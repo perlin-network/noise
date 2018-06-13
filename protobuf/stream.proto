@@ -16,12 +16,19 @@ service Noise {
 message ID {
     bytes public_key = 1;
     string address = 2;
+
+    // Nonce is the request/response ID.
+    // Null if ID associated to a message is not a request/response/
+    string nonce = 3;
 }
 
 message Message {
     google.protobuf.Any message = 1;
 
+    // Sender's address and public key.
     ID sender = 2;
+
+    // Sender's signature of message.
     bytes signature = 3;
 }
 
