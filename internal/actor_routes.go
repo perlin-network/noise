@@ -2,15 +2,22 @@ package internal
 
 import (
 	"github.com/perlin-network/noise/actor"
-	"github.com/perlin-network/noise/protobuf"
-	"github.com/perlin-network/noise/peer"
-	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/dht"
+	"github.com/perlin-network/noise/peer"
+	"github.com/perlin-network/noise/protobuf"
 )
 
 type RouteActor struct {
-	self peer.ID
+	self   peer.ID
 	routes *dht.RoutingTable
+}
+
+func (state *RouteActor) Start() {
+
+}
+
+func (state *RouteActor) Stop() {
+
 }
 
 // TODO: Send parameters which should contain easy-access to network.Network.
@@ -37,7 +44,7 @@ func (state *RouteActor) Receive(client protobuf.Noise_StreamClient, sender peer
 		// Update routing table w/ peer's ID.
 		state.routes.Update(state.self)
 
-		log.Info("Successfully bootstrapped w/ peer " + raw.Sender.Address + ".")
+		//log.Info("Successfully bootstrapped w/ peer " + raw.Sender.Address + ".")
 	case *protobuf.LookupNodeRequest:
 		if client != nil {
 			response := &protobuf.LookupNodeResponse{Peers: []*protobuf.ID{}}
@@ -60,7 +67,7 @@ func (state *RouteActor) Receive(client protobuf.Noise_StreamClient, sender peer
 func CreateRouteActor(self peer.ID) func() actor.ActorTemplate {
 	return func() actor.ActorTemplate {
 		return &RouteActor{
-			self: self,
+			self:   self,
 			routes: dht.CreateRoutingTable(self),
 		}
 	}

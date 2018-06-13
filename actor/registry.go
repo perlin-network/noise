@@ -1,14 +1,14 @@
 package actor
 
 import (
-	"github.com/orcaman/concurrent-map"
 	"errors"
+	"github.com/orcaman/concurrent-map"
 	"sync/atomic"
 )
 
 var (
 	ErrAlreadyExists = errors.New("actor with name already exists")
-	ErrNotFound = errors.New("actor with name does not exist")
+	ErrNotFound      = errors.New("actor with name does not exist")
 )
 
 var Registry = &ActorRegistry{
