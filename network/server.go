@@ -59,7 +59,7 @@ func (s Server) Stream(server protobuf.Noise_StreamServer) error {
 
 		if client != nil {
 			for _, actor := range s.actors {
-				actor.Receive(client, *id, msg)
+				actor.Props.Receive(client, *id, msg)
 			}
 		}
 	}
