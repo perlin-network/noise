@@ -1,21 +1,19 @@
 package actor
 
 import (
-	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+	"github.com/perlin-network/noise/peer"
 )
 
-type MessageReceiver interface {
+type ActorTemplate interface {
 	Receive(client protobuf.Noise_StreamClient, sender peer.ID, message interface{})
 }
 
-type ActorTemplate func() *Actor
-
 type Actor struct {
-	MessageReceiver
+	ActorTemplate
 
 	Mailbox chan protobuf.Message
-	Name string
+	Name    string
 }
 
 func (a *Actor) Stop() {
@@ -30,21 +28,23 @@ func (a *Actor) Tell(message protobuf.Message) {
 }
 
 // Creates and registers an actor with a random name and returns its instance.
-func CreateActor(template ActorTemplate) *Actor {
+func CreateActor(template func() ActorTemplate) *Actor {
 	return CreateActorNamed(Registry.nextAvailableID(), template)
 }
 
 // Creates and registers an actor with a prefixed name and returns its instance.
-func CreateActorPrefixed(prefix string, template ActorTemplate) *Actor {
-	return CreateActorNamed(prefix + "_" + Registry.nextAvailableID(), template)
+func CreateActorPrefixed(prefix string, template func() ActorTemplate) *Actor {
+	return CreateActorNamed(prefix+"_"+Registry.nextAvailableID(), template)
 }
 
 // Creates and registers an actor with a specified name and returns its instance.
-func CreateActorNamed(name string, template ActorTemplate) *Actor {
+func CreateActorNamed(name string, template func() ActorTemplate) *Actor {
 	// Create actor.
-	actor := template()
-	actor.Name = name
-	actor.Mailbox = make(chan protobuf.Message)
+	actor := &Actor{
+		ActorTemplate: template(),
+		Name:          name,
+		Mailbox:       make(chan protobuf.Message),
+	}
 
 	// Register actor to processes.
 	err := Registry.RegisterActor(name, actor)

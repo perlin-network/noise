@@ -13,17 +13,17 @@ var (
 
 var Registry = &ActorRegistry{
 	processes: cmap.New(),
-	actorCount: 0,
+	count:     0,
 }
 
 type ActorRegistry struct {
 	processes cmap.ConcurrentMap
-	actorCount uint64
+	count     uint64
 }
 
 func (registry *ActorRegistry) nextAvailableID() string {
-	id := hashId(registry.actorCount)
-	atomic.AddUint64(&registry.actorCount, 1)
+	id := hashId(registry.count)
+	atomic.AddUint64(&registry.count, 1)
 
 	return id
 }
