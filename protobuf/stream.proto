@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package protobuf;
+
+option java_multiple_files = true;
+option java_package = "org.perlin.noise.proto";
+option java_outer_classname = "NoiseProto";
+
+import "google/protobuf/any.proto";
+
+service Noise {
+    rpc Stream (stream Message) returns (stream Message) {
+    }
+}
+
+message ID {
+    bytes public_key = 1;
+    string address = 2;
+}
+
+message Message {
+    google.protobuf.Any message = 1;
+
+    ID sender = 2;
+    bytes signature = 3;
+}
+
+message HandshakeRequest {
+}
+message HandshakeResponse {
+}
+message LookupNodeRequest {
+    ID target = 1;
+}
+message LookupNodeResponse {
+    repeated ID peers = 1;
+}
