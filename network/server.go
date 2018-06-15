@@ -55,7 +55,7 @@ func (s Server) Stream(server protobuf.Noise_StreamServer) error {
 
 		// Handle request/response.
 		if raw.Nonce != 0 {
-			s.network.HandleRequest(raw.Nonce, msg)
+			s.network.HandleResponse(raw.Nonce, msg)
 		}
 
 		switch msg.(type) {
@@ -63,7 +63,7 @@ func (s Server) Stream(server protobuf.Noise_StreamServer) error {
 			// Update routing table w/ peer's ID.
 			s.network.Routes.Update(*id)
 
-			// Dial and send handshake response to peer.
+			// Send handshake response to peer.
 			client, err := s.network.Client(peer.ID(*raw.Sender))
 
 			if err != nil {

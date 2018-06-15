@@ -26,7 +26,6 @@ type Network struct {
 
 	RequestNonce uint64
 	Requests     map[uint64]chan proto.Message
-	RequestMutex *sync.RWMutex
 
 	peerMutex *sync.RWMutex
 	peers map[string]protobuf.Noise_StreamClient
@@ -47,7 +46,6 @@ func CreateNetwork(keys *crypto.KeyPair, address string, port int) *Network {
 
 		RequestNonce: 0,
 		Requests:     make(map[uint64]chan proto.Message),
-		RequestMutex: &sync.RWMutex{},
 
 		peerMutex: &sync.RWMutex{},
 		peers: make(map[string]protobuf.Noise_StreamClient),
@@ -177,7 +175,7 @@ func (n *Network) Tell(client Sendable, message proto.Message) error {
 func (n *Network) Reply(client Sendable, nonce uint64, message proto.Message) error {
 	msg, err := n.prepareMessage(message)
 
-	log.Print("SENDING A RESPONSE FOR", nonce)
+	log.Debug("SENDING A RESPONSE FOR", nonce)
 	msg.Nonce = nonce
 
 	if err != nil {
@@ -193,14 +191,12 @@ func (n *Network) Reply(client Sendable, nonce uint64, message proto.Message) er
 }
 
 // Provide a response to a request.
-func (n *Network) HandleRequest(nonce uint64, response proto.Message) {
+func (n *Network) HandleResponse(nonce uint64, response proto.Message) {
 	log.Print("GOT A RESPONSE FOR", nonce)
 
-	n.RequestMutex.RLock()
 	if channel, exists := n.Requests[nonce]; exists {
 		channel <- response
 	}
-	n.RequestMutex.RUnlock()
 }
 
 func (n *Network) Request(client Sendable, message proto.Message) (proto.Message, error) {
@@ -218,21 +214,17 @@ func (n *Network) Request(client Sendable, message proto.Message) (proto.Message
 		return nil, err
 	}
 
-	channel := make(chan proto.Message)
-
 	// Start tracking the request.
-	n.RequestMutex.Lock()
-	log.Print("WAITING FOR NONCE", msg.Nonce)
-	n.Requests[msg.Nonce] = channel
+	log.Debug("WAITING FOR NONCE", msg.Nonce)
+	n.Requests[msg.Nonce] = make(chan proto.Message, 1)
 
 	// Stop tracking the request.
-	defer n.RequestMutex.Unlock()
 	defer delete(n.Requests, msg.Nonce)
 
 	select {
-	case response := <-channel:
+	case response := <-n.Requests[msg.Nonce]:
 		return response, nil
-	case <-time.After(3 * time.Second): // TODO: Make delay customizable.
+	case <-time.After(10 * time.Second): // TODO: Make delay customizable.
 		return nil, errors.New("request timed out")
 	}
 }
