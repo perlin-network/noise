@@ -22,7 +22,6 @@ func createServer(network *Network) *Server {
 
 func (s Server) Stream(server protobuf.Noise_StreamServer) error {
 	var id *peer.ID
-	var client protobuf.Noise_StreamClient
 
 	for {
 		raw, err := server.Recv()
@@ -64,43 +63,49 @@ func (s Server) Stream(server protobuf.Noise_StreamServer) error {
 			// Update routing table w/ peer's ID.
 			s.network.Routes.Update(*id)
 
-			if client == nil {
-				// Dial and send handshake response to peer.
-				client, err = s.network.Dial(raw.Sender.Address)
-				if err != nil {
-					continue
-				}
-				err = s.network.Tell(client, &protobuf.HandshakeResponse{})
-				if err != nil {
-					continue
-				}
+			// Dial and send handshake response to peer.
+			client, err := s.network.Client(peer.ID(*raw.Sender))
 
-				log.Info("Peer " + raw.Sender.Address + " has connected to you.")
+			if err != nil {
+				continue
 			}
+			err = s.network.Tell(client, &protobuf.HandshakeResponse{})
+			if err != nil {
+				continue
+			}
+
+			log.Info("Peer " + raw.Sender.Address + " has connected to you.")
 
 			continue
 		case *protobuf.HandshakeResponse:
 			// Update routing table w/ peer's ID.
 			s.network.Routes.Update(*id)
 
+			BootstrapPeers(s.network, *id, dht.BucketSize)
+
 			log.Info("Successfully bootstrapped w/ peer " + raw.Sender.Address + ".")
 
 			continue
 		case *protobuf.LookupNodeRequest:
-			if client != nil {
-				response := &protobuf.LookupNodeResponse{Peers: []*protobuf.ID{}}
-				msg := msg.(*protobuf.LookupNodeRequest)
+			response := &protobuf.LookupNodeResponse{Peers: []*protobuf.ID{}}
+			msg := msg.(*protobuf.LookupNodeRequest)
 
-				// Update routing table w/ peer's ID.
-				s.network.Routes.Update(*id)
+			// Update routing table w/ peer's ID.
+			s.network.Routes.Update(*id)
 
-				// Respond back with closest peers to a provided target.
-				for _, id := range s.network.Routes.FindClosestPeers(peer.ID(*msg.Target), dht.BucketSize) {
-					id := protobuf.ID(id)
-					response.Peers = append(response.Peers, &id)
-				}
+			// Respond back with closest peers to a provided target.
+			for _, id := range s.network.Routes.FindClosestPeers(peer.ID(*msg.Target), dht.BucketSize) {
+				id := protobuf.ID(id)
+				response.Peers = append(response.Peers, &id)
+			}
 
-				s.network.Tell(client, response)
+			client, err := s.network.Client(peer.ID(*raw.Sender))
+			if err != nil {
+				continue
+			}
+			err = s.network.Reply(client, raw.Nonce, response)
+			if err != nil {
+				continue
 			}
 		}
 	}

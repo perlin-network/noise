@@ -1,55 +1,81 @@
 package network
 
 import (
-	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"sync"
+	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/perlin-go/network/dht"
 )
 
-func Request(msg protobuf.Message) {
-
-}
-
-func BootstrapPeers(network *Network, table *dht.RoutingTable, target peer.ID, count int) (addresses []string, publicKeys [][]byte) {
+func BootstrapPeers(network *Network, target peer.ID, count int) (addresses []string, publicKeys [][]byte) {
 	queue := []peer.ID{target}
 
 	visited := make(map[string]struct{})
-	visited[table.Self().Hex()] = struct{}{}
+	visited[network.Keys.PublicKeyHex()] = struct{}{}
 	visited[target.Hex()] = struct{}{}
 
 	for len(queue) > 0 {
 		var wait sync.WaitGroup
 		wait.Add(len(queue))
 
-		//responses := make(chan *protobuf.LookupNodeResponse, len(queue))
+		responses := make(chan *protobuf.LookupNodeResponse, len(queue))
 
 		// Queue up all work into worker pools for contacting peers.
 		for _, popped := range queue {
-			go func(peerId protobuf.ID) {
+			go func(peerId peer.ID) {
 				defer wait.Done()
 
-				client, err := network.Dial(peerId.Address)
+				client, err := network.Client(peerId)
 				if err != nil {
 					return
 				}
+
+				protoId := protobuf.ID(peerId)
 
 				request := &protobuf.LookupNodeRequest{
-					Target: &peerId,
+					Target: &protoId,
 				}
 
-				err = network.Tell(client, request)
+				response, err := network.Request(client, request)
 
 				if err != nil {
+					log.Debug(response)
 					return
 				}
 
-				// TODO: Create request/response RPC over gRPC.
+				if response, ok := response.(*protobuf.LookupNodeResponse); ok {
+					log.Debug(response)
+					responses <- response
+				}
+			}(popped)
+		}
 
-				//if response, ok := response.(*messages.LookupNodeResponse); ok && response.Verify() {
-				//	responses <- response
-				//}
-			}(protobuf.ID(popped))
+		// Empty the queue.
+		queue = []peer.ID{}
+
+		// Wait until all responses from peers come back.
+		wait.Wait()
+
+		// Expand nodes in breadth-first search.
+		close(responses)
+		for response := range responses {
+			// Queue up expanded nodes.
+			for _, id := range response.Peers {
+				peer := peer.ID(*id)
+
+				if _, seen := visited[peer.Hex()]; !seen {
+					queue = append(queue, peer)
+					visited[peer.Hex()] = struct{}{}
+
+					addresses = append(addresses, peer.Address)
+
+					publicKey := make([]byte, dht.IdSize)
+					copy(publicKey, peer.PublicKey[:])
+
+					publicKeys = append(publicKeys, publicKey)
+				}
+			}
 		}
 	}
 
