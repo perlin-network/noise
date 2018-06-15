@@ -22,7 +22,7 @@ type ActorRegistry struct {
 }
 
 func (registry *ActorRegistry) nextAvailableID() string {
-	id := hashId(registry.count)
+	id := hashId(atomic.LoadUint64(&registry.count))
 	atomic.AddUint64(&registry.count, 1)
 
 	return id

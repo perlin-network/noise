@@ -47,6 +47,7 @@ func (state *RouteActor) Receive(client protobuf.Noise_StreamClient, sender peer
 		//log.Info("Successfully bootstrapped w/ peer " + raw.Sender.Address + ".")
 	case *protobuf.LookupNodeRequest:
 		if client != nil {
+
 			response := &protobuf.LookupNodeResponse{Peers: []*protobuf.ID{}}
 			msg := msg.(*protobuf.LookupNodeRequest)
 
