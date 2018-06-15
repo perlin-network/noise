@@ -7,6 +7,10 @@ import (
 	"sync"
 )
 
+func Request(msg protobuf.Message) {
+
+}
+
 func BootstrapPeers(network *Network, table *dht.RoutingTable, target peer.ID, count int) (addresses []string, publicKeys [][]byte) {
 	queue := []peer.ID{target}
 
