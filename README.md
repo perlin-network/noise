@@ -11,3 +11,9 @@ Noise follows the DRY (don't-repeat-yourself) principle for its choices of techn
 - Real-time, bidirectional streaming between peers via. gRPC and Protobufs.
 - NaCL/Ed25519 scheme for peer identities and signatures.
 - Kademlia-inspired peer discovery.
+
+## Build
+
+```
+go generate
+```

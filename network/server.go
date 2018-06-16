@@ -55,7 +55,7 @@ func (s Server) Stream(server protobuf.Noise_StreamServer) error {
 
 		// Handle request/response.
 		if raw.Nonce != 0 {
-			s.network.HandleResponse(raw.Nonce, msg)
+			go s.network.HandleResponse(raw.Nonce, msg)
 		}
 
 		switch msg.(type) {

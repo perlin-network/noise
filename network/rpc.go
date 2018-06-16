@@ -1,11 +1,10 @@
 package network
 
 import (
+	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"sync"
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/perlin-go/network/dht"
 )
 
 func BootstrapPeers(network *Network, target peer.ID, count int) (addresses []string, publicKeys [][]byte) {
@@ -62,16 +61,16 @@ func BootstrapPeers(network *Network, target peer.ID, count int) (addresses []st
 		for response := range responses {
 			// Queue up expanded nodes.
 			for _, id := range response.Peers {
-				peer := peer.ID(*id)
+				p := peer.ID(*id)
 
-				if _, seen := visited[peer.Hex()]; !seen {
-					queue = append(queue, peer)
-					visited[peer.Hex()] = struct{}{}
+				if _, seen := visited[p.Hex()]; !seen {
+					queue = append(queue, p)
+					visited[p.Hex()] = struct{}{}
 
-					addresses = append(addresses, peer.Address)
+					addresses = append(addresses, p.Address)
 
-					publicKey := make([]byte, dht.IdSize)
-					copy(publicKey, peer.PublicKey[:])
+					publicKey := make([]byte, peer.IdSize)
+					copy(publicKey, p.PublicKey[:])
 
 					publicKeys = append(publicKeys, publicKey)
 				}

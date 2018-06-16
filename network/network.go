@@ -15,7 +15,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"v/github.com/golang/protobuf@v1.1.0/ptypes"
+	"github.com/golang/protobuf/ptypes"
 )
 
 type Network struct {
@@ -28,7 +28,7 @@ type Network struct {
 	Requests     map[uint64]chan proto.Message
 
 	peerMutex *sync.RWMutex
-	peers map[string]protobuf.Noise_StreamClient
+	peers     map[string]protobuf.Noise_StreamClient
 
 	ID peer.ID
 
@@ -48,7 +48,7 @@ func CreateNetwork(keys *crypto.KeyPair, address string, port int) *Network {
 		Requests:     make(map[uint64]chan proto.Message),
 
 		peerMutex: &sync.RWMutex{},
-		peers: make(map[string]protobuf.Noise_StreamClient),
+		peers:     make(map[string]protobuf.Noise_StreamClient),
 
 		Routes: dht.CreateRoutingTable(peer.CreateID(id.Address, keys.PublicKey)),
 	}
@@ -68,7 +68,6 @@ func (n *Network) Client(peer peer.ID) (protobuf.Noise_StreamClient, error) {
 
 	return n.peers[peer.Hex()], nil
 }
-
 
 func (n *Network) Host() string {
 	return n.Address + ":" + strconv.Itoa(n.Port)
