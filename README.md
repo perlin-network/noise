@@ -12,8 +12,17 @@ Noise follows the DRY (don't-repeat-yourself) principle for its choices of techn
 - NaCL/Ed25519 scheme for peer identities and signatures.
 - Kademlia-inspired peer discovery.
 
-## Build
+## Usage
 
 ```
-go generate
+# install vgo tooling
+go get -u golang.org/x/vgo
+
+# download the dependencies to vendor folder and run main.go
+vgo mod -vendor
+vgo run main.go
+
+# build and run the main.go noise binary
+vgo build
+./noise
 ```
