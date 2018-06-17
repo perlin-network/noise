@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"github.com/perlin-network/noise/peer"
 	"sort"
+	"sync"
 )
 
 const BucketSize = 20
@@ -12,13 +13,14 @@ type RoutingTable struct {
 	// Current node's ID.
 	self peer.ID
 
-	buckets [peer.IdSize * 8]*list.List
+	buckets *sync.Map
+	//buckets [peer.IdSize * 8]*list.List
 }
 
 func CreateRoutingTable(id peer.ID) *RoutingTable {
-	table := &RoutingTable{self: id}
+	table := &RoutingTable{self: id, buckets: &sync.Map{}}
 	for i := 0; i < peer.IdSize*8; i++ {
-		table.buckets[i] = list.New()
+		table.buckets.Store(i, list.New())
 	}
 
 	table.Update(id)
@@ -34,7 +36,8 @@ func (t *RoutingTable) Self() peer.ID {
 // Moves a peer to the front of a bucket int he routing table.
 func (t *RoutingTable) Update(target peer.ID) {
 	bucketId := target.Xor(t.self).PrefixLen()
-	bucket := t.buckets[bucketId]
+	bucketValue, _ := t.buckets.Load(bucketId)
+	bucket := bucketValue.(*list.List)
 
 	var element *list.Element
 
@@ -51,8 +54,6 @@ func (t *RoutingTable) Update(target peer.ID) {
 		if bucket.Len() <= BucketSize {
 			bucket.PushFront(target)
 		}
-
-		// TODO: Remove nodes that don't respond to a ping.
 	} else {
 		bucket.MoveToFront(element)
 	}
@@ -63,7 +64,9 @@ func (t *RoutingTable) GetPeers() (peers []peer.ID) {
 	visited := make(map[string]struct{})
 	visited[t.self.Hex()] = struct{}{}
 
-	for _, bucket := range t.buckets {
+	t.buckets.Range(func(key, value interface{}) bool {
+		bucket := value.(*list.List)
+
 		for e := bucket.Front(); e != nil; e = e.Next() {
 			id := e.Value.(peer.ID)
 			if _, seen := visited[id.Hex()]; !seen {
@@ -71,7 +74,8 @@ func (t *RoutingTable) GetPeers() (peers []peer.ID) {
 				visited[id.Hex()] = struct{}{}
 			}
 		}
-	}
+		return true
+	})
 
 	return
 }
@@ -81,7 +85,9 @@ func (t *RoutingTable) GetPeerAddresses() (peers []string) {
 	visited := make(map[string]struct{})
 	visited[t.self.Hex()] = struct{}{}
 
-	for _, bucket := range t.buckets {
+	t.buckets.Range(func(key, value interface{}) bool {
+		bucket := value.(*list.List)
+
 		for e := bucket.Front(); e != nil; e = e.Next() {
 			id := e.Value.(peer.ID)
 			if _, seen := visited[id.Hex()]; !seen {
@@ -89,7 +95,8 @@ func (t *RoutingTable) GetPeerAddresses() (peers []string) {
 				visited[id.Hex()] = struct{}{}
 			}
 		}
-	}
+		return true
+	})
 
 	return
 }
@@ -97,10 +104,11 @@ func (t *RoutingTable) GetPeerAddresses() (peers []string) {
 // Removes a peer from the routing table. O(bucket_size).
 func (t *RoutingTable) RemovePeer(target peer.ID) {
 	bucketId := target.Xor(t.self).PrefixLen()
+	bucket := t.Bucket(bucketId)
 
-	for e := t.buckets[bucketId].Front(); e != nil; e = e.Next() {
+	for e := bucket.Front(); e != nil; e = e.Next() {
 		if e.Value.(peer.ID).Equals(target) {
-			t.buckets[bucketId].Remove(e)
+			bucket.Remove(e)
 		}
 	}
 }
@@ -108,8 +116,9 @@ func (t *RoutingTable) RemovePeer(target peer.ID) {
 // Determines if a peer exists in the routing table. O(bucket_size).
 func (t *RoutingTable) PeerExists(target peer.ID) bool {
 	bucketId := target.Xor(t.self).PrefixLen()
+	bucket := t.Bucket(bucketId)
 
-	for e := t.buckets[bucketId].Front(); e != nil; e = e.Next() {
+	for e := bucket.Front(); e != nil; e = e.Next() {
 		if e.Value.(peer.ID).Equals(target) {
 			return true
 		}
@@ -120,20 +129,21 @@ func (t *RoutingTable) PeerExists(target peer.ID) bool {
 
 func (t *RoutingTable) FindClosestPeers(target peer.ID, count int) (peers []peer.ID) {
 	bucketId := target.Xor(t.self).PrefixLen()
+	bucket := t.Bucket(bucketId)
 
-	for e := t.buckets[bucketId].Front(); e != nil; e = e.Next() {
+	for e := bucket.Front(); e != nil; e = e.Next() {
 		peers = append(peers, e.Value.(peer.ID))
 	}
 
 	for i := 1; len(peers) < count && (bucketId-i >= 0 || bucketId+i < peer.IdSize*8); i++ {
 		if bucketId-i >= 0 {
-			for e := t.buckets[bucketId-i].Front(); e != nil; e = e.Next() {
+			for e := t.Bucket(bucketId - i).Front(); e != nil; e = e.Next() {
 				peers = append(peers, e.Value.(peer.ID))
 			}
 		}
 
 		if bucketId+i < peer.IdSize*8 {
-			for e := t.buckets[bucketId+i].Front(); e != nil; e = e.Next() {
+			for e := t.Bucket(bucketId + i).Front(); e != nil; e = e.Next() {
 				peers = append(peers, e.Value.(peer.ID))
 			}
 		}
@@ -151,4 +161,13 @@ func (t *RoutingTable) FindClosestPeers(target peer.ID, count int) (peers []peer
 	}
 
 	return peers
+}
+
+func (t *RoutingTable) Bucket(id int) *list.List {
+	if bucket, exists := t.buckets.Load(id); exists {
+		if bucket, ok := bucket.(*list.List); ok {
+			return bucket
+		}
+	}
+	return nil
 }
