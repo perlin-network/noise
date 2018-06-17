@@ -29,6 +29,9 @@ message Message {
 
     // Nonce is the request/response ID. Null if ID associated to a message is not a request/response.
     uint64 nonce = 4;
+
+    // Is this message a response?
+    bool is_response = 5;
 }
 
 message HandshakeRequest {
