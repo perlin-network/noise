@@ -12,7 +12,6 @@ import (
 	"google.golang.org/grpc"
 	"net"
 	"strconv"
-	"sync"
 	"sync/atomic"
 	"time"
 	"github.com/golang/protobuf/ptypes"
@@ -26,9 +25,6 @@ type Network struct {
 
 	RequestNonce uint64
 	Requests     map[uint64]chan proto.Message
-
-	peerMutex *sync.RWMutex
-	peers     map[string]protobuf.Noise_StreamClient
 
 	ID peer.ID
 
@@ -47,26 +43,8 @@ func CreateNetwork(keys *crypto.KeyPair, address string, port int) *Network {
 		RequestNonce: 0,
 		Requests:     make(map[uint64]chan proto.Message),
 
-		peerMutex: &sync.RWMutex{},
-		peers:     make(map[string]protobuf.Noise_StreamClient),
-
 		Routes: dht.CreateRoutingTable(peer.CreateID(id.Address, keys.PublicKey)),
 	}
-}
-
-func (n *Network) Client(peer peer.ID) (protobuf.Noise_StreamClient, error) {
-	n.peerMutex.Lock()
-	defer n.peerMutex.Unlock()
-
-	if _, exists := n.peers[peer.Hex()]; !exists {
-		client, err := n.Dial(peer.Address)
-		if err != nil {
-			return nil, err
-		}
-		n.peers[peer.Hex()] = client
-	}
-
-	return n.peers[peer.Hex()], nil
 }
 
 func (n *Network) Host() string {
@@ -174,7 +152,6 @@ func (n *Network) Tell(client Sendable, message proto.Message) error {
 func (n *Network) Reply(client Sendable, nonce uint64, message proto.Message) error {
 	msg, err := n.prepareMessage(message)
 
-	log.Debug("SENDING A RESPONSE FOR", nonce)
 	msg.Nonce = nonce
 	msg.IsResponse = true
 
@@ -192,8 +169,7 @@ func (n *Network) Reply(client Sendable, nonce uint64, message proto.Message) er
 
 // Provide a response to a request.
 func (n *Network) HandleResponse(nonce uint64, response proto.Message) {
-	log.Print("GOT A RESPONSE FOR", nonce)
-
+	// Check if the request is currently looking to be received.
 	if channel, exists := n.Requests[nonce]; exists {
 		channel <- response
 	}
@@ -215,10 +191,10 @@ func (n *Network) Request(client Sendable, message proto.Message) (proto.Message
 	}
 
 	// Start tracking the request.
-	log.Debug("WAITING FOR NONCE", msg.Nonce)
 	n.Requests[msg.Nonce] = make(chan proto.Message, 1)
 
 	// Stop tracking the request.
+	defer close(n.Requests[msg.Nonce])
 	defer delete(n.Requests, msg.Nonce)
 
 	select {

@@ -7,12 +7,11 @@ import (
 	"sync"
 )
 
-func BootstrapPeers(network *Network, target peer.ID, count int) (addresses []string, publicKeys [][]byte) {
+func bootstrapPeers(network *Network, target peer.ID, count int) (addresses []string, publicKeys [][]byte) {
 	queue := []peer.ID{target}
 
 	visited := make(map[string]struct{})
 	visited[network.Keys.PublicKeyHex()] = struct{}{}
-	visited[target.Hex()] = struct{}{}
 
 	for len(queue) > 0 {
 		var wait sync.WaitGroup
@@ -25,7 +24,7 @@ func BootstrapPeers(network *Network, target peer.ID, count int) (addresses []st
 			go func(peerId peer.ID) {
 				defer wait.Done()
 
-				client, err := network.Client(peerId)
+				client, err := network.dial(peerId.Address)
 				if err != nil {
 					return
 				}
@@ -39,12 +38,11 @@ func BootstrapPeers(network *Network, target peer.ID, count int) (addresses []st
 				response, err := network.Request(client, request)
 
 				if err != nil {
-					log.Debug(response)
+					log.Debug(err)
 					return
 				}
 
 				if response, ok := response.(*protobuf.LookupNodeResponse); ok {
-					log.Debug(response)
 					responses <- response
 				}
 			}(popped)
