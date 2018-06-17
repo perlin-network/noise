@@ -61,6 +61,8 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 				log.Debug("Failed to connect to peer " + client.id.Address + ".")
 				break
 			}
+		} else if !client.id.Equals(val) {
+			continue
 		}
 
 		// Unmarshal protobuf messages.
