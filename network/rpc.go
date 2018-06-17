@@ -13,6 +13,7 @@ func bootstrapPeers(network *Network, target peer.ID, count int) (addresses []st
 
 	visited := make(map[string]struct{})
 	visited[network.Keys.PublicKeyHex()] = struct{}{}
+	visited[target.Hex()] = struct{}{}
 
 	for len(queue) > 0 {
 		var wait sync.WaitGroup
