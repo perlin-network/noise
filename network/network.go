@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/log"
@@ -12,9 +13,9 @@ import (
 	"google.golang.org/grpc"
 	"net"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
-	"github.com/golang/protobuf/ptypes"
 )
 
 type Network struct {
@@ -24,7 +25,7 @@ type Network struct {
 	Port    int
 
 	RequestNonce uint64
-	Requests     map[uint64]chan proto.Message
+	Requests     *sync.Map
 
 	ID peer.ID
 
@@ -41,7 +42,7 @@ func CreateNetwork(keys *crypto.KeyPair, address string, port int) *Network {
 		ID:      id,
 
 		RequestNonce: 0,
-		Requests:     make(map[uint64]chan proto.Message),
+		Requests:     &sync.Map{},
 
 		Routes: dht.CreateRoutingTable(peer.CreateID(id.Address, keys.PublicKey)),
 	}
@@ -55,6 +56,7 @@ func (n *Network) Listen() {
 	go n.listen()
 }
 
+// Listen for peers on a port specified on instantation of Network{}.
 func (n *Network) listen() {
 	listener, err := net.Listen("tcp", ":"+strconv.Itoa(n.Port))
 	if err != nil {
@@ -94,11 +96,12 @@ func (n *Network) Bootstrap(addresses ...string) {
 	}
 }
 
-// Dial a peer w/o a handshake request.
+// Dial a peer.
 func (n *Network) Dial(address string) (protobuf.Noise_StreamClient, error) {
 	return n.dial(address)
 }
 
+// Dials a peer via. gRPC.
 func (n *Network) dial(address string) (protobuf.Noise_StreamClient, error) {
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 
@@ -114,6 +117,7 @@ func (n *Network) dial(address string) (protobuf.Noise_StreamClient, error) {
 	return client, nil
 }
 
+// Marshals message into proto.Message and signs it with this node's private key.
 func (n *Network) prepareMessage(message proto.Message) (*protobuf.Message, error) {
 	raw, err := ptypes.MarshalAny(message)
 	if err != nil {
@@ -170,8 +174,8 @@ func (n *Network) Reply(client Sendable, nonce uint64, message proto.Message) er
 // Provide a response to a request.
 func (n *Network) HandleResponse(nonce uint64, response proto.Message) {
 	// Check if the request is currently looking to be received.
-	if channel, exists := n.Requests[nonce]; exists {
-		channel <- response
+	if channel, exists := n.Requests.Load(nonce); exists {
+		channel.(chan proto.Message) <- response
 	}
 }
 
@@ -191,14 +195,15 @@ func (n *Network) Request(client Sendable, message proto.Message) (proto.Message
 	}
 
 	// Start tracking the request.
-	n.Requests[msg.Nonce] = make(chan proto.Message, 1)
+	channel := make(chan proto.Message, 1)
+	n.Requests.Store(msg.Nonce, channel)
 
 	// Stop tracking the request.
-	defer close(n.Requests[msg.Nonce])
-	defer delete(n.Requests, msg.Nonce)
+	defer close(channel)
+	defer n.Requests.Delete(msg.Nonce)
 
 	select {
-	case response := <-n.Requests[msg.Nonce]:
+	case response := <-channel:
 		return response, nil
 	case <-time.After(10 * time.Second): // TODO: Make delay customizable.
 		return nil, errors.New("request timed out")

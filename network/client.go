@@ -1,11 +1,11 @@
 package network
 
 import (
-	"github.com/perlin-network/noise/peer"
 	"github.com/golang/protobuf/proto"
-	"github.com/perlin-network/noise/protobuf"
-	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/dht"
+	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/peer"
+	"github.com/perlin-network/noise/protobuf"
 	"strings"
 )
 
@@ -18,7 +18,7 @@ type IncomingMessage struct {
 type PeerClient struct {
 	server *Server
 
-	id     *peer.ID
+	id   *peer.ID
 	conn protobuf.Noise_StreamClient
 
 	mailbox chan IncomingMessage

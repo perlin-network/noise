@@ -14,7 +14,6 @@ type RoutingTable struct {
 	self peer.ID
 
 	buckets *sync.Map
-	//buckets [peer.IdSize * 8]*list.List
 }
 
 func CreateRoutingTable(id peer.ID) *RoutingTable {
