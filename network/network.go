@@ -176,6 +176,7 @@ func (n *Network) Reply(client Sendable, nonce uint64, message proto.Message) er
 
 	log.Debug("SENDING A RESPONSE FOR", nonce)
 	msg.Nonce = nonce
+	msg.IsResponse = true
 
 	if err != nil {
 		return err
