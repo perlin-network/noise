@@ -1,6 +1,7 @@
 package network
 
 import (
+	"context"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
@@ -24,7 +25,12 @@ func bootstrapPeers(network *Network, target peer.ID, count int) (addresses []st
 			go func(peerId peer.ID) {
 				defer wait.Done()
 
-				client, err := network.dial(peerId.Address)
+				conn, err := network.dial(peerId.Address)
+				if err != nil {
+					return
+				}
+
+				client, err := protobuf.NewNoiseClient(conn).Stream(context.Background())
 				if err != nil {
 					return
 				}

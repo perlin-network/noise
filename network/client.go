@@ -1,11 +1,15 @@
 package network
 
 import (
+	"context"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"strings"
 )
 
@@ -18,10 +22,34 @@ type IncomingMessage struct {
 type PeerClient struct {
 	server *Server
 
-	id   *peer.ID
-	conn protobuf.Noise_StreamClient
+	id     *peer.ID
+	conn   *grpc.ClientConn
+	client protobuf.Noise_StreamClient
 
 	mailbox chan IncomingMessage
+}
+
+// Establishes an outgoing connection a given peer.
+func (c *PeerClient) establishConnection() error {
+	if c.id != nil && c.conn == nil && c.client == nil {
+		conn, err := c.network().dial(c.id.Address)
+		if err != nil {
+			return err
+		}
+
+		client, err := protobuf.NewNoiseClient(conn).Stream(context.Background())
+
+		if err != nil {
+			return err
+		}
+
+		c.conn = conn
+		c.client = client
+
+		return nil
+	}
+
+	return status.Errorf(codes.Internal, "either client id is nil or client conn has alreayd been established")
 }
 
 func CreatePeerClient(server *Server) *PeerClient {
@@ -45,7 +73,7 @@ func (c *PeerClient) process() {
 			c.network().Routes.Update(*c.id)
 
 			// Send handshake response to peer.
-			err := c.network().Tell(c.conn, &protobuf.HandshakeResponse{})
+			err := c.network().Tell(c.client, &protobuf.HandshakeResponse{})
 
 			if err != nil {
 				continue
@@ -74,7 +102,7 @@ func (c *PeerClient) process() {
 				response.Peers = append(response.Peers, &id)
 			}
 
-			err := c.network().Reply(c.conn, item.nonce, response)
+			err := c.network().Reply(c.client, item.nonce, response)
 			if err != nil {
 				continue
 			}
@@ -86,5 +114,9 @@ func (c *PeerClient) process() {
 
 // Clean up mailbox for peer client.
 func (c *PeerClient) close() {
+	if c.conn != nil {
+		c.conn.Close()
+	}
+
 	close(c.mailbox)
 }

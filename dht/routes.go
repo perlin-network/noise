@@ -22,8 +22,8 @@ type Bucket struct {
 }
 
 func NewBucket() *Bucket {
-	return &Bucket {
-		List: list.New(),
+	return &Bucket{
+		List:  list.New(),
 		mutex: &sync.RWMutex{},
 	}
 }

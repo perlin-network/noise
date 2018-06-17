@@ -56,10 +56,10 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 		if client.id == nil {
 			client.id = &val
 
-			client.conn, err = s.network.dial(client.id.Address)
+			err := client.establishConnection()
 			if err != nil {
 				log.Debug("Failed to connect to peer " + client.id.Address + ".")
-				break
+				return err
 			}
 		} else if !client.id.Equals(val) {
 			continue

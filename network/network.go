@@ -84,7 +84,13 @@ func (n *Network) listen() {
 // Bootstrap with a number of peers and send a handshake to them.
 func (n *Network) Bootstrap(addresses ...string) {
 	for _, address := range addresses {
-		client, err := n.dial(address)
+		conn, err := n.dial(address)
+		if err != nil {
+			continue
+		}
+
+		// Create a temporary client for now and send a handshake request.
+		client, err := protobuf.NewNoiseClient(conn).Stream(context.Background())
 		if err != nil {
 			continue
 		}
@@ -97,24 +103,19 @@ func (n *Network) Bootstrap(addresses ...string) {
 }
 
 // Dial a peer.
-func (n *Network) Dial(address string) (protobuf.Noise_StreamClient, error) {
+func (n *Network) Dial(address string) (*grpc.ClientConn, error) {
 	return n.dial(address)
 }
 
 // Dials a peer via. gRPC.
-func (n *Network) dial(address string) (protobuf.Noise_StreamClient, error) {
+func (n *Network) dial(address string) (*grpc.ClientConn, error) {
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 
 	if err != nil {
 		return nil, err
 	}
 
-	client, err := protobuf.NewNoiseClient(conn).Stream(context.Background())
-	if err != nil {
-		return nil, err
-	}
-
-	return client, nil
+	return conn, nil
 }
 
 // Marshals message into proto.Message and signs it with this node's private key.
