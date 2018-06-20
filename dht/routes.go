@@ -2,9 +2,10 @@ package dht
 
 import (
 	"container/list"
-	"github.com/perlin-network/noise/peer"
 	"sort"
 	"sync"
+
+	"github.com/perlin-network/noise/peer"
 )
 
 const BucketSize = 20
@@ -146,13 +147,13 @@ func (t *RoutingTable) PeerExists(target peer.ID) bool {
 
 	bucket.mutex.Lock()
 
+	defer bucket.mutex.Unlock()
+
 	for e := bucket.Front(); e != nil; e = e.Next() {
 		if e.Value.(peer.ID).Equals(target) {
 			return true
 		}
 	}
-
-	bucket.mutex.Unlock()
 
 	return false
 }

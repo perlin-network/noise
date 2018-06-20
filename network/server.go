@@ -1,12 +1,13 @@
 package network
 
 import (
+	"io"
+
 	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
-	"io"
 )
 
 type Server struct {
@@ -32,8 +33,10 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 		// Should any errors occur reading packets, disconnect the peer.
 		if err == io.EOF || err != nil {
 			if client.id != nil {
-				s.network.Routes.RemovePeer(*client.id)
-				log.Info("Peer " + client.id.Address + " has disconnected.")
+				if s.network.Routes.PeerExists(*client.id) {
+					s.network.Routes.RemovePeer(*client.id)
+					log.Info("Peer " + client.id.Address + " has disconnected.")
+				}
 			}
 			return nil
 		}
