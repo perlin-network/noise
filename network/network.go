@@ -19,14 +19,26 @@ import (
 )
 
 type Network struct {
+	// Routing table.
 	Routes  *dht.RoutingTable
+
+	// Node's keypair.
 	Keys    *crypto.KeyPair
+
+	// Node's network information.
 	Address string
 	Port    int
 
+	// To do with handling request/responses.
 	RequestNonce uint64
+	// map[uint64]*proto.Message
 	Requests     *sync.Map
 
+	// Map of incoming message processors for the network.
+	// map[proto.Message]MessageProcessor
+	Processors *sync.Map
+
+	// Node's cryptographic ID.
 	ID peer.ID
 
 	listener net.Listener
