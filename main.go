@@ -4,13 +4,14 @@ import (
 	"flag"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/grpc_utils"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
 )
 
-//
 func filterPeers(host string, port int, peers []string) []string {
 	currAddress := fmt.Sprintf("%s:%d", host, port)
 	peersLen := len(peers)
@@ -18,6 +19,10 @@ func filterPeers(host string, port int, peers []string) []string {
 	visitedSet := make(map[string]struct{}, peersLen)
 	for _, peer := range peers {
 		if peer != currAddress {
+			if len(strings.Trim(peer, " ")) == 0 {
+				// remove blank peers
+				continue
+			}
 			// remove if it is the current host and port
 			if _, ok := visitedSet[peer]; !ok {
 				// remove if it is a duplicate in the list
@@ -48,6 +53,11 @@ func main() {
 	net := network.CreateNetwork(keys, host, port)
 
 	net.Listen()
+
+	if err := grpc_utils.BlockUntilServerReady(host, port, 10*time.Second); err != nil {
+		log.Print(fmt.Sprintf("Error: %v", err))
+		return
+	}
 
 	if len(peers) > 0 {
 		net.Bootstrap(peers...)

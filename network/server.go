@@ -1,6 +1,7 @@
 package network
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/golang/protobuf/ptypes"
@@ -61,7 +62,7 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 
 			err := client.establishConnection()
 			if err != nil {
-				log.Debug("Failed to connect to peer " + client.id.Address + ".")
+				log.Debug("Failed to connect to peer " + client.id.Address + fmt.Sprintf(" err=[%+v]", err))
 				return err
 			}
 		} else if !client.id.Equals(val) {
