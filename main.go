@@ -19,10 +19,6 @@ func filterPeers(host string, port int, peers []string) []string {
 	visitedSet := make(map[string]struct{}, peersLen)
 	for _, peer := range peers {
 		if peer != currAddress {
-			if len(strings.Trim(peer, " ")) == 0 {
-				// remove blank peers
-				continue
-			}
 			// remove if it is the current host and port
 			if _, ok := visitedSet[peer]; !ok {
 				// remove if it is a duplicate in the list
