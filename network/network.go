@@ -3,6 +3,14 @@ package network
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/crypto"
@@ -11,11 +19,10 @@ import (
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"google.golang.org/grpc"
-	"net"
-	"strconv"
-	"sync"
-	"sync/atomic"
-	"time"
+)
+
+var (
+	dialTimeout = 3 * time.Second
 )
 
 type Network struct {
@@ -31,6 +38,8 @@ type Network struct {
 
 	listener net.Listener
 	server   *Server
+
+	ConnPool *sync.Map
 }
 
 func (n *Network) Host() string {
@@ -87,18 +96,28 @@ func (n *Network) Bootstrap(addresses ...string) {
 	}
 }
 
-// Dial a peer.
-func (n *Network) Dial(address string) (*grpc.ClientConn, error) {
-	return n.dial(address)
-}
-
 // Dials a peer via. gRPC.
 func (n *Network) dial(address string) (*grpc.ClientConn, error) {
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	if len(strings.Trim(address, " ")) == 0 {
+		return nil, fmt.Errorf("Cannot dial, address was empty")
+	}
+	log.Info("[dial] dialing addr: " + address)
+	//debug.PrintStack()
+	if conn, ok := n.ConnPool.Load(address); ok && conn != nil {
+		log.Debug("[dial] reusing existing connection: " + address)
+		return conn.(*grpc.ClientConn), nil
+	}
 
+	ctx, _ := context.WithTimeout(context.Background(), dialTimeout)
+	opts := []grpc.DialOption{
+		grpc.WithInsecure(),
+		grpc.WithBlock(),
+	}
+	conn, err := grpc.DialContext(ctx, address, opts...)
 	if err != nil {
 		return nil, err
 	}
+	n.ConnPool.Store(address, conn)
 
 	return conn, nil
 }

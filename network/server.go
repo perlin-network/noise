@@ -1,6 +1,8 @@
 package network
 
 import (
+	"context"
+	"fmt"
 	"io"
 
 	"github.com/golang/protobuf/ptypes"
@@ -18,6 +20,10 @@ func createServer(network *Network) *Server {
 	return &Server{
 		network: network,
 	}
+}
+
+func (s *Server) Healthz(ctx context.Context, in *protobuf.HealthRequest) (*protobuf.HealthResponse, error) {
+	return &protobuf.HealthResponse{Status: "ready"}, nil
 }
 
 // Handles new incoming peer connections and their messages.
@@ -61,7 +67,7 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 
 			err := client.establishConnection()
 			if err != nil {
-				log.Debug("Failed to connect to peer " + client.id.Address + ".")
+				log.Debug(fmt.Sprintf("Failed to connect to peer %s err=[%+v]", client.id.Address, err))
 				return err
 			}
 		} else if !client.id.Equals(val) {

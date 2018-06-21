@@ -4,13 +4,14 @@ import (
 	"flag"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/grpc_utils"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
 )
 
-//
 func filterPeers(host string, port int, peers []string) []string {
 	currAddress := fmt.Sprintf("%s:%d", host, port)
 	peersLen := len(peers)
@@ -57,6 +58,11 @@ func main() {
 	}
 
 	net.Listen()
+
+	if err := grpc_utils.BlockUntilServerReady(host, port, 10*time.Second); err != nil {
+		log.Print(fmt.Sprintf("Error: %v", err))
+		return
+	}
 
 	if len(peers) > 0 {
 		net.Bootstrap(peers...)

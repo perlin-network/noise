@@ -2,6 +2,8 @@ package network
 
 import (
 	"context"
+	"strings"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/log"
@@ -10,7 +12,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"strings"
 )
 
 type IncomingMessage struct {
@@ -49,7 +50,7 @@ func (c *PeerClient) establishConnection() error {
 		return nil
 	}
 
-	return status.Errorf(codes.Internal, "either client id is nil or client conn has alreayd been established")
+	return status.Errorf(codes.Internal, "either client id is nil or client conn has already been established")
 }
 
 func CreatePeerClient(server *Server) *PeerClient {
@@ -89,7 +90,9 @@ func (c *PeerClient) process() {
 				c.network().Routes.Update(peer.CreateID(addresses[i], publicKeys[i]))
 			}
 
-			log.Info("[handshake] bootstrapped w/ peer(s): " + strings.Join(c.network().Routes.GetPeerAddresses(), ", ") + ".")
+			log.Info("[handshake] bootstrapped w/ peer(s): routes=" + strings.Join(c.network().Routes.GetPeerAddresses(), ", ") + ".")
+
+			//log.Debug(fmt.Sprintf("  msg=%v, connections=%+v", c.id, c.network().ConnPool))
 		case *protobuf.LookupNodeRequest:
 			response := &protobuf.LookupNodeResponse{Peers: []*protobuf.ID{}}
 
@@ -116,6 +119,7 @@ func (c *PeerClient) process() {
 func (c *PeerClient) close() {
 	if c.conn != nil {
 		c.conn.Close()
+		c.network().ConnPool.Delete(c.id.Address)
 	}
 
 	close(c.mailbox)

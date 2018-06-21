@@ -2,11 +2,12 @@ package network
 
 import (
 	"errors"
+	"strconv"
+	"sync"
+
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/peer"
-	"strconv"
-	"sync"
 )
 
 type NetworkBuilder struct {
@@ -52,6 +53,8 @@ func (builder *NetworkBuilder) BuildNetwork() (*Network, error) {
 		Requests:     &sync.Map{},
 
 		Routes: dht.CreateRoutingTable(id),
+
+		ConnPool: &sync.Map{},
 	}
 
 	return network, nil
