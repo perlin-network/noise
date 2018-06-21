@@ -96,6 +96,11 @@ func (n *Network) Bootstrap(addresses ...string) {
 	}
 }
 
+// Dial a peer.
+func (n *Network) Dial(address string) (*grpc.ClientConn, error) {
+	return n.dial(address)
+}
+
 // Dials a peer via. gRPC.
 func (n *Network) dial(address string) (*grpc.ClientConn, error) {
 	if len(strings.Trim(address, " ")) == 0 {
