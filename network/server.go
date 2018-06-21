@@ -1,6 +1,7 @@
 package network
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -19,6 +20,10 @@ func createServer(network *Network) *Server {
 	return &Server{
 		network: network,
 	}
+}
+
+func (s *Server) Healthz(ctx context.Context, in *protobuf.HealthRequest) (*protobuf.HealthResponse, error) {
+	return &protobuf.HealthResponse{Status: "ready"}, nil
 }
 
 // Handles new incoming peer connections and their messages.

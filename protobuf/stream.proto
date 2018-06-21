@@ -9,8 +9,8 @@ option java_outer_classname = "NoiseProto";
 import "google/protobuf/any.proto";
 
 service Noise {
-    rpc Stream (stream Message) returns (stream Message) {
-    }
+    rpc Stream (stream Message) returns (stream Message) {}
+    rpc Healthz (HealthRequest) returns (HealthResponse) {}
 }
 
 message ID {
@@ -43,4 +43,10 @@ message LookupNodeRequest {
 }
 message LookupNodeResponse {
     repeated ID peers = 1;
+}
+
+message HealthRequest {
+}
+message HealthResponse {
+    string status = 1;
 }

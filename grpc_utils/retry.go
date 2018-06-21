@@ -29,15 +29,15 @@ func BlockUntilServerReady(host string, port int, timeout time.Duration) error {
 		defer conn.Close()
 
 		client := protobuf.NewNoiseClient(conn)
-		if stream, err := client.Stream(context.Background()); err != nil {
+		if resp, err := client.Healthz(context.Background(), &protobuf.HealthRequest{}); err != nil {
 			continue
 		} else {
-			if err := stream.CloseSend(); err != nil {
-				log.Debug(fmt.Sprintf("Close error: %+v", err))
+			if resp.Status != "ready" {
+				continue
 			}
-			conn.Close()
 		}
-		time.Sleep(3 * time.Second)
+		conn.Close()
+		time.Sleep(2 * time.Second)
 		log.Debug(fmt.Sprintf("Server ready after %d ms\n", time.Now().Sub(startTime).Nanoseconds()/1000000))
 		return nil
 	}
