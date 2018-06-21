@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/crypto"
@@ -68,7 +69,12 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 			err := client.establishConnection()
 			if err != nil {
 				log.Debug("Failed to connect to peer " + client.id.Address + fmt.Sprintf(" err=[%+v]", err))
-				return err
+				// HACK: retry failed connection, server may not be ready yet
+				time.Sleep(3 * time.Second)
+				if err := client.establishConnection(); err != nil {
+					log.Debug("Failed to connect on retry to peer " + client.id.Address + fmt.Sprintf(" err=[%+v]", err))
+					return err
+				}
 			}
 		} else if !client.id.Equals(val) {
 			continue

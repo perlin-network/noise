@@ -13,8 +13,6 @@ import (
 func BlockUntilServerReady(host string, port int, timeout time.Duration) error {
 	address := fmt.Sprintf("%s:%d", host, port)
 	startTime := time.Now()
-	//time.Sleep(3 * time.Second)
-	//return nil
 
 	for i := 0; i < 100; i++ {
 		if time.Now().Sub(startTime) > timeout {
@@ -37,7 +35,6 @@ func BlockUntilServerReady(host string, port int, timeout time.Duration) error {
 			}
 		}
 		conn.Close()
-		time.Sleep(2 * time.Second)
 		log.Debug(fmt.Sprintf("Server ready after %d ms\n", time.Now().Sub(startTime).Nanoseconds()/1000000))
 		return nil
 	}
