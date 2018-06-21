@@ -45,7 +45,16 @@ func main() {
 	log.Print("Private Key: " + keys.PrivateKeyHex())
 	log.Print("Public Key: " + keys.PublicKeyHex())
 
-	net := network.CreateNetwork(keys, host, port)
+	builder := network.NetworkBuilder{}
+	builder.SetKeys(keys)
+	builder.SetAddress(host)
+	builder.SetPort(port)
+
+	net, err := builder.BuildNetwork()
+	if err != nil {
+		log.Print(err)
+		return
+	}
 
 	net.Listen()
 
