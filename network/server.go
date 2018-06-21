@@ -32,10 +32,10 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 
 		// Should any errors occur reading packets, disconnect the peer.
 		if err == io.EOF || err != nil {
-			if client.id != nil {
-				if s.network.Routes.PeerExists(*client.id) {
-					s.network.Routes.RemovePeer(*client.id)
-					log.Info("Peer " + client.id.Address + " has disconnected.")
+			if client.Id != nil {
+				if s.network.Routes.PeerExists(*client.Id) {
+					s.network.Routes.RemovePeer(*client.Id)
+					log.Info("Peer " + client.Id.Address + " has disconnected.")
 				}
 			}
 			return nil
@@ -56,15 +56,15 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 		val := peer.ID(*raw.Sender)
 
 		// Just in case, set the peer ID only once.
-		if client.id == nil {
-			client.id = &val
+		if client.Id == nil {
+			client.Id = &val
 
 			err := client.establishConnection()
 			if err != nil {
-				log.Debug("Failed to connect to peer " + client.id.Address + ".")
+				log.Debug("Failed to connect to peer " + client.Id.Address + ".")
 				return err
 			}
-		} else if !client.id.Equals(val) {
+		} else if !client.Id.Equals(val) {
 			continue
 		}
 
@@ -80,10 +80,10 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 		if raw.Nonce > 0 && raw.IsResponse {
 			s.network.HandleResponse(raw.Nonce, msg)
 		} else {
-			// Forward it to mailbox of client.
+			// Forward it to mailbox of Client.
 			client.mailbox <- IncomingMessage{
-				msg:   ptr.Message,
-				nonce: raw.Nonce,
+				Message: ptr.Message,
+				Nonce:   raw.Nonce,
 			}
 		}
 	}
