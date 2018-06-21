@@ -21,6 +21,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+var (
+	dialTimeout = 3 * time.Second
+)
+
 type Network struct {
 	Routes  *dht.RoutingTable
 	Keys    *crypto.KeyPair
@@ -104,7 +108,12 @@ func (n *Network) dial(address string) (*grpc.ClientConn, error) {
 		return conn, nil
 	}
 
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	ctx, _ := context.WithTimeout(context.Background(), dialTimeout)
+	opts := []grpc.DialOption{
+		grpc.WithInsecure(),
+		grpc.WithBlock(),
+	}
+	conn, err := grpc.DialContext(ctx, address, opts...)
 	if err != nil {
 		return nil, err
 	}
