@@ -1,18 +1,18 @@
 package network
 
 import (
+	"errors"
 	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/peer"
 	"strconv"
 	"sync"
-	"github.com/perlin-network/noise/dht"
-	"errors"
 )
 
 type NetworkBuilder struct {
-	keys *crypto.KeyPair
+	keys    *crypto.KeyPair
 	address string
-	port int
+	port    int
 }
 
 func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
@@ -42,18 +42,17 @@ func (builder *NetworkBuilder) BuildNetwork() (*Network, error) {
 
 	id := peer.CreateID(builder.address+":"+strconv.Itoa(builder.port), builder.keys.PublicKey)
 
-	network := &Network {
-		Keys: builder.keys,
+	network := &Network{
+		Keys:    builder.keys,
 		Address: builder.address,
-		Port: builder.port,
-		ID: id,
+		Port:    builder.port,
+		ID:      id,
 
 		RequestNonce: 0,
 		Requests:     &sync.Map{},
 
 		Routes: dht.CreateRoutingTable(id),
 	}
-
 
 	return network, nil
 }
