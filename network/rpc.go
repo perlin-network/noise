@@ -2,10 +2,11 @@ package network
 
 import (
 	"context"
+	"sync"
+
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
-	"sync"
 )
 
 func bootstrapPeers(network *Network, target peer.ID, count int) (addresses []string, publicKeys [][]byte) {
@@ -36,10 +37,10 @@ func bootstrapPeers(network *Network, target peer.ID, count int) (addresses []st
 					return
 				}
 
-				protoId := protobuf.ID(peerId)
+				protoID := protobuf.ID(peerId)
 
 				request := &protobuf.LookupNodeRequest{
-					Target: &protoId,
+					Target: &protoID,
 				}
 
 				response, err := network.Request(client, request)

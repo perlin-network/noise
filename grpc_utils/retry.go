@@ -6,37 +6,25 @@ import (
 	"time"
 
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/protobuf"
 	"google.golang.org/grpc"
 )
 
-func BlockUntilServerReady(host string, port int, timeout time.Duration) error {
+func BlockUntilServerReady(host string, port int, dialTimeout time.Duration) error {
 	address := fmt.Sprintf("%s:%d", host, port)
 	startTime := time.Now()
 
-	for i := 0; i < 100; i++ {
-		if time.Now().Sub(startTime) > timeout {
-			break
-		}
-
-		time.Sleep(time.Duration(100*i) * time.Millisecond)
-		conn, err := grpc.Dial(address, grpc.WithInsecure())
-		if err != nil {
-			continue
-		}
-		defer conn.Close()
-
-		client := protobuf.NewNoiseClient(conn)
-		if resp, err := client.Healthz(context.Background(), &protobuf.HealthRequest{}); err != nil {
-			continue
-		} else {
-			if resp.Status != "ready" {
-				continue
-			}
-		}
-		conn.Close()
-		log.Debug(fmt.Sprintf("Server ready after %d ms\n", time.Now().Sub(startTime).Nanoseconds()/1000000))
-		return nil
+	ctx, cancel := context.WithTimeout(context.Background(), dialTimeout)
+	defer cancel()
+	opts := []grpc.DialOption{
+		grpc.WithInsecure(),
+		grpc.WithBlock(),
 	}
-	return fmt.Errorf("Unable to connect locally after %f seconds", time.Now().Sub(startTime).Seconds())
+	conn, err := grpc.DialContext(ctx, address, opts...)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	log.Debug(fmt.Sprintf("Server ready after %d ms\n", time.Now().Sub(startTime).Nanoseconds()/1000000))
+	return nil
 }
