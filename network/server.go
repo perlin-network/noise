@@ -68,11 +68,12 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 
 			err := client.establishConnection()
 			if err != nil {
-				log.Debug("Failed to connect to peer " + client.id.Address + fmt.Sprintf(" err=[%+v]", err))
+				retryTime := 3
+				log.Debug(fmt.Sprintf("Failed to connect to peer %s err=[%+v], will retry in %d sec", client.id.Address, err, retryTime))
 				// HACK: retry failed connection, server may not be ready yet
-				time.Sleep(3 * time.Second)
+				time.Sleep(time.Duration(retryTime) * time.Second)
 				if err := client.establishConnection(); err != nil {
-					log.Debug("Failed to connect on retry to peer " + client.id.Address + fmt.Sprintf(" err=[%+v]", err))
+					log.Debug(fmt.Sprintf("Failed to connect to peer %s err=[%+v], retry failed", client.id.Address, err))
 					return err
 				}
 			}
