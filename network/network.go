@@ -38,23 +38,6 @@ type Network struct {
 	ConnPool map[string]*grpc.ClientConn
 }
 
-func CreateNetwork(keys *crypto.KeyPair, address string, port int) *Network {
-	id := peer.CreateID(address+":"+strconv.Itoa(port), keys.PublicKey)
-	return &Network{
-		Keys:    keys,
-		Address: address,
-		Port:    port,
-		ID:      id,
-
-		RequestNonce: 0,
-		Requests:     &sync.Map{},
-
-		Routes: dht.CreateRoutingTable(peer.CreateID(id.Address, keys.PublicKey)),
-
-		ConnPool: map[string]*grpc.ClientConn{},
-	}
-}
-
 func (n *Network) Host() string {
 	return n.Address + ":" + strconv.Itoa(n.Port)
 }
