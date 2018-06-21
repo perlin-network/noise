@@ -90,9 +90,7 @@ func (c *PeerClient) process() {
 				c.network().Routes.Update(peer.CreateID(addresses[i], publicKeys[i]))
 			}
 
-			log.Info("[handshake] bootstrapped w/ peer(s): routes=" + strings.Join(c.network().Routes.GetPeerAddresses(), ", ") + ".")
-
-			//log.Debug(fmt.Sprintf("  msg=%v, connections=%+v", c.id, c.network().ConnPool))
+			log.Info("[handshake] bootstrapped w/ peer(s): " + strings.Join(c.network().Routes.GetPeerAddresses(), ", ") + ".")
 		case *protobuf.LookupNodeRequest:
 			response := &protobuf.LookupNodeResponse{Peers: []*protobuf.ID{}}
 

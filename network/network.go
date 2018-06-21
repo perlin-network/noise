@@ -101,13 +101,13 @@ func (n *Network) dial(address string) (*grpc.ClientConn, error) {
 	if len(strings.Trim(address, " ")) == 0 {
 		return nil, fmt.Errorf("Cannot dial, address was empty")
 	}
-	log.Info("[dial] dialing addr: " + address)
-	//debug.PrintStack()
+
+	// load a cached connection
 	if conn, ok := n.ConnPool.Load(address); ok && conn != nil {
-		log.Debug("[dial] reusing existing connection: " + address)
 		return conn.(*grpc.ClientConn), nil
 	}
 
+	// block in case the server on the other side isn't ready right away
 	ctx, _ := context.WithTimeout(context.Background(), dialTimeout)
 	opts := []grpc.DialOption{
 		grpc.WithInsecure(),
