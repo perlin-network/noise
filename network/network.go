@@ -33,21 +33,6 @@ type Network struct {
 	server   *Server
 }
 
-func CreateNetwork(keys *crypto.KeyPair, address string, port int) *Network {
-	id := peer.CreateID(address+":"+strconv.Itoa(port), keys.PublicKey)
-	return &Network{
-		Keys:    keys,
-		Address: address,
-		Port:    port,
-		ID:      id,
-
-		RequestNonce: 0,
-		Requests:     &sync.Map{},
-
-		Routes: dht.CreateRoutingTable(peer.CreateID(id.Address, keys.PublicKey)),
-	}
-}
-
 func (n *Network) Host() string {
 	return n.Address + ":" + strconv.Itoa(n.Port)
 }
