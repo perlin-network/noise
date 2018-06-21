@@ -20,22 +20,22 @@ import (
 
 type Network struct {
 	// Routing table.
-	Routes  *dht.RoutingTable
+	Routes *dht.RoutingTable
 
 	// Node's keypair.
-	Keys    *crypto.KeyPair
+	Keys *crypto.KeyPair
 
-	// Node's network information.
+	// Node's Network information.
 	Address string
 	Port    int
 
 	// To do with handling request/responses.
 	RequestNonce uint64
 	// map[uint64]*proto.Message
-	Requests     *sync.Map
+	Requests *sync.Map
 
-	// Map of incoming message processors for the network.
-	// map[proto.Message]MessageProcessor
+	// Map of incoming message processors for the Network.
+	// map[string]MessageProcessor
 	Processors *sync.Map
 
 	// Node's cryptographic ID.
@@ -86,7 +86,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 			continue
 		}
 
-		// Create a temporary client for now and send a handshake request.
+		// Create a temporary Client for now and send a handshake request.
 		client, err := protobuf.NewNoiseClient(conn).Stream(context.Background())
 		if err != nil {
 			continue
@@ -183,10 +183,10 @@ func (n *Network) Request(client Sendable, message proto.Message) (proto.Message
 		return nil, err
 	}
 
-	// Set the request nonce.
+	// Set the request Nonce.
 	msg.Nonce = atomic.AddUint64(&n.RequestNonce, 1)
 
-	// Send the client the request.
+	// Send the Client the request.
 	err = client.Send(msg)
 	if err != nil {
 		return nil, err

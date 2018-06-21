@@ -1,14 +1,15 @@
-package network
+package discovery
 
 import (
 	"context"
 	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"sync"
 )
 
-func bootstrapPeers(network *Network, target peer.ID, count int) (addresses []string, publicKeys [][]byte) {
+func bootstrapPeers(network *network.Network, target peer.ID, count int) (addresses []string, publicKeys [][]byte) {
 	queue := []peer.ID{target}
 
 	visited := make(map[string]struct{})
@@ -26,7 +27,7 @@ func bootstrapPeers(network *Network, target peer.ID, count int) (addresses []st
 			go func(peerId peer.ID) {
 				defer wait.Done()
 
-				conn, err := network.dial(peerId.Address)
+				conn, err := network.Dial(peerId.Address)
 				if err != nil {
 					return
 				}

@@ -7,7 +7,8 @@ import (
 
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/network"
+	"github.com/perlin-network/noise/network/builders"
+	"github.com/perlin-network/noise/network/discovery"
 )
 
 //
@@ -45,10 +46,13 @@ func main() {
 	log.Print("Private Key: " + keys.PrivateKeyHex())
 	log.Print("Public Key: " + keys.PublicKeyHex())
 
-	builder := network.NetworkBuilder{}
+	builder := &builders.NetworkBuilder{}
 	builder.SetKeys(keys)
 	builder.SetAddress(host)
 	builder.SetPort(port)
+
+	// Register peer discovery RPC handlers.
+	discovery.BootstrapPeerDiscovery(builder)
 
 	net, err := builder.BuildNetwork()
 	if err != nil {
