@@ -86,7 +86,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 			continue
 		}
 
-		// Create a temporary Client for now and send a handshake request.
+		// Create a temporary client for now and send a handshake request.
 		client, err := protobuf.NewNoiseClient(conn).Stream(context.Background())
 		if err != nil {
 			continue
@@ -183,10 +183,10 @@ func (n *Network) Request(client Sendable, message proto.Message) (proto.Message
 		return nil, err
 	}
 
-	// Set the request Nonce.
+	// Set the request nonce.
 	msg.Nonce = atomic.AddUint64(&n.RequestNonce, 1)
 
-	// Send the Client the request.
+	// Send the client the request.
 	err = client.Send(msg)
 	if err != nil {
 		return nil, err

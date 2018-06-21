@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"reflect"
+	"fmt"
 )
 
 type IncomingMessage struct {
@@ -17,7 +18,7 @@ type IncomingMessage struct {
 	Nonce   uint64
 }
 
-// Represents a single incoming peer Client.
+// Represents a single incoming peer client.
 type PeerClient struct {
 	server *Server
 
@@ -58,7 +59,7 @@ func CreatePeerClient(server *Server) *PeerClient {
 	}
 }
 
-// Refer to current Network.
+// Refer to current network.
 func (c *PeerClient) Network() *Network {
 	return c.server.network
 }
@@ -66,18 +67,22 @@ func (c *PeerClient) Network() *Network {
 // Event loop for processing through incoming request/responses.
 func (c *PeerClient) process() {
 	for item := range c.mailbox {
-		processor, exists := c.Network().Processors.Load(reflect.TypeOf(item.Message).String())
+		name := reflect.TypeOf(item.Message).String()
+		processor, exists := c.Network().Processors.Load(name)
 
 		if exists {
 			processor := processor.(MessageProcessor)
-			processor.Handle(c, &item)
+			err := processor.Handle(c, &item)
+			if err != nil {
+				log.Debug(fmt.Sprintf("An error occurred handling %x: %x", name, err))
+			}
 		} else {
-			log.Debug("Unknown message type received:", reflect.TypeOf(item.Message).String())
+			log.Debug("Unknown message type received:", name)
 		}
 	}
 }
 
-// Clean up mailbox for peer Client.
+// Clean up mailbox for peer client.
 func (c *PeerClient) close() {
 	if c.Conn != nil {
 		c.Conn.Close()

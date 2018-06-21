@@ -12,7 +12,7 @@ import (
 
 type HandshakeRequestProcessor struct{}
 
-func (HandshakeRequestProcessor) Handle(client *network.PeerClient, message *network.IncomingMessage) {
+func (HandshakeRequestProcessor) Handle(client *network.PeerClient, message *network.IncomingMessage) error {
 	// Update routing table w/ peer's ID.
 	client.Network().Routes.Update(*client.Id)
 
@@ -20,13 +20,14 @@ func (HandshakeRequestProcessor) Handle(client *network.PeerClient, message *net
 	err := client.Network().Tell(client.Client, &protobuf.HandshakeResponse{})
 
 	if err != nil {
-		// TODO: Handle error.
+		return err
 	}
+	return nil
 }
 
 type HandshakeResponseProcessor struct{}
 
-func (HandshakeResponseProcessor) Handle(client *network.PeerClient, raw *network.IncomingMessage) {
+func (HandshakeResponseProcessor) Handle(client *network.PeerClient, raw *network.IncomingMessage) error {
 	// Update routing table w/ peer's ID.
 	client.Network().Routes.Update(*client.Id)
 
@@ -38,11 +39,13 @@ func (HandshakeResponseProcessor) Handle(client *network.PeerClient, raw *networ
 	}
 
 	log.Info("[handshake] bootstrapped w/ peer(s): " + strings.Join(client.Network().Routes.GetPeerAddresses(), ", ") + ".")
+
+	return nil
 }
 
 type LookupNodeRequestProcessor struct{}
 
-func (LookupNodeRequestProcessor) Handle(c *network.PeerClient, raw *network.IncomingMessage) {
+func (LookupNodeRequestProcessor) Handle(c *network.PeerClient, raw *network.IncomingMessage) error {
 	msg := raw.Message.(*protobuf.LookupNodeRequest)
 	response := &protobuf.LookupNodeResponse{Peers: []*protobuf.ID{}}
 
@@ -61,6 +64,8 @@ func (LookupNodeRequestProcessor) Handle(c *network.PeerClient, raw *network.Inc
 	}
 
 	log.Info("[lookup] connected peers: " + strings.Join(c.Network().Routes.GetPeerAddresses(), ", "))
+
+	return nil
 }
 
 // Registers necessary message processors for peer discovery.
