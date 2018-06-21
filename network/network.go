@@ -39,7 +39,7 @@ type Network struct {
 	listener net.Listener
 	server   *Server
 
-	ConnPool map[string]*grpc.ClientConn
+	ConnPool *sync.Map
 }
 
 func (n *Network) Host() string {
@@ -103,9 +103,9 @@ func (n *Network) dial(address string) (*grpc.ClientConn, error) {
 	}
 	log.Info("[dial] dialing addr: " + address)
 	//debug.PrintStack()
-	if conn, ok := n.ConnPool[address]; ok && conn != nil {
+	if conn, ok := n.ConnPool.Load(address); ok && conn != nil {
 		log.Debug("[dial] reusing existing connection: " + address)
-		return conn, nil
+		return conn.(*grpc.ClientConn), nil
 	}
 
 	ctx, _ := context.WithTimeout(context.Background(), dialTimeout)
@@ -117,9 +117,9 @@ func (n *Network) dial(address string) (*grpc.ClientConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	n.ConnPool[address] = conn
+	n.ConnPool.Store(address, conn)
 
-	return n.ConnPool[address], nil
+	return conn, nil
 }
 
 // Marshals message into proto.Message and signs it with this node's private key.

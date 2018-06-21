@@ -8,7 +8,6 @@ import (
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/peer"
-	"google.golang.org/grpc"
 )
 
 type NetworkBuilder struct {
@@ -55,7 +54,7 @@ func (builder *NetworkBuilder) BuildNetwork() (*Network, error) {
 
 		Routes: dht.CreateRoutingTable(id),
 
-		ConnPool: map[string]*grpc.ClientConn{},
+		ConnPool: &sync.Map{},
 	}
 
 	return network, nil
