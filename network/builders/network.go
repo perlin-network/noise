@@ -2,14 +2,15 @@ package builders
 
 import (
 	"errors"
+	"reflect"
+	"strconv"
+	"sync"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
-	"reflect"
-	"strconv"
-	"sync"
 )
 
 type NetworkBuilder struct {
@@ -83,6 +84,8 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 		Processors: builder.processors,
 
 		Routes: dht.CreateRoutingTable(id),
+
+		ConnPool: &sync.Map{},
 	}
 
 	return network, nil

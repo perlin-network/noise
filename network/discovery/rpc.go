@@ -2,11 +2,12 @@ package discovery
 
 import (
 	"context"
+	"sync"
+
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
-	"sync"
 )
 
 func bootstrapPeers(network *network.Network, target peer.ID, count int) (addresses []string, publicKeys [][]byte) {
@@ -37,10 +38,10 @@ func bootstrapPeers(network *network.Network, target peer.ID, count int) (addres
 					return
 				}
 
-				protoId := protobuf.ID(peerId)
+				protoID := protobuf.ID(peerId)
 
 				request := &protobuf.LookupNodeRequest{
-					Target: &protoId,
+					Target: &protoID,
 				}
 
 				response, err := network.Request(client, request)

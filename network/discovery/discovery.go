@@ -1,13 +1,14 @@
 package discovery
 
 import (
+	"strings"
+
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
-	"strings"
 )
 
 type HandshakeRequestProcessor struct{}
@@ -38,7 +39,7 @@ func (HandshakeResponseProcessor) Handle(client *network.PeerClient, raw *networ
 		client.Network().Routes.Update(peer.CreateID(addresses[i], publicKeys[i]))
 	}
 
-	log.Info("[handshake] bootstrapped w/ peer(s): " + strings.Join(client.Network().Routes.GetPeerAddresses(), ", ") + ".")
+	log.Info("[handshake] bootstrapped w/ peer(s): " + strings.Join(getConnectedPeers(client), ", ") + ".")
 
 	return nil
 }
@@ -73,4 +74,13 @@ func BootstrapPeerDiscovery(builder *builders.NetworkBuilder) {
 	builder.AddProcessor((*protobuf.HandshakeRequest)(nil), new(HandshakeRequestProcessor))
 	builder.AddProcessor((*protobuf.HandshakeResponse)(nil), new(HandshakeResponseProcessor))
 	builder.AddProcessor((*protobuf.LookupNodeRequest)(nil), new(LookupNodeRequestProcessor))
+}
+
+func getConnectedPeers(c *network.PeerClient) []string {
+	peers := []string{}
+	c.Network().ConnPool.Range(func(k, v interface{}) bool {
+		peers = append(peers, k.(string))
+		return true
+	})
+	return peers
 }
