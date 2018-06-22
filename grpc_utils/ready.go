@@ -25,6 +25,6 @@ func BlockUntilConnectionReady(host string, port int, dialTimeout time.Duration)
 	}
 	defer conn.Close()
 
-	log.Debug(fmt.Sprintf("Server ready after %d ms\n", int(time.Now().Sub(startTime).Seconds()*1000)))
+	log.Debug(fmt.Sprintf("Server ready after %fs\n", time.Now().Sub(startTime).Seconds()))
 	return nil
 }
