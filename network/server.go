@@ -39,7 +39,7 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 					log.Info("Peer " + client.Id.Address + " has disconnected.")
 				}
 			}
-			return nil
+			break
 		}
 
 		// Check if any of the message headers are invalid or null.
