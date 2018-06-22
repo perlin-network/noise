@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/perlin-network/noise/log"
 	"google.golang.org/grpc"
 )
 
+// block until a connection to the host and port is successful
 func BlockUntilConnectionReady(host string, port int, dialTimeout time.Duration) error {
 	address := fmt.Sprintf("%s:%d", host, port)
-	startTime := time.Now()
 
 	ctx, cancel := context.WithTimeout(context.Background(), dialTimeout)
 	defer cancel()
@@ -25,6 +24,5 @@ func BlockUntilConnectionReady(host string, port int, dialTimeout time.Duration)
 	}
 	defer conn.Close()
 
-	log.Debug(fmt.Sprintf("Server ready after %fs\n", time.Now().Sub(startTime).Seconds()))
 	return nil
 }

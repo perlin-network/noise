@@ -133,9 +133,9 @@ func (n *Network) dial(address string) (*grpc.ClientConn, error) {
 		grpc.WithBlock(),
 	}
 	conn, err := grpc.DialContext(ctx, address, opts...)
+	defer cancel()
 
 	if err != nil {
-		cancel()
 		return nil, err
 	}
 
