@@ -128,18 +128,19 @@ func (n *Network) dial(address string) (*grpc.ClientConn, error) {
 
 	// block in case the server on the other side isn't ready right away
 	ctx, cancel := context.WithTimeout(context.Background(), dialTimeout)
+	defer cancel()
+
 	opts := []grpc.DialOption{
 		grpc.WithInsecure(),
 		grpc.WithBlock(),
 	}
 	conn, err := grpc.DialContext(ctx, address, opts...)
-	defer cancel()
 
 	if err != nil {
 		return nil, err
 	}
 
-	// cache the result
+	// cache the connection
 	n.SocketPool.Store(address, conn)
 
 	return conn, nil
