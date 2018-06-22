@@ -74,7 +74,7 @@ func FromPrivateKeyBytes(rawPrivateKey []byte) (*KeyPair, error) {
 }
 
 func GetPublicKey(rawPrivateKey []byte) []byte {
-	return ed25519.PrivateKey(rawPrivateKey).Public().([]byte)
+	return ed25519.PrivateKey(rawPrivateKey).Public().(ed25519.PublicKey)
 }
 
 func Verify(publicKey []byte, message []byte, signature []byte) bool {
