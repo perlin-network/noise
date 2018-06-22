@@ -49,7 +49,7 @@ type Network struct {
 
 	// Map of connection addresses (string) <-> *grpc.Conn
 	// so that the network doesn't dial multiple times to the same ip
-	ConnPool *sync.Map
+	SocketPool *sync.Map
 }
 
 var (
@@ -122,7 +122,7 @@ func (n *Network) dial(address string) (*grpc.ClientConn, error) {
 	}
 
 	// load a cached connection
-	if conn, ok := n.ConnPool.Load(address); ok && conn != nil {
+	if conn, ok := n.SocketPool.Load(address); ok && conn != nil {
 		return conn.(*grpc.ClientConn), nil
 	}
 
@@ -140,7 +140,7 @@ func (n *Network) dial(address string) (*grpc.ClientConn, error) {
 	}
 
 	// cache the result
-	n.ConnPool.Store(address, conn)
+	n.SocketPool.Store(address, conn)
 
 	return conn, nil
 }

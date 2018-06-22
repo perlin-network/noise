@@ -86,7 +86,7 @@ func (c *PeerClient) process() {
 // Clean up mailbox for peer client.
 func (c *PeerClient) close() {
 	if c.Conn != nil {
-		c.Network().ConnPool.Delete(c.Id.Address)
+		c.Network().SocketPool.Delete(c.Id.Address)
 		c.Conn.Close()
 	}
 

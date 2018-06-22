@@ -85,7 +85,7 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 
 		Routes: dht.CreateRoutingTable(id),
 
-		ConnPool: &sync.Map{},
+		SocketPool: &sync.Map{},
 	}
 
 	return network, nil
