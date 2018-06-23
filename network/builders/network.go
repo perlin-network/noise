@@ -15,7 +15,7 @@ import (
 
 type NetworkBuilder struct {
 	keys    *crypto.KeyPair
-	address string
+	host    string
 	port    int
 
 	// map[string]MessageProcessor
@@ -26,8 +26,8 @@ func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
 	builder.keys = pair
 }
 
-func (builder *NetworkBuilder) SetAddress(address string) {
-	builder.address = address
+func (builder *NetworkBuilder) SetHost(host string) {
+	builder.host = host
 }
 
 func (builder *NetworkBuilder) SetPort(port int) {
@@ -57,7 +57,7 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 		return nil, errors.New("cryptography keypair not provided to Network; cannot create node Id")
 	}
 
-	if len(builder.address) == 0 {
+	if len(builder.host) == 0 {
 		return nil, errors.New("Network requires public server IP for peers to connect to")
 	}
 
@@ -70,11 +70,16 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 		builder.processors = &sync.Map{}
 	}
 
-	id := peer.CreateID(builder.address+":"+strconv.Itoa(builder.port), builder.keys.PublicKey)
+	unifiedHost, err := network.ToUnifiedHost(builder.host)
+	if err != nil {
+		return nil, err
+	}
+
+	id := peer.CreateID(unifiedHost+":"+strconv.Itoa(builder.port), builder.keys.PublicKey)
 
 	network := &network.Network{
 		Keys:    builder.keys,
-		Address: builder.address,
+		Host:    unifiedHost,
 		Port:    builder.port,
 		ID:      id,
 

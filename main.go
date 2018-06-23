@@ -53,7 +53,7 @@ func main() {
 
 	builder := &builders.NetworkBuilder{}
 	builder.SetKeys(keys)
-	builder.SetAddress(host)
+	builder.SetHost(host)
 	builder.SetPort(port)
 
 	// Register peer discovery RPC handlers.
