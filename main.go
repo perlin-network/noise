@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/grpc_utils"
-	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
 )
@@ -32,6 +32,10 @@ func filterPeers(host string, port int, peers []string) []string {
 }
 
 func main() {
+	// glog defaults to logging to a file, override this flag to log to console for testing
+	flag.Set("logtostderr", "true")
+
+	// process other flags
 	portFlag := flag.Int("port", 3000, "port to listen to")
 	hostFlag := flag.String("host", "localhost", "host to listen to")
 	peersFlag := flag.String("peers", "", "peers to connect to")
@@ -44,8 +48,8 @@ func main() {
 
 	keys := crypto.RandomKeyPair()
 
-	log.Print("Private Key: " + keys.PrivateKeyHex())
-	log.Print("Public Key: " + keys.PublicKeyHex())
+	glog.Infof("Private Key: %s", keys.PrivateKeyHex())
+	glog.Infof("Public Key: %s", keys.PublicKeyHex())
 
 	builder := &builders.NetworkBuilder{}
 	builder.SetKeys(keys)
@@ -57,7 +61,7 @@ func main() {
 
 	net, err := builder.BuildNetwork()
 	if err != nil {
-		log.Print(err)
+		glog.Warning(err)
 		return
 	}
 
@@ -65,7 +69,7 @@ func main() {
 
 	blockTimeout := 10 * time.Second
 	if err := grpc_utils.BlockUntilConnectionReady(host, port, blockTimeout); err != nil {
-		log.Info(fmt.Sprintf("Error: port was not available, cannot bootstrap peers, err=%+v", err))
+		glog.Warningf("Error: port was not available, cannot bootstrap peers, err=%+v", err)
 	}
 
 	if len(peers) > 0 {
@@ -73,4 +77,6 @@ func main() {
 	}
 
 	select {}
+
+	glog.Flush()
 }
