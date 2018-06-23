@@ -30,7 +30,7 @@ type PeerClient struct {
 	Stream protobuf.Noise_StreamClient
 
 	// To do with handling request/responses.
-	RequestNonce uint64
+	requestNonce uint64
 	// map[uint64]*proto.Message
 	requests *sync.Map
 
@@ -77,7 +77,7 @@ func CreatePeerClient(server *Server) *PeerClient {
 		server:  server,
 		mailbox: make(chan IncomingMessage),
 
-		RequestNonce: 0,
+		requestNonce: 0,
 		requests:     &sync.Map{},
 	}
 
@@ -182,7 +182,7 @@ func (c *PeerClient) Request(message proto.Message) (proto.Message, error) {
 	}
 
 	// Set the request nonce.
-	msg.Nonce = atomic.AddUint64(&c.RequestNonce, 1)
+	msg.Nonce = atomic.AddUint64(&c.requestNonce, 1)
 
 	// Send the client the request.
 	err = c.Stream.Send(msg)

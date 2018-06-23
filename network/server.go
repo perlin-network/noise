@@ -22,8 +22,12 @@ func createServer(network *Network) *Server {
 
 // Handles new incoming peer connections and their messages.
 func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
-	client := CreatePeerClient(s)
-	defer client.close()
+	var client *PeerClient
+	defer func() {
+		if client != nil {
+			client.close()
+		}
+	}()
 
 	for {
 		raw, err := server.Recv()
@@ -53,6 +57,14 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 		// Derive peer ID.
 		val := peer.ID(*raw.Sender)
 
+		if client == nil {
+			if cached, exists := s.network.Peers.Load(val.Address); exists && cached != nil {
+				client = cached.(*PeerClient)
+			} else {
+				client = CreatePeerClient(s)
+			}
+		}
+
 		// If peer ID has never been set, set it.
 		if client.Id == nil {
 			client.Id = &val
@@ -80,7 +92,7 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 		msg := ptr.Message
 
 		// Handle request/response.
-		if raw.IsResponse {
+		if raw.Nonce > 0 && raw.IsResponse {
 			client.handleResponse(raw.Nonce, msg)
 		} else {
 			// Forward it to mailbox of Client.
