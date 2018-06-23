@@ -7,10 +7,10 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/grpc_utils"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
 	"time"
-	"github.com/perlin-network/noise/grpc_utils"
 )
 
 func filterPeers(host string, port int, peers []string) []string {

@@ -31,8 +31,8 @@ func NewBucket() *Bucket {
 
 func CreateRoutingTable(id peer.ID) *RoutingTable {
 	table := &RoutingTable{
-		self: id,
-		buckets: make([]*Bucket, peer.IdSize * 8),
+		self:    id,
+		buckets: make([]*Bucket, peer.IdSize*8),
 	}
 	for i := 0; i < peer.IdSize*8; i++ {
 		table.buckets[i] = NewBucket()

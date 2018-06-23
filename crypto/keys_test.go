@@ -1,9 +1,9 @@
 package crypto
 
 import (
-	"testing"
 	"crypto/rand"
 	"reflect"
+	"testing"
 )
 
 func TestSignVerify(t *testing.T) {
@@ -12,23 +12,23 @@ func TestSignVerify(t *testing.T) {
 
 	_, err := rand.Read(message)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
 	sig, err := kp.Sign(message)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
 	ok := Verify(kp.PublicKey, message, sig)
 	if !ok {
-		panic("Signature verification failed")
+		t.Fatal("signature verification failed")
 	}
 
 	sig[0] = ^sig[0]
 	ok = Verify(kp.PublicKey, message, sig)
 	if ok {
-		panic("Invalid signature passed verification unexpectedly")
+		t.Fatal("invalid signature passed verification unexpectedly")
 	}
 }
 
@@ -36,10 +36,10 @@ func TestFromPrivateKey(t *testing.T) {
 	kp1 := RandomKeyPair()
 	kp2, err := FromPrivateKey(kp1.PrivateKeyHex())
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
 	if !reflect.DeepEqual(kp1, kp2) {
-		panic("kp1 and kp2 are not deep-equal.")
+		t.Fatal("kp1 and kp2 are not deep-equal.")
 	}
 }

@@ -14,9 +14,9 @@ import (
 )
 
 type NetworkBuilder struct {
-	keys    *crypto.KeyPair
-	host    string
-	port    int
+	keys *crypto.KeyPair
+	host string
+	port int
 
 	// map[string]MessageProcessor
 	processors *sync.Map
@@ -78,10 +78,10 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 	id := peer.CreateID(unifiedHost+":"+strconv.Itoa(builder.port), builder.keys.PublicKey)
 
 	network := &network.Network{
-		Keys:    builder.keys,
-		Host:    unifiedHost,
-		Port:    builder.port,
-		ID:      id,
+		Keys: builder.keys,
+		Host: unifiedHost,
+		Port: builder.port,
+		ID:   id,
 
 		Processors: builder.processors,
 

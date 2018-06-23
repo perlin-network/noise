@@ -1,8 +1,8 @@
 package network
 
 import (
-	"net"
 	"errors"
+	"net"
 )
 
 func ToUnifiedHost(host string) (string, error) {
@@ -17,6 +17,11 @@ func ToUnifiedHost(host string) (string, error) {
 		}
 
 		host = addrs[0]
+
+		// Hacky localhost fix.
+		if host == "::1" {
+			host = "127.0.0.1"
+		}
 	}
 
 	return host, nil

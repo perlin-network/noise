@@ -4,16 +4,16 @@ import (
 	"context"
 	"reflect"
 
+	"errors"
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"google.golang.org/grpc"
 	"sync"
 	"sync/atomic"
 	"time"
-	"errors"
-	"github.com/golang/protobuf/ptypes"
 )
 
 type IncomingMessage struct {
