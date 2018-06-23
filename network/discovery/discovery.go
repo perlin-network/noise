@@ -3,8 +3,8 @@ package discovery
 import (
 	"strings"
 
+	"github.com/golang/glog"
 	"github.com/perlin-network/noise/dht"
-	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/peer"
@@ -39,7 +39,7 @@ func (HandshakeResponseProcessor) Handle(client *network.PeerClient, raw *networ
 		client.Network().Routes.Update(peer.CreateID(addresses[i], publicKeys[i]))
 	}
 
-	log.Info("[handshake] bootstrapped w/ peer(s): " + strings.Join(getConnectedPeers(client), ", ") + ".")
+	glog.Infof("[handshake] bootstrapped w/ peer(s): %s.", strings.Join(getConnectedPeers(client), ", "))
 
 	return nil
 }
@@ -64,7 +64,7 @@ func (LookupNodeRequestProcessor) Handle(c *network.PeerClient, raw *network.Inc
 		// TODO: Handle error responding to client.
 	}
 
-	log.Info("[lookup] connected peers: " + strings.Join(c.Network().Routes.GetPeerAddresses(), ", "))
+	glog.Infof("[lookup] connected peers: %s.", strings.Join(c.Network().Routes.GetPeerAddresses(), ", "))
 
 	return nil
 }

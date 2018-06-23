@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/perlin-network/noise/log"
+	"github.com/golang/glog"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
@@ -47,7 +47,7 @@ func bootstrapPeers(network *network.Network, target peer.ID, count int) (addres
 				response, err := network.Request(client, request)
 
 				if err != nil {
-					log.Debug(err)
+					glog.Warning(err)
 					return
 				}
 

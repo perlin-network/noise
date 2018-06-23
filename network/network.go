@@ -11,11 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/dht"
-	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"google.golang.org/grpc"
@@ -68,7 +68,7 @@ func (n *Network) Listen() {
 func (n *Network) listen() {
 	listener, err := net.Listen("tcp", ":"+strconv.Itoa(n.Port))
 	if err != nil {
-		log.Debug(err)
+		glog.Warningf("Error listening on port %d: %v", n.Port, err)
 		return
 	}
 
@@ -80,11 +80,11 @@ func (n *Network) listen() {
 	n.listener = listener
 	n.server = server
 
-	log.Debug("Listening for peers on port " + strconv.Itoa(n.Port) + ".")
+	glog.Infof("Listening for peers on port %d.", n.Port)
 
 	err = client.Serve(listener)
 	if err != nil {
-		log.Debug(err)
+		glog.Warning("Error serving client code:", err)
 		return
 	}
 }
