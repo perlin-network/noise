@@ -48,8 +48,8 @@ func main() {
 
 	keys := crypto.RandomKeyPair()
 
-	glog.Info("Private Key: " + keys.PrivateKeyHex())
-	glog.Info("Public Key: " + keys.PublicKeyHex())
+	glog.Infof("Private Key: %s", keys.PrivateKeyHex())
+	glog.Infof("Public Key: %s", keys.PublicKeyHex())
 
 	builder := &builders.NetworkBuilder{}
 	builder.SetKeys(keys)
