@@ -2,11 +2,10 @@ package network
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
-	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"google.golang.org/grpc"
@@ -103,10 +102,10 @@ func (c *PeerClient) processIncomingMessages() {
 			processor := processor.(MessageProcessor)
 			err := processor.Handle(c, &item)
 			if err != nil {
-				log.Debug(fmt.Sprintf("An error occurred handling %x: %x", name, err))
+				glog.Infof("An error occurred handling %x: %x", name, err)
 			}
 		} else {
-			log.Debug("Unknown message type received:", name)
+			glog.Info("Unknown message type received:", name)
 		}
 	}
 }
