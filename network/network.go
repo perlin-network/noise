@@ -68,7 +68,7 @@ func (n *Network) Listen() {
 func (n *Network) listen() {
 	listener, err := net.Listen("tcp", ":"+strconv.Itoa(n.Port))
 	if err != nil {
-		glog.Warningf("Error listening on port %d: %v", n.Port, err)
+		glog.Warning(err)
 		return
 	}
 
@@ -84,7 +84,7 @@ func (n *Network) listen() {
 
 	err = client.Serve(listener)
 	if err != nil {
-		glog.Warning("Error serving client code:", err)
+		glog.Warning(err)
 		return
 	}
 }
