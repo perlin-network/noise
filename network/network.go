@@ -7,13 +7,12 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/dht"
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/peer"
-	"github.com/perlin-network/noise/protobuf"
 	"google.golang.org/grpc"
+	"github.com/perlin-network/noise/dht"
+	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/peer"
+	"github.com/golang/glog"
+	"github.com/perlin-network/noise/protobuf"
 )
 
 type Network struct {
@@ -54,7 +53,7 @@ func (n *Network) Host() string {
 func (n *Network) Listen() {
 	listener, err := net.Listen("tcp", ":"+strconv.Itoa(n.Port))
 	if err != nil {
-		log.Debug(err)
+		glog.Fatal(err)
 		return
 	}
 
@@ -66,11 +65,11 @@ func (n *Network) Listen() {
 	n.listener = listener
 	n.server = server
 
-	log.Debug("Listening for peers on port " + strconv.Itoa(n.Port) + ".")
+	glog.Infof("Listening for peers on port %d.", n.Port)
 
 	err = client.Serve(listener)
 	if err != nil {
-		log.Debug(err)
+		glog.Fatal(err)
 		return
 	}
 }
@@ -106,7 +105,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 
 	err := client.establishConnection(address)
 	if err != nil {
-		log.Debug(fmt.Sprintf("Failed to connect to peer %s err=[%+v]", address, err))
+		glog.Infof(fmt.Sprintf("Failed to connect to peer %s err=[%+v]\n", address, err))
 		return nil, err
 	}
 

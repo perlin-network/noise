@@ -1,12 +1,11 @@
 package network
 
 import (
-	"fmt"
 	"io"
 
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 )
@@ -34,7 +33,7 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 			if client.Id != nil {
 				if s.network.Routes.PeerExists(*client.Id) {
 					s.network.Routes.RemovePeer(*client.Id)
-					log.Info("Peer " + client.Id.Address + " has disconnected.")
+					glog.Infof("Peer %s has disconnected.", client.Id.Address)
 				}
 			}
 			break
@@ -42,7 +41,7 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 
 		// Check if any of the message headers are invalid or null.
 		if raw.Message == nil || raw.Sender == nil || raw.Sender.PublicKey == nil || len(raw.Sender.Address) == 0 || raw.Signature == nil {
-			log.Debug("Received an invalid message (either no message, no sender, or no signature) from a peer.")
+			glog.Info("Received an invalid message (either no message, no sender, or no signature) from a peer.")
 			continue
 		}
 
@@ -62,12 +61,15 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 
 			// Could not connect to peer; disconnect.
 			if err != nil {
-				log.Debug(fmt.Sprintf("Failed to connect back to peer %s err=[%+v]", client.Id.Address, err))
+				glog.Warningf("Failed to connect to peer %s err=[%+v]\n", client.Id.Address, err)
 				return err
 			}
 		} else if !client.Id.Equals(val) {
 			continue
 		}
+
+		// Update routing table w/ peer's ID.
+		s.network.Routes.Update(val)
 
 		// Unmarshal protobuf messages.
 		var ptr ptypes.DynamicAny

@@ -1,94 +1,82 @@
-package network
+package main
 
 import (
-	"io"
+	"flag"
+	"fmt"
+	"strings"
 
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/peer"
-	"github.com/perlin-network/noise/protobuf"
+	"github.com/perlin-network/noise/network/builders"
+	"github.com/perlin-network/noise/network/discovery"
+	"time"
+	"github.com/perlin-network/noise/grpc_utils"
 )
 
-type Server struct {
-	network *Network
-}
-
-func createServer(network *Network) *Server {
-	return &Server{
-		network: network,
-	}
-}
-
-// Handles new incoming peer connections and their messages.
-func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
-	client := CreatePeerClient(s)
-	defer client.close()
-
-	for {
-		raw, err := server.Recv()
-
-		// Should any errors occur reading packets, disconnect the peer.
-		if err == io.EOF || err != nil {
-			if client.Id != nil {
-				if s.network.Routes.PeerExists(*client.Id) {
-					s.network.Routes.RemovePeer(*client.Id)
-					glog.Infof("Peer %s has disconnected.", client.Id.Address)
-				}
-			}
-			break
-		}
-
-		// Check if any of the message headers are invalid or null.
-		if raw.Message == nil || raw.Sender == nil || raw.Sender.PublicKey == nil || len(raw.Sender.Address) == 0 || raw.Signature == nil {
-			glog.Info("Received an invalid message (either no message, no sender, or no signature) from a peer.")
-			continue
-		}
-
-		// Verify signature of message.
-		if !crypto.Verify(raw.Sender.PublicKey, raw.Message.Value, raw.Signature) {
-			continue
-		}
-
-		// Derive peer ID.
-		val := peer.ID(*raw.Sender)
-
-		// If peer ID has never been set, set it.
-		if client.Id == nil {
-			client.Id = &val
-
-			err := client.establishConnection(client.Id.Address)
-
-			// Could not connect to peer; disconnect.
-			if err != nil {
-				glog.Warningf("Failed to connect to peer %s err=[%+v]\n", client.Id.Address, err)
-				return err
-			}
-		} else if !client.Id.Equals(val) {
-			continue
-		}
-
-		// Update routing table w/ peer's ID.
-		s.network.Routes.Update(val)
-
-		// Unmarshal protobuf messages.
-		var ptr ptypes.DynamicAny
-		if err := ptypes.UnmarshalAny(raw.Message, &ptr); err != nil {
-			continue
-		}
-
-		msg := ptr.Message
-
-		// Handle request/response.
-		if raw.IsResponse {
-			client.handleResponse(raw.Nonce, msg)
-		} else {
-			// Forward it to mailbox of Client.
-			client.mailbox <- IncomingMessage{
-				Message: ptr.Message,
-				Nonce:   raw.Nonce,
+func filterPeers(host string, port int, peers []string) []string {
+	currAddress := fmt.Sprintf("%s:%d", host, port)
+	peersLen := len(peers)
+	filtered := make([]string, peersLen)
+	visitedSet := make(map[string]struct{}, peersLen)
+	for _, peer := range peers {
+		if peer != currAddress {
+			// remove if it is the current host and port
+			if _, ok := visitedSet[peer]; !ok {
+				// remove if it is a duplicate in the list
+				filtered = append(filtered, peer)
+				visitedSet[peer] = struct{}{}
 			}
 		}
 	}
-	return nil
+	return filtered
+}
+
+func main() {
+	// glog defaults to logging to a file, override this flag to log to console for testing
+	flag.Set("logtostderr", "true")
+
+	// process other flags
+	portFlag := flag.Int("port", 3000, "port to listen to")
+	hostFlag := flag.String("host", "localhost", "host to listen to")
+	peersFlag := flag.String("peers", "", "peers to connect to")
+	flag.Parse()
+
+	port := *portFlag
+	host := *hostFlag
+	peers := strings.Split(*peersFlag, ",")
+	peers = filterPeers(host, port, peers)
+
+	keys := crypto.RandomKeyPair()
+
+	glog.Infof("Private Key: %s", keys.PrivateKeyHex())
+	glog.Infof("Public Key: %s", keys.PublicKeyHex())
+
+	builder := &builders.NetworkBuilder{}
+	builder.SetKeys(keys)
+	builder.SetAddress(host)
+	builder.SetPort(port)
+
+	// Register peer discovery RPC handlers.
+	discovery.BootstrapPeerDiscovery(builder)
+
+	net, err := builder.BuildNetwork()
+	if err != nil {
+		glog.Fatal(err)
+		return
+	}
+
+	go net.Listen()
+
+	if len(peers) > 0 {
+		blockTimeout := 10 * time.Second
+		if err := grpc_utils.BlockUntilConnectionReady(host, port, blockTimeout); err != nil {
+			glog.Warningf(fmt.Sprintf("Error: port was not available, cannot bootstrap peers, err=%+v", err))
+		}
+
+		net.Bootstrap(peers...)
+	}
+
+	select {}
+
+	glog.Flush()
 }

@@ -41,7 +41,7 @@ func bootstrapPeers(network *network.Network, target peer.ID, count int) (addres
 				response, err := client.Request(request)
 
 				if err != nil {
-					glog.Warning(err)
+					glog.Error(err)
 					return
 				}
 
