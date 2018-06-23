@@ -1,7 +1,6 @@
 package discovery
 
 import (
-	"context"
 	"sync"
 
 	"github.com/golang/glog"
@@ -28,12 +27,7 @@ func bootstrapPeers(network *network.Network, target peer.ID, count int) (addres
 			go func(peerId peer.ID) {
 				defer wait.Done()
 
-				conn, err := network.Dial(peerId.Address)
-				if err != nil {
-					return
-				}
-
-				client, err := protobuf.NewNoiseClient(conn).Stream(context.Background())
+				client, err := network.Dial(peerId.Address)
 				if err != nil {
 					return
 				}
@@ -44,10 +38,10 @@ func bootstrapPeers(network *network.Network, target peer.ID, count int) (addres
 					Target: &protoID,
 				}
 
-				response, err := network.Request(client, request)
+				response, err := client.Request(request)
 
 				if err != nil {
-					glog.Warning(err)
+					glog.Error(err)
 					return
 				}
 

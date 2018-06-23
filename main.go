@@ -4,13 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/grpc_utils"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
+	"time"
+	"github.com/perlin-network/noise/grpc_utils"
 )
 
 func filterPeers(host string, port int, peers []string) []string {
@@ -61,18 +61,18 @@ func main() {
 
 	net, err := builder.BuildNetwork()
 	if err != nil {
-		glog.Warning(err)
+		glog.Fatal(err)
 		return
 	}
 
-	net.Listen()
-
-	blockTimeout := 10 * time.Second
-	if err := grpc_utils.BlockUntilConnectionReady(host, port, blockTimeout); err != nil {
-		glog.Warningf("Error: port was not available, cannot bootstrap peers, err=%+v", err)
-	}
+	go net.Listen()
 
 	if len(peers) > 0 {
+		blockTimeout := 10 * time.Second
+		if err := grpc_utils.BlockUntilConnectionReady(host, port, blockTimeout); err != nil {
+			glog.Warningf(fmt.Sprintf("Error: port was not available, cannot bootstrap peers, err=%+v", err))
+		}
+
 		net.Bootstrap(peers...)
 	}
 

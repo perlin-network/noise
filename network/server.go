@@ -22,10 +22,12 @@ func createServer(network *Network) *Server {
 
 // Handles new incoming peer connections and their messages.
 func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
-	client := CreatePeerClient(s)
-	defer client.close()
-
-	go client.process()
+	var client *PeerClient
+	defer func() {
+		if client != nil {
+			client.close()
+		}
+	}()
 
 	for {
 		raw, err := server.Recv()
@@ -55,18 +57,31 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 		// Derive peer ID.
 		val := peer.ID(*raw.Sender)
 
-		// Just in case, set the peer ID only once.
+		if client == nil {
+			if cached, exists := s.network.Peers.Load(val.Address); exists && cached != nil {
+				client = cached.(*PeerClient)
+			} else {
+				client = CreatePeerClient(s)
+			}
+		}
+
+		// If peer ID has never been set, set it.
 		if client.Id == nil {
 			client.Id = &val
 
-			err := client.establishConnection()
+			err := client.establishConnection(client.Id.Address)
+
+			// Could not connect to peer; disconnect.
 			if err != nil {
-				glog.Warningf("Failed to connect to peer %s err=[%+v]", client.Id.Address, err)
+				glog.Warningf("Failed to connect to peer %s err=[%+v]\n", client.Id.Address, err)
 				return err
 			}
 		} else if !client.Id.Equals(val) {
 			continue
 		}
+
+		// Update routing table w/ peer's ID.
+		s.network.Routes.Update(val)
 
 		// Unmarshal protobuf messages.
 		var ptr ptypes.DynamicAny
@@ -78,7 +93,7 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 
 		// Handle request/response.
 		if raw.Nonce > 0 && raw.IsResponse {
-			s.network.HandleResponse(raw.Nonce, msg)
+			client.handleResponse(raw.Nonce, msg)
 		} else {
 			// Forward it to mailbox of Client.
 			client.mailbox <- IncomingMessage{
