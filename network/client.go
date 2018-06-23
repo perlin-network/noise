@@ -2,6 +2,9 @@ package network
 
 import (
 	"context"
+	"fmt"
+	"reflect"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
@@ -9,8 +12,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"reflect"
-	"fmt"
 )
 
 type IncomingMessage struct {
@@ -85,6 +86,7 @@ func (c *PeerClient) process() {
 // Clean up mailbox for peer client.
 func (c *PeerClient) close() {
 	if c.Conn != nil {
+		c.Network().SocketPool.Delete(c.Id.Address)
 		c.Conn.Close()
 	}
 
