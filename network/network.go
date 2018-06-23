@@ -23,8 +23,9 @@ type Network struct {
 	Keys *crypto.KeyPair
 
 	// Node's Network information.
-	Address string
-	Port    int
+	// The Address is `Host:Port`.
+	Host string
+	Port int
 
 	// Map of incoming message processors for the Network.
 	// map[string]MessageProcessor
@@ -45,8 +46,8 @@ var (
 	dialTimeout = 3 * time.Second
 )
 
-func (n *Network) Host() string {
-	return n.Address + ":" + strconv.Itoa(n.Port)
+func (n *Network) Address() string {
+	return n.Host + ":" + strconv.Itoa(n.Port)
 }
 
 // Listen for peers on a port specified on instantation of Network{}.
@@ -92,8 +93,14 @@ func (n *Network) Bootstrap(addresses ...string) {
 
 // Dials a peer via. gRPC.
 func (n *Network) Dial(address string) (*PeerClient, error) {
-	if len(strings.Trim(address, " ")) == 0 {
+	address = strings.TrimSpace(address)
+	if len(address) == 0 {
 		return nil, fmt.Errorf("cannot dial, address was empty")
+	}
+
+	address, err := ToUnifiedAddress(address)
+	if err != nil {
+		return nil, err
 	}
 
 	// load a cached connection
@@ -103,7 +110,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 
 	client := CreatePeerClient(n.server)
 
-	err := client.establishConnection(address)
+	err = client.establishConnection(address)
 	if err != nil {
 		glog.Infof(fmt.Sprintf("Failed to connect to peer %s err=[%+v]\n", address, err))
 		return nil, err
