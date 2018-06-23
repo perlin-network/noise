@@ -26,8 +26,6 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 	client := CreatePeerClient(s)
 	defer client.close()
 
-	go client.process()
-
 	for {
 		raw, err := server.Recv()
 
@@ -56,13 +54,15 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 		// Derive peer ID.
 		val := peer.ID(*raw.Sender)
 
-		// Just in case, set the peer ID only once.
+		// If peer ID has never been set, set it.
 		if client.Id == nil {
 			client.Id = &val
 
-			err := client.establishConnection()
+			err := client.establishConnection(client.Id.Address)
+
+			// Could not connect to peer; disconnect.
 			if err != nil {
-				log.Debug(fmt.Sprintf("Failed to connect to peer %s err=[%+v]", client.Id.Address, err))
+				log.Debug(fmt.Sprintf("Failed to connect back to peer %s err=[%+v]", client.Id.Address, err))
 				return err
 			}
 		} else if !client.Id.Equals(val) {
@@ -78,8 +78,8 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 		msg := ptr.Message
 
 		// Handle request/response.
-		if raw.Nonce > 0 && raw.IsResponse {
-			s.network.HandleResponse(raw.Nonce, msg)
+		if raw.IsResponse {
+			client.handleResponse(raw.Nonce, msg)
 		} else {
 			// Forward it to mailbox of Client.
 			client.mailbox <- IncomingMessage{

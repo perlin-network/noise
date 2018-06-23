@@ -18,7 +18,7 @@ func (HandshakeRequestProcessor) Handle(client *network.PeerClient, message *net
 	client.Network().Routes.Update(*client.Id)
 
 	// Send handshake response to peer.
-	err := client.Network().Tell(client.Client, &protobuf.HandshakeResponse{})
+	err := client.Tell(&protobuf.HandshakeResponse{})
 
 	if err != nil {
 		return err
@@ -47,7 +47,10 @@ func (HandshakeResponseProcessor) Handle(client *network.PeerClient, raw *networ
 type LookupNodeRequestProcessor struct{}
 
 func (LookupNodeRequestProcessor) Handle(c *network.PeerClient, raw *network.IncomingMessage) error {
+	// Deserialize received request.
 	msg := raw.Message.(*protobuf.LookupNodeRequest)
+
+	// Prepare response.
 	response := &protobuf.LookupNodeResponse{Peers: []*protobuf.ID{}}
 
 	// Update routing table w/ peer's ID.
@@ -59,7 +62,7 @@ func (LookupNodeRequestProcessor) Handle(c *network.PeerClient, raw *network.Inc
 		response.Peers = append(response.Peers, &id)
 	}
 
-	err := c.Network().Reply(c.Client, raw.Nonce, response)
+	err := c.Reply(raw.Nonce, response)
 	if err != nil {
 		// TODO: Handle error responding to client.
 	}
@@ -78,7 +81,7 @@ func BootstrapPeerDiscovery(builder *builders.NetworkBuilder) {
 
 func getConnectedPeers(c *network.PeerClient) []string {
 	peers := []string{}
-	c.Network().SocketPool.Range(func(k, v interface{}) bool {
+	c.Network().Peers.Range(func(k, v interface{}) bool {
 		peers = append(peers, k.(string))
 		return true
 	})

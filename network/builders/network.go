@@ -78,14 +78,11 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 		Port:    builder.port,
 		ID:      id,
 
-		RequestNonce: 0,
-		Requests:     &sync.Map{},
-
 		Processors: builder.processors,
 
 		Routes: dht.CreateRoutingTable(id),
 
-		SocketPool: &sync.Map{},
+		Peers: &sync.Map{},
 	}
 
 	return network, nil
