@@ -37,8 +37,7 @@ type PeerClient struct {
 
 	mailbox chan IncomingMessage
 
-	refCount int64
-	refLock sync.Mutex // TODO: Replace with atomic operations
+	refCount uint64
 }
 
 // Establishes an outgoing connection a given peer should one not exist already.
@@ -220,36 +219,29 @@ func (c *PeerClient) Request(request *rpc.Request) (proto.Message, error) {
 
 // Fails if c.refCount == 0; otherwise increases c.refCount by one
 func (c *PeerClient) open() error {
-	c.refLock.Lock()
-	defer c.refLock.Unlock()
-
 	if c.refCount == 0 {
 		return errors.New("attempting to open a closed PeerClient")
 	}
 
-	c.refCount++
+	atomic.AddUint64(&c.refCount, 1)
 	return nil
 }
 
 // Clean up mailbox for peer client.
 func (c *PeerClient) close() {
-	c.refLock.Lock()
-	oldRc := c.refCount
-	if c.refCount > 0 {
-		c.refCount--
+	old := atomic.LoadUint64(&c.refCount)
+	if old > 0 {
+		atomic.StoreUint64(&c.refCount, old-1)
 	}
-	c.refLock.Unlock()
 
-	if oldRc == 1 {
-		//glog.Infof("Destroying PeerClient")
-
+	if old == 1 {
 		if c.Conn != nil {
 			c.Network().Peers.Delete(c.Id.Address)
 			c.Conn.Close()
 		}
-	
+
 		close(c.mailbox)
-	} else if oldRc <= 0 {
-		panic("BUG: oldRc <= 0")
+	} else if old <= 0 {
+		glog.Fatal("BUG: old <= 0")
 	}
 }
