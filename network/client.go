@@ -38,6 +38,7 @@ type PeerClient struct {
 	mailbox chan IncomingMessage
 
 	refCount uint64
+	refMutex *sync.Mutex
 }
 
 // Establishes an outgoing connection a given peer should one not exist already.
@@ -86,6 +87,7 @@ func createPeerClient(server *Server) *PeerClient {
 		requests:     &sync.Map{},
 
 		refCount: 1,
+		refMutex: &sync.Mutex{},
 	}
 
 	// Have peers start processing for incoming messages.
@@ -219,20 +221,27 @@ func (c *PeerClient) Request(request *rpc.Request) (proto.Message, error) {
 
 // Fails if c.refCount == 0; otherwise increases c.refCount by one
 func (c *PeerClient) open() error {
+	c.refMutex.Lock()
+	defer c.refMutex.Unlock()
+
 	if c.refCount == 0 {
 		return errors.New("attempting to open a closed PeerClient")
 	}
 
-	atomic.AddUint64(&c.refCount, 1)
+	c.refCount++
 	return nil
 }
 
 // Clean up mailbox for peer client.
 func (c *PeerClient) close() {
-	old := atomic.LoadUint64(&c.refCount)
+	c.refMutex.Lock()
+
+	old := c.refCount
 	if old > 0 {
-		atomic.StoreUint64(&c.refCount, old-1)
+		c.refCount--
 	}
+
+	c.refMutex.Unlock()
 
 	if old == 1 {
 		if c.Conn != nil {
