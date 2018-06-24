@@ -110,7 +110,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 		return client.(*PeerClient), nil
 	}
 
-	client := CreatePeerClient(n.server)
+	client := createPeerClient(n.server)
 
 	err = client.establishConnection(address)
 	if err != nil {
@@ -139,7 +139,7 @@ func (n *Network) Broadcast(message proto.Message) {
 }
 
 // Asynchronously broadcast a message to a set of peer clients denoted by their addresses.
-func (n *Network) BroadcastPeersByAddress(message proto.Message, addresses ...string) {
+func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
 	for _, address := range addresses {
 		if client, exists := n.Peers.Load(address); exists && client != nil {
 			client := client.(*PeerClient)
@@ -155,7 +155,7 @@ func (n *Network) BroadcastPeersByAddress(message proto.Message, addresses ...st
 }
 
 // Asynchronously broadcast a message to a set of peer clients denoted by their peer IDs.
-func (n *Network) BroadcastPeersById(message proto.Message, ids ...peer.ID) {
+func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
 	for _, id := range ids {
 		if client, exists := n.Peers.Load(id.Address); exists && client != nil {
 			client := client.(*PeerClient)
@@ -179,6 +179,11 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 		client := value.(*PeerClient)
 		addresses = append(addresses, client.Id.Address)
 
+		// Limit total amount of addresses in case we have a lot of peers.
+		if len(addresses) > K * 3 {
+			return false
+		}
+
 		return true
 	})
 
@@ -191,5 +196,5 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 		K = len(addresses)
 	}
 
-	n.BroadcastPeersByAddress(message, addresses[:K]...)
+	n.BroadcastByAddresses(message, addresses[:K]...)
 }

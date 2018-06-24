@@ -73,7 +73,9 @@ func (c *PeerClient) establishConnection(address string) error {
 	return nil
 }
 
-func CreatePeerClient(server *Server) *PeerClient {
+// Creates a client representing a single peer, and has peers start
+// processing for incoming messages through channels.
+func createPeerClient(server *Server) *PeerClient {
 	client := &PeerClient{
 		server:  server,
 		mailbox: make(chan IncomingMessage),
