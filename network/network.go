@@ -79,6 +79,8 @@ func (n *Network) Listen() {
 
 // Bootstrap with a number of peers and commence a handshake.
 func (n *Network) Bootstrap(addresses ...string) {
+	addresses = FilterPeers(n.Host, n.Port, addresses)
+
 	for _, address := range addresses {
 		client, err := n.Dial(address)
 		if err != nil {

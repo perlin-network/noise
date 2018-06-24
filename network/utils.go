@@ -3,6 +3,7 @@ package network
 import (
 	"errors"
 	"net"
+	"fmt"
 )
 
 func ToUnifiedHost(host string) (string, error) {
@@ -39,4 +40,20 @@ func ToUnifiedAddress(address string) (string, error) {
 	}
 
 	return net.JoinHostPort(host, port), nil
+}
+
+// Filter out duplicate addresses.
+func FilterPeers(host string, port int, peers []string) (filtered []string) {
+	address := fmt.Sprintf("%s:%d", host, port)
+
+	visited := make(map[string]struct{})
+	visited[address] = struct{}{}
+
+	for _, peer := range peers {
+		if _, exists := visited[peer]; !exists {
+			filtered = append(filtered, peer)
+			visited[peer] = struct{}{}
+		}
+	}
+	return filtered
 }

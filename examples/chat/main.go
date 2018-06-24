@@ -26,22 +26,6 @@ func (*ChatMessageProcessor) Handle(client *network.PeerClient, raw *network.Inc
 	return nil
 }
 
-// Filter out duplicate addresses.
-func filterPeers(host string, port int, peers []string) (filtered []string) {
-	address := fmt.Sprintf("%s:%d", host, port)
-
-	visited := make(map[string]struct{})
-	visited[address] = struct{}{}
-
-	for _, peer := range peers {
-		if _, exists := visited[peer]; !exists {
-			filtered = append(filtered, peer)
-			visited[peer] = struct{}{}
-		}
-	}
-	return filtered
-}
-
 func main() {
 	// glog defaults to logging to a file, override this flag to log to console for testing
 	flag.Set("logtostderr", "true")
@@ -55,7 +39,6 @@ func main() {
 	port := *portFlag
 	host := *hostFlag
 	peers := strings.Split(*peersFlag, ",")
-	peers = filterPeers(host, port, peers)
 
 	keys := crypto.RandomKeyPair()
 
