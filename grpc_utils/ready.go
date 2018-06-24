@@ -22,7 +22,7 @@ func BlockUntilConnectionReady(host string, port int, dialTimeout time.Duration)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	conn.Close()
 
 	return nil
 }

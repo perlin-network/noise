@@ -8,6 +8,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
+	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"google.golang.org/grpc"
@@ -175,8 +176,12 @@ func (c *PeerClient) handleResponse(nonce uint64, response proto.Message) {
 }
 
 // Initiate a request/response-style RPC call to the given peer.
-func (c *PeerClient) Request(message proto.Message) (proto.Message, error) {
-	msg, err := c.prepareMessage(message)
+func (c *PeerClient) Request(request *rpc.Request) (proto.Message, error) {
+	if request.Message == nil {
+		return nil, errors.New("request must specify a message to send")
+	}
+
+	msg, err := c.prepareMessage(request.Message)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +206,7 @@ func (c *PeerClient) Request(message proto.Message) (proto.Message, error) {
 	select {
 	case response := <-channel:
 		return response, nil
-	case <-time.After(3 * time.Second): // TODO: Make delay customizable.
+	case <-time.After(request.Timeout): // TODO: Make delay customizable.
 		return nil, errors.New("request timed out")
 	}
 }
