@@ -171,24 +171,25 @@ func (n *Network) BroadcastPeersById(message proto.Message, ids ...peer.ID) {
 }
 
 // Asynchronously broadcast message to random selected K peers.
-// Does not guarantee broadcasting to exactly K peers; completely random.
+// Does not guarantee broadcasting to exactly K peers.
 func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	var addresses []string
 
 	n.Peers.Range(func(key, value interface{}) bool {
 		client := value.(*PeerClient)
-
-		// Flip a coin :).
-		if rand.Intn(2) == 0 {
-			addresses = append(addresses, client.Id.Address)
-		}
-
-		if len(addresses) == K {
-			return false
-		}
+		addresses = append(addresses, client.Id.Address)
 
 		return true
 	})
 
-	n.BroadcastPeersByAddress(message, addresses...)
+	// Flip a coin and shuffle :).
+	rand.Shuffle(len(addresses), func(i, j int) {
+		addresses[i], addresses[j] = addresses[j], addresses[i]
+	})
+
+	if len(addresses) < K {
+		K = len(addresses)
+	}
+
+	n.BroadcastPeersByAddress(message, addresses[:K]...)
 }
