@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"github.com/golang/protobuf/proto"
 )
 
 type Network struct {
@@ -122,6 +123,16 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 	return client, nil
 }
 
-type Sendable interface {
-	Send(*protobuf.Message) error
+// Asynchronously broadcast a message to all peer clients.
+func (n *Network) Broadcast(message proto.Message) {
+	n.Peers.Range(func(key, value interface{}) bool {
+		client := value.(*PeerClient)
+		err := client.Tell(message)
+
+		if err != nil {
+			glog.Errorf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+		}
+
+		return true
+	})
 }

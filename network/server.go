@@ -62,6 +62,7 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 				client = cached.(*PeerClient)
 			} else {
 				client = CreatePeerClient(s)
+				s.network.Peers.Store(val.Address, client)
 			}
 		}
 
