@@ -95,6 +95,23 @@ func (n *Network) Bootstrap(addresses ...string) {
 	}
 }
 
+// Loads the peer from n.Peers and opens it
+func (n *Network) OpenCachedPeer(address string) (*PeerClient, bool) {
+	peer, ok := n.Peers.Load(address)
+	if !ok || peer == nil {
+		return nil, false
+	}
+
+	client := peer.(*PeerClient)
+
+	err := client.open()
+	if err != nil {
+		return nil, false
+	}
+
+	return client, true
+}
+
 // Dials a peer via. gRPC.
 func (n *Network) Dial(address string) (*PeerClient, error) {
 	address = strings.TrimSpace(address)
@@ -108,8 +125,8 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 	}
 
 	// load a cached connection
-	if client, ok := n.Peers.Load(address); ok && client != nil {
-		return client.(*PeerClient), nil
+	if client, ok := n.OpenCachedPeer(address); ok {
+		return client, nil
 	}
 
 	client := createPeerClient(n.server)
@@ -117,6 +134,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 	err = client.establishConnection(address)
 	if err != nil {
 		glog.Infof(fmt.Sprintf("Failed to connect to peer %s err=[%+v]\n", address, err))
+		client.close()
 		return nil, err
 	}
 
@@ -143,13 +161,14 @@ func (n *Network) Broadcast(message proto.Message) {
 // Asynchronously broadcast a message to a set of peer clients denoted by their addresses.
 func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
 	for _, address := range addresses {
-		if client, exists := n.Peers.Load(address); exists && client != nil {
-			client := client.(*PeerClient)
+		if client, ok := n.OpenCachedPeer(address); ok {
 			err := client.Tell(message)
 
 			if err != nil {
 				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
 			}
+
+			client.close()
 		} else {
 			glog.Warningf("Failed to send message to peer %s; peer does not exist.", address)
 		}
@@ -159,13 +178,14 @@ func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...strin
 // Asynchronously broadcast a message to a set of peer clients denoted by their peer IDs.
 func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
 	for _, id := range ids {
-		if client, exists := n.Peers.Load(id.Address); exists && client != nil {
-			client := client.(*PeerClient)
+		if client, ok := n.OpenCachedPeer(id.Address); ok {
 			err := client.Tell(message)
 
 			if err != nil {
 				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
 			}
+
+			client.close()
 		} else {
 			glog.Warningf("Failed to send message to peer %s; peer does not exist.", id)
 		}

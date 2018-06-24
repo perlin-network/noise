@@ -58,8 +58,8 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 		val := peer.ID(*raw.Sender)
 
 		if client == nil {
-			if cached, exists := s.network.Peers.Load(val.Address); exists && cached != nil {
-				client = cached.(*PeerClient)
+			if cached, ok := s.network.OpenCachedPeer(val.Address); ok {
+				client = cached
 			} else {
 				client = createPeerClient(s)
 				s.network.Peers.Store(val.Address, client)
