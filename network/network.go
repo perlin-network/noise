@@ -96,7 +96,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 }
 
 // Loads the peer from n.Peers and opens it
-func (n *Network) OpenCachedPeer(address string) (*PeerClient, bool) {
+func (n *Network) GetPeer(address string) (*PeerClient, bool) {
 	peer, ok := n.Peers.Load(address)
 	if !ok || peer == nil {
 		return nil, false
@@ -125,7 +125,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 	}
 
 	// load a cached connection
-	if client, ok := n.OpenCachedPeer(address); ok {
+	if client, ok := n.GetPeer(address); ok {
 		return client, nil
 	}
 
@@ -161,7 +161,7 @@ func (n *Network) Broadcast(message proto.Message) {
 // Asynchronously broadcast a message to a set of peer clients denoted by their addresses.
 func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
 	for _, address := range addresses {
-		if client, ok := n.OpenCachedPeer(address); ok {
+		if client, ok := n.GetPeer(address); ok {
 			err := client.Tell(message)
 
 			if err != nil {
@@ -178,7 +178,7 @@ func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...strin
 // Asynchronously broadcast a message to a set of peer clients denoted by their peer IDs.
 func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
 	for _, id := range ids {
-		if client, ok := n.OpenCachedPeer(id.Address); ok {
+		if client, ok := n.GetPeer(id.Address); ok {
 			err := client.Tell(message)
 
 			if err != nil {
