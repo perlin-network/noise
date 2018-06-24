@@ -3,17 +3,18 @@ package network
 import (
 	"fmt"
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"google.golang.org/grpc"
+	"math/rand"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"github.com/golang/protobuf/proto"
 )
 
 type Network struct {
@@ -130,9 +131,64 @@ func (n *Network) Broadcast(message proto.Message) {
 		err := client.Tell(message)
 
 		if err != nil {
-			glog.Errorf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+			glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
 		}
 
 		return true
 	})
+}
+
+// Asynchronously broadcast a message to a set of peer clients denoted by their addresses.
+func (n *Network) BroadcastPeersByAddress(message proto.Message, addresses ...string) {
+	for _, address := range addresses {
+		if client, exists := n.Peers.Load(address); exists && client != nil {
+			client := client.(*PeerClient)
+			err := client.Tell(message)
+
+			if err != nil {
+				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+			}
+		} else {
+			glog.Warningf("Failed to send message to peer %s; peer does not exist.", address)
+		}
+	}
+}
+
+// Asynchronously broadcast a message to a set of peer clients denoted by their peer IDs.
+func (n *Network) BroadcastPeersById(message proto.Message, ids ...peer.ID) {
+	for _, id := range ids {
+		if client, exists := n.Peers.Load(id.Address); exists && client != nil {
+			client := client.(*PeerClient)
+			err := client.Tell(message)
+
+			if err != nil {
+				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+			}
+		} else {
+			glog.Warningf("Failed to send message to peer %s; peer does not exist.", id)
+		}
+	}
+}
+
+// Asynchronously broadcast message to random selected K peers.
+// Does not guarantee broadcasting to exactly K peers; completely random.
+func (n *Network) BroadcastRandomly(message proto.Message, K int) {
+	var addresses []string
+
+	n.Peers.Range(func(key, value interface{}) bool {
+		client := value.(*PeerClient)
+
+		// Flip a coin :).
+		if rand.Intn(2) == 0 {
+			addresses = append(addresses, client.Id.Address)
+		}
+
+		if len(addresses) == K {
+			return false
+		}
+
+		return true
+	})
+
+	n.BroadcastPeersByAddress(message, addresses...)
 }
