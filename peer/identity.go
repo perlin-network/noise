@@ -21,10 +21,12 @@ func (id ID) String() string {
 	return fmt.Sprintf("ID{PublicKey: %v, Address: %v}", id.PublicKey, id.Address)
 }
 
+// Determines if two peer IDs are equal to each other based on the contents of their public keys.
 func (id ID) Equals(other ID) bool {
 	return bytes.Equal(id.PublicKey[:IdSize], other.PublicKey[:IdSize])
 }
 
+// Interprets public keys of two peer IDs as big integers, and determines which one is smaller than the other.
 func (id ID) Less(other interface{}) bool {
 	if other, is := other.(ID); is {
 		return bytes.Compare(id.PublicKey[:IdSize], other.PublicKey[:IdSize]) == -1
@@ -32,12 +34,12 @@ func (id ID) Less(other interface{}) bool {
 	return false
 }
 
-// PublicKeyHex generate EncodeToString return of Public Key
+// Generates hex-encoded string of public key of this given peer ID.
 func (id ID) PublicKeyHex() string {
 	return hex.EncodeToString(id.PublicKey)
 }
 
-// Xor (^) operation of public key
+// Performs XOR (^) over another peer ID's public key.
 func (id ID) Xor(other ID) ID {
 	var result [IdSize]byte
 	for i := 0; i < IdSize; i++ {
