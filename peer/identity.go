@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+
 	"github.com/perlin-network/noise/protobuf"
 	"golang.org/x/crypto/ed25519"
 )
@@ -31,10 +32,12 @@ func (id ID) Less(other interface{}) bool {
 	return false
 }
 
-func (id ID) Hex() string {
-	return hex.EncodeToString(id.PublicKey[:])
+// PublicKeyHex generate EncodeToString return of Public Key
+func (id ID) PublicKeyHex() string {
+	return hex.EncodeToString(id.PublicKey)
 }
 
+// Xor (^) operation of public key
 func (id ID) Xor(other ID) ID {
 	var result [IdSize]byte
 	for i := 0; i < IdSize; i++ {
@@ -53,8 +56,4 @@ func (id ID) PrefixLen() int {
 		}
 	}
 	return IdSize*8 - 1
-}
-
-func (id ID) PublicKeyHex() string {
-	return hex.EncodeToString(id.PublicKey)
 }
