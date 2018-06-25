@@ -148,7 +148,13 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 func (n *Network) Broadcast(message proto.Message) {
 	n.Peers.Range(func(key, value interface{}) bool {
 		client := value.(*PeerClient)
-		err := client.Tell(message)
+		err := client.open()
+		if err != nil {
+			return true
+		}
+
+		err = client.Tell(message)
+		client.close()
 
 		if err != nil {
 			glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
@@ -199,7 +205,13 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 
 	n.Peers.Range(func(key, value interface{}) bool {
 		client := value.(*PeerClient)
+		err := client.open()
+		if err != nil {
+			return true
+		}
+
 		addresses = append(addresses, client.Id.Address)
+		client.close()
 
 		// Limit total amount of addresses in case we have a lot of peers.
 		if len(addresses) > K * 3 {
