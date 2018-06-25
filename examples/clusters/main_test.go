@@ -64,14 +64,7 @@ func setupCluster(t *testing.T, nodes []*ClusterNode) error {
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		// need to filter the peers otherwise Tell will segfault
-		filteredPeers := []string{}
-		for j, peer := range peers {
-			if i != j {
-				filteredPeers = append(filteredPeers, peer)
-			}
-		}
-		nodes[i].Net.Bootstrap(filteredPeers...)
+		nodes[i].Net.Bootstrap(peers...)
 	}
 
 	return nil
