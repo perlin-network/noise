@@ -35,13 +35,17 @@ func TestFilterPeers(t *testing.T) {
 		"10.0.0.3:3000",
 		"10.0.0.6:3000",
 		"localhost:3004",
+		"::1:3005",
 	})
 	expected := []string{
 		"10.0.0.5:3000",
 		"10.0.0.1:3000",
+		// "10.0.0.1:3000" is a duplicate
 		"10.0.0.1:2000",
+		// "10.0.0.3:3000" is filtered
 		"10.0.0.6:3000",
 		"127.0.0.1:3004",
+		// "::1:3005" will be removed
 	}
 	if !reflect.DeepEqual(result, expected) {
 		t.Fatalf("Unexpected got %v, but expected %v", result, expected)
