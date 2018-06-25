@@ -2,11 +2,12 @@ package discovery
 
 import (
 	"context"
+	"sync"
+
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
-	"sync"
 )
 
 func bootstrapPeers(network *network.Network, target peer.ID, count int) (addresses []string, publicKeys [][]byte) {
@@ -14,7 +15,7 @@ func bootstrapPeers(network *network.Network, target peer.ID, count int) (addres
 
 	visited := make(map[string]struct{})
 	visited[network.Keys.PublicKeyHex()] = struct{}{}
-	visited[target.Hex()] = struct{}{}
+	visited[target.PublicKeyHex()] = struct{}{}
 
 	for len(queue) > 0 {
 		var wait sync.WaitGroup
@@ -69,9 +70,9 @@ func bootstrapPeers(network *network.Network, target peer.ID, count int) (addres
 			for _, id := range response.Peers {
 				p := peer.ID(*id)
 
-				if _, seen := visited[p.Hex()]; !seen {
+				if _, seen := visited[p.PublicKeyHex()]; !seen {
 					queue = append(queue, p)
-					visited[p.Hex()] = struct{}{}
+					visited[p.PublicKeyHex()] = struct{}{}
 
 					addresses = append(addresses, p.Address)
 
