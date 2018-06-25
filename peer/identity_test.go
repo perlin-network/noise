@@ -15,7 +15,6 @@ var (
 )
 
 func TestIDEqual(t *testing.T) {
-
 	if !bytes.Equal(id.PublicKey, testPublicKey) {
 		t.Fatalf("wrong public key: %s != %s", id.PublicKey, testPublicKey)
 	}
@@ -53,13 +52,13 @@ func TestIDPublicKeyHex(t *testing.T) {
 }
 
 func TestIDXor(t *testing.T) {
-	comparee := CreateID(
+	xor := CreateID(
 		testAddr,
 		[]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
 	)
 
-	if !comparee.Equals(id.Xor(CreateID(testAddr, testPublicKey2))) {
-		t.Fatalf("xor() error : %v != %v", comparee, id.Xor(CreateID(testAddr, testPublicKey2)))
+	if !xor.Equals(id.Xor(CreateID(testAddr, testPublicKey2))) {
+		t.Fatalf("xor() error : %v != %v", xor, id.Xor(CreateID(testAddr, testPublicKey2)))
 	}
 
 }
