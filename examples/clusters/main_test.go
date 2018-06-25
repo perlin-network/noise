@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/examples/clusters/messages"
 	"github.com/perlin-network/noise/grpc_utils"
@@ -16,17 +15,30 @@ import (
 )
 
 type ClusterNode struct {
-	Host string
-	Port int
-	Net  *network.Network
+	Host             string
+	Port             int
+	Net              *network.Network
+	BufferedMessages []*messages.ClusterTestMessage
 }
 
 func (c *ClusterNode) Handle(client *network.PeerClient, raw *network.IncomingMessage) error {
 	message := raw.Message.(*messages.ClusterTestMessage)
 
-	glog.Infof("<%s> %s", client.Id.Address, message.Message)
+	if c.BufferedMessages == nil {
+		c.BufferedMessages = []*messages.ClusterTestMessage{}
+	}
+	c.BufferedMessages = append(c.BufferedMessages, message)
 
 	return nil
+}
+
+func (c *ClusterNode) PopMessage() *messages.ClusterTestMessage {
+	if len(c.BufferedMessages) == 0 {
+		return nil
+	}
+	var retVal *messages.ClusterTestMessage
+	retVal, c.BufferedMessages = c.BufferedMessages[0], c.BufferedMessages[1:]
+	return retVal
 }
 
 var blockTimeout = 10 * time.Second
@@ -85,13 +97,36 @@ func TestClusters(t *testing.T) {
 
 		nodes = append(nodes, node)
 	}
-	if len(nodes) != cluster1NumPorts {
-		t.Errorf("Should have only %d nodes, but had %d", len(nodes), cluster1NumPorts)
-	}
 
 	if err := setupCluster(t, nodes); err != nil {
 		t.Fatal(err)
 	}
 
-	// TODO
+	for i, node := range nodes {
+		if node.Net == nil {
+			t.Fatalf("Expected %d nodes, but node %d is missing a network", len(nodes), i)
+		}
+	}
+
+	// check if you can send a message from node 1 and will it be received only in node 2,3
+	{
+		testMessage := "message from node 0"
+		nodes[0].Net.Broadcast(&messages.ClusterTestMessage{Message: testMessage})
+
+		// HACK: TODO: replace sleep with something else
+		time.Sleep(1 * time.Second)
+
+		if result := nodes[0].PopMessage(); result != nil {
+			t.Errorf("Expected nothing in node 0, got %v", result)
+		}
+		for i := 1; i < len(nodes); i++ {
+			if result := nodes[i].PopMessage(); result == nil {
+				t.Errorf("Expected a message in node %d but it was blank", i)
+			} else {
+				if result.Message != testMessage {
+					t.Errorf("Expected message %s in node %d but got %v", testMessage, i, result)
+				}
+			}
+		}
+	}
 }
