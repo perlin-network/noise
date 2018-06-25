@@ -104,18 +104,27 @@ func (c *PeerClient) Network() *Network {
 // Event loop for processing through incoming request/responses.
 func (c *PeerClient) processIncomingMessages() {
 	for item := range c.mailbox {
-		name := reflect.TypeOf(item.Message).String()
-		processor, exists := c.Network().Processors.Load(name)
-
-		if exists {
-			processor := processor.(MessageProcessor)
-			err := processor.Handle(c, &item)
+		func() {
+			err := c.open()
 			if err != nil {
-				glog.Infof("An error occurred handling %x: %x", name, err)
+				return
 			}
-		} else {
-			glog.Info("Unknown message type received:", name)
-		}
+
+			defer c.close()
+
+			name := reflect.TypeOf(item.Message).String()
+			processor, exists := c.Network().Processors.Load(name)
+
+			if exists {
+				processor := processor.(MessageProcessor)
+				err := processor.Handle(c, &item)
+				if err != nil {
+					glog.Infof("An error occurred handling %x: %x", name, err)
+				}
+			} else {
+				glog.Info("Unknown message type received:", name)
+			}
+		}()
 	}
 }
 
