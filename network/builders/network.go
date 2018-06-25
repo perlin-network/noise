@@ -2,20 +2,21 @@ package builders
 
 import (
 	"errors"
+	"reflect"
+	"strconv"
+	"sync"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
-	"reflect"
-	"strconv"
-	"sync"
 )
 
 type NetworkBuilder struct {
-	keys    *crypto.KeyPair
-	address string
-	port    int
+	keys *crypto.KeyPair
+	host string
+	port int
 
 	// map[string]MessageProcessor
 	processors *sync.Map
@@ -25,8 +26,8 @@ func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
 	builder.keys = pair
 }
 
-func (builder *NetworkBuilder) SetAddress(address string) {
-	builder.address = address
+func (builder *NetworkBuilder) SetHost(host string) {
+	builder.host = host
 }
 
 func (builder *NetworkBuilder) SetPort(port int) {
@@ -56,7 +57,7 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 		return nil, errors.New("cryptography keypair not provided to Network; cannot create node Id")
 	}
 
-	if len(builder.address) == 0 {
+	if len(builder.host) == 0 {
 		return nil, errors.New("Network requires public server IP for peers to connect to")
 	}
 
@@ -69,20 +70,24 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 		builder.processors = &sync.Map{}
 	}
 
-	id := peer.CreateID(builder.address+":"+strconv.Itoa(builder.port), builder.keys.PublicKey)
+	unifiedHost, err := network.ToUnifiedHost(builder.host)
+	if err != nil {
+		return nil, err
+	}
+
+	id := peer.CreateID(unifiedHost+":"+strconv.Itoa(builder.port), builder.keys.PublicKey)
 
 	network := &network.Network{
-		Keys:    builder.keys,
-		Address: builder.address,
-		Port:    builder.port,
-		ID:      id,
-
-		RequestNonce: 0,
-		Requests:     &sync.Map{},
+		Keys: builder.keys,
+		Host: unifiedHost,
+		Port: builder.port,
+		ID:   id,
 
 		Processors: builder.processors,
 
 		Routes: dht.CreateRoutingTable(id),
+
+		Peers: &sync.Map{},
 	}
 
 	return network, nil

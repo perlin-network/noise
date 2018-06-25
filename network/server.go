@@ -3,9 +3,9 @@ package network
 import (
 	"io"
 
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 )
@@ -22,10 +22,12 @@ func createServer(network *Network) *Server {
 
 // Handles new incoming peer connections and their messages.
 func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
-	client := CreatePeerClient(s)
-	defer client.close()
-
-	go client.process()
+	var client *PeerClient
+	defer func() {
+		if client != nil {
+			client.close()
+		}
+	}()
 
 	for {
 		raw, err := server.Recv()
@@ -35,15 +37,15 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 			if client.Id != nil {
 				if s.network.Routes.PeerExists(*client.Id) {
 					s.network.Routes.RemovePeer(*client.Id)
-					log.Info("Peer " + client.Id.Address + " has disconnected.")
+					glog.Infof("Peer %s has disconnected.", client.Id.Address)
 				}
 			}
-			return nil
+			break
 		}
 
 		// Check if any of the message headers are invalid or null.
 		if raw.Message == nil || raw.Sender == nil || raw.Sender.PublicKey == nil || len(raw.Sender.Address) == 0 || raw.Signature == nil {
-			log.Debug("Received an invalid message (either no message, no sender, or no signature) from a peer.")
+			glog.Info("Received an invalid message (either no message, no sender, or no signature) from a peer.")
 			continue
 		}
 
@@ -55,18 +57,32 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 		// Derive peer ID.
 		val := peer.ID(*raw.Sender)
 
-		// Just in case, set the peer ID only once.
+		if client == nil {
+			if cached, ok := s.network.GetPeer(val.Address); ok {
+				client = cached
+			} else {
+				client = createPeerClient(s)
+				s.network.Peers.Store(val.Address, client)
+			}
+		}
+
+		// If peer ID has never been set, set it.
 		if client.Id == nil {
 			client.Id = &val
 
-			err := client.establishConnection()
+			err := client.establishConnection(client.Id.Address)
+
+			// Could not connect to peer; disconnect.
 			if err != nil {
-				log.Debug("Failed to connect to peer " + client.Id.Address + ".")
+				glog.Warningf("Failed to connect to peer %s err=[%+v]\n", client.Id.Address, err)
 				return err
 			}
 		} else if !client.Id.Equals(val) {
 			continue
 		}
+
+		// Update routing table w/ peer's ID.
+		s.network.Routes.Update(val)
 
 		// Unmarshal protobuf messages.
 		var ptr ptypes.DynamicAny
@@ -78,7 +94,7 @@ func (s *Server) Stream(server protobuf.Noise_StreamServer) error {
 
 		// Handle request/response.
 		if raw.Nonce > 0 && raw.IsResponse {
-			s.network.HandleResponse(raw.Nonce, msg)
+			client.handleResponse(raw.Nonce, msg)
 		} else {
 			// Forward it to mailbox of Client.
 			client.mailbox <- IncomingMessage{

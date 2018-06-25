@@ -1,21 +1,21 @@
 package network
 
 import (
-	"context"
-	"errors"
+	"fmt"
+	"math/rand"
+	"net"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/dht"
-	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"google.golang.org/grpc"
-	"net"
-	"strconv"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 type Network struct {
@@ -26,13 +26,9 @@ type Network struct {
 	Keys *crypto.KeyPair
 
 	// Node's Network information.
-	Address string
-	Port    int
-
-	// To do with handling request/responses.
-	RequestNonce uint64
-	// map[uint64]*proto.Message
-	Requests *sync.Map
+	// The Address is `Host:Port`.
+	Host string
+	Port int
 
 	// Map of incoming message processors for the Network.
 	// map[string]MessageProcessor
@@ -43,21 +39,25 @@ type Network struct {
 
 	listener net.Listener
 	server   *Server
+
+	// Map of connection addresses (string) <-> *network.PeerClient
+	// so that the network doesn't dial multiple times to the same ip
+	Peers *sync.Map
 }
 
-func (n *Network) Host() string {
-	return n.Address + ":" + strconv.Itoa(n.Port)
-}
+var (
+	dialTimeout = 3 * time.Second
+)
 
-func (n *Network) Listen() {
-	go n.listen()
+func (n *Network) Address() string {
+	return n.Host + ":" + strconv.Itoa(n.Port)
 }
 
 // Listen for peers on a port specified on instantation of Network{}.
-func (n *Network) listen() {
+func (n *Network) Listen() {
 	listener, err := net.Listen("tcp", ":"+strconv.Itoa(n.Port))
 	if err != nil {
-		log.Debug(err)
+		glog.Fatal(err)
 		return
 	}
 
@@ -69,145 +69,158 @@ func (n *Network) listen() {
 	n.listener = listener
 	n.server = server
 
-	log.Debug("Listening for peers on port " + strconv.Itoa(n.Port) + ".")
+	glog.Infof("Listening for peers on port %d.", n.Port)
 
 	err = client.Serve(listener)
 	if err != nil {
-		log.Debug(err)
+		glog.Fatal(err)
 		return
 	}
 }
 
-// Bootstrap with a number of peers and send a handshake to them.
+// Bootstrap with a number of peers and commence a handshake.
 func (n *Network) Bootstrap(addresses ...string) {
+	addresses = FilterPeers(n.Host, n.Port, addresses)
+
 	for _, address := range addresses {
-		conn, err := n.dial(address)
+		client, err := n.Dial(address)
 		if err != nil {
 			continue
 		}
 
-		// Create a temporary client for now and send a handshake request.
-		client, err := protobuf.NewNoiseClient(conn).Stream(context.Background())
-		if err != nil {
-			continue
-		}
-
-		err = n.Tell(client, &protobuf.HandshakeRequest{})
+		// Send a handshake request.
+		err = client.Tell(&protobuf.HandshakeRequest{})
 		if err != nil {
 			continue
 		}
 	}
 }
 
-// Dial a peer.
-func (n *Network) Dial(address string) (*grpc.ClientConn, error) {
-	return n.dial(address)
+// Loads the peer from n.Peers and opens it
+func (n *Network) GetPeer(address string) (*PeerClient, bool) {
+	peer, ok := n.Peers.Load(address)
+	if !ok || peer == nil {
+		return nil, false
+	}
+
+	client := peer.(*PeerClient)
+
+	err := client.open()
+	if err != nil {
+		return nil, false
+	}
+
+	return client, true
 }
 
 // Dials a peer via. gRPC.
-func (n *Network) dial(address string) (*grpc.ClientConn, error) {
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+func (n *Network) Dial(address string) (*PeerClient, error) {
+	address = strings.TrimSpace(address)
+	if len(address) == 0 {
+		return nil, fmt.Errorf("Cannot dial, address was empty")
+	}
 
+	address, err := ToUnifiedAddress(address)
 	if err != nil {
 		return nil, err
 	}
 
-	return conn, nil
-}
+	// load a cached connection
+	if client, ok := n.GetPeer(address); ok && client != nil {
+		return client, nil
+	}
 
-// Marshals message into proto.Message and signs it with this node's private key.
-func (n *Network) prepareMessage(message proto.Message) (*protobuf.Message, error) {
-	raw, err := ptypes.MarshalAny(message)
+	client := createPeerClient(n.server)
+	if client == nil {
+		return nil, fmt.Errorf("Unable to create peer client for address %s", address)
+	}
+
+	err = client.establishConnection(address)
 	if err != nil {
+		glog.Infof(fmt.Sprintf("Failed to connect to peer %s err=[%+v]\n", address, err))
+		client.close()
 		return nil, err
 	}
 
-	id := protobuf.ID(n.ID)
+	// Cache the peer's client.
+	n.Peers.Store(address, client)
 
-	signature, err := n.Keys.Sign(raw.Value)
-	if err != nil {
-		return nil, err
-	}
-
-	msg := &protobuf.Message{
-		Message:   raw,
-		Sender:    &id,
-		Signature: signature,
-	}
-
-	return msg, nil
+	return client, nil
 }
 
-func (n *Network) Tell(client Sendable, message proto.Message) error {
-	msg, err := n.prepareMessage(message)
-	if err != nil {
-		return err
-	}
-	err = client.Send(msg)
-	if err != nil {
-		return err
-	}
+// Asynchronously broadcast a message to all peer clients.
+func (n *Network) Broadcast(message proto.Message) {
+	n.Peers.Range(func(key, value interface{}) bool {
+		client := value.(*PeerClient)
+		err := client.Tell(message)
 
-	return nil
+		if err != nil {
+			glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+		}
+
+		return true
+	})
 }
 
-func (n *Network) Reply(client Sendable, nonce uint64, message proto.Message) error {
-	msg, err := n.prepareMessage(message)
+// Asynchronously broadcast a message to a set of peer clients denoted by their addresses.
+func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
+	for _, address := range addresses {
+		if client, ok := n.GetPeer(address); ok {
+			err := client.Tell(message)
 
-	msg.Nonce = nonce
-	msg.IsResponse = true
+			if err != nil {
+				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+			}
 
-	if err != nil {
-		return err
-	}
-
-	err = client.Send(msg)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Provide a response to a request.
-func (n *Network) HandleResponse(nonce uint64, response proto.Message) {
-	// Check if the request is currently looking to be received.
-	if channel, exists := n.Requests.Load(nonce); exists {
-		channel.(chan proto.Message) <- response
+			client.close()
+		} else {
+			glog.Warningf("Failed to send message to peer %s; peer does not exist.", address)
+		}
 	}
 }
 
-func (n *Network) Request(client Sendable, message proto.Message) (proto.Message, error) {
-	msg, err := n.prepareMessage(message)
-	if err != nil {
-		return nil, err
-	}
+// Asynchronously broadcast a message to a set of peer clients denoted by their peer IDs.
+func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
+	for _, id := range ids {
+		if client, ok := n.GetPeer(id.Address); ok {
+			err := client.Tell(message)
 
-	// Set the request nonce.
-	msg.Nonce = atomic.AddUint64(&n.RequestNonce, 1)
+			if err != nil {
+				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+			}
 
-	// Send the client the request.
-	err = client.Send(msg)
-	if err != nil {
-		return nil, err
-	}
-
-	// Start tracking the request.
-	channel := make(chan proto.Message, 1)
-	n.Requests.Store(msg.Nonce, channel)
-
-	// Stop tracking the request.
-	defer close(channel)
-	defer n.Requests.Delete(msg.Nonce)
-
-	select {
-	case response := <-channel:
-		return response, nil
-	case <-time.After(10 * time.Second): // TODO: Make delay customizable.
-		return nil, errors.New("request timed out")
+			client.close()
+		} else {
+			glog.Warningf("Failed to send message to peer %s; peer does not exist.", id)
+		}
 	}
 }
 
-type Sendable interface {
-	Send(*protobuf.Message) error
+// Asynchronously broadcast message to random selected K peers.
+// Does not guarantee broadcasting to exactly K peers.
+func (n *Network) BroadcastRandomly(message proto.Message, K int) {
+	var addresses []string
+
+	n.Peers.Range(func(key, value interface{}) bool {
+		client := value.(*PeerClient)
+		addresses = append(addresses, client.Id.Address)
+
+		// Limit total amount of addresses in case we have a lot of peers.
+		if len(addresses) > K*3 {
+			return false
+		}
+
+		return true
+	})
+
+	// Flip a coin and shuffle :).
+	rand.Shuffle(len(addresses), func(i, j int) {
+		addresses[i], addresses[j] = addresses[j], addresses[i]
+	})
+
+	if len(addresses) < K {
+		K = len(addresses)
+	}
+
+	n.BroadcastByAddresses(message, addresses[:K]...)
 }

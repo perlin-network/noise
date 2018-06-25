@@ -1,17 +1,30 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
-	"strings"
-
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/examples/chat/messages"
 	"github.com/perlin-network/noise/grpc_utils"
+	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
+	"os"
+	"strings"
 	"time"
 )
+
+type ChatMessageProcessor struct{}
+
+func (*ChatMessageProcessor) Handle(client *network.PeerClient, raw *network.IncomingMessage) error {
+	message := raw.Message.(*messages.ChatMessage)
+
+	glog.Infof("<%s> %s", client.Id.Address, message.Message)
+
+	return nil
+}
 
 func main() {
 	// glog defaults to logging to a file, override this flag to log to console for testing
@@ -40,6 +53,8 @@ func main() {
 	// Register peer discovery RPC handlers.
 	discovery.BootstrapPeerDiscovery(builder)
 
+	builder.AddProcessor((*messages.ChatMessage)(nil), new(ChatMessageProcessor))
+
 	net, err := builder.BuildNetwork()
 	if err != nil {
 		glog.Fatal(err)
@@ -57,7 +72,14 @@ func main() {
 		net.Bootstrap(peers...)
 	}
 
-	select {}
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		input, _ := reader.ReadString('\n')
+
+		glog.Infof("<%s> %s", net.Address(), input)
+
+		net.Broadcast(&messages.ChatMessage{Message: input})
+	}
 
 	glog.Flush()
 }

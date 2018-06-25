@@ -1,20 +1,22 @@
 package discovery
 
 import (
-	"context"
 	"sync"
 
-	"github.com/perlin-network/noise/log"
+	"time"
+
+	"github.com/golang/glog"
 	"github.com/perlin-network/noise/network"
+	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 )
 
-func bootstrapPeers(network *network.Network, target peer.ID, count int) (addresses []string, publicKeys [][]byte) {
+func bootstrapPeers(net *network.Network, target peer.ID, count int) (addresses []string, publicKeys [][]byte) {
 	queue := []peer.ID{target}
 
 	visited := make(map[string]struct{})
-	visited[network.Keys.PublicKeyHex()] = struct{}{}
+	visited[net.Keys.PublicKeyHex()] = struct{}{}
 	visited[target.PublicKeyHex()] = struct{}{}
 
 	for len(queue) > 0 {
@@ -28,26 +30,21 @@ func bootstrapPeers(network *network.Network, target peer.ID, count int) (addres
 			go func(peerId peer.ID) {
 				defer wait.Done()
 
-				conn, err := network.Dial(peerId.Address)
+				client, err := net.Dial(peerId.Address)
 				if err != nil {
 					return
 				}
 
-				client, err := protobuf.NewNoiseClient(conn).Stream(context.Background())
-				if err != nil {
-					return
-				}
+				protoID := protobuf.ID(peerId)
 
-				protoId := protobuf.ID(peerId)
+				request := new(rpc.Request)
+				request.SetMessage(&protobuf.LookupNodeRequest{Target: &protoID})
+				request.SetTimeout(3 * time.Second)
 
-				request := &protobuf.LookupNodeRequest{
-					Target: &protoId,
-				}
-
-				response, err := network.Request(client, request)
+				response, err := client.Request(request)
 
 				if err != nil {
-					log.Debug(err)
+					glog.Error(err)
 					return
 				}
 

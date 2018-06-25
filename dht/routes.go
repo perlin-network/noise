@@ -14,7 +14,7 @@ type RoutingTable struct {
 	// Current node's ID.
 	self peer.ID
 
-	buckets *sync.Map
+	buckets []*Bucket
 }
 
 type Bucket struct {
@@ -30,9 +30,12 @@ func NewBucket() *Bucket {
 }
 
 func CreateRoutingTable(id peer.ID) *RoutingTable {
-	table := &RoutingTable{self: id, buckets: &sync.Map{}}
+	table := &RoutingTable{
+		self:    id,
+		buckets: make([]*Bucket, peer.IdSize*8),
+	}
 	for i := 0; i < peer.IdSize*8; i++ {
-		table.buckets.Store(i, NewBucket())
+		table.buckets[i] = NewBucket()
 	}
 
 	table.Update(id)
@@ -79,9 +82,7 @@ func (t *RoutingTable) GetPeers() (peers []peer.ID) {
 	visited := make(map[string]struct{})
 	visited[t.self.PublicKeyHex()] = struct{}{}
 
-	t.buckets.Range(func(key, value interface{}) bool {
-		bucket := value.(*Bucket)
-
+	for _, bucket := range t.buckets {
 		bucket.mutex.RLock()
 
 		for e := bucket.Front(); e != nil; e = e.Next() {
@@ -93,8 +94,7 @@ func (t *RoutingTable) GetPeers() (peers []peer.ID) {
 		}
 
 		bucket.mutex.RUnlock()
-		return true
-	})
+	}
 
 	return
 }
@@ -104,9 +104,7 @@ func (t *RoutingTable) GetPeerAddresses() (peers []string) {
 	visited := make(map[string]struct{})
 	visited[t.self.PublicKeyHex()] = struct{}{}
 
-	t.buckets.Range(func(key, value interface{}) bool {
-		bucket := value.(*Bucket)
-
+	for _, bucket := range t.buckets {
 		bucket.mutex.RLock()
 
 		for e := bucket.Front(); e != nil; e = e.Next() {
@@ -118,8 +116,7 @@ func (t *RoutingTable) GetPeerAddresses() (peers []string) {
 		}
 
 		bucket.mutex.RUnlock()
-		return true
-	})
+	}
 
 	return
 }
@@ -199,10 +196,9 @@ func (t *RoutingTable) FindClosestPeers(target peer.ID, count int) (peers []peer
 }
 
 func (t *RoutingTable) Bucket(id int) *Bucket {
-	if bucket, exists := t.buckets.Load(id); exists {
-		if bucket, ok := bucket.(*Bucket); ok {
-			return bucket
-		}
+	if id >= 0 && id < len(t.buckets) {
+		return t.buckets[id]
+	} else {
+		return nil
 	}
-	return nil
 }
