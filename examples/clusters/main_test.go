@@ -8,16 +8,13 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/examples/chat/messages"
+	"github.com/perlin-network/noise/examples/clusters/messages"
 	"github.com/perlin-network/noise/grpc_utils"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
 )
 
-type ClusterMessage struct {
-	Value string
-}
 type ClusterNode struct {
 	Host string
 	Port int
@@ -25,7 +22,7 @@ type ClusterNode struct {
 }
 
 func (c *ClusterNode) Handle(client *network.PeerClient, raw *network.IncomingMessage) error {
-	message := raw.Message.(*messages.ChatMessage)
+	message := raw.Message.(*messages.ClusterTestMessage)
 
 	glog.Infof("<%s> %s", client.Id.Address, message.Message)
 
@@ -49,14 +46,13 @@ func setupCluster(t *testing.T, nodes []*ClusterNode) error {
 
 		discovery.BootstrapPeerDiscovery(builder)
 
-		builder.AddProcessor((*messages.ChatMessage)(nil), nodes[i])
+		builder.AddProcessor((*messages.ClusterTestMessage)(nil), nodes[i])
 
 		net, err := builder.BuildNetwork()
 		if err != nil {
 			return err
 		}
 		node.Net = net
-		nodes = append(nodes, node)
 
 		go net.Listen()
 	}
@@ -88,6 +84,9 @@ func TestClusters(t *testing.T) {
 		node.Port = cluster1StartPort + i
 
 		nodes = append(nodes, node)
+	}
+	if len(nodes) != cluster1NumPorts {
+		t.Errorf("Should have only %d nodes, but had %d", len(nodes), cluster1NumPorts)
 	}
 
 	if err := setupCluster(t, nodes); err != nil {
