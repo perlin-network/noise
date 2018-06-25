@@ -50,23 +50,14 @@ func FilterPeers(host string, port int, peers []string) (filtered []string) {
 	visited[address] = struct{}{}
 
 	for _, peer := range peers {
-		if _, exists := visited[peer]; !exists {
-			filtered = append(filtered, peer)
-			visited[peer] = struct{}{}
-		}
-	}
-	return filtered
-}
-
-// resolves a list of addresses, ignores bad ones
-func unifyAddresses(addresses []string) []string {
-	retVal := []string{}
-	for _, address := range addresses {
-		resolved, err := ToUnifiedAddress(address)
+		resolved, err := ToUnifiedAddress(peer)
 		if err != nil {
 			continue
 		}
-		retVal = append(retVal, resolved)
+		if _, exists := visited[resolved]; !exists {
+			filtered = append(filtered, resolved)
+			visited[resolved] = struct{}{}
+		}
 	}
-	return retVal
+	return filtered
 }
