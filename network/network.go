@@ -98,12 +98,12 @@ func (n *Network) Bootstrap(addresses ...string) {
 
 // Loads the peer from n.Peers and opens it
 func (n *Network) GetPeer(address string) (*PeerClient, bool) {
-	peer, ok := n.Peers.Load(address)
-	if !ok || peer == nil {
+	raw, ok := n.Peers.Load(address)
+	if !ok || raw == nil {
 		return nil, false
 	}
 
-	client := peer.(*PeerClient)
+	client := raw.(*PeerClient)
 
 	err := client.open()
 	if err != nil {
@@ -117,7 +117,7 @@ func (n *Network) GetPeer(address string) (*PeerClient, bool) {
 func (n *Network) Dial(address string) (*PeerClient, error) {
 	address = strings.TrimSpace(address)
 	if len(address) == 0 {
-		return nil, fmt.Errorf("Cannot dial, address was empty")
+		return nil, fmt.Errorf("cannot dial, address was empty")
 	}
 
 	address, err := ToUnifiedAddress(address)
@@ -132,7 +132,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 
 	client := createPeerClient(n.server)
 	if client == nil {
-		return nil, fmt.Errorf("Unable to create peer client for address %s", address)
+		return nil, fmt.Errorf("unable to create peer client for address %s", address)
 	}
 
 	err = client.establishConnection(address)
