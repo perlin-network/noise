@@ -2,8 +2,8 @@ package network
 
 import (
 	"net"
-	"strings"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -27,21 +27,27 @@ func TestToUnifiedAddress(t *testing.T) {
 }
 
 func TestFilterPeers(t *testing.T) {
-	ret := FilterPeers("10.0.0.3", 3000, []string{
+	result := FilterPeers("10.0.0.3", 3000, []string{
 		"10.0.0.5:3000",
 		"10.0.0.1:3000",
 		"10.0.0.1:3000",
 		"10.0.0.1:2000",
 		"10.0.0.3:3000",
 		"10.0.0.6:3000",
+		"localhost:3004",
+		"::1:3005",
 	})
 	expected := []string{
 		"10.0.0.5:3000",
 		"10.0.0.1:3000",
+		// "10.0.0.1:3000" is a duplicate
 		"10.0.0.1:2000",
+		// "10.0.0.3:3000" is filtered
 		"10.0.0.6:3000",
+		"127.0.0.1:3004",
+		// "::1:3005" will be removed
 	}
-	if !reflect.DeepEqual(ret, expected) {
-		t.Fatal("Unexpected filter output")
+	if !reflect.DeepEqual(result, expected) {
+		t.Fatalf("Unexpected got %v, but expected %v", result, expected)
 	}
 }

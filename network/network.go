@@ -2,6 +2,13 @@ package network
 
 import (
 	"fmt"
+	"math/rand"
+	"net"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
@@ -9,12 +16,6 @@ import (
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"google.golang.org/grpc"
-	"math/rand"
-	"net"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 type Network struct {
@@ -202,7 +203,7 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 		addresses = append(addresses, client.Id.Address)
 
 		// Limit total amount of addresses in case we have a lot of peers.
-		if len(addresses) > K * 3 {
+		if len(addresses) > K*3 {
 			return false
 		}
 
