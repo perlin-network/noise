@@ -15,10 +15,10 @@ func TestHash(t *testing.T) {
 	if ok {
 		if n.String() != r.String() {
 			fmt.Printf("%v \n%v \n", r, n)
-			panic("Hash error")
+			t.Fatal("Hash error")
 		}
 	} else {
-		panic("Big Int error")
+		t.Fatal("Big Int error")
 	}
 }
 
@@ -27,6 +27,6 @@ func TestHashBytes(t *testing.T) {
 	n := []byte{245, 214, 123, 174, 115, 176, 225, 13, 13, 253, 48, 67, 179, 244, 241, 0, 173, 160, 20, 197, 195, 123, 213, 206, 151, 129, 59, 19, 245, 171, 43, 207}
 	if !bytes.Equal(n, r) {
 		fmt.Printf("%v \n%v \n", r, n)
-		panic("Hash error")
+		t.Fatal("Hash error")
 	}
 }
