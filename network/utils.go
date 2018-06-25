@@ -2,8 +2,8 @@ package network
 
 import (
 	"errors"
-	"net"
 	"fmt"
+	"net"
 )
 
 func ToUnifiedHost(host string) (string, error) {
@@ -56,4 +56,17 @@ func FilterPeers(host string, port int, peers []string) (filtered []string) {
 		}
 	}
 	return filtered
+}
+
+// resolves a list of addresses, ignores bad ones
+func unifyAddresses(addresses []string) []string {
+	retVal := []string{}
+	for _, address := range addresses {
+		resolved, err := ToUnifiedAddress(address)
+		if err != nil {
+			continue
+		}
+		retVal = append(retVal, resolved)
+	}
+	return retVal
 }

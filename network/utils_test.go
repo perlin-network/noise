@@ -2,8 +2,8 @@ package network
 
 import (
 	"net"
-	"strings"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -43,5 +43,27 @@ func TestFilterPeers(t *testing.T) {
 	}
 	if !reflect.DeepEqual(ret, expected) {
 		t.Fatal("Unexpected filter output")
+	}
+}
+
+func TestUnifyAddresses(t *testing.T) {
+	oneResolvedAddr, err := ToUnifiedAddress("localhost:1000")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testAddr := []string{
+		"localhost:1000",
+		"123.45.67.89:123",
+	}
+	expectedAddr := []string{
+		oneResolvedAddr,
+		testAddr[1],
+	}
+
+	resultAddr := unifyAddresses(testAddr)
+
+	if !reflect.DeepEqual(resultAddr, expectedAddr) {
+		t.Fatalf("Unexpected got %v, but expected %v", resultAddr, expectedAddr)
 	}
 }

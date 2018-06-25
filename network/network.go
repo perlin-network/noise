@@ -80,7 +80,7 @@ func (n *Network) Listen() {
 
 // Bootstrap with a number of peers and commence a handshake.
 func (n *Network) Bootstrap(addresses ...string) {
-	resolvedAddr := resolveAddresses(addresses)
+	resolvedAddr := unifyAddresses(addresses)
 	addresses = FilterPeers(n.Host, n.Port, resolvedAddr)
 
 	for _, address := range addresses {
@@ -221,16 +221,4 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	}
 
 	n.BroadcastByAddresses(message, addresses[:K]...)
-}
-
-func resolveAddresses(addresses []string) []string {
-	retVal := []string{}
-	for _, address := range addresses {
-		resolved, err := ToUnifiedAddress(address)
-		if err != nil {
-			continue
-		}
-		retVal = append(retVal, resolved)
-	}
-	return retVal
 }
