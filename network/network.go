@@ -2,6 +2,13 @@ package network
 
 import (
 	"fmt"
+	"math/rand"
+	"net"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
@@ -9,12 +16,6 @@ import (
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"google.golang.org/grpc"
-	"math/rand"
-	"net"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 type Network struct {
@@ -79,7 +80,8 @@ func (n *Network) Listen() {
 
 // Bootstrap with a number of peers and commence a handshake.
 func (n *Network) Bootstrap(addresses ...string) {
-	addresses = FilterPeers(n.Host, n.Port, addresses)
+	resolvedAddr := resolveAddresses(addresses)
+	addresses = FilterPeers(n.Host, n.Port, resolvedAddr)
 
 	for _, address := range addresses {
 		client, err := n.Dial(address)
@@ -202,7 +204,7 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 		addresses = append(addresses, client.Id.Address)
 
 		// Limit total amount of addresses in case we have a lot of peers.
-		if len(addresses) > K * 3 {
+		if len(addresses) > K*3 {
 			return false
 		}
 
@@ -219,4 +221,16 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	}
 
 	n.BroadcastByAddresses(message, addresses[:K]...)
+}
+
+func resolveAddresses(addresses []string) []string {
+	retVal := []string{}
+	for _, address := range addresses {
+		resolved, err := ToUnifiedAddress(address)
+		if err != nil {
+			continue
+		}
+		retVal = append(retVal, resolved)
+	}
+	return retVal
 }
