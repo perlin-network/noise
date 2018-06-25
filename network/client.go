@@ -120,7 +120,12 @@ func (c *PeerClient) processIncomingMessages() {
 }
 
 // Marshals message into proto.Message and signs it with this node's private key.
+// Errors if the message is null.
 func (c *PeerClient) prepareMessage(message proto.Message) (*protobuf.Message, error) {
+	if message == nil {
+		return nil, errors.New("message is null")
+	}
+
 	raw, err := ptypes.MarshalAny(message)
 	if err != nil {
 		return nil, err
@@ -185,10 +190,6 @@ func (c *PeerClient) handleResponse(nonce uint64, response proto.Message) {
 
 // Initiate a request/response-style RPC call to the given peer.
 func (c *PeerClient) Request(request *rpc.Request) (proto.Message, error) {
-	if request.Message == nil {
-		return nil, errors.New("request must specify a message to send")
-	}
-
 	msg, err := c.prepareMessage(request.Message)
 	if err != nil {
 		return nil, err

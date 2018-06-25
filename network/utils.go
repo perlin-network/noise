@@ -2,8 +2,8 @@ package network
 
 import (
 	"errors"
-	"net"
 	"fmt"
+	"net"
 )
 
 func ToUnifiedHost(host string) (string, error) {
@@ -50,9 +50,13 @@ func FilterPeers(host string, port int, peers []string) (filtered []string) {
 	visited[address] = struct{}{}
 
 	for _, peer := range peers {
-		if _, exists := visited[peer]; !exists {
-			filtered = append(filtered, peer)
-			visited[peer] = struct{}{}
+		resolved, err := ToUnifiedAddress(peer)
+		if err != nil {
+			continue
+		}
+		if _, exists := visited[resolved]; !exists {
+			filtered = append(filtered, resolved)
+			visited[resolved] = struct{}{}
 		}
 	}
 	return filtered
