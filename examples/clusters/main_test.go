@@ -59,12 +59,19 @@ func setupCluster(t *testing.T, nodes []*ClusterNode) error {
 
 	for i := 0; i < len(nodes); i++ {
 		if err := grpc_utils.BlockUntilConnectionReady(nodes[i].Host, nodes[i].Port, blockTimeout); err != nil {
-			return fmt.Errorf("Error: port was not available, cannot bootstrap peers, err=%+v", err)
+			return fmt.Errorf("Error: port was not available, cannot bootstrap node %d peers, err=%+v", i, err)
 		}
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		nodes[i].Net.Bootstrap(peers...)
+		// need to filter the peers otherwise Tell will segfault
+		filteredPeers := []string{}
+		for j, peer := range peers {
+			if i != j {
+				filteredPeers = append(filteredPeers, peer)
+			}
+		}
+		nodes[i].Net.Bootstrap(filteredPeers...)
 	}
 
 	return nil
