@@ -77,6 +77,9 @@ func setupCluster(t *testing.T, nodes []*ClusterNode) error {
 
 	for i := 0; i < len(nodes); i++ {
 		nodes[i].Net.Bootstrap(peers...)
+
+		// HACK: seems there's another race condition with Bootstrap
+		time.Sleep(1 * time.Second)
 	}
 
 	return nil
