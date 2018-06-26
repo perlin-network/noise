@@ -6,7 +6,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -32,7 +31,7 @@ type Network struct {
 
 	// Map of incoming message processors for the Network.
 	// map[string]MessageProcessor
-	Processors *sync.Map
+	Processors *StringMessageProcessorSyncMap
 
 	// Node's cryptographic ID.
 	ID peer.ID
@@ -42,7 +41,7 @@ type Network struct {
 
 	// Map of connection addresses (string) <-> *network.PeerClient
 	// so that the network doesn't dial multiple times to the same ip
-	Peers *sync.Map
+	Peers *StringPeerClientSyncMap
 }
 
 var (
@@ -98,12 +97,10 @@ func (n *Network) Bootstrap(addresses ...string) {
 
 // Loads the peer from n.Peers and opens it
 func (n *Network) GetPeer(address string) (*PeerClient, bool) {
-	peer, ok := n.Peers.Load(address)
-	if !ok || peer == nil {
+	client, ok := n.Peers.Load(address)
+	if !ok || client == nil {
 		return nil, false
 	}
-
-	client := peer.(*PeerClient)
 
 	err := client.open()
 	if err != nil {
@@ -147,8 +144,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 
 // Asynchronously broadcast a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
-	n.Peers.Range(func(key, value interface{}) bool {
-		client := value.(*PeerClient)
+	n.Peers.Range(func(key string, client *PeerClient) bool {
 		err := client.Tell(message)
 
 		if err != nil {
@@ -198,8 +194,7 @@ func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
 func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	var addresses []string
 
-	n.Peers.Range(func(key, value interface{}) bool {
-		client := value.(*PeerClient)
+	n.Peers.Range(func(key string, client *PeerClient) bool {
 		addresses = append(addresses, client.Id.Address)
 
 		// Limit total amount of addresses in case we have a lot of peers.
