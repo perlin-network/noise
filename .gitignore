@@ -4,3 +4,6 @@ noise
 chat
 
 vendor
+
+# Ignore Generated Objects
+**.pb.*

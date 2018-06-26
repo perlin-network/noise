@@ -18,8 +18,9 @@ Noise follows the DRY (don't-repeat-yourself) principle for its choices of techn
 # install vgo tooling
 go get -u golang.org/x/vgo
 
-# download the dependencies to vendor folder and run main.go
+# download the dependencies to vendor folder, compile assets, and run main.go
 vgo mod -vendor
+vgo generate
 vgo run main.go
 
 # build and run the main.go noise binary
