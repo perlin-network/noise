@@ -2,6 +2,7 @@ package basic
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/examples/basic/messages"
@@ -20,6 +21,8 @@ type ClusterNode interface {
 	SetNet(*network.Network)
 	Handle(client *network.PeerClient, raw *network.IncomingMessage) error
 }
+
+var blockTimeout = 10 * time.Second
 
 // SetupCluster sets up a connected group of nodes in a cluster.
 func SetupCluster(nodes []ClusterNode) error {

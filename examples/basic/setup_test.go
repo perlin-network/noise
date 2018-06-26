@@ -48,7 +48,6 @@ func (e *BasicNode) Handle(client *network.PeerClient, raw *network.IncomingMess
 
 // makes sure the implementation matches the interface at compile time
 var _ ClusterNode = (*BasicNode)(nil)
-var blockTimeout = 10 * time.Second
 
 // PopMessage returns the oldest message from it's buffer and removes it from the list
 func (e *BasicNode) PopMessage() *messages.BasicMessage {
