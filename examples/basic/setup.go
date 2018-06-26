@@ -15,6 +15,7 @@ import (
 type ClusterNode struct {
 	Host             string
 	Port             int
+	Peers            []string
 	Net              *network.Network
 	BufferedMessages []*messages.ClusterTestMessage
 }
@@ -74,8 +75,8 @@ func SetupCluster(nodes []*ClusterNode) error {
 		}
 	}
 
-	for i := 0; i < len(nodes); i++ {
-		nodes[i].Net.Bootstrap(peers...)
+	for _, node := range nodes {
+		node.Net.Bootstrap(node.Peers...)
 
 		// TODO: seems there's another race condition with Bootstrap, use a sleep for now
 		time.Sleep(1 * time.Second)

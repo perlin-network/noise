@@ -17,6 +17,7 @@ func ExampleSetupClusters() {
 	cluster1StartPort := 5000
 	cluster1NumPorts := 3
 	nodes := []*ClusterNode{}
+	peers := []string{}
 
 	for i := 0; i < cluster1NumPorts; i++ {
 		node := &ClusterNode{}
@@ -24,6 +25,11 @@ func ExampleSetupClusters() {
 		node.Port = cluster1StartPort + i
 
 		nodes = append(nodes, node)
+		peers = append(peers, fmt.Sprintf("%s:%d", node.Host, node.Port))
+	}
+
+	for _, node := range nodes {
+		node.Peers = peers
 	}
 
 	if err := SetupCluster(nodes); err != nil {
