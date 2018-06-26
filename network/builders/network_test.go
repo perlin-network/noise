@@ -22,10 +22,10 @@ var (
 	port = 12345
 )
 
-//DummyProcessor so to keep independency to incoming.go and outgoing.go
-type DummyProcessor struct{}
+//MockProcessor so to keep independency to incoming.go and outgoing.go
+type MockProcessor struct{}
 
-func (DummyProcessor) Handle(client *network.PeerClient, message *network.IncomingMessage) error {
+func (MockProcessor) Handle(client *network.PeerClient, message *network.IncomingMessage) error {
 	// Send handshake response to peer.
 	err := client.Tell(&protobuf.HandshakeResponse{})
 
@@ -42,7 +42,7 @@ func buildNet(port int) (*network.Network, error) {
 	builder.SetHost(host)
 	builder.SetPort(port)
 
-	builder.AddProcessor((*protobuf.HandshakeRequest)(nil), new(DummyProcessor))
+	builder.AddProcessor((*protobuf.HandshakeRequest)(nil), new(MockProcessor))
 
 	return builder.BuildNetwork()
 }
@@ -52,14 +52,13 @@ func TestBuildNetwork(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("testbuildnetwork error: %v", err)
-		return
 	}
 }
 
 func TestSetters(t *testing.T) {
 	net, _ := buildNet(port)
-	if net.Address() != fmt.Sprintf("127.0.0.1:%v", port) { //unified
-		t.Fatal("address is wrong")
+	if net.Address() != fmt.Sprintf("127.0.0.1:%d", port) { //unified
+		t.Fatalf("address is wrong: expected %s but got %s", fmt.Sprintf("127.0.0.1:%d", port), net.Address())
 	}
 	if net.Host != fmt.Sprintf("127.0.0.1") { //unified
 		t.Fatal("host is wrong")
@@ -101,26 +100,31 @@ func TestPeers(t *testing.T) {
 	net2.Bootstrap(peers...)
 	net3.Bootstrap(peers...)
 
-	if !strings.Contains(fmt.Sprintf("%v", net1.Peers), "127.0.0.1:12346") ||
-		!strings.Contains(fmt.Sprintf("%v", net1.Peers), "127.0.0.1:12347") {
+	resolvedHost := "127.0.0.1"
+	resolvedAddr1 := fmt.Sprintf("%s:12345", resolvedHost)
+	resolvedAddr2 := fmt.Sprintf("%s:12346", resolvedHost)
+	resolvedAddr3 := fmt.Sprintf("%s:12347", resolvedHost)
+
+	if !strings.Contains(fmt.Sprintf("%v", net1.Peers), resolvedAddr2) ||
+		!strings.Contains(fmt.Sprintf("%v", net1.Peers), resolvedAddr3) {
 		t.Fatalf("missing Peers 0")
 	}
-	if _, ok := net1.GetPeer("127.0.0.1:12346"); !ok {
+	if _, ok := net1.GetPeer(resolvedAddr2); !ok {
 		t.Fatalf("missing peers 1")
 	}
-	if _, ok := net1.GetPeer("127.0.0.1:12347"); !ok {
+	if _, ok := net1.GetPeer(resolvedAddr3); !ok {
 		t.Fatalf("missing peers 2")
 	}
-	if _, ok := net2.GetPeer("127.0.0.1:12345"); !ok {
+	if _, ok := net2.GetPeer(resolvedAddr1); !ok {
 		t.Fatalf("missing peers 3")
 	}
-	if _, ok := net2.GetPeer("127.0.0.1:12347"); !ok {
+	if _, ok := net2.GetPeer(resolvedAddr3); !ok {
 		t.Fatalf("missing peers 4")
 	}
-	if _, ok := net3.GetPeer("127.0.0.1:12345"); !ok {
+	if _, ok := net3.GetPeer(resolvedAddr1); !ok {
 		t.Fatalf("missing peers 5")
 	}
-	if _, ok := net3.GetPeer("127.0.0.1:12346"); !ok {
+	if _, ok := net3.GetPeer(resolvedAddr2); !ok {
 		t.Fatalf("missing peers 6")
 	}
 }
