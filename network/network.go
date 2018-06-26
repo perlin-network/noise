@@ -52,13 +52,14 @@ func (n *Network) Address() string {
 }
 
 // Listen starts listening for peers on a port.
-func (n *Network) Listen() {
+func (n *Network) Listen(netStart chan<- bool) {
 	listener, err := kcp.ListenWithOptions(":"+strconv.Itoa(int(n.Port)), nil, 10, 3)
 	if err != nil {
 		glog.Fatal(err)
 		return
 	}
 
+	netStart <- true
 	glog.Infof("Listening for peers on port %d.", n.Port)
 
 	// Handle new clients.
