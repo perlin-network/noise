@@ -6,17 +6,18 @@ import (
 	"time"
 
 	"fmt"
+	"math/rand"
+	"strings"
+
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
-	"math/rand"
-	"strings"
-	"github.com/pkg/errors"
 )
 
 type Network struct {
@@ -29,7 +30,7 @@ type Network struct {
 	// Node's Network information.
 	// The Address is `Host:Port`.
 	Host string
-	Port int
+	Port uint16
 
 	// Map of incomingStream message processors for the Network.
 	// map[string]MessageProcessor
@@ -45,13 +46,14 @@ type Network struct {
 	Peers *StringPeerClientSyncMap
 }
 
+//Address returns a formated host:port string
 func (n *Network) Address() string {
-	return n.Host + ":" + strconv.Itoa(n.Port)
+	return n.Host + ":" + strconv.Itoa(int(n.Port))
 }
 
 // Listen starts listening for peers on a port.
 func (n *Network) Listen() {
-	listener, err := kcp.ListenWithOptions(":"+strconv.Itoa(n.Port), nil, 10, 3)
+	listener, err := kcp.ListenWithOptions(":"+strconv.Itoa(int(n.Port)), nil, 10, 3)
 	if err != nil {
 		glog.Fatal(err)
 		return
