@@ -49,6 +49,7 @@ func (e *BasicNode) Handle(client *network.PeerClient, raw *network.IncomingMess
 
 // makes sure the implementation matches the interface at compile time
 var _ ClusterNode = (*BasicNode)(nil)
+var blockTimeout = 10 * time.Second
 
 // PopMessage returns the oldest message from it's buffer and removes it from the list
 func (e *BasicNode) PopMessage() *messages.BasicMessage {
@@ -91,23 +92,27 @@ func ExampleSetupClusters() {
 		return
 	}
 
+	// After all the nodes are started, get them to start talking with each other
 	for i, node := range nodes {
 		if node.net == nil {
 			fmt.Printf("expected %d nodes, but node %d is missing a network", len(nodes), i)
 			return
 		}
+
+		node.Net().Bootstrap(node.Peers()...)
+
+		// TODO: seems there's another race condition with Bootstrap, use a sleep for now
+		time.Sleep(1 * time.Second)
 	}
 
-	// check if you can send a message from node 1 and will it be received only in node 2,3
-
-	testMessage := "message from node 0"
-
 	// Broadcast is an asynchronous call to send a message to other nodes
+	testMessage := "message from node 0"
 	nodes[0].Net().Broadcast(&messages.BasicMessage{Message: testMessage})
 
 	// Simplificiation: message broadcasting is asynchronous, so need the messages to settle
 	time.Sleep(1 * time.Second)
 
+	// check if you can send a message from node 1 and will it be received only in node 2,3
 	if result := nodes[0].PopMessage(); result != nil {
 		fmt.Printf("expected nothing in node 0, got %v", result)
 		return
