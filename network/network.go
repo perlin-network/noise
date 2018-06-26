@@ -14,7 +14,8 @@ import (
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
-	"google.golang.org/grpc"
+	"github.com/xtaci/kcp-go"
+	"github.com/xtaci/smux"
 )
 
 type Network struct {
@@ -29,7 +30,7 @@ type Network struct {
 	Host string
 	Port int
 
-	// Map of incoming message processors for the Network.
+	// Map of incomingStream message processors for the Network.
 	// map[string]MessageProcessor
 	Processors *StringMessageProcessorSyncMap
 
@@ -37,7 +38,6 @@ type Network struct {
 	ID peer.ID
 
 	listener net.Listener
-	server   *Server
 
 	// Map of connection addresses (string) <-> *network.PeerClient
 	// so that the network doesn't dial multiple times to the same ip
@@ -54,26 +54,35 @@ func (n *Network) Address() string {
 
 // Listen for peers on a port specified on instantation of Network{}.
 func (n *Network) Listen() {
-	listener, err := net.Listen("tcp", ":"+strconv.Itoa(n.Port))
+	listener, err := kcp.ListenWithOptions(":"+strconv.Itoa(n.Port), nil, 10, 3)
 	if err != nil {
 		glog.Fatal(err)
 		return
 	}
 
-	client := grpc.NewServer()
-	server := createServer(n)
-
-	protobuf.RegisterNoiseServer(client, server)
-
-	n.listener = listener
-	n.server = server
-
 	glog.Infof("Listening for peers on port %d.", n.Port)
 
-	err = client.Serve(listener)
-	if err != nil {
-		glog.Fatal(err)
-		return
+	// Handle new clients.
+	for {
+		conn, err := listener.AcceptKCP()
+		if err != nil {
+			glog.Error(err)
+			continue
+		}
+
+		session, err := smux.Server(conn, nil)
+		if err != nil {
+			glog.Error(err)
+			continue
+		}
+
+		client, err := CreatePeerClient(n, session)
+		if err != nil {
+			glog.Error(err)
+			continue
+		}
+
+		go client.processIncomingMessages()
 	}
 }
 

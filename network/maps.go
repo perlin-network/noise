@@ -5,8 +5,8 @@
 package network
 
 import (
-	"sync"
 	"github.com/cheekybits/genny/generic"
+	"sync"
 )
 
 type Key generic.Type
@@ -30,7 +30,7 @@ func (m *KeyValueSyncMap) Load(k Key) (Value, bool) {
 }
 
 func (m *KeyValueSyncMap) Range(cb func(Key, Value) bool) {
-	m.inner.Range(func (k interface{}, v interface{}) bool {
+	m.inner.Range(func(k interface{}, v interface{}) bool {
 		return cb(k.(Key), v.(Value))
 	})
 }
