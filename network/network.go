@@ -7,15 +7,15 @@ import (
 
 	"fmt"
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
-	"strings"
 	"math/rand"
-	"github.com/golang/protobuf/proto"
+	"strings"
 )
 
 type Network struct {
