@@ -59,3 +59,7 @@ func (ctx *MessageContext) Network() *Network {
 func (ctx *MessageContext) Self() peer.ID {
 	return ctx.Network().ID
 }
+
+func (ctx *MessageContext) Sender() peer.ID {
+	return *ctx.client.Id
+}

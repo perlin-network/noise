@@ -16,6 +16,7 @@ import (
 	"github.com/xtaci/smux"
 	"math/rand"
 	"strings"
+	"github.com/pkg/errors"
 )
 
 type Network struct {
@@ -127,12 +128,14 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 		return nil, err
 	}
 
+	if address == n.Address() {
+		return nil, errors.New("peer should not dial itself")
+	}
+
 	// load a cached connection
 	if client, exists := n.Peers.Load(address); exists && client != nil {
 		return client, nil
 	}
-
-	glog.Info(address)
 
 	client := createPeerClient(n)
 
