@@ -13,6 +13,7 @@ import (
 	"github.com/perlin-network/noise/peer"
 )
 
+//NetworkBuilder is a Address->processors struct
 type NetworkBuilder struct {
 	keys *crypto.KeyPair
 	host string
@@ -22,24 +23,27 @@ type NetworkBuilder struct {
 	processors *network.StringMessageProcessorSyncMap
 }
 
+//SetKeys produced by crypto.RandomKeyPair()
 func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
 	builder.keys = pair
 }
 
+//SetHost of builder e.g. "127.0.0.1"
 func (builder *NetworkBuilder) SetHost(host string) {
 	builder.host = host
 }
 
+//SetPort of builder e.g. 12345
 func (builder *NetworkBuilder) SetPort(port int) {
 	builder.port = port
 }
 
-// Sets a processor for a given message,
+// AddProcessor for a given message,
 // Example: builder.AddProcessor((*protobuf.LookupNodeRequest)(nil), MessageProcessor{})
 func (builder *NetworkBuilder) AddProcessor(message proto.Message, processor network.MessageProcessor) {
 	// Initialize map if not exist.
 	if builder.processors == nil {
-		builder.processors = &network.StringMessageProcessorSyncMap {}
+		builder.processors = &network.StringMessageProcessorSyncMap{}
 	}
 
 	name := reflect.TypeOf(message).String()
@@ -52,6 +56,7 @@ func (builder *NetworkBuilder) AddProcessor(message proto.Message, processor net
 	}
 }
 
+//BuildNetwork runs the builder configurations a return a network.Network
 func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 	if builder.keys == nil {
 		return nil, errors.New("cryptography keypair not provided to Network; cannot create node Id")
@@ -67,7 +72,7 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 
 	// Initialize map if not exist.
 	if builder.processors == nil {
-		builder.processors = &network.StringMessageProcessorSyncMap {}
+		builder.processors = &network.StringMessageProcessorSyncMap{}
 	}
 
 	unifiedHost, err := network.ToUnifiedHost(builder.host)
@@ -87,7 +92,7 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 
 		Routes: dht.CreateRoutingTable(id),
 
-		Peers: &network.StringPeerClientSyncMap {},
+		Peers: &network.StringPeerClientSyncMap{},
 	}
 
 	return network, nil
