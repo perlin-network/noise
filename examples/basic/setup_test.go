@@ -10,7 +10,6 @@ import (
 )
 
 type BasicNode struct {
-	ClusterNode
 	h        string
 	p        int
 	ps       []string
