@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strconv"
 
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/dht"
@@ -47,7 +48,7 @@ func (builder *NetworkBuilder) AddProcessor(message proto.Message, processor net
 	if value := reflect.ValueOf(message); value.Kind() == reflect.Ptr && value.Pointer() == 0 {
 		builder.processors.Store(name, processor)
 	} else {
-		panic("message must be nil")
+		glog.Fatal("message must be nil")
 	}
 }
 
