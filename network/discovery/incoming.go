@@ -46,7 +46,7 @@ func (LookupNodeRequestProcessor) Handle(ctx *network.MessageContext) error {
 	msg := ctx.Message().(*protobuf.LookupNodeRequest)
 
 	// Prepare response.
-	response := &protobuf.LookupNodeResponse{Peers: []*protobuf.ID{}}
+	response := &protobuf.LookupNodeResponse{}
 
 	// Respond back with closest peers to a provided target.
 	for _, id := range ctx.Network().Routes.FindClosestPeers(peer.ID(*msg.Target), dht.BucketSize) {
@@ -70,13 +70,4 @@ func BootstrapPeerDiscovery(builder *builders.NetworkBuilder) {
 	builder.AddProcessor((*protobuf.HandshakeRequest)(nil), new(HandshakeRequestProcessor))
 	builder.AddProcessor((*protobuf.HandshakeResponse)(nil), new(HandshakeResponseProcessor))
 	builder.AddProcessor((*protobuf.LookupNodeRequest)(nil), new(LookupNodeRequestProcessor))
-}
-
-func getConnectedPeers(c *network.PeerClient) []string {
-	var peers []string
-	c.Network.Peers.Range(func(k string, v *network.PeerClient) bool {
-		peers = append(peers, k)
-		return true
-	})
-	return peers
 }

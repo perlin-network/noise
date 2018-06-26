@@ -68,6 +68,7 @@ func bootstrapPeers(net *network.Network, target peer.ID, count int) (addresses 
 				p := peer.ID(*id)
 
 				if _, seen := visited[p.PublicKeyHex()]; !seen {
+
 					queue = append(queue, p)
 					visited[p.PublicKeyHex()] = struct{}{}
 
