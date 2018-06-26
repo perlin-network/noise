@@ -34,7 +34,7 @@ type PeerClient struct {
 
 	// To do with handling request/responses.
 	requestNonce uint64
-	// map[uint64]*proto.Message
+	// map[uint64]MessageChan
 	requests *Uint64MessageChanSyncMap
 
 	mailbox chan IncomingMessage
