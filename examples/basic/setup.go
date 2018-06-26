@@ -17,25 +17,25 @@ type ClusterNode struct {
 	Port             int
 	Peers            []string
 	Net              *network.Network
-	BufferedMessages []*messages.ClusterTestMessage
+	BufferedMessages []*messages.BasicMessage
 }
 
 func (c *ClusterNode) Handle(client *network.PeerClient, raw *network.IncomingMessage) error {
-	message := raw.Message.(*messages.ClusterTestMessage)
+	message := raw.Message.(*messages.BasicMessage)
 
 	if c.BufferedMessages == nil {
-		c.BufferedMessages = []*messages.ClusterTestMessage{}
+		c.BufferedMessages = []*messages.BasicMessage{}
 	}
 	c.BufferedMessages = append(c.BufferedMessages, message)
 
 	return nil
 }
 
-func (c *ClusterNode) PopMessage() *messages.ClusterTestMessage {
+func (c *ClusterNode) PopMessage() *messages.BasicMessage {
 	if len(c.BufferedMessages) == 0 {
 		return nil
 	}
-	var retVal *messages.ClusterTestMessage
+	var retVal *messages.BasicMessage
 	retVal, c.BufferedMessages = c.BufferedMessages[0], c.BufferedMessages[1:]
 	return retVal
 }
@@ -58,7 +58,7 @@ func SetupCluster(nodes []*ClusterNode) error {
 
 		discovery.BootstrapPeerDiscovery(builder)
 
-		builder.AddProcessor((*messages.ClusterTestMessage)(nil), nodes[i])
+		builder.AddProcessor((*messages.BasicMessage)(nil), nodes[i])
 
 		net, err := builder.BuildNetwork()
 		if err != nil {

@@ -47,7 +47,7 @@ func ExampleSetupClusters() {
 		testMessage := "message from node 0"
 
 		// Broadcast is an asynchronous call to send a message to other nodes
-		nodes[0].Net.Broadcast(&messages.ClusterTestMessage{Message: testMessage})
+		nodes[0].Net.Broadcast(&messages.BasicMessage{Message: testMessage})
 
 		// Simplificiation: message broadcasting is asynchronous, so need the messages to settle
 		time.Sleep(1 * time.Second)

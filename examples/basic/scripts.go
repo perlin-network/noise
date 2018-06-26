@@ -1,3 +1,3 @@
-//go:generate protoc --go_out=plugins=grpc:. messages/cluster.proto
+//go:generate protoc --go_out=plugins=grpc:. messages/basic.proto
 
 package basic
