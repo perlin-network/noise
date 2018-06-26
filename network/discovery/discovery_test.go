@@ -54,6 +54,7 @@ func TestDiscovery(t *testing.T) {
 		"*protobuf.LookupNodeRequest",
 	}
 	processors := fmt.Sprintf("%v", net1.Processors)
+	//expected: &{{{0 0} {{map[] true}} map[*protobuf.HandshakeRequest:0xc4200c4068 *protobuf.HandshakeResponse:0xc4200c4070 *protobuf.LookupNodeRequest:0xc4200c4078] 0}}
 	for _, v := range expected {
 		if !strings.Contains(processors, v) {
 			t.Fatalf("not enough processor: %s", v)
