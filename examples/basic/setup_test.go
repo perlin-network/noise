@@ -16,8 +16,8 @@ func ExampleSetupClusters() {
 	host := "localhost"
 	startPort := 5000
 	numNodes := 3
-	nodes := []*ClusterNode{}
-	peers := []string{}
+	var nodes []*ClusterNode
+	var peers []string
 
 	for i := 0; i < numNodes; i++ {
 		node := &ClusterNode{}

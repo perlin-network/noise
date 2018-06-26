@@ -23,9 +23,6 @@ type ClusterNode struct {
 func (c *ClusterNode) Handle(client *network.PeerClient, raw *network.IncomingMessage) error {
 	message := raw.Message.(*messages.BasicMessage)
 
-	if c.BufferedMessages == nil {
-		c.BufferedMessages = []*messages.BasicMessage{}
-	}
 	c.BufferedMessages = append(c.BufferedMessages, message)
 
 	return nil
@@ -44,12 +41,9 @@ var blockTimeout = 10 * time.Second
 
 // SetupCluster - Sets up a connected group of nodes in a cluster
 func SetupCluster(nodes []*ClusterNode) error {
-	peers := []string{}
-
 	for i := 0; i < len(nodes); i++ {
 		node := nodes[i]
 		keys := crypto.RandomKeyPair()
-		peers = append(peers, fmt.Sprintf("%s:%d", node.Host, node.Port))
 
 		builder := &builders.NetworkBuilder{}
 		builder.SetKeys(keys)
