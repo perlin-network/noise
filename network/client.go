@@ -121,6 +121,8 @@ func (c *PeerClient) handleMessage(stream *smux.Stream) {
 	id := peer.ID(*msg.Sender)
 
 	if c.Id == nil {
+		c.Id = &id
+
 		err := c.establishConnection(id.Address)
 
 		// Could not connect to peer; disconnect.
@@ -128,8 +130,6 @@ func (c *PeerClient) handleMessage(stream *smux.Stream) {
 			glog.Errorf("Failed to connect to peer %s err=[%+v]\n", id.Address, err)
 			return
 		}
-
-		c.Id = &id
 	} else if !c.Id.Equals(id) {
 		// Peer sent message with a completely different ID (???)
 		glog.Errorf("Message signed by peer %s but client is %s", c.Id.Address, id.Address)
@@ -150,7 +150,7 @@ func (c *PeerClient) handleMessage(stream *smux.Stream) {
 	name := reflect.TypeOf(ptr.Message).String()
 	processor, exists := c.Network.Processors.Load(name)
 
-	glog.Info(name)
+	glog.Infof("%s sent response of type %s", c.Id.Address, name)
 
 	if exists {
 		processor := processor.(MessageProcessor)

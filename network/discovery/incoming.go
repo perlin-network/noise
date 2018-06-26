@@ -27,7 +27,7 @@ func (HandshakeRequestProcessor) Handle(ctx *network.MessageContext) error {
 type HandshakeResponseProcessor struct{}
 
 func (HandshakeResponseProcessor) Handle(ctx *network.MessageContext) error {
-	addresses, publicKeys := bootstrapPeers(ctx.Network(), ctx.Self(), dht.BucketSize)
+	addresses, publicKeys := bootstrapPeers(ctx.Network(), ctx.Sender(), dht.BucketSize)
 
 	// Update routing table w/ bootstrapped peers.
 	for i := 0; i < len(addresses); i++ {
