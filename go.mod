@@ -1,6 +1,7 @@
 module github.com/perlin-network/noise
 
 require (
+	github.com/cheekybits/genny v0.0.0-20170328200008-9127e812e1e9
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/protobuf v1.1.0
 	golang.org/x/crypto v0.0.0-20180614221331-a8fb68e7206f

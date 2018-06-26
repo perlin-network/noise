@@ -74,8 +74,8 @@ func BootstrapPeerDiscovery(builder *builders.NetworkBuilder) {
 
 func getConnectedPeers(c *network.PeerClient) []string {
 	var peers []string
-	c.Network().Peers.Range(func(k, v interface{}) bool {
-		peers = append(peers, k.(string))
+	c.Network().Peers.Range(func(k string, v *network.PeerClient) bool {
+		peers = append(peers, k)
 		return true
 	})
 	return peers

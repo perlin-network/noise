@@ -22,6 +22,8 @@ type IncomingMessage struct {
 	Nonce   uint64
 }
 
+type MessageChan chan proto.Message
+
 // Represents a single incoming peer client.
 type PeerClient struct {
 	server *Server
@@ -32,8 +34,8 @@ type PeerClient struct {
 
 	// To do with handling request/responses.
 	requestNonce uint64
-	// map[uint64]*proto.Message
-	requests *sync.Map
+	// map[uint64]MessageChan
+	requests *Uint64MessageChanSyncMap
 
 	mailbox chan IncomingMessage
 
@@ -84,7 +86,7 @@ func createPeerClient(server *Server) *PeerClient {
 		mailbox: make(chan IncomingMessage),
 
 		requestNonce: 0,
-		requests:     &sync.Map{},
+		requests:     &Uint64MessageChanSyncMap {},
 
 		refCount: 1,
 		refMutex: &sync.Mutex{},
@@ -184,7 +186,7 @@ func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
 func (c *PeerClient) handleResponse(nonce uint64, response proto.Message) {
 	// Check if the request is currently looking to be received.
 	if channel, exists := c.requests.Load(nonce); exists {
-		channel.(chan proto.Message) <- response
+		channel <- response
 	}
 }
 

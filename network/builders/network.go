@@ -4,8 +4,8 @@ import (
 	"errors"
 	"reflect"
 	"strconv"
-	"sync"
 
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/dht"
@@ -19,7 +19,7 @@ type NetworkBuilder struct {
 	port int
 
 	// map[string]MessageProcessor
-	processors *sync.Map
+	processors *network.StringMessageProcessorSyncMap
 }
 
 func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
@@ -39,7 +39,7 @@ func (builder *NetworkBuilder) SetPort(port int) {
 func (builder *NetworkBuilder) AddProcessor(message proto.Message, processor network.MessageProcessor) {
 	// Initialize map if not exist.
 	if builder.processors == nil {
-		builder.processors = &sync.Map{}
+		builder.processors = &network.StringMessageProcessorSyncMap {}
 	}
 
 	name := reflect.TypeOf(message).String()
@@ -48,7 +48,7 @@ func (builder *NetworkBuilder) AddProcessor(message proto.Message, processor net
 	if value := reflect.ValueOf(message); value.Kind() == reflect.Ptr && value.Pointer() == 0 {
 		builder.processors.Store(name, processor)
 	} else {
-		builder.processors.Store(name, reflect.Zero(reflect.TypeOf(message)).Interface().(proto.Message))
+		glog.Fatal("message must be nil")
 	}
 }
 
@@ -67,7 +67,7 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 
 	// Initialize map if not exist.
 	if builder.processors == nil {
-		builder.processors = &sync.Map{}
+		builder.processors = &network.StringMessageProcessorSyncMap {}
 	}
 
 	unifiedHost, err := network.ToUnifiedHost(builder.host)
@@ -87,7 +87,7 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 
 		Routes: dht.CreateRoutingTable(id),
 
-		Peers: &sync.Map{},
+		Peers: &network.StringPeerClientSyncMap {},
 	}
 
 	return network, nil
