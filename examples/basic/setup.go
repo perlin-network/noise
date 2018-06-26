@@ -13,33 +13,35 @@ import (
 )
 
 type ClusterNode struct {
-	Host             string
-	Port             int
-	Peers            []string
-	Net              *network.Network
-	BufferedMessages []*messages.BasicMessage
+	Host     string
+	Port     int
+	Peers    []string
+	Net      *network.Network
+	Messages []*messages.BasicMessage
 }
 
+// Handle implements the network interface callback
 func (c *ClusterNode) Handle(client *network.PeerClient, raw *network.IncomingMessage) error {
 	message := raw.Message.(*messages.BasicMessage)
 
-	c.BufferedMessages = append(c.BufferedMessages, message)
+	c.Messages = append(c.Messages, message)
 
 	return nil
 }
 
+// PopMessage returns the oldest message from it's buffer and removes it from the list
 func (c *ClusterNode) PopMessage() *messages.BasicMessage {
-	if len(c.BufferedMessages) == 0 {
+	if len(c.Messages) == 0 {
 		return nil
 	}
 	var retVal *messages.BasicMessage
-	retVal, c.BufferedMessages = c.BufferedMessages[0], c.BufferedMessages[1:]
+	retVal, c.Messages = c.Messages[0], c.Messages[1:]
 	return retVal
 }
 
 var blockTimeout = 10 * time.Second
 
-// SetupCluster - Sets up a connected group of nodes in a cluster
+// SetupCluster sets up a connected group of nodes in a cluster.
 func SetupCluster(nodes []*ClusterNode) error {
 	for i := 0; i < len(nodes); i++ {
 		node := nodes[i]
@@ -65,7 +67,7 @@ func SetupCluster(nodes []*ClusterNode) error {
 
 	for i := 0; i < len(nodes); i++ {
 		if err := grpc_utils.BlockUntilConnectionReady(nodes[i].Host, nodes[i].Port, blockTimeout); err != nil {
-			return fmt.Errorf("Error: port was not available, cannot bootstrap node %d peers, err=%+v", i, err)
+			return fmt.Errorf("port was not available, cannot bootstrap node %d peers: %+v", i, err)
 		}
 	}
 
