@@ -39,9 +39,11 @@ func ExampleSetupClusters() {
 	// check if you can send a message from node 1 and will it be received only in node 2,3
 	{
 		testMessage := "message from node 0"
+
+		// Broadcast is an asynchronous call to send a message to other nodes
 		nodes[0].Net.Broadcast(&messages.ClusterTestMessage{Message: testMessage})
 
-		// HACK: TODO: replace sleep with something else
+		// Simplificiation: message broadcasting is asynchronous, so need the messages to settle
 		time.Sleep(1 * time.Second)
 
 		if result := nodes[0].PopMessage(); result != nil {
