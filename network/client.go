@@ -150,6 +150,8 @@ func (c *PeerClient) handleMessage(stream *smux.Stream) {
 	name := reflect.TypeOf(ptr.Message).String()
 	processor, exists := c.Network.Processors.Load(name)
 
+	glog.Info(name)
+
 	if exists {
 		processor := processor.(MessageProcessor)
 

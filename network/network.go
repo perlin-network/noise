@@ -14,6 +14,8 @@ import (
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
 	"strings"
+	"math/rand"
+	"github.com/golang/protobuf/proto"
 )
 
 type Network struct {
@@ -144,4 +146,79 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 	n.Peers.Store(address, client)
 
 	return client, nil
+}
+
+// Asynchronously broadcast a message to all peer clients.
+func (n *Network) Broadcast(message proto.Message) {
+	n.Peers.Range(func(key string, client *PeerClient) bool {
+		err := client.Tell(message)
+
+		if err != nil {
+			glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+		}
+
+		return true
+	})
+}
+
+// Asynchronously broadcast a message to a set of peer clients denoted by their addresses.
+func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
+	for _, address := range addresses {
+		if client, ok := n.Peers.Load(address); ok {
+			err := client.Tell(message)
+
+			if err != nil {
+				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+			}
+
+			client.close()
+		} else {
+			glog.Warningf("Failed to send message to peer %s; peer does not exist.", address)
+		}
+	}
+}
+
+// Asynchronously broadcast a message to a set of peer clients denoted by their peer IDs.
+func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
+	for _, id := range ids {
+		if client, ok := n.Peers.Load(id.Address); ok {
+			err := client.Tell(message)
+
+			if err != nil {
+				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+			}
+
+			client.close()
+		} else {
+			glog.Warningf("Failed to send message to peer %s; peer does not exist.", id)
+		}
+	}
+}
+
+// Asynchronously broadcast message to random selected K peers.
+// Does not guarantee broadcasting to exactly K peers.
+func (n *Network) BroadcastRandomly(message proto.Message, K int) {
+	var addresses []string
+
+	n.Peers.Range(func(key string, client *PeerClient) bool {
+		addresses = append(addresses, client.Id.Address)
+
+		// Limit total amount of addresses in case we have a lot of peers.
+		if len(addresses) > K*3 {
+			return false
+		}
+
+		return true
+	})
+
+	// Flip a coin and shuffle :).
+	rand.Shuffle(len(addresses), func(i, j int) {
+		addresses[i], addresses[j] = addresses[j], addresses[i]
+	})
+
+	if len(addresses) < K {
+		K = len(addresses)
+	}
+
+	n.BroadcastByAddresses(message, addresses[:K]...)
 }
