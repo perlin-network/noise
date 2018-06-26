@@ -1,3 +1,5 @@
+//go:generate protoc --gogoslick_out=. protobuf/*.proto
+
 package main
 
 import (
