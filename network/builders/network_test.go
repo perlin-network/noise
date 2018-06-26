@@ -25,7 +25,7 @@ var (
 //MockProcessor so to keep independency to incoming.go and outgoing.go
 type MockProcessor struct{}
 
-func (MockProcessor) Handle(client *network.PeerClient, message *network.IncomingMessage) error {
+func (p *MockProcessor) Handle(client *network.PeerClient, message *network.IncomingMessage) error {
 	// Send handshake response to peer.
 	err := client.Tell(&protobuf.HandshakeResponse{})
 
@@ -110,22 +110,22 @@ func TestPeers(t *testing.T) {
 		t.Fatalf("missing Peers 0")
 	}
 	if _, ok := net1.GetPeer(resolvedAddr2); !ok {
-		t.Fatalf("missing peers 1")
+		t.Fatalf("net1 missing peer: %s", resolvedAddr2)
 	}
 	if _, ok := net1.GetPeer(resolvedAddr3); !ok {
-		t.Fatalf("missing peers 2")
+		t.Fatalf("net1 missing peer: %s", resolvedAddr3)
 	}
 	if _, ok := net2.GetPeer(resolvedAddr1); !ok {
-		t.Fatalf("missing peers 3")
+		t.Fatalf("net2 missing peer: %s", resolvedAddr1)
 	}
 	if _, ok := net2.GetPeer(resolvedAddr3); !ok {
-		t.Fatalf("missing peers 4")
+		t.Fatalf("net2 missing peer: %s", resolvedAddr3)
 	}
 	if _, ok := net3.GetPeer(resolvedAddr1); !ok {
-		t.Fatalf("missing peers 5")
+		t.Fatalf("net3 missing peer: %s", resolvedAddr1)
 	}
 	if _, ok := net3.GetPeer(resolvedAddr2); !ok {
-		t.Fatalf("missing peers 6")
+		t.Fatalf("net3 missing peer: %s", resolvedAddr2)
 	}
 }
 

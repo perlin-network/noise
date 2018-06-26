@@ -19,10 +19,10 @@ var (
 	port = 12345
 )
 
-//DummyProcessor so to keep independency to incoming.go and outgoing.go
-type DummyProcessor struct{}
+//MockProcessor so to keep independency to incoming.go and outgoing.go
+type MockProcessor struct{}
 
-func (DummyProcessor) Handle(client *network.PeerClient, message *network.IncomingMessage) error {
+func (p *MockProcessor) Handle(client *network.PeerClient, message *network.IncomingMessage) error {
 	// Send handshake response to peer.
 	err := client.Tell(&protobuf.HandshakeResponse{})
 
@@ -39,7 +39,7 @@ func buildNet(port int) *builders.NetworkBuilder {
 	builder.SetHost(host)
 	builder.SetPort(port)
 
-	builder.AddProcessor((*protobuf.HandshakeRequest)(nil), new(DummyProcessor))
+	builder.AddProcessor((*protobuf.HandshakeRequest)(nil), new(MockProcessor))
 
 	return builder
 }
