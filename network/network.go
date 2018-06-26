@@ -55,6 +55,7 @@ func (n *Network) Address() string {
 func (n *Network) Listen(netStart chan<- bool) {
 	listener, err := kcp.ListenWithOptions(":"+strconv.Itoa(int(n.Port)), nil, 10, 3)
 	if err != nil {
+		netStart <- false
 		glog.Fatal(err)
 		return
 	}
