@@ -74,7 +74,8 @@ func setupNodes() []*RingNode {
 		node.p = startPort + i
 
 		// in a ring, each node is only connected to 2 others
-		node.ps = append(node.ps, fmt.Sprintf("%s:%d", node.h, (node.p+1)%numNodes))
+		node.ps = append(node.ps, fmt.Sprintf("%s:%d", node.h, (node.p+1)%(startPort+numNodes)))
+		node.ps = append(node.ps, fmt.Sprintf("%s:%d", node.h, (node.p-1)%(startPort+numNodes)))
 
 		nodes = append(nodes, node)
 	}
@@ -101,7 +102,7 @@ func TestRing(t *testing.T) {
 	}
 
 	for i, node := range nodes {
-		if node.net == nil {
+		if node.Net() == nil {
 			t.Fatalf("expected %d nodes, but node %d is missing a network", len(nodes), i)
 		}
 
