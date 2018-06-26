@@ -26,7 +26,7 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type ID struct {
 	PublicKey            []byte   `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
-	Address              string   `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	Address              string   `protobuf:"bytes,2,opt,name=address" json:"address,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -71,15 +71,15 @@ func (m *ID) GetAddress() string {
 }
 
 type Message struct {
-	Message *any.Any `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	Message *any.Any `protobuf:"bytes,1,opt,name=message" json:"message,omitempty"`
 	// Sender's address and public key.
-	Sender *ID `protobuf:"bytes,2,opt,name=sender,proto3" json:"sender,omitempty"`
+	Sender *ID `protobuf:"bytes,2,opt,name=sender" json:"sender,omitempty"`
 	// Sender's signature of message.
 	Signature []byte `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
 	// Nonce is the request/response ID. Null if ID associated to a message is not a request/response.
-	Nonce uint64 `protobuf:"varint,4,opt,name=nonce,proto3" json:"nonce,omitempty"`
+	Nonce uint64 `protobuf:"varint,4,opt,name=nonce" json:"nonce,omitempty"`
 	// Is this message a response?
-	IsResponse           bool     `protobuf:"varint,5,opt,name=is_response,json=isResponse,proto3" json:"is_response,omitempty"`
+	IsResponse           bool     `protobuf:"varint,5,opt,name=is_response,json=isResponse" json:"is_response,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -205,7 +205,7 @@ func (m *HandshakeResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_HandshakeResponse proto.InternalMessageInfo
 
 type LookupNodeRequest struct {
-	Target               *ID      `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	Target               *ID      `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -243,7 +243,7 @@ func (m *LookupNodeRequest) GetTarget() *ID {
 }
 
 type LookupNodeResponse struct {
-	Peers                []*ID    `protobuf:"bytes,1,rep,name=peers,proto3" json:"peers,omitempty"`
+	Peers                []*ID    `protobuf:"bytes,1,rep,name=peers" json:"peers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -313,7 +313,7 @@ func NewNoiseClient(cc *grpc.ClientConn) NoiseClient {
 }
 
 func (c *noiseClient) Stream(ctx context.Context, opts ...grpc.CallOption) (Noise_StreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Noise_serviceDesc.Streams[0], "/protobuf.Noise/Stream", opts...)
+	stream, err := c.cc.NewStream(ctx, &_Noise_serviceDesc.Streams[0], "/protobuf.Noise/stream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -384,7 +384,7 @@ var _Noise_serviceDesc = grpc.ServiceDesc{
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "Stream",
+			StreamName:    "stream",
 			Handler:       _Noise_Stream_Handler,
 			ServerStreams: true,
 			ClientStreams: true,

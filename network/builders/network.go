@@ -39,7 +39,7 @@ func (builder *NetworkBuilder) SetPort(port int) {
 func (builder *NetworkBuilder) AddProcessor(message proto.Message, processor network.MessageProcessor) {
 	// Initialize map if not exist.
 	if builder.processors == nil {
-		builder.processors = &network.StringMessageProcessorSyncMap {}
+		builder.processors = &network.StringMessageProcessorSyncMap{}
 	}
 
 	name := reflect.TypeOf(message).String()
@@ -67,7 +67,7 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 
 	// Initialize map if not exist.
 	if builder.processors == nil {
-		builder.processors = &network.StringMessageProcessorSyncMap {}
+		builder.processors = &network.StringMessageProcessorSyncMap{}
 	}
 
 	unifiedHost, err := network.ToUnifiedHost(builder.host)
@@ -87,7 +87,7 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 
 		Routes: dht.CreateRoutingTable(id),
 
-		Peers: &network.StringPeerClientSyncMap {},
+		Peers: &network.StringPeerClientSyncMap{},
 	}
 
 	return network, nil

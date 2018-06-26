@@ -2,15 +2,12 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"strings"
 
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/grpc_utils"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
-	"time"
 )
 
 func main() {
@@ -49,11 +46,6 @@ func main() {
 	go net.Listen()
 
 	if len(peers) > 0 {
-		blockTimeout := 10 * time.Second
-		if err := grpc_utils.BlockUntilConnectionReady(host, port, blockTimeout); err != nil {
-			glog.Warningf(fmt.Sprintf("Error: port was not available, cannot bootstrap peers, err=%+v", err))
-		}
-
 		net.Bootstrap(peers...)
 	}
 
