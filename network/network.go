@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"fmt"
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/dht"
@@ -13,7 +14,6 @@ import (
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
 	"strings"
-	"fmt"
 )
 
 type Network struct {
@@ -42,10 +42,6 @@ type Network struct {
 	Peers *StringPeerClientSyncMap
 }
 
-var (
-	dialTimeout = 3 * time.Second
-)
-
 func (n *Network) Address() string {
 	return n.Host + ":" + strconv.Itoa(n.Port)
 }
@@ -73,7 +69,7 @@ func (n *Network) Listen() {
 func (n *Network) handleMux(conn net.Conn) {
 	config := smux.DefaultConfig()
 	config.MaxReceiveBuffer = 8192
-	config.KeepAliveInterval = 1 * time.Second
+	config.KeepAliveInterval = 500 * time.Millisecond
 
 	session, err := smux.Server(conn, config)
 	if err != nil {
@@ -83,18 +79,18 @@ func (n *Network) handleMux(conn net.Conn) {
 
 	defer session.Close()
 
-	client := newPeerClient(n)
+	client := createPeerClient(n)
 
 	// Handle new streams and process their incoming messages.
 	for {
 		stream, err := session.AcceptStream()
 		if err != nil {
 			glog.Error(err)
-			return
+			break
 		}
 
 		// One goroutine per request stream.
-		go client.handleIncomingRequest(stream)
+		go client.handleMessage(stream)
 	}
 }
 
@@ -105,25 +101,17 @@ func (n *Network) Bootstrap(addresses ...string) {
 	for _, address := range addresses {
 		client, err := n.Dial(address)
 		if err != nil {
+			glog.Warning(err)
 			continue
 		}
 
 		// Send a handshake request.
 		err = client.Tell(&protobuf.HandshakeRequest{})
 		if err != nil {
+			glog.Error(err)
 			continue
 		}
 	}
-}
-
-// Loads the peer from n.Peers and opens it
-func (n *Network) GetPeer(address string) (*PeerClient, bool) {
-	client, ok := n.Peers.Load(address)
-	if !ok || client == nil {
-		return nil, false
-	}
-
-	return client, true
 }
 
 func (n *Network) Dial(address string) (*PeerClient, error) {
@@ -138,15 +126,17 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 	}
 
 	// load a cached connection
-	if client, ok := n.GetPeer(address); ok && client != nil {
+	if client, exists := n.Peers.Load(address); exists && client != nil {
 		return client, nil
 	}
 
-	client := newPeerClient(n)
+	glog.Info(address)
+
+	client := createPeerClient(n)
 
 	err = client.establishConnection(address)
 	if err != nil {
-		glog.Infof(fmt.Sprintf("Failed to connect to peer %s err=[%+v]\n", address, err))
+		glog.Warningf("Failed to connect to peer %s err=[%+v]\n", address, err)
 		return nil, err
 	}
 
