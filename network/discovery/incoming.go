@@ -9,14 +9,13 @@ import (
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
-	"github.com/golang/protobuf/proto"
 )
 
 type HandshakeRequestProcessor struct{}
 
-func (HandshakeRequestProcessor) Handle(client *network.PeerClient, message proto.Message) error {
+func (HandshakeRequestProcessor) Handle(ctx *network.MessageContext) error {
 	// Send handshake response to peer.
-	err := client.Tell(&protobuf.HandshakeResponse{})
+	err := ctx.Send(&protobuf.HandshakeResponse{})
 
 	if err != nil {
 		glog.Error(err)
@@ -27,41 +26,41 @@ func (HandshakeRequestProcessor) Handle(client *network.PeerClient, message prot
 
 type HandshakeResponseProcessor struct{}
 
-func (HandshakeResponseProcessor) Handle(client *network.PeerClient, raw proto.Message) error {
-	addresses, publicKeys := bootstrapPeers(client.Network, *client.Id, dht.BucketSize)
+func (HandshakeResponseProcessor) Handle(ctx *network.MessageContext) error {
+	addresses, publicKeys := bootstrapPeers(ctx.Network(), ctx.Self(), dht.BucketSize)
 
 	// Update routing table w/ bootstrapped peers.
 	for i := 0; i < len(addresses); i++ {
-		client.Network.Routes.Update(peer.CreateID(addresses[i], publicKeys[i]))
+		ctx.Network().Routes.Update(peer.CreateID(addresses[i], publicKeys[i]))
 	}
 
-	glog.Infof("bootstrapped w/ peer(s): %s.", strings.Join(getConnectedPeers(client), ", "))
+	glog.Infof("bootstrapped w/ peer(s): %s.", strings.Join(ctx.Network().Routes.GetPeerAddresses(), ", "))
 
 	return nil
 }
 
 type LookupNodeRequestProcessor struct{}
 
-func (LookupNodeRequestProcessor) Handle(client *network.PeerClient, raw proto.Message) error {
+func (LookupNodeRequestProcessor) Handle(ctx *network.MessageContext) error {
 	// Deserialize received request.
-	msg := raw.(*protobuf.LookupNodeRequest)
+	msg := ctx.Message().(*protobuf.LookupNodeRequest)
 
 	// Prepare response.
 	response := &protobuf.LookupNodeResponse{Peers: []*protobuf.ID{}}
 
 	// Respond back with closest peers to a provided target.
-	for _, id := range client.Network.Routes.FindClosestPeers(peer.ID(*msg.Target), dht.BucketSize) {
+	for _, id := range ctx.Network().Routes.FindClosestPeers(peer.ID(*msg.Target), dht.BucketSize) {
 		id := protobuf.ID(id)
 		response.Peers = append(response.Peers, &id)
 	}
 
-	err := client.Tell(response)
+	err := ctx.Reply(response)
 	if err != nil {
 		glog.Error(err)
-		// TODO: Handle error responding to client.
+		return err
 	}
 
-	glog.Infof("connected peers: %s.", strings.Join(client.Network.Routes.GetPeerAddresses(), ", "))
+	glog.Infof("connected peers: %s.", strings.Join(ctx.Network().Routes.GetPeerAddresses(), ", "))
 
 	return nil
 }

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"strings"
 )
 
 func ToUnifiedHost(host string) (string, error) {
@@ -51,7 +50,7 @@ func FilterPeers(host string, port int, peers []string) (filtered []string) {
 	visited[address] = struct{}{}
 
 	for _, peer := range peers {
-		resolved, err := ToUnifiedAddress(strings.TrimSpace(peer))
+		resolved, err := ToUnifiedAddress(peer)
 		if err != nil {
 			continue
 		}

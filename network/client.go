@@ -5,14 +5,14 @@ import (
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
 	"io"
 	"reflect"
-	"github.com/pkg/errors"
-	"github.com/perlin-network/noise/network/rpc"
 	"time"
 )
 
@@ -22,15 +22,15 @@ type PeerClient struct {
 
 	Id *peer.ID
 
-	session *smux.Session
+	outgoing *smux.Session
 }
 
-func newPeerClient(network *Network) *PeerClient {
+func createPeerClient(network *Network) *PeerClient {
 	return &PeerClient{Network: network}
 }
 
 func (c *PeerClient) establishConnection(address string) error {
-	if c.session != nil {
+	if c.outgoing != nil {
 		return errors.New("connection already established")
 	}
 
@@ -38,11 +38,15 @@ func (c *PeerClient) establishConnection(address string) error {
 
 	// Failed to connect. Continue.
 	if err != nil {
-		glog.Warning(err)
+		glog.Error(err)
 		return err
 	}
 
-	c.session, err = smux.Client(dialer, nil)
+	config := smux.DefaultConfig()
+	config.MaxReceiveBuffer = 8192
+	config.KeepAliveInterval = 500 * time.Millisecond
+	config.KeepAliveTimeout = 1 * time.Second
+	c.outgoing, err = smux.Client(dialer, config)
 
 	// Failed to open session. Continue.
 	if err != nil {
@@ -51,6 +55,16 @@ func (c *PeerClient) establishConnection(address string) error {
 	}
 
 	return nil
+}
+
+func (c *PeerClient) close() {
+	// Disconnect the user.
+	if c.Id != nil {
+		if c.Network.Routes.PeerExists(*c.Id) {
+			c.Network.Routes.RemovePeer(*c.Id)
+			glog.Infof("Peer %s has disconnected.", c.Id.Address)
+		}
+	}
 }
 
 func (c *PeerClient) receiveMessage(stream *smux.Stream) (*protobuf.Message, error) {
@@ -64,6 +78,10 @@ func (c *PeerClient) receiveMessage(stream *smux.Stream) (*protobuf.Message, err
 	}
 
 	if err != nil {
+		if err == io.EOF {
+			c.close()
+		}
+
 		return nil, err
 	}
 
@@ -74,21 +92,15 @@ func (c *PeerClient) receiveMessage(stream *smux.Stream) (*protobuf.Message, err
 	return msg, err
 }
 
-func (c *PeerClient) handleIncomingRequest(stream *smux.Stream) {
+func (c *PeerClient) handleMessage(stream *smux.Stream) {
 	// Clean up resources.
 	defer stream.Close()
 
 	msg, err := c.receiveMessage(stream)
 
 	// Failed to receive message.
-	if err == io.EOF || err != nil {
-		// Disconnect the user.
-		if c.Id != nil {
-			if c.Network.Routes.PeerExists(*c.Id) {
-				c.Network.Routes.RemovePeer(*c.Id)
-				glog.Infof("Peer %s has disconnected.", c.Id.Address)
-			}
-		}
+	if err != nil {
+		glog.Error(err)
 		return
 	}
 
@@ -109,8 +121,6 @@ func (c *PeerClient) handleIncomingRequest(stream *smux.Stream) {
 	id := peer.ID(*msg.Sender)
 
 	if c.Id == nil {
-		c.Id = &id
-
 		err := c.establishConnection(id.Address)
 
 		// Could not connect to peer; disconnect.
@@ -118,8 +128,11 @@ func (c *PeerClient) handleIncomingRequest(stream *smux.Stream) {
 			glog.Errorf("Failed to connect to peer %s err=[%+v]\n", id.Address, err)
 			return
 		}
+
+		c.Id = &id
 	} else if !c.Id.Equals(id) {
 		// Peer sent message with a completely different ID (???)
+		glog.Errorf("Message signed by peer %s but client is %s", c.Id.Address, id.Address)
 		return
 	}
 
@@ -133,14 +146,21 @@ func (c *PeerClient) handleIncomingRequest(stream *smux.Stream) {
 		return
 	}
 
-	// Check if the received request has a message processor.
-	// If exists, execute it.
+	// Check if the received request has a message processor. If exists, execute it.
 	name := reflect.TypeOf(ptr.Message).String()
 	processor, exists := c.Network.Processors.Load(name)
 
 	if exists {
 		processor := processor.(MessageProcessor)
-		err := processor.Handle(c, ptr.Message)
+
+		// Create message execution context.
+		ctx := new(MessageContext)
+		ctx.client = c
+		ctx.stream = stream
+		ctx.message = ptr.Message
+
+		// Process request.
+		err := processor.Handle(ctx)
 		if err != nil {
 			glog.Errorf("An error occurred handling %x: %x", name, err)
 		}
@@ -179,8 +199,8 @@ func (c *PeerClient) prepareMessage(message proto.Message) (*protobuf.Message, e
 
 // Asynchronously emit a message to a given peer.
 func (c *PeerClient) Tell(message proto.Message) error {
-	if c.session == nil {
-		return errors.New("client connnot established")
+	if c.outgoing == nil {
+		return errors.New("client session nil")
 	}
 
 	msg, err := c.prepareMessage(message)
@@ -189,7 +209,7 @@ func (c *PeerClient) Tell(message proto.Message) error {
 	}
 
 	// Open a new stream.
-	stream, err := c.session.OpenStream()
+	stream, err := c.outgoing.OpenStream()
 	if err != nil {
 		return err
 	}
@@ -206,6 +226,9 @@ func (c *PeerClient) Tell(message proto.Message) error {
 	}
 
 	if err != nil {
+		if err == io.EOF {
+			c.close()
+		}
 		return err
 	}
 
@@ -214,8 +237,8 @@ func (c *PeerClient) Tell(message proto.Message) error {
 
 // Request requests for a response for a request sent to a given peer.
 func (c *PeerClient) Request(request *rpc.Request) (proto.Message, error) {
-	if c.session == nil {
-		return nil, errors.New("client connnot established")
+	if c.outgoing == nil {
+		return nil, errors.New("client session nil")
 	}
 
 	req, err := c.prepareMessage(request.Message)
@@ -224,18 +247,19 @@ func (c *PeerClient) Request(request *rpc.Request) (proto.Message, error) {
 	}
 
 	// Open a new stream.
-	stream, err := c.session.OpenStream()
+	stream, err := c.outgoing.OpenStream()
 	if err != nil {
 		return nil, err
 	}
 	defer stream.Close()
 
+	stream.SetWriteDeadline(time.Now().Add(request.Timeout))
+	stream.SetReadDeadline(time.Now().Add(request.Timeout))
+
 	bytes, err := proto.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
-
-	stream.SetWriteDeadline(time.Now().Add(request.Timeout))
 
 	// Send request bytes.
 	n, err := stream.Write(bytes)
@@ -244,10 +268,11 @@ func (c *PeerClient) Request(request *rpc.Request) (proto.Message, error) {
 	}
 
 	if err != nil {
+		if err == io.EOF {
+			c.close()
+		}
 		return nil, err
 	}
-
-	stream.SetReadDeadline(time.Now().Add(request.Timeout))
 
 	// Await for response bytes.
 	res, err := c.receiveMessage(stream)
