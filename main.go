@@ -20,7 +20,7 @@ func main() {
 	peersFlag := flag.String("peers", "", "peers to connect to")
 	flag.Parse()
 
-	port := *portFlag
+	port := uint16(*portFlag)
 	host := *hostFlag
 	peers := strings.Split(*peersFlag, ",")
 

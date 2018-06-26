@@ -16,21 +16,24 @@ import (
 type NetworkBuilder struct {
 	keys *crypto.KeyPair
 	host string
-	port int
+	port uint16
 
 	// map[string]MessageProcessor
 	processors *network.StringMessageProcessorSyncMap
 }
 
+//SetKeys pair created from crypto.KeyPair
 func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
 	builder.keys = pair
 }
 
+//SetHost of NetworkBuilder
 func (builder *NetworkBuilder) SetHost(host string) {
 	builder.host = host
 }
 
-func (builder *NetworkBuilder) SetPort(port int) {
+//SetPort of NetworkBuilder
+func (builder *NetworkBuilder) SetPort(port uint16) {
 	builder.port = port
 }
 
@@ -75,7 +78,7 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 		return nil, err
 	}
 
-	id := peer.CreateID(unifiedHost+":"+strconv.Itoa(builder.port), builder.keys.PublicKey)
+	id := peer.CreateID(unifiedHost+":"+strconv.Itoa(int(builder.port)), builder.keys.PublicKey)
 
 	network := &network.Network{
 		Keys: builder.keys,
