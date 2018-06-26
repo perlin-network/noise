@@ -10,150 +10,258 @@ import (
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
 	"io"
+	"reflect"
+	"github.com/pkg/errors"
+	"github.com/perlin-network/noise/network/rpc"
+	"time"
 )
 
 // Represents a single incomingStream peer client.
 type PeerClient struct {
-	network *Network
+	Network *Network
 
 	Id *peer.ID
 
-	incomingSession *smux.Session
-	incomingStream  *smux.Stream
-
-	outgoingSession *smux.Session
-	outgoingStream  *smux.Stream
-
-	Mailbox chan proto.Message
-	Outbox  chan proto.Message
-
-	// To do with handling request/responses.
-	requestNonce uint64
-	// map[uint64]MessageChan
-	requests *Uint64MessageChanSyncMap
+	session *smux.Session
 }
 
-func CreatePeerClient(network *Network, session *smux.Session) (*PeerClient, error) {
-	client := &PeerClient{
-		network:         network,
-		incomingSession: session,
+func newPeerClient(network *Network) *PeerClient {
+	return &PeerClient{Network: network}
+}
+
+func (c *PeerClient) establishConnection(address string) error {
+	if c.session != nil {
+		return errors.New("connection already established")
 	}
 
-	// Open a main incomingStream.
-	stream, err := client.openIncomingStream()
+	dialer, err := kcp.DialWithOptions(address, nil, 10, 3)
+
+	// Failed to connect. Continue.
+	if err != nil {
+		glog.Warning(err)
+		return err
+	}
+
+	c.session, err = smux.Client(dialer, nil)
+
+	// Failed to open session. Continue.
+	if err != nil {
+		glog.Error(err)
+		return err
+	}
+
+	return nil
+}
+
+func (c *PeerClient) receiveMessage(stream *smux.Stream) (*protobuf.Message, error) {
+	buffer := make([]byte, 8192)
+
+	n, err := stream.Read(buffer)
+
+	// Packet size overflows buffer. Continue.
+	if n == 8192 {
+		return nil, errors.New("packet size overflows buffer")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Deserialize message.
+	msg := new(protobuf.Message)
+	err = proto.Unmarshal(buffer[0:n], msg)
+
+	return msg, err
+}
+
+func (c *PeerClient) handleIncomingRequest(stream *smux.Stream) {
+	// Clean up resources.
+	defer stream.Close()
+
+	msg, err := c.receiveMessage(stream)
+
+	// Failed to receive message.
+	if err == io.EOF || err != nil {
+		// Disconnect the user.
+		if c.Id != nil {
+			if c.Network.Routes.PeerExists(*c.Id) {
+				c.Network.Routes.RemovePeer(*c.Id)
+				glog.Infof("Peer %s has disconnected.", c.Id.Address)
+			}
+		}
+		return
+	}
+
+	// Check if any of the message headers are invalid or null.
+	if msg.Message == nil || msg.Sender == nil || msg.Sender.PublicKey == nil || len(msg.Sender.Address) == 0 || msg.Signature == nil {
+		glog.Warning("Received an invalid message (either no message, no sender, or no signature) from a peer.")
+		return
+	}
+
+	// Verify signature of message.
+	if !crypto.Verify(msg.Sender.PublicKey, msg.Message.Value, msg.Signature) {
+		glog.Warning("Received message had an malformed signature.")
+		return
+	}
+
+	// Derive, set the peer ID, connect to the peer, and additionally
+	// store the peer.
+	id := peer.ID(*msg.Sender)
+
+	if c.Id == nil {
+		c.Id = &id
+
+		err := c.establishConnection(id.Address)
+
+		// Could not connect to peer; disconnect.
+		if err != nil {
+			glog.Errorf("Failed to connect to peer %s err=[%+v]\n", id.Address, err)
+			return
+		}
+	} else if !c.Id.Equals(id) {
+		// Peer sent message with a completely different ID (???)
+		return
+	}
+
+	// Update routing table w/ peer's ID.
+	c.Network.Routes.Update(id)
+
+	// Unmarshal protobuf.
+	var ptr ptypes.DynamicAny
+	if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
+		glog.Error(err)
+		return
+	}
+
+	// Check if the received request has a message processor.
+	// If exists, execute it.
+	name := reflect.TypeOf(ptr.Message).String()
+	processor, exists := c.Network.Processors.Load(name)
+
+	if exists {
+		processor := processor.(MessageProcessor)
+		err := processor.Handle(c, ptr.Message)
+		if err != nil {
+			glog.Errorf("An error occurred handling %x: %x", name, err)
+		}
+	} else {
+		glog.Warning("Unknown message type received:", name)
+	}
+}
+
+// Marshals message into proto.Message and signs it with this node's private key.
+// Errors if the message is null.
+func (c *PeerClient) prepareMessage(message proto.Message) (*protobuf.Message, error) {
+	if message == nil {
+		return nil, errors.New("message is null")
+	}
+
+	raw, err := ptypes.MarshalAny(message)
+	if err != nil {
+		return nil, err
+	}
+
+	id := protobuf.ID(c.Network.ID)
+
+	signature, err := c.Network.Keys.Sign(raw.Value)
+	if err != nil {
+		return nil, err
+	}
+
+	msg := &protobuf.Message{
+		Message:   raw,
+		Sender:    &id,
+		Signature: signature,
+	}
+
+	return msg, nil
+}
+
+// Asynchronously emit a message to a given peer.
+func (c *PeerClient) Tell(message proto.Message) error {
+	if c.session == nil {
+		return errors.New("client connnot established")
+	}
+
+	msg, err := c.prepareMessage(message)
+	if err != nil {
+		return err
+	}
+
+	// Open a new stream.
+	stream, err := c.session.OpenStream()
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+
+	bytes, err := proto.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	n, err := stream.Write(bytes)
+	if n != len(bytes) {
+		return errors.New("failed to write all bytes to stream")
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Request requests for a response for a request sent to a given peer.
+func (c *PeerClient) Request(request *rpc.Request) (proto.Message, error) {
+	if c.session == nil {
+		return nil, errors.New("client connnot established")
+	}
+
+	req, err := c.prepareMessage(request.Message)
+	if err != nil {
+		return nil, err
+	}
+
+	// Open a new stream.
+	stream, err := c.session.OpenStream()
+	if err != nil {
+		return nil, err
+	}
+	defer stream.Close()
+
+	bytes, err := proto.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	stream.SetWriteDeadline(time.Now().Add(request.Timeout))
+
+	// Send request bytes.
+	n, err := stream.Write(bytes)
+	if n != len(bytes) {
+		return nil, errors.New("failed to write all bytes to stream")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	stream.SetReadDeadline(time.Now().Add(request.Timeout))
+
+	// Await for response bytes.
+	res, err := c.receiveMessage(stream)
 	if err != nil {
 		glog.Error(err)
 		return nil, err
 	}
 
-	client.incomingStream = stream
-
-	return client, nil
-}
-
-func (c *PeerClient) openIncomingStream() (*smux.Stream, error) {
-	stream, err := c.incomingSession.AcceptStream()
-	if err != nil {
+	// Unmarshal response protobuf.
+	var ptr ptypes.DynamicAny
+	if err := ptypes.UnmarshalAny(res.Message, &ptr); err != nil {
+		glog.Error(err)
 		return nil, err
 	}
 
-	return stream, err
-}
-
-func (c *PeerClient) openOutgoingStream() (*smux.Stream, error) {
-	stream, err := c.outgoingSession.AcceptStream()
-	if err != nil {
-		return nil, err
-	}
-
-	return stream, err
-}
-
-func (c *PeerClient) processIncomingMessages() {
-	buffer := make([]byte, 8192)
-	for {
-		n, err := c.incomingStream.Read(buffer)
-
-		// Packet size overflows buffer. Continue.
-		if n == 8192 {
-			continue
-		}
-
-		if err == io.EOF || err != nil {
-			// Disconnect the user.
-			if c.Id != nil {
-				if c.network.Routes.PeerExists(*c.Id) {
-					c.network.Routes.RemovePeer(*c.Id)
-					glog.Infof("Peer %s has disconnected.", c.Id.Address)
-				}
-			}
-			break
-		}
-
-		// Deserialize message.
-		raw := new(protobuf.Message)
-		err = proto.Unmarshal(buffer[0:n], raw)
-
-		// Check if any of the message headers are invalid or null.
-		if raw.Message == nil || raw.Sender == nil || raw.Sender.PublicKey == nil || len(raw.Sender.Address) == 0 || raw.Signature == nil {
-			glog.Info("Received an invalid message (either no message, no sender, or no signature) from a peer.")
-			continue
-		}
-
-		// Verify signature of message.
-		if !crypto.Verify(raw.Sender.PublicKey, raw.Message.Value, raw.Signature) {
-			continue
-		}
-
-		// Derive, set the peer ID, connect to the peer, and additionally
-		// store the peer.
-		id := peer.ID(*raw.Sender)
-
-		if c.Id == nil {
-			dialer, err := kcp.DialWithOptions(c.Id.Address, nil, 10, 3)
-
-			// Failed to connect. continue.
-			if err != nil {
-				glog.Warning(err)
-				continue
-			}
-
-			session, err := smux.Client(dialer, nil)
-
-			// Failed to open session. continue.
-			if err != nil {
-				glog.Error(err)
-				continue
-			}
-
-			c.Id = &id
-			c.outgoingSession = session
-
-			c.outgoingStream, err = c.openOutgoingStream()
-
-			// Failed to open a stream. continue.
-			if err != nil {
-				glog.Warning(err)
-				continue
-			}
-
-			c.network.Peers.Store(id.Address, c)
-		}
-
-		// Update routing table w/ peer's ID.
-		c.network.Routes.Update(id)
-
-		// Unmarshal protobuf messages.
-		var ptr ptypes.DynamicAny
-		if err := ptypes.UnmarshalAny(raw.Message, &ptr); err != nil {
-			continue
-		}
-
-		// Stream received messages to mailbox.
-		c.Mailbox <- ptr.Message
-	}
-}
-
-func (c *PeerClient) processOutgoingMessages() {
-
+	return ptr.Message, nil
 }
