@@ -27,12 +27,12 @@ func ExampleSetupClusters() {
 	}
 
 	if err := SetupCluster(nodes); err != nil {
-		glog.Fatal(err)
+		fmt.Print(err)
 	}
 
 	for i, node := range nodes {
 		if node.Net == nil {
-			glog.Fatalf("Expected %d nodes, but node %d is missing a network", len(nodes), i)
+			fmt.Printf("Expected %d nodes, but node %d is missing a network", len(nodes), i)
 		}
 	}
 
@@ -49,15 +49,15 @@ func ExampleSetupClusters() {
 		}
 		for i := 1; i < len(nodes); i++ {
 			if result := nodes[i].PopMessage(); result == nil {
-				glog.Errorf("Expected a message in node %d but it was blank", i)
+				fmt.Printf("Expected a message in node %d but it was blank", i)
 			} else {
 				if result.Message != testMessage {
-					glog.Errorf("Expected message %s in node %d but got %v", testMessage, i, result)
+					fmt.Printf("Expected message %s in node %d but got %v", testMessage, i, result)
 				}
 			}
 		}
 	}
 
-	fmt.Printf("okay")
-	// Output: okay
+	fmt.Printf("Success")
+	// Output: Success
 }
