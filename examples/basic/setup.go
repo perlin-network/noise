@@ -1,13 +1,11 @@
-package main
+package basic
 
 import (
-	"flag"
 	"fmt"
-	"testing"
 	"time"
 
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/examples/clusters/messages"
+	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/grpc_utils"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
@@ -43,7 +41,8 @@ func (c *ClusterNode) PopMessage() *messages.ClusterTestMessage {
 
 var blockTimeout = 10 * time.Second
 
-func setupCluster(t *testing.T, nodes []*ClusterNode) error {
+// SetupCluster - Sets up a fully connected group of nodes in a cluster
+func SetupCluster(nodes []*ClusterNode) error {
 	peers := []string{}
 
 	for i := 0; i < len(nodes); i++ {
@@ -83,53 +82,4 @@ func setupCluster(t *testing.T, nodes []*ClusterNode) error {
 	}
 
 	return nil
-}
-
-func TestClusters(t *testing.T) {
-	flag.Parse()
-
-	host := "localhost"
-	cluster1StartPort := 3001
-	cluster1NumPorts := 3
-	nodes := []*ClusterNode{}
-
-	for i := 0; i < cluster1NumPorts; i++ {
-		node := &ClusterNode{}
-		node.Host = host
-		node.Port = cluster1StartPort + i
-
-		nodes = append(nodes, node)
-	}
-
-	if err := setupCluster(t, nodes); err != nil {
-		t.Fatal(err)
-	}
-
-	for i, node := range nodes {
-		if node.Net == nil {
-			t.Fatalf("Expected %d nodes, but node %d is missing a network", len(nodes), i)
-		}
-	}
-
-	// check if you can send a message from node 1 and will it be received only in node 2,3
-	{
-		testMessage := "message from node 0"
-		nodes[0].Net.Broadcast(&messages.ClusterTestMessage{Message: testMessage})
-
-		// HACK: TODO: replace sleep with something else
-		time.Sleep(1 * time.Second)
-
-		if result := nodes[0].PopMessage(); result != nil {
-			t.Errorf("Expected nothing in node 0, got %v", result)
-		}
-		for i := 1; i < len(nodes); i++ {
-			if result := nodes[i].PopMessage(); result == nil {
-				t.Errorf("Expected a message in node %d but it was blank", i)
-			} else {
-				if result.Message != testMessage {
-					t.Errorf("Expected message %s in node %d but got %v", testMessage, i, result)
-				}
-			}
-		}
-	}
 }
