@@ -42,7 +42,7 @@ func (c *ClusterNode) PopMessage() *messages.ClusterTestMessage {
 
 var blockTimeout = 10 * time.Second
 
-// SetupCluster - Sets up a fully connected group of nodes in a cluster
+// SetupCluster - Sets up a connected group of nodes in a cluster
 func SetupCluster(nodes []*ClusterNode) error {
 	peers := []string{}
 
