@@ -1,21 +1,19 @@
 package network
 
 import (
-	"fmt"
-	"math/rand"
 	"net"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
+	"strings"
+	"fmt"
 )
 
 type Network struct {
@@ -39,8 +37,8 @@ type Network struct {
 
 	listener net.Listener
 
-	// Map of connection addresses (string) <-> *network.PeerClient
-	// so that the network doesn't dial multiple times to the same ip
+	// Map of connection addresses (string) <-> *Network.PeerClient
+	// so that the Network doesn't dial multiple times to the same ip
 	Peers *StringPeerClientSyncMap
 }
 
@@ -52,7 +50,7 @@ func (n *Network) Address() string {
 	return n.Host + ":" + strconv.Itoa(n.Port)
 }
 
-// Listen for peers on a port specified on instantation of Network{}.
+// Listen starts listening for peers on a port.
 func (n *Network) Listen() {
 	listener, err := kcp.ListenWithOptions(":"+strconv.Itoa(n.Port), nil, 10, 3)
 	if err != nil {
@@ -64,25 +62,39 @@ func (n *Network) Listen() {
 
 	// Handle new clients.
 	for {
-		conn, err := listener.AcceptKCP()
+		if conn, err := listener.AcceptKCP(); err == nil {
+			go n.handleMux(conn)
+		} else {
+			glog.Error(err)
+		}
+	}
+}
+
+func (n *Network) handleMux(conn net.Conn) {
+	config := smux.DefaultConfig()
+	config.MaxReceiveBuffer = 8192
+	config.KeepAliveInterval = 1 * time.Second
+
+	session, err := smux.Server(conn, config)
+	if err != nil {
+		glog.Error(err)
+		return
+	}
+
+	defer session.Close()
+
+	client := newPeerClient(n)
+
+	// Handle new streams and process their incoming messages.
+	for {
+		stream, err := session.AcceptStream()
 		if err != nil {
 			glog.Error(err)
-			continue
+			return
 		}
 
-		session, err := smux.Server(conn, nil)
-		if err != nil {
-			glog.Error(err)
-			continue
-		}
-
-		client, err := CreatePeerClient(n, session)
-		if err != nil {
-			glog.Error(err)
-			continue
-		}
-
-		go client.processIncomingMessages()
+		// One goroutine per request stream.
+		go client.handleIncomingRequest(stream)
 	}
 }
 
@@ -111,15 +123,9 @@ func (n *Network) GetPeer(address string) (*PeerClient, bool) {
 		return nil, false
 	}
 
-	err := client.open()
-	if err != nil {
-		return nil, false
-	}
-
 	return client, true
 }
 
-// Dials a peer via. gRPC.
 func (n *Network) Dial(address string) (*PeerClient, error) {
 	address = strings.TrimSpace(address)
 	if len(address) == 0 {
@@ -136,15 +142,11 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 		return client, nil
 	}
 
-	client := createPeerClient(n.server)
-	if client == nil {
-		return nil, fmt.Errorf("unable to create peer client for address %s", address)
-	}
+	client := newPeerClient(n)
 
 	err = client.establishConnection(address)
 	if err != nil {
 		glog.Infof(fmt.Sprintf("Failed to connect to peer %s err=[%+v]\n", address, err))
-		client.close()
 		return nil, err
 	}
 
@@ -152,79 +154,4 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 	n.Peers.Store(address, client)
 
 	return client, nil
-}
-
-// Asynchronously broadcast a message to all peer clients.
-func (n *Network) Broadcast(message proto.Message) {
-	n.Peers.Range(func(key string, client *PeerClient) bool {
-		err := client.Tell(message)
-
-		if err != nil {
-			glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
-		}
-
-		return true
-	})
-}
-
-// Asynchronously broadcast a message to a set of peer clients denoted by their addresses.
-func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
-	for _, address := range addresses {
-		if client, ok := n.GetPeer(address); ok {
-			err := client.Tell(message)
-
-			if err != nil {
-				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
-			}
-
-			client.close()
-		} else {
-			glog.Warningf("Failed to send message to peer %s; peer does not exist.", address)
-		}
-	}
-}
-
-// Asynchronously broadcast a message to a set of peer clients denoted by their peer IDs.
-func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
-	for _, id := range ids {
-		if client, ok := n.GetPeer(id.Address); ok {
-			err := client.Tell(message)
-
-			if err != nil {
-				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
-			}
-
-			client.close()
-		} else {
-			glog.Warningf("Failed to send message to peer %s; peer does not exist.", id)
-		}
-	}
-}
-
-// Asynchronously broadcast message to random selected K peers.
-// Does not guarantee broadcasting to exactly K peers.
-func (n *Network) BroadcastRandomly(message proto.Message, K int) {
-	var addresses []string
-
-	n.Peers.Range(func(key string, client *PeerClient) bool {
-		addresses = append(addresses, client.Id.Address)
-
-		// Limit total amount of addresses in case we have a lot of peers.
-		if len(addresses) > K*3 {
-			return false
-		}
-
-		return true
-	})
-
-	// Flip a coin and shuffle :).
-	rand.Shuffle(len(addresses), func(i, j int) {
-		addresses[i], addresses[j] = addresses[j], addresses[i]
-	})
-
-	if len(addresses) < K {
-		K = len(addresses)
-	}
-
-	n.BroadcastByAddresses(message, addresses[:K]...)
 }

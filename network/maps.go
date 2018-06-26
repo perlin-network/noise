@@ -1,6 +1,5 @@
 //go:generate genny -in=$GOFILE -out=gen-string-PeerClient-$GOFILE gen "Key=string Value=*PeerClient"
 //go:generate genny -in=$GOFILE -out=gen-string-MessageProcessor-$GOFILE gen "Key=string Value=MessageProcessor"
-//go:generate genny -in=$GOFILE -out=gen-uint64-MessageChan-$GOFILE gen "Key=uint64 Value=MessageChan"
 
 package network
 
