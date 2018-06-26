@@ -123,11 +123,14 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 	}
 
 	// load a cached connection
-	if client, ok := n.GetPeer(address); ok {
+	if client, ok := n.GetPeer(address); ok && client != nil {
 		return client, nil
 	}
 
 	client := createPeerClient(n.server)
+	if client == nil {
+		return nil, fmt.Errorf("unable to create peer client for address %s", address)
+	}
 
 	err = client.establishConnection(address)
 	if err != nil {

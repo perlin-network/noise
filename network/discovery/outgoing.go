@@ -3,12 +3,13 @@ package discovery
 import (
 	"sync"
 
+	"time"
+
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
-	"time"
 )
 
 func bootstrapPeers(net *network.Network, target peer.ID, count int) (addresses []string, publicKeys [][]byte) {
@@ -16,7 +17,7 @@ func bootstrapPeers(net *network.Network, target peer.ID, count int) (addresses 
 
 	visited := make(map[string]struct{})
 	visited[net.Keys.PublicKeyHex()] = struct{}{}
-	visited[target.Hex()] = struct{}{}
+	visited[target.PublicKeyHex()] = struct{}{}
 
 	for len(queue) > 0 {
 		var wait sync.WaitGroup
@@ -66,9 +67,9 @@ func bootstrapPeers(net *network.Network, target peer.ID, count int) (addresses 
 			for _, id := range response.Peers {
 				p := peer.ID(*id)
 
-				if _, seen := visited[p.Hex()]; !seen {
+				if _, seen := visited[p.PublicKeyHex()]; !seen {
 					queue = append(queue, p)
-					visited[p.Hex()] = struct{}{}
+					visited[p.PublicKeyHex()] = struct{}{}
 
 					addresses = append(addresses, p.Address)
 

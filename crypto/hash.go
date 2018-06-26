@@ -1,8 +1,9 @@
 package crypto
 
 import (
-	"golang.org/x/crypto/blake2b"
 	"math/big"
+
+	"golang.org/x/crypto/blake2b"
 )
 
 func Hash(s *big.Int) *big.Int {
