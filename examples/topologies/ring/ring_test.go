@@ -3,13 +3,15 @@ package basic
 import (
 	"flag"
 	"fmt"
+	"testing"
 	"time"
 
+	"github.com/perlin-network/noise/examples/basic"
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
 )
 
-type BasicNode struct {
+type RingNode struct {
 	h        string
 	p        int
 	ps       []string
@@ -17,28 +19,28 @@ type BasicNode struct {
 	Messages []*messages.BasicMessage
 }
 
-func (e *BasicNode) Host() string {
+func (e *RingNode) Host() string {
 	return e.h
 }
 
-func (e *BasicNode) Port() int {
+func (e *RingNode) Port() int {
 	return e.p
 }
 
-func (e *BasicNode) Peers() []string {
+func (e *RingNode) Peers() []string {
 	return e.ps
 }
 
-func (e *BasicNode) Net() *network.Network {
+func (e *RingNode) Net() *network.Network {
 	return e.net
 }
 
-func (e *BasicNode) SetNet(n *network.Network) {
+func (e *RingNode) SetNet(n *network.Network) {
 	e.net = n
 }
 
 // Handle implements the network interface callback
-func (e *BasicNode) Handle(client *network.PeerClient, raw *network.IncomingMessage) error {
+func (e *RingNode) Handle(client *network.PeerClient, raw *network.IncomingMessage) error {
 	message := raw.Message.(*messages.BasicMessage)
 
 	e.Messages = append(e.Messages, message)
@@ -47,7 +49,7 @@ func (e *BasicNode) Handle(client *network.PeerClient, raw *network.IncomingMess
 }
 
 // PopMessage returns the oldest message from it's buffer and removes it from the list
-func (e *BasicNode) PopMessage() *messages.BasicMessage {
+func (e *RingNode) PopMessage() *messages.BasicMessage {
 	if len(e.Messages) == 0 {
 		return nil
 	}
@@ -57,46 +59,53 @@ func (e *BasicNode) PopMessage() *messages.BasicMessage {
 }
 
 // makes sure the implementation matches the interface at compile time
-var _ ClusterNode = (*BasicNode)(nil)
+var _ basic.ClusterNode = (*RingNode)(nil)
 
-// ExampleSetupClusters is an example of how to use SetupClusters() to automate tests
-func ExampleSetupClusters() {
-	// parse to flags to silence the glog library
-	flag.Parse()
+func setupNodes() []*RingNode {
 
 	host := "localhost"
 	startPort := 5000
-	numNodes := 3
-	var nodes []*BasicNode
-	var cn []ClusterNode
-	var peers []string
+	numNodes := 4
+	var nodes []*RingNode
 
 	for i := 0; i < numNodes; i++ {
-		node := &BasicNode{}
+		node := &RingNode{}
 		node.h = host
 		node.p = startPort + i
 
+		// in a ring, each node is only connected to 2 others
+		node.ps = append(node.ps, fmt.Sprintf("%s:%d", node.h, (node.p+1)%numNodes))
+
 		nodes = append(nodes, node)
-		cn = append(cn, node)
-		peers = append(peers, fmt.Sprintf("%s:%d", node.h, node.p))
 	}
 
-	for _, node := range nodes {
-		node.ps = peers
+	return nodes
+}
+
+func ringNode2ClusterNode(ring []*RingNode) []basic.ClusterNode {
+	var cluster []basic.ClusterNode
+	for _, node := range ring {
+		cluster = append(cluster, node)
+	}
+	return cluster
+}
+
+func TestRing(t *testing.T) {
+	// parse to flags to silence the glog library
+	flag.Parse()
+
+	nodes := setupNodes()
+
+	if err := basic.SetupCluster(ringNode2ClusterNode(nodes)); err != nil {
+		t.Fatal(err)
 	}
 
-	if err := SetupCluster(cn); err != nil {
-		fmt.Print(err)
-		return
-	}
-
-	// After all the nodes are started, get them to start talking with each other
 	for i, node := range nodes {
 		if node.net == nil {
-			fmt.Printf("expected %d nodes, but node %d is missing a network", len(nodes), i)
-			return
+			t.Fatalf("expected %d nodes, but node %d is missing a network", len(nodes), i)
 		}
 
+		// get nodes to start talking with each other
 		node.Net().Bootstrap(node.Peers()...)
 
 		// TODO: seems there's another race condition with Bootstrap, use a sleep for now
@@ -112,21 +121,21 @@ func ExampleSetupClusters() {
 
 	// check if you can send a message from node 1 and will it be received only in node 2,3
 	if result := nodes[0].PopMessage(); result != nil {
-		fmt.Printf("expected nothing in node 0, got %v", result)
-		return
+		t.Errorf("expected nothing in node 0, got %v", result)
+	}
+	if len(nodes[0].Messages) > 0 {
+		t.Errorf("expected no messages buffered in node 0, found: %v", nodes[0].Messages)
 	}
 	for i := 1; i < len(nodes); i++ {
 		if result := nodes[i].PopMessage(); result == nil {
-			fmt.Printf("expected a message in node %d but it was blank", i)
-			return
+			t.Errorf("expected a message in node %d but it was blank", i)
 		} else {
 			if result.Message != testMessage {
-				fmt.Printf("expected message %s in node %d but got %v", testMessage, i, result)
-				return
+				t.Errorf("expected message %s in node %d but got %v", testMessage, i, result)
 			}
 		}
+		if len(nodes[i].Messages) > 0 {
+			t.Errorf("expected no messages buffered in node %d, found: %v", i, nodes[i].Messages)
+		}
 	}
-
-	fmt.Printf("success")
-	// Output: success
 }
