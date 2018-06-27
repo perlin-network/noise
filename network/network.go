@@ -88,7 +88,7 @@ func (n *Network) handleMux(conn net.Conn) {
 	for {
 		stream, err := session.AcceptStream()
 		if err != nil {
-			if err.Error() == "broken pipe"  {
+			if err.Error() == "broken pipe" {
 				client.Close()
 			}
 			break
@@ -101,6 +101,8 @@ func (n *Network) handleMux(conn net.Conn) {
 
 // Bootstrap with a number of peers and commence a handshake.
 func (n *Network) Bootstrap(addresses ...string) {
+	<-n.Listening
+
 	addresses = FilterPeers(n.Host, n.Port, addresses)
 
 	for _, address := range addresses {
@@ -134,7 +136,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 		return nil, errors.New("peer should not dial itself")
 	}
 
-	// load a cached connection
+	// Load a cached connection.
 	if client, exists := n.Peers.Load(address); exists && client != nil {
 		return client, nil
 	}
@@ -146,9 +148,6 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 		glog.Warningf("Failed to connect to peer %s err=[%+v]\n", address, err)
 		return nil, err
 	}
-
-	// Cache the peer's client.
-	n.Peers.Store(address, client)
 
 	return client, nil
 }
