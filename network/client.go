@@ -1,8 +1,8 @@
 package network
 
 import (
-	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
