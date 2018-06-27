@@ -1,12 +1,10 @@
 package network
 
 import (
-	"net"
-	"strconv"
-	"time"
-
 	"fmt"
 	"math/rand"
+	"net"
+	"strconv"
 	"strings"
 
 	"github.com/golang/glog"
@@ -75,8 +73,6 @@ func (n *Network) Listen(netStart chan<- bool) {
 
 func (n *Network) handleMux(conn net.Conn) {
 	config := smux.DefaultConfig()
-	config.MaxReceiveBuffer = 8192
-	config.KeepAliveInterval = 500 * time.Millisecond
 
 	session, err := smux.Server(conn, config)
 	if err != nil {
@@ -92,7 +88,7 @@ func (n *Network) handleMux(conn net.Conn) {
 	for {
 		stream, err := session.AcceptStream()
 		if err != nil {
-			glog.Error(err)
+			glog.Error("%s: %s", client.Id.Address, err)
 			break
 		}
 

@@ -11,7 +11,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
-	"io"
 	"reflect"
 	"time"
 )
@@ -43,9 +42,7 @@ func (c *PeerClient) establishConnection(address string) error {
 	}
 
 	config := smux.DefaultConfig()
-	config.MaxReceiveBuffer = 8192
-	config.KeepAliveInterval = 500 * time.Millisecond
-	config.KeepAliveTimeout = 1 * time.Second
+
 	c.outgoing, err = smux.Client(dialer, config)
 
 	// Failed to open session. Continue.
@@ -65,31 +62,6 @@ func (c *PeerClient) close() {
 			glog.Infof("Peer %s has disconnected.", c.Id.Address)
 		}
 	}
-}
-
-func (c *PeerClient) receiveMessage(stream *smux.Stream) (*protobuf.Message, error) {
-	buffer := make([]byte, 8192)
-
-	n, err := stream.Read(buffer)
-
-	// Packet size overflows buffer. Continue.
-	if n == 8192 {
-		return nil, errors.New("packet size overflows buffer")
-	}
-
-	if err != nil {
-		if err == io.EOF {
-			c.close()
-		}
-
-		return nil, err
-	}
-
-	// Deserialize message.
-	msg := new(protobuf.Message)
-	err = proto.Unmarshal(buffer[0:n], msg)
-
-	return msg, err
 }
 
 func (c *PeerClient) handleMessage(stream *smux.Stream) {
@@ -205,11 +177,6 @@ func (c *PeerClient) Tell(message proto.Message) error {
 		return errors.New("client session nil")
 	}
 
-	msg, err := c.prepareMessage(message)
-	if err != nil {
-		return err
-	}
-
 	// Open a new stream.
 	stream, err := c.outgoing.OpenStream()
 	if err != nil {
@@ -217,20 +184,9 @@ func (c *PeerClient) Tell(message proto.Message) error {
 	}
 	defer stream.Close()
 
-	bytes, err := proto.Marshal(msg)
+	err = c.sendMessage(stream, message)
 	if err != nil {
-		return err
-	}
-
-	n, err := stream.Write(bytes)
-	if n != len(bytes) {
-		return errors.New("failed to write all bytes to stream")
-	}
-
-	if err != nil {
-		if err == io.EOF {
-			c.close()
-		}
+		glog.Error(err)
 		return err
 	}
 
@@ -238,14 +194,9 @@ func (c *PeerClient) Tell(message proto.Message) error {
 }
 
 // Request requests for a response for a request sent to a given peer.
-func (c *PeerClient) Request(request *rpc.Request) (proto.Message, error) {
+func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 	if c.outgoing == nil {
 		return nil, errors.New("client session nil")
-	}
-
-	req, err := c.prepareMessage(request.Message)
-	if err != nil {
-		return nil, err
 	}
 
 	// Open a new stream.
@@ -255,24 +206,11 @@ func (c *PeerClient) Request(request *rpc.Request) (proto.Message, error) {
 	}
 	defer stream.Close()
 
-	stream.SetWriteDeadline(time.Now().Add(request.Timeout))
-	stream.SetReadDeadline(time.Now().Add(request.Timeout))
+	stream.SetDeadline(time.Now().Add(req.Timeout))
 
-	bytes, err := proto.Marshal(req)
+	err = c.sendMessage(stream, req.Message)
 	if err != nil {
-		return nil, err
-	}
-
-	// Send request bytes.
-	n, err := stream.Write(bytes)
-	if n != len(bytes) {
-		return nil, errors.New("failed to write all bytes to stream")
-	}
-
-	if err != nil {
-		if err == io.EOF {
-			c.close()
-		}
+		glog.Error(err)
 		return nil, err
 	}
 
@@ -286,7 +224,6 @@ func (c *PeerClient) Request(request *rpc.Request) (proto.Message, error) {
 	// Unmarshal response protobuf.
 	var ptr ptypes.DynamicAny
 	if err := ptypes.UnmarshalAny(res.Message, &ptr); err != nil {
-		glog.Error(err)
 		return nil, err
 	}
 
