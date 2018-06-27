@@ -28,7 +28,7 @@ type PeerClient struct {
 
 // createPeerClient creates a stub peer client.
 func createPeerClient(network *Network) *PeerClient {
-	return &PeerClient{Network: network, Backoff: &backoff.Backoff{}}
+	return &PeerClient{Network: network, Backoff: backoff.DefaultBackoff()}
 }
 
 // Dial attempts to establish or reestablish a session by dialing a peer's address.
