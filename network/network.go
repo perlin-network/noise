@@ -42,6 +42,8 @@ type Network struct {
 	// Map of connection addresses (string) <-> *Network.PeerClient
 	// so that the Network doesn't dial multiple times to the same ip
 	Peers *StringPeerClientSyncMap
+
+	Listening chan struct{}
 }
 
 //Address returns a formated host:port string
@@ -50,15 +52,15 @@ func (n *Network) Address() string {
 }
 
 // Listen starts listening for peers on a port.
-func (n *Network) Listen(netStart chan<- bool) {
+func (n *Network) Listen() {
 	listener, err := kcp.ListenWithOptions(":"+strconv.Itoa(int(n.Port)), nil, 10, 3)
 	if err != nil {
-		netStart <- false
 		glog.Fatal(err)
 		return
 	}
 
-	netStart <- true
+	n.Listening <- struct{}{}
+
 	glog.Infof("Listening for peers on port %d.", n.Port)
 
 	// Handle new clients.
@@ -88,7 +90,7 @@ func (n *Network) handleMux(conn net.Conn) {
 	for {
 		stream, err := session.AcceptStream()
 		if err != nil {
-			glog.Error("%s: %s", client.Id.Address, err)
+			glog.Error(err)
 			break
 		}
 
