@@ -173,7 +173,7 @@ func (n *Network) Broadcast(message proto.Message) {
 	// add missing peers before dialing
 	n.dialMissingPeers(peerList, routeList)
 
-	// get a list of peers in the peer list
+	// tell all the peers
 	n.Peers.Range(func(key string, client *PeerClient) bool {
 		if err := client.Tell(message); err != nil {
 			glog.Warningf("Failed to send message to peer %v [err=%s]", client.Id, err)
