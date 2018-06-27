@@ -37,7 +37,7 @@ func (c *PeerClient) establishConnection(address string) error {
 
 	dialer, err := kcp.DialWithOptions(address, nil, 10, 3)
 
-	// Failed to connect. Continue.
+	// Failed to connect.
 	if err != nil {
 		glog.Error(err)
 		return err
@@ -45,11 +45,14 @@ func (c *PeerClient) establishConnection(address string) error {
 
 	c.Session, err = smux.Client(dialer, muxConfig())
 
-	// Failed to open session. Continue.
+	// Failed to open session.
 	if err != nil {
 		glog.Error(err)
 		return err
 	}
+
+	// Cache the peer's client.
+	c.Network.Peers.Store(address, c)
 
 	return nil
 }
