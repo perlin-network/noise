@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
+	"time"
 )
 
 type Network struct {
@@ -75,6 +76,8 @@ func (n *Network) Listen() {
 
 func (n *Network) handleMux(conn net.Conn) {
 	config := smux.DefaultConfig()
+	config.KeepAliveInterval = 50 * time.Millisecond
+	config.KeepAliveTimeout = 100 * time.Millisecond
 
 	session, err := smux.Server(conn, config)
 	if err != nil {
@@ -90,7 +93,12 @@ func (n *Network) handleMux(conn net.Conn) {
 	for {
 		stream, err := session.AcceptStream()
 		if err != nil {
-			glog.Error(err)
+			if err.Error() == "broken pipe" && client.Id != nil {
+				n.Routes.RemovePeer(*client.Id)
+
+				n.Peers.Delete(client.Id.Address)
+				glog.Infof("Peer %s has disconnected.", client.Id.Address)
+			}
 			break
 		}
 
