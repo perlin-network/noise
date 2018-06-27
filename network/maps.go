@@ -1,12 +1,11 @@
 //go:generate genny -in=$GOFILE -out=gen-string-PeerClient-$GOFILE gen "Key=string Value=*PeerClient"
 //go:generate genny -in=$GOFILE -out=gen-string-MessageProcessor-$GOFILE gen "Key=string Value=MessageProcessor"
-//go:generate genny -in=$GOFILE -out=gen-uint64-MessageChan-$GOFILE gen "Key=uint64 Value=MessageChan"
 
 package network
 
 import (
-	"sync"
 	"github.com/cheekybits/genny/generic"
+	"sync"
 )
 
 type Key generic.Type
@@ -30,7 +29,7 @@ func (m *KeyValueSyncMap) Load(k Key) (Value, bool) {
 }
 
 func (m *KeyValueSyncMap) Range(cb func(Key, Value) bool) {
-	m.inner.Range(func (k interface{}, v interface{}) bool {
+	m.inner.Range(func(k interface{}, v interface{}) bool {
 		return cb(k.(Key), v.(Value))
 	})
 }

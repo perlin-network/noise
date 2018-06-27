@@ -3,26 +3,22 @@ package main
 import (
 	"bufio"
 	"flag"
-	"fmt"
+	"os"
+	"strings"
+
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/examples/chat/messages"
-	"github.com/perlin-network/noise/grpc_utils"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
-	"os"
-	"strings"
-	"time"
 )
 
 type ChatMessageProcessor struct{}
 
-func (*ChatMessageProcessor) Handle(client *network.PeerClient, raw *network.IncomingMessage) error {
-	message := raw.Message.(*messages.ChatMessage)
-
-	glog.Infof("<%s> %s", client.Id.Address, message.Message)
-
+func (c *ChatMessageProcessor) Handle(ctx *network.MessageContext) error {
+	message := ctx.Message().(*messages.ChatMessage)
+	glog.Infof("<%s> %s", ctx.Client().Id.Address, message.Message)
 	return nil
 }
 
@@ -36,7 +32,7 @@ func main() {
 	peersFlag := flag.String("peers", "", "peers to connect to")
 	flag.Parse()
 
-	port := *portFlag
+	port := uint16(*portFlag)
 	host := *hostFlag
 	peers := strings.Split(*peersFlag, ",")
 
@@ -64,11 +60,6 @@ func main() {
 	go net.Listen()
 
 	if len(peers) > 0 {
-		blockTimeout := 10 * time.Second
-		if err := grpc_utils.BlockUntilConnectionReady(host, port, blockTimeout); err != nil {
-			glog.Warningf(fmt.Sprintf("Error: port was not available, cannot bootstrap peers, err=%+v", err))
-		}
-
 		net.Bootstrap(peers...)
 	}
 
