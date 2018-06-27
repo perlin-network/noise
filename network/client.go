@@ -1,6 +1,9 @@
 package network
 
 import (
+	"reflect"
+	"time"
+
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
@@ -10,8 +13,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
-	"reflect"
-	"time"
 )
 
 // Represents a single incomingStream peer client.
@@ -107,7 +108,7 @@ func (c *PeerClient) handleMessage(stream *smux.Stream) {
 	name := reflect.TypeOf(ptr.Message).String()
 	processor, exists := c.Network.Processors.Load(name)
 
-	glog.Infof("%s sent response of type %s", c.Id.Address, name)
+	glog.Infof("%s sent message of type %s", c.Id.Address, name)
 
 	if exists {
 		processor := processor.(MessageProcessor)

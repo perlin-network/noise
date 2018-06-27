@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -59,7 +60,7 @@ func (n *Network) Listen() {
 		return
 	}
 
-	n.Listening <- struct{}{}
+	//n.Listening <- struct{}{}
 
 	glog.Infof("Listening for peers on port %d.", n.Port)
 
@@ -156,17 +157,29 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 	return client, nil
 }
 
-// Asynchronously broadcast a message to all peer clients.
+// Broadcast asynchronously sends a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
-	n.Peers.Range(func(key string, client *PeerClient) bool {
-		err := client.Tell(message)
+	var peerList []string
+	var routeList []string
 
-		if err != nil {
+	// get a list of peers in the routing table
+	for _, peer := range n.Routes.GetPeers() {
+		routeList = append(routeList, peer.Address)
+	}
+
+	// get a list of peers in the peer list
+	n.Peers.Range(func(key string, client *PeerClient) bool {
+		peerList = append(peerList, key)
+
+		glog.Infof("[debug] Sending message to peer=%v msg=%s", client.Id, message)
+		if err := client.Tell(message); err != nil {
 			glog.Warningf("Failed to send message to peer %v [err=%s]", client.Id, err)
 		}
 
 		return true
 	})
+
+	n.dialMissingPeers(peerList, routeList)
 }
 
 // Asynchronously broadcast a message to a set of peer clients denoted by their addresses.
@@ -229,4 +242,26 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	}
 
 	n.BroadcastByAddresses(message, addresses[:K]...)
+}
+
+func (n *Network) dialMissingPeers(peerList []string, routeList []string) {
+	// TODO: can cache the listHashes and skip the check
+
+	// make sure every route has a peer
+	sort.Strings(peerList)
+	sort.Strings(routeList)
+	glog.Infof("[Debug] peerList=%v routeList=%v", peerList, routeList)
+
+	for r, p := 0, 0; r < len(routeList); r++ {
+		if p >= len(peerList) || routeList[r] != peerList[p] {
+			// this is a missing peer, add it to the peers
+			go func() {
+				if _, err := n.Dial(routeList[r]); err != nil {
+					glog.Infof("Could not dial address: %s", routeList[r])
+				}
+			}()
+		} else {
+			p++
+		}
+	}
 }
