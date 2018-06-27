@@ -1,12 +1,10 @@
 package basic
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/examples/basic/messages"
-	"github.com/perlin-network/noise/grpc_utils"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
@@ -15,11 +13,11 @@ import (
 // ClusterNode holds the network and message handler for each node
 type ClusterNode interface {
 	Host() string
-	Port() int
+	Port() uint16
 	Peers() []string
 	Net() *network.Network
 	SetNet(*network.Network)
-	Handle(client *network.PeerClient, raw *network.IncomingMessage) error
+	Handle(ctx *network.MessageContext) error
 }
 
 var blockTimeout = 10 * time.Second
@@ -46,12 +44,6 @@ func SetupCluster(nodes []ClusterNode) error {
 		node.SetNet(net)
 
 		go net.Listen()
-	}
-
-	for i := 0; i < len(nodes); i++ {
-		if err := grpc_utils.BlockUntilConnectionReady(nodes[i].Host(), nodes[i].Port(), blockTimeout); err != nil {
-			return fmt.Errorf("port was not available, cannot bootstrap node %d: %+v", i, err)
-		}
 	}
 
 	return nil

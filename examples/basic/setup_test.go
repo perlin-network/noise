@@ -21,8 +21,8 @@ func (e *BasicNode) Host() string {
 	return e.h
 }
 
-func (e *BasicNode) Port() int {
-	return e.p
+func (e *BasicNode) Port() uint16 {
+	return uint16(e.p)
 }
 
 func (e *BasicNode) Peers() []string {
@@ -38,11 +38,9 @@ func (e *BasicNode) SetNet(n *network.Network) {
 }
 
 // Handle implements the network interface callback
-func (e *BasicNode) Handle(client *network.PeerClient, raw *network.IncomingMessage) error {
-	message := raw.Message.(*messages.BasicMessage)
-
+func (e *BasicNode) Handle(ctx *network.MessageContext) error {
+	message := ctx.Message().(*messages.BasicMessage)
 	e.Messages = append(e.Messages, message)
-
 	return nil
 }
 
