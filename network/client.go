@@ -4,6 +4,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
+	"github.com/jpillora/backoff"
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
@@ -21,10 +22,12 @@ type PeerClient struct {
 	Id *peer.ID
 
 	Session *smux.Session
+
+	Backoff *backoff.Backoff
 }
 
 func createPeerClient(network *Network) *PeerClient {
-	return &PeerClient{Network: network}
+	return &PeerClient{Network: network, Backoff: &backoff.Backoff{}}
 }
 
 func (c *PeerClient) establishConnection(address string) error {
@@ -46,6 +49,40 @@ func (c *PeerClient) establishConnection(address string) error {
 	if err != nil {
 		glog.Error(err)
 		return err
+	}
+
+	return nil
+}
+
+func (c *PeerClient) reestablishConnection() error {
+	if c.Session != nil && !c.Session.IsClosed() {
+		err := c.Session.Close()
+		if err != nil {
+			glog.Error(err)
+			return err
+		}
+	}
+
+	c.Backoff.Reset()
+	c.Session = nil
+	maxAttempts := 5
+	attempt := 0
+
+	for {
+		if attempt >= maxAttempts {
+			c.close()
+			return errors.New("unable to reestablish connection")
+		}
+		attempt++
+
+		err := c.establishConnection(c.Id.Address)
+		if err != nil {
+			d := c.Backoff.Duration()
+			time.Sleep(d)
+			continue
+		}
+
+		break
 	}
 
 	return nil
