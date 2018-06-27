@@ -4,7 +4,6 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/ptypes"
-	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
@@ -73,18 +72,6 @@ func (c *PeerClient) handleMessage(stream *smux.Stream) {
 	// Failed to receive message.
 	if err != nil {
 		glog.Error(err)
-		return
-	}
-
-	// Check if any of the message headers are invalid or null.
-	if msg.Message == nil || msg.Sender == nil || msg.Sender.PublicKey == nil || len(msg.Sender.Address) == 0 || msg.Signature == nil {
-		glog.Warning("Received an invalid message (either no message, no sender, or no signature) from a peer.")
-		return
-	}
-
-	// Verify signature of message.
-	if !crypto.Verify(msg.Sender.PublicKey, msg.Message.Value, msg.Signature) {
-		glog.Warning("Received message had an malformed signature.")
 		return
 	}
 
@@ -184,6 +171,7 @@ func (c *PeerClient) Tell(message proto.Message) error {
 	}
 	defer stream.Close()
 
+	// Send message bytes.
 	err = c.sendMessage(stream, message)
 	if err != nil {
 		glog.Error(err)
@@ -208,6 +196,7 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 
 	stream.SetDeadline(time.Now().Add(req.Timeout))
 
+	// Send request bytes.
 	err = c.sendMessage(stream, req.Message)
 	if err != nil {
 		glog.Error(err)
