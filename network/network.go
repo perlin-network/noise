@@ -60,7 +60,7 @@ func (n *Network) Listen() {
 		return
 	}
 
-	//n.Listening <- struct{}{}
+	n.Listening <- struct{}{}
 
 	glog.Infof("Listening for peers on port %d.", n.Port)
 

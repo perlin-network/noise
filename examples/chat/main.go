@@ -5,7 +5,6 @@ import (
 	"flag"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
@@ -60,7 +59,7 @@ func main() {
 
 	go net.Listen()
 
-	time.Sleep(1 * time.Second)
+	<-net.Listening
 
 	if len(peers) > 0 {
 		net.Bootstrap(peers...)
