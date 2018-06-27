@@ -8,8 +8,8 @@ import (
 	"reflect"
 )
 
-// handleMessage ingests and handles a stream dedicated to representing a single RPC call.
-func (c *PeerClient) handleMessage(stream *smux.Stream) {
+// ingest ingests and handles an incoming stream constituting one message.
+func (c *PeerClient) ingest(stream *smux.Stream) {
 	// Clean up resources.
 	defer stream.Close()
 
@@ -44,7 +44,9 @@ func (c *PeerClient) handleMessage(stream *smux.Stream) {
 	}
 
 	// Update routing table w/ peer's ID.
-	c.Network.Routes.Update(id)
+	if c.Network.Routes != nil {
+		c.Network.Routes.Update(id)
+	}
 
 	// Unmarshal protobuf.
 	var ptr ptypes.DynamicAny

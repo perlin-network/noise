@@ -18,6 +18,7 @@ import (
 	"github.com/xtaci/smux"
 )
 
+// Network represents the current networking state for this node.
 type Network struct {
 	// Routing table.
 	Routes *dht.RoutingTable
@@ -37,12 +38,11 @@ type Network struct {
 	// Node's cryptographic ID.
 	ID peer.ID
 
-	listener net.Listener
-
 	// Map of connection addresses (string) <-> *Network.PeerClient
 	// so that the Network doesn't dial multiple times to the same ip
 	Peers *StringPeerClientSyncMap
 
+	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
 }
 
@@ -95,7 +95,7 @@ func (n *Network) handleMux(conn net.Conn) {
 		}
 
 		// One goroutine per request stream.
-		go client.handleMessage(stream)
+		go client.ingest(stream)
 	}
 }
 
