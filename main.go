@@ -43,10 +43,11 @@ func main() {
 		return
 	}
 
-	netStart := make(chan bool, 1)
-	go net.Listen(netStart)
+	go net.Listen()
 
-	if len(peers) > 0 && <-netStart {
+	<-net.Listening
+
+	if len(peers) > 0 {
 		net.Bootstrap(peers...)
 	}
 

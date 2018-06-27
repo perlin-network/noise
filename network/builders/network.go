@@ -91,6 +91,8 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 		Routes: dht.CreateRoutingTable(id),
 
 		Peers: &network.StringPeerClientSyncMap{},
+
+		Listening: make(chan struct{}),
 	}
 
 	return network, nil
