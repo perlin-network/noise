@@ -8,6 +8,7 @@ import (
 	"github.com/golang/protobuf/ptypes"
 )
 
+// handleMessage ingests and handles a stream dedicated to representing a single RPC call.
 func (c *PeerClient) handleMessage(stream *smux.Stream) {
 	// Clean up resources.
 	defer stream.Close()

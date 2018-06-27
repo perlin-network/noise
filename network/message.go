@@ -6,10 +6,15 @@ import (
 	"github.com/xtaci/smux"
 )
 
+// MessageProcessor is an interface which developers may implement to attach to a
+// network for handling specific messages. A single MessageProcessor may multiplex
+// and handle different types of messages.
 type MessageProcessor interface {
 	Handle(ctx *MessageContext) error
 }
 
+// MessageContext provides parameters and helper functions to a MessageProcessor
+// for interacting with/analyzing incoming messages from a select peer.
 type MessageContext struct {
 	client  *PeerClient
 	stream  *smux.Stream

@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// Represents a single incomingStream peer client.
+// PeerClient represents a single incoming peers client.
 type PeerClient struct {
 	Network *Network
 
@@ -22,10 +22,13 @@ type PeerClient struct {
 	Session *smux.Session
 }
 
+// createPeerClient creates a stub peer client.
 func createPeerClient(network *Network) *PeerClient {
 	return &PeerClient{Network: network}
 }
 
+// establishConnection establishes a session by dialing a peers address. Errors if
+// peer is not dial-able, or if the peer client already is connected.
 func (c *PeerClient) establishConnection(address string) error {
 	if c.Session != nil {
 		return errors.New("connection already established")
@@ -50,18 +53,24 @@ func (c *PeerClient) establishConnection(address string) error {
 	return nil
 }
 
+// close stops all sessions/streams and cleans up the nodes
+// routing table. Errors if session fails to close.
 func (c *PeerClient) close() {
 	// Disconnect the user.
 	if c.Id != nil {
 		if c.Network.Routes.PeerExists(*c.Id) {
 			c.Network.Routes.RemovePeer(*c.Id)
 			c.Network.Peers.Delete(c.Id.Address)
+			err := c.Session.Close()
+			if err != nil {
+				glog.Error(err)
+			}
 			glog.Infof("Peer %s has disconnected.", c.Id.Address)
 		}
 	}
 }
 
-// Marshals message into proto.Message and signs it with this node's private key.
+// prepareMessage marshals a message into a proto.Message and signs it with this nodes private key.
 // Errors if the message is null.
 func (c *PeerClient) prepareMessage(message proto.Message) (*protobuf.Message, error) {
 	if message == nil {
@@ -89,7 +98,7 @@ func (c *PeerClient) prepareMessage(message proto.Message) (*protobuf.Message, e
 	return msg, nil
 }
 
-// Asynchronously emit a message to a given peer.
+// Tell asynchronously emit a message to a given peer.
 func (c *PeerClient) Tell(message proto.Message) error {
 	if c.Session == nil {
 		return errors.New("client session nil")
