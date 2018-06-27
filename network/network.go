@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"time"
-
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
@@ -48,7 +46,7 @@ type Network struct {
 	Listening chan struct{}
 }
 
-//Address returns a formated host:port string
+// Address returns a formated host:port string
 func (n *Network) Address() string {
 	return n.Host + ":" + strconv.Itoa(int(n.Port))
 }
@@ -76,11 +74,7 @@ func (n *Network) Listen() {
 }
 
 func (n *Network) handleMux(conn net.Conn) {
-	config := smux.DefaultConfig()
-	config.KeepAliveInterval = 50 * time.Millisecond
-	config.KeepAliveTimeout = 100 * time.Millisecond
-
-	session, err := smux.Server(conn, config)
+	session, err := smux.Server(conn, muxConfig())
 	if err != nil {
 		glog.Error(err)
 		return

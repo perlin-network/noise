@@ -40,11 +40,7 @@ func (c *PeerClient) establishConnection(address string) error {
 		return err
 	}
 
-	config := smux.DefaultConfig()
-	config.KeepAliveInterval = 50 * time.Millisecond
-	config.KeepAliveTimeout = 100 * time.Millisecond
-
-	c.Session, err = smux.Client(dialer, config)
+	c.Session, err = smux.Client(dialer, muxConfig())
 
 	// Failed to open session. Continue.
 	if err != nil {
