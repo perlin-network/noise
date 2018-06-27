@@ -155,7 +155,6 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 // Asynchronously broadcast a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
 	n.Peers.Range(func(key string, client *PeerClient) bool {
-		glog.Info(key)
 		err := client.Tell(message)
 
 		if err != nil {
