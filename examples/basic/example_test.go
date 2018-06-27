@@ -62,6 +62,7 @@ func ExampleBasic() {
 		nodes = append(nodes, node)
 	}
 
+	// Wait for all nodes to finish discovering other peers.
 	time.Sleep(1 * time.Second)
 
 	// Broadcast out a message from Node 0.
