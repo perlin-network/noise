@@ -42,7 +42,7 @@ func (c *PeerClient) sendMessage(stream *smux.Stream, message proto.Message) err
 	err = writer.Flush()
 	if err != nil {
 		if err == io.EOF {
-			c.close()
+			c.Close()
 		}
 		return err
 	}
@@ -79,7 +79,7 @@ func (c *PeerClient) receiveMessage(stream *smux.Stream) (*protobuf.Message, err
 
 	if err != nil {
 		if err == io.EOF {
-			c.close()
+			c.Close()
 		}
 
 		return nil, err

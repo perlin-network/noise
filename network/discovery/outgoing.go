@@ -5,7 +5,6 @@ import (
 
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
@@ -44,7 +43,7 @@ func bootstrapPeers(net *network.Network, target peer.ID, count int) (addresses 
 				response, err := client.Request(request)
 
 				if err != nil {
-					glog.Error(err)
+					client.Close()
 					return
 				}
 
