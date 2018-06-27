@@ -18,7 +18,7 @@ func (c *PeerClient) handleMessage(stream *smux.Stream) {
 	// Failed to receive message.
 	if err != nil {
 		if err.Error() == "broken pipe" {
-			c.close()
+			c.Close()
 		}
 		return
 	}

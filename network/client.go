@@ -53,19 +53,23 @@ func (c *PeerClient) establishConnection(address string) error {
 	return nil
 }
 
-// close stops all sessions/streams and cleans up the nodes
+// Close stops all sessions/streams and cleans up the nodes
 // routing table. Errors if session fails to close.
-func (c *PeerClient) close() {
+func (c *PeerClient) Close() {
 	// Disconnect the user.
 	if c.Id != nil {
 		if c.Network.Routes.PeerExists(*c.Id) {
 			c.Network.Routes.RemovePeer(*c.Id)
 			c.Network.Peers.Delete(c.Id.Address)
-			err := c.Session.Close()
-			if err != nil {
-				glog.Error(err)
-			}
+
 			glog.Infof("Peer %s has disconnected.", c.Id.Address)
+		}
+	}
+
+	if c.Session != nil && !c.Session.IsClosed() {
+		err := c.Session.Close()
+		if err != nil {
+			glog.Error(err)
 		}
 	}
 }
@@ -114,8 +118,8 @@ func (c *PeerClient) Tell(message proto.Message) error {
 	// Send message bytes.
 	err = c.sendMessage(stream, message)
 	if err != nil {
-		if err.Error() == "broken pipe"  {
-			c.close()
+		if err.Error() == "broken pipe" {
+			c.Close()
 		}
 		return err
 	}
@@ -141,8 +145,8 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 	// Send request bytes.
 	err = c.sendMessage(stream, req.Message)
 	if err != nil {
-		if err.Error() == "broken pipe"  {
-			c.close()
+		if err.Error() == "broken pipe" {
+			c.Close()
 		}
 		return nil, err
 	}
@@ -150,8 +154,8 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 	// Await for response bytes.
 	res, err := c.receiveMessage(stream)
 	if err != nil {
-		if err.Error() == "broken pipe"  {
-			c.close()
+		if err.Error() == "broken pipe" {
+			c.Close()
 		}
 		return nil, err
 	}
