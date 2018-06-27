@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"time"
+
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
@@ -16,7 +18,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
-	"time"
 )
 
 type Network struct {
@@ -167,7 +168,7 @@ func (n *Network) Broadcast(message proto.Message) {
 		err := client.Tell(message)
 
 		if err != nil {
-			glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+			glog.Warningf("Failed to send message to peer %v [err=%s]", client.Id, err)
 		}
 
 		return true
