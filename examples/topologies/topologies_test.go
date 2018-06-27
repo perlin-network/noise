@@ -189,31 +189,36 @@ func bootstrapNodes(nodes []*TopoNode) error {
 	return nil
 }
 
-func sendFromNode0(t *testing.T, nodes []*TopoNode) {
+func broadcastNode(t *testing.T, nodes []*TopoNode, sendingNodeIdx int) {
 	// Broadcast is an asynchronous call to send a message to other nodes
-	testMessage := "message from node 0"
-	nodes[0].Net().Broadcast(&messages.BasicMessage{Message: testMessage})
+	testMessage := fmt.Sprintf("message from node %d", sendingNodeIdx)
+	nodes[sendingNodeIdx].Net().Broadcast(&messages.BasicMessage{Message: testMessage})
 
-	// Simplificiation: message broadcasting is asynchronous, so need the messages to settle
+	// TODO: remove this simplificiation: message broadcasting is asynchronous, so need the messages to settle
 	time.Sleep(1 * time.Second)
 
-	// check if you can send a message from node 1 and will it be received only in node 2,3
-	if result := nodes[0].PopMessage(); result != nil {
-		t.Errorf("expected nothing in node 0, got %v", result)
-	}
-	if len(nodes[0].Messages) > 0 {
-		t.Errorf("expected no messages buffered in node 0, found: %v", nodes[0].Messages)
-	}
+	// check the messages
 	for i := 1; i < len(nodes); i++ {
-		if result := nodes[i].PopMessage(); result == nil {
-			t.Errorf("expected a message in node %d but it was blank", i)
-		} else {
-			if result.Message != testMessage {
-				t.Errorf("expected message %s in node %d but got %v", testMessage, i, result)
+		if i == sendingNodeIdx {
+			// this is the sending node, it should not have received it's own message
+			if result := nodes[sendingNodeIdx].PopMessage(); result != nil {
+				t.Errorf("expected nothing in sending node %d, got %v", sendingNodeIdx, result)
 			}
-		}
-		if len(nodes[i].Messages) > 0 {
-			t.Errorf("expected no messages buffered in node %d, found: %v", i, nodes[i].Messages)
+			if len(nodes[sendingNodeIdx].Messages) > 0 {
+				t.Errorf("expected no messages buffered in sending node %d, found: %v", sendingNodeIdx, nodes[0].Messages)
+			}
+		} else {
+			// this is a receiving node, it should have just the one message buffered up
+			if result := nodes[i].PopMessage(); result == nil {
+				t.Errorf("expected a message in (sending node %d) receiving node %d but it was blank", sendingNodeIdx, i)
+			} else {
+				if result.Message != testMessage {
+					t.Errorf("expected message %s in (sending node %d) receiving node %d but got %v", testMessage, sendingNodeIdx, i, result)
+				}
+			}
+			if len(nodes[i].Messages) > 0 {
+				t.Errorf("expected no messages buffered in (sending node %d) receiving node %d, found: %v", sendingNodeIdx, i, nodes[i].Messages)
+			}
 		}
 	}
 }
@@ -234,7 +239,9 @@ func TestRing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sendFromNode0(t, nodes)
+	for i := 0; i < len(nodes); i++ {
+		broadcastNode(t, nodes, i)
+	}
 
 	// TODO: should close the connection to release the port
 }
@@ -258,7 +265,9 @@ func TestMesh(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sendFromNode0(t, nodes)
+	for i := 0; i < len(nodes); i++ {
+		broadcastNode(t, nodes, i)
+	}
 }
 
 func TestStar(t *testing.T) {
@@ -277,7 +286,9 @@ func TestStar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sendFromNode0(t, nodes)
+	for i := 0; i < len(nodes); i++ {
+		broadcastNode(t, nodes, i)
+	}
 }
 
 func TestFullyConnected(t *testing.T) {
@@ -296,7 +307,9 @@ func TestFullyConnected(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sendFromNode0(t, nodes)
+	for i := 0; i < len(nodes); i++ {
+		broadcastNode(t, nodes, i)
+	}
 }
 
 func TestLine(t *testing.T) {
@@ -315,7 +328,9 @@ func TestLine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sendFromNode0(t, nodes)
+	for i := 0; i < len(nodes); i++ {
+		broadcastNode(t, nodes, i)
+	}
 }
 
 func TestTree(t *testing.T) {
@@ -334,5 +349,7 @@ func TestTree(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sendFromNode0(t, nodes)
+	for i := 0; i < len(nodes); i++ {
+		broadcastNode(t, nodes, i)
+	}
 }
