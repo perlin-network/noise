@@ -57,8 +57,8 @@ func (e *BasicNode) PopMessage() *messages.BasicMessage {
 // makes sure the implementation matches the interface at compile time
 var _ ClusterNode = (*BasicNode)(nil)
 
-// ExampleSetupClusters is an example of how to use SetupClusters() to automate tests
-func ExampleSetupClusters() {
+// ExampleBasic is an example of how to use send messages across nodes
+func ExampleBasic() {
 	// parse to flags to silence the glog library
 	flag.Parse()
 
@@ -67,6 +67,7 @@ func ExampleSetupClusters() {
 	numNodes := 3
 	var nodes []*BasicNode
 	var cn []ClusterNode
+	var peers []string
 
 	for i := 0; i < numNodes; i++ {
 		node := &BasicNode{}
@@ -77,9 +78,11 @@ func ExampleSetupClusters() {
 		cn = append(cn, node)
 
 		// peer discovery, don't need any peers for the first node
-		if i > 0 {
-			node.ps = append(node.ps, fmt.Sprintf("%s:%d", nodes[0].h, nodes[0].p))
-		}
+		peers = append(peers, fmt.Sprintf("%s:%d", nodes[0].h, nodes[0].p))
+	}
+
+	for _, node := range nodes {
+		node.ps = peers
 	}
 
 	if err := SetupCluster(cn); err != nil {
@@ -94,14 +97,12 @@ func ExampleSetupClusters() {
 			return
 		}
 
-		if len(node.Peers()) == 0 {
-			continue
+		if len(node.Peers()) > 0 {
+			node.Net().Bootstrap(node.Peers()...)
+
+			// TODO: seems there's another race condition with Bootstrap, use a sleep for now
+			time.Sleep(1 * time.Second)
 		}
-
-		node.Net().Bootstrap(node.Peers()...)
-
-		// TODO: seems there's another race condition with Bootstrap, use a sleep for now
-		time.Sleep(1 * time.Second)
 	}
 
 	// Broadcast is an asynchronous call to send a message to other nodes
@@ -119,9 +120,11 @@ func ExampleSetupClusters() {
 	for i := 1; i < len(nodes); i++ {
 		if result := nodes[i].PopMessage(); result == nil {
 			fmt.Printf("expected a message in node %d but it was blank\n", i)
+			return
 		} else {
 			if result.Message != testMessage {
 				fmt.Printf("expected message %s in node %d but got %v\n", testMessage, i, result)
+				return
 			}
 		}
 	}

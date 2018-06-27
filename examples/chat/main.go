@@ -59,6 +59,8 @@ func main() {
 
 	go net.Listen()
 
+	<-net.Listening
+
 	if len(peers) > 0 {
 		net.Bootstrap(peers...)
 	}
@@ -66,6 +68,11 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		input, _ := reader.ReadString('\n')
+
+		// skip blank lines
+		if len(strings.TrimSpace(input)) == 0 {
+			continue
+		}
 
 		glog.Infof("<%s> %s", net.Address(), input)
 

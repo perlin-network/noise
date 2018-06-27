@@ -1,6 +1,8 @@
 package network
 
 import (
+	"time"
+
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
@@ -10,7 +12,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
-	"time"
 )
 
 // PeerClient represents a single incoming peers client.

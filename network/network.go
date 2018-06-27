@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -88,7 +89,7 @@ func (n *Network) handleMux(conn net.Conn) {
 	for {
 		stream, err := session.AcceptStream()
 		if err != nil {
-			if err.Error() == "broken pipe"  {
+			if err.Error() == "broken pipe" {
 				client.Close()
 			}
 			break
@@ -155,10 +156,26 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 
 // Asynchronously broadcast a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
-	n.Peers.Range(func(key string, client *PeerClient) bool {
-		err := client.Tell(message)
+	var peerList []string
+	var routeList []string
 
-		if err != nil {
+	// get a list of peers in the routing table
+	for _, peer := range n.Routes.GetPeers() {
+		routeList = append(routeList, peer.Address)
+	}
+
+	// get a list of peers in the peer list
+	n.Peers.Range(func(key string, client *PeerClient) bool {
+		peerList = append(peerList, key)
+		return true
+	})
+
+	// add missing peers before dialing
+	n.dialMissingPeers(peerList, routeList)
+
+	// tell all the peers
+	n.Peers.Range(func(key string, client *PeerClient) bool {
+		if err := client.Tell(message); err != nil {
 			glog.Warningf("Failed to send message to peer %v [err=%s]", client.Id, err)
 		}
 
@@ -226,4 +243,23 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	}
 
 	n.BroadcastByAddresses(message, addresses[:K]...)
+}
+
+func (n *Network) dialMissingPeers(peerList []string, routeList []string) {
+	// TODO: can cache the listHashes and skip the check
+
+	// make sure every route has a peer
+	sort.Strings(peerList)
+	sort.Strings(routeList)
+
+	for r, p := 0, 0; r < len(routeList); r++ {
+		if p >= len(peerList) || routeList[r] != peerList[p] {
+			// this is a missing peer, add it to the peers
+			if _, err := n.Dial(routeList[r]); err != nil {
+				glog.Infof("Could not dial address: %s", routeList[r])
+			}
+		} else {
+			p++
+		}
+	}
 }

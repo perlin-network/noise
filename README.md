@@ -22,7 +22,7 @@ go get -u golang.org/x/vgo
 vgo mod -vendor
 [terminal 1] vgo run main.go -port 3000
 [terminal 2] vgo run main.go -port 3001 peers localhost:3000
-[terminal 3] vgo run main.go -port 3002 peers localhost:3001
+[terminal 3] vgo run main.go -port 3002 peers localhost:3000
 
 # build and run the main.go noise binary
 vgo build
