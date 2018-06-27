@@ -59,8 +59,6 @@ func main() {
 
 	go net.Listen()
 
-	<-net.Listening
-
 	if len(peers) > 0 {
 		net.Bootstrap(peers...)
 	}

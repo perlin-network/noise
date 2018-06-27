@@ -3,132 +3,89 @@ package basic
 import (
 	"flag"
 	"fmt"
-	"time"
-
+	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
+	"github.com/perlin-network/noise/network/builders"
+	"github.com/perlin-network/noise/network/discovery"
+	"time"
 )
 
-type BasicNode struct {
-	h        string
-	p        int
-	ps       []string
-	net      *network.Network
-	Messages []*messages.BasicMessage
+// BasicMessageProcessor buffers all messages into a mailbox for this test.
+type BasicMessageProcessor struct {
+	Mailbox chan *messages.BasicMessage
 }
 
-func (e *BasicNode) Host() string {
-	return e.h
-}
-
-func (e *BasicNode) Port() uint16 {
-	return uint16(e.p)
-}
-
-func (e *BasicNode) Peers() []string {
-	return e.ps
-}
-
-func (e *BasicNode) Net() *network.Network {
-	return e.net
-}
-
-func (e *BasicNode) SetNet(n *network.Network) {
-	e.net = n
-}
-
-// Handle implements the network interface callback
-func (e *BasicNode) Handle(ctx *network.MessageContext) error {
+func (state *BasicMessageProcessor) Handle(ctx *network.MessageContext) error {
 	message := ctx.Message().(*messages.BasicMessage)
-	e.Messages = append(e.Messages, message)
+	state.Mailbox <- message
+
 	return nil
 }
 
-// makes sure the implementation matches the interface at compile time
-var _ ClusterNode = (*BasicNode)(nil)
-
-// PopMessage returns the oldest message from it's buffer and removes it from the list
-func (e *BasicNode) PopMessage() *messages.BasicMessage {
-	if len(e.Messages) == 0 {
-		return nil
-	}
-	var retVal *messages.BasicMessage
-	retVal, e.Messages = e.Messages[0], e.Messages[1:]
-	return retVal
-}
-
-// ExampleBasic is an example of how to use send messages across nodes
+// ExampleBasic demonstrates how to broadcast a message to a set of peers that discover
+// each other through peer discovery.
 func ExampleBasic() {
-	// parse to flags to silence the glog library
 	flag.Parse()
+
+	numNodes := 3
 
 	host := "localhost"
 	startPort := 5000
-	numNodes := 3
-	var nodes []*BasicNode
-	var cn []ClusterNode
-	var peers []string
+
+	var nodes []*network.Network
+	var processors []*BasicMessageProcessor
 
 	for i := 0; i < numNodes; i++ {
-		node := &BasicNode{}
-		node.h = host
-		node.p = startPort + i
+		builder := &builders.NetworkBuilder{}
+		builder.SetKeys(crypto.RandomKeyPair())
+		builder.SetHost(host)
+		builder.SetPort(uint16(startPort + i))
+
+		discovery.BootstrapPeerDiscovery(builder)
+
+		processors = append(processors, &BasicMessageProcessor{Mailbox: make(chan *messages.BasicMessage, 1)})
+		builder.AddProcessor((*messages.BasicMessage)(nil), processors[i])
+
+		node, err := builder.BuildNetwork()
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		go node.Listen()
+
+		// Bootstrap to Node 0.
+		if i != 0 {
+			node.Bootstrap(nodes[0].Address())
+		}
 
 		nodes = append(nodes, node)
-		cn = append(cn, node)
-
-		// peer discovery, don't need any peers for the first node
-		peers = append(peers, fmt.Sprintf("%s:%d", nodes[0].h, nodes[0].p))
 	}
 
-	for _, node := range nodes {
-		node.ps = peers
-	}
-
-	if err := SetupCluster(cn); err != nil {
-		fmt.Print(err)
-		return
-	}
-
-	// After all the nodes are started, get them to start talking with each other
-	for i, node := range nodes {
-		if node.Net() == nil {
-			fmt.Printf("expected %d nodes, but node %d is missing a network", len(nodes), i)
-			return
-		}
-
-		if len(node.Peers()) > 0 {
-			node.Net().Bootstrap(node.Peers()...)
-
-			// TODO: seems there's another race condition with Bootstrap, use a sleep for now
-			time.Sleep(1 * time.Second)
-		}
-	}
-
-	// Broadcast is an asynchronous call to send a message to other nodes
-	testMessage := "message from node 0"
-	nodes[0].Net().Broadcast(&messages.BasicMessage{Message: testMessage})
-
-	// Simplificiation: message broadcasting is asynchronous, so need the messages to settle
 	time.Sleep(1 * time.Second)
 
-	// check if you can send a message from node 1 and will it be received only in node 2,3
-	if result := nodes[0].PopMessage(); result != nil {
-		fmt.Printf("expected nothing in node 0, got %v", result)
-		return
-	}
+	// Broadcast out a message from Node 0.
+	expected := "This is a broadcasted message from Node 0."
+	nodes[0].Broadcast(&messages.BasicMessage{Message: expected})
+
+	fmt.Println("Node 0 sent out a message.")
+
+	// Check if message was received by other nodes.
 	for i := 1; i < len(nodes); i++ {
-		if result := nodes[i].PopMessage(); result == nil {
-			fmt.Printf("expected a message in node %d but it was blank\n", i)
-			return
-		} else {
-			if result.Message != testMessage {
-				fmt.Printf("expected message %s in node %d but got %v\n", testMessage, i, result)
-				return
+		select {
+		case received := <-processors[i].Mailbox:
+			if received.Message != expected {
+				fmt.Printf("Expected message %s to be received by node %d but got %v\n", expected, i, received.Message)
+			} else {
+				fmt.Printf("Node %d received a message from Node 0.\n", i)
 			}
+		case <-time.After(3 * time.Second):
+			fmt.Printf("Timed out attempting to receive message from Node 0.\n")
 		}
 	}
 
-	fmt.Printf("success")
-	// Output: success
+	// Output:
+	// Node 0 sent out a message.
+	// Node 1 received a message from Node 0.
+	// Node 2 received a message from Node 0.
 }

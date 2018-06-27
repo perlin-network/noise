@@ -101,6 +101,8 @@ func (n *Network) handleMux(conn net.Conn) {
 
 // Bootstrap with a number of peers and commence a handshake.
 func (n *Network) Bootstrap(addresses ...string) {
+	<-n.Listening
+
 	addresses = FilterPeers(n.Host, n.Port, addresses)
 
 	for _, address := range addresses {
@@ -153,6 +155,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 // Asynchronously broadcast a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
 	n.Peers.Range(func(key string, client *PeerClient) bool {
+		glog.Info(key)
 		err := client.Tell(message)
 
 		if err != nil {
