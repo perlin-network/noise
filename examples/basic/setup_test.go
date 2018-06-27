@@ -67,7 +67,6 @@ func ExampleSetupClusters() {
 	numNodes := 3
 	var nodes []*BasicNode
 	var cn []ClusterNode
-	var peers []string
 
 	for i := 0; i < numNodes; i++ {
 		node := &BasicNode{}
@@ -76,11 +75,11 @@ func ExampleSetupClusters() {
 
 		nodes = append(nodes, node)
 		cn = append(cn, node)
-		peers = append(peers, fmt.Sprintf("%s:%d", node.h, node.p))
-	}
 
-	for _, node := range nodes {
-		node.ps = peers
+		// peer discovery, don't need any peers for the first node
+		if i > 0 {
+			node.ps = append(node.ps, fmt.Sprintf("%s:%d", nodes[0].h, nodes[0].p))
+		}
 	}
 
 	if err := SetupCluster(cn); err != nil {
@@ -90,9 +89,13 @@ func ExampleSetupClusters() {
 
 	// After all the nodes are started, get them to start talking with each other
 	for i, node := range nodes {
-		if node.net == nil {
+		if node.Net() == nil {
 			fmt.Printf("expected %d nodes, but node %d is missing a network", len(nodes), i)
 			return
+		}
+
+		if len(node.Peers()) == 0 {
+			continue
 		}
 
 		node.Net().Bootstrap(node.Peers()...)
@@ -115,12 +118,10 @@ func ExampleSetupClusters() {
 	}
 	for i := 1; i < len(nodes); i++ {
 		if result := nodes[i].PopMessage(); result == nil {
-			fmt.Printf("expected a message in node %d but it was blank", i)
-			return
+			fmt.Printf("expected a message in node %d but it was blank\n", i)
 		} else {
 			if result.Message != testMessage {
-				fmt.Printf("expected message %s in node %d but got %v", testMessage, i, result)
-				return
+				fmt.Printf("expected message %s in node %d but got %v\n", testMessage, i, result)
 			}
 		}
 	}
