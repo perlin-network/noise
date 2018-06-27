@@ -65,7 +65,7 @@ func (n *Network) Listen() {
 
 	// Handle new clients.
 	for {
-		if conn, err := listener.AcceptKCP(); err == nil {
+		if conn, err := listener.Accept(); err == nil {
 			go n.handleMux(conn)
 		} else {
 			glog.Error(err)
