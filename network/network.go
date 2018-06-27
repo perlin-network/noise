@@ -6,7 +6,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
@@ -14,7 +13,9 @@ import (
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
-	"google.golang.org/grpc"
+	"github.com/pkg/errors"
+	"github.com/xtaci/kcp-go"
+	"github.com/xtaci/smux"
 )
 
 type Network struct {
@@ -27,9 +28,9 @@ type Network struct {
 	// Node's Network information.
 	// The Address is `Host:Port`.
 	Host string
-	Port int
+	Port uint16
 
-	// Map of incoming message processors for the Network.
+	// Map of incomingStream message processors for the Network.
 	// map[string]MessageProcessor
 	Processors *StringMessageProcessorSyncMap
 
@@ -37,43 +38,64 @@ type Network struct {
 	ID peer.ID
 
 	listener net.Listener
-	server   *Server
 
-	// Map of connection addresses (string) <-> *network.PeerClient
-	// so that the network doesn't dial multiple times to the same ip
+	// Map of connection addresses (string) <-> *Network.PeerClient
+	// so that the Network doesn't dial multiple times to the same ip
 	Peers *StringPeerClientSyncMap
+
+	Listening chan struct{}
 }
 
-var (
-	dialTimeout = 3 * time.Second
-)
-
+// Address returns a formated host:port string
 func (n *Network) Address() string {
-	return n.Host + ":" + strconv.Itoa(n.Port)
+	return n.Host + ":" + strconv.Itoa(int(n.Port))
 }
 
-// Listen for peers on a port specified on instantation of Network{}.
+// Listen starts listening for peers on a port.
 func (n *Network) Listen() {
-	listener, err := net.Listen("tcp", ":"+strconv.Itoa(n.Port))
+	listener, err := kcp.ListenWithOptions(":"+strconv.Itoa(int(n.Port)), nil, 10, 3)
 	if err != nil {
 		glog.Fatal(err)
 		return
 	}
 
-	client := grpc.NewServer()
-	server := createServer(n)
-
-	protobuf.RegisterNoiseServer(client, server)
-
-	n.listener = listener
-	n.server = server
+	n.Listening <- struct{}{}
 
 	glog.Infof("Listening for peers on port %d.", n.Port)
 
-	err = client.Serve(listener)
+	// Handle new clients.
+	for {
+		if conn, err := listener.Accept(); err == nil {
+			go n.handleMux(conn)
+		} else {
+			glog.Error(err)
+		}
+	}
+}
+
+func (n *Network) handleMux(conn net.Conn) {
+	session, err := smux.Server(conn, muxConfig())
 	if err != nil {
-		glog.Fatal(err)
+		glog.Error(err)
 		return
+	}
+
+	defer session.Close()
+
+	client := createPeerClient(n)
+
+	// Handle new streams and process their incoming messages.
+	for {
+		stream, err := session.AcceptStream()
+		if err != nil {
+			if err.Error() == "broken pipe"  {
+				client.Close()
+			}
+			break
+		}
+
+		// One goroutine per request stream.
+		go client.handleMessage(stream)
 	}
 }
 
@@ -84,33 +106,19 @@ func (n *Network) Bootstrap(addresses ...string) {
 	for _, address := range addresses {
 		client, err := n.Dial(address)
 		if err != nil {
+			glog.Warning(err)
 			continue
 		}
 
 		// Send a handshake request.
 		err = client.Tell(&protobuf.HandshakeRequest{})
 		if err != nil {
+			glog.Error(err)
 			continue
 		}
 	}
 }
 
-// Loads the peer from n.Peers and opens it
-func (n *Network) GetPeer(address string) (*PeerClient, bool) {
-	client, ok := n.Peers.Load(address)
-	if !ok || client == nil {
-		return nil, false
-	}
-
-	err := client.open()
-	if err != nil {
-		return nil, false
-	}
-
-	return client, true
-}
-
-// Dials a peer via. gRPC.
 func (n *Network) Dial(address string) (*PeerClient, error) {
 	address = strings.TrimSpace(address)
 	if len(address) == 0 {
@@ -122,20 +130,20 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 		return nil, err
 	}
 
+	if address == n.Address() {
+		return nil, errors.New("peer should not dial itself")
+	}
+
 	// load a cached connection
-	if client, ok := n.GetPeer(address); ok && client != nil {
+	if client, exists := n.Peers.Load(address); exists && client != nil {
 		return client, nil
 	}
 
-	client := createPeerClient(n.server)
-	if client == nil {
-		return nil, fmt.Errorf("unable to create peer client for address %s", address)
-	}
+	client := createPeerClient(n)
 
 	err = client.establishConnection(address)
 	if err != nil {
-		glog.Infof(fmt.Sprintf("Failed to connect to peer %s err=[%+v]\n", address, err))
-		client.close()
+		glog.Warningf("Failed to connect to peer %s err=[%+v]\n", address, err)
 		return nil, err
 	}
 
@@ -151,7 +159,7 @@ func (n *Network) Broadcast(message proto.Message) {
 		err := client.Tell(message)
 
 		if err != nil {
-			glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+			glog.Warningf("Failed to send message to peer %v [err=%s]", client.Id, err)
 		}
 
 		return true
@@ -161,14 +169,14 @@ func (n *Network) Broadcast(message proto.Message) {
 // Asynchronously broadcast a message to a set of peer clients denoted by their addresses.
 func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
 	for _, address := range addresses {
-		if client, ok := n.GetPeer(address); ok {
+		if client, ok := n.Peers.Load(address); ok {
 			err := client.Tell(message)
 
 			if err != nil {
 				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
 			}
 
-			client.close()
+			client.Close()
 		} else {
 			glog.Warningf("Failed to send message to peer %s; peer does not exist.", address)
 		}
@@ -178,14 +186,14 @@ func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...strin
 // Asynchronously broadcast a message to a set of peer clients denoted by their peer IDs.
 func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
 	for _, id := range ids {
-		if client, ok := n.GetPeer(id.Address); ok {
+		if client, ok := n.Peers.Load(id.Address); ok {
 			err := client.Tell(message)
 
 			if err != nil {
 				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
 			}
 
-			client.close()
+			client.Close()
 		} else {
 			glog.Warningf("Failed to send message to peer %s; peer does not exist.", id)
 		}

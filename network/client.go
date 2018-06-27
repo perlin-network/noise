@@ -1,127 +1,80 @@
 package network
 
 import (
-	"context"
-	"reflect"
-
-	"errors"
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
-	"google.golang.org/grpc"
-	"sync"
-	"sync/atomic"
+	"github.com/pkg/errors"
+	"github.com/xtaci/kcp-go"
+	"github.com/xtaci/smux"
 	"time"
 )
 
-type IncomingMessage struct {
-	Message proto.Message
-	Nonce   uint64
-}
-
-type MessageChan chan proto.Message
-
-// Represents a single incoming peer client.
+// PeerClient represents a single incoming peers client.
 type PeerClient struct {
-	server *Server
+	Network *Network
 
-	Id     *peer.ID
-	Conn   *grpc.ClientConn
-	Stream protobuf.Noise_StreamClient
+	Id *peer.ID
 
-	// To do with handling request/responses.
-	requestNonce uint64
-	// map[uint64]MessageChan
-	requests *Uint64MessageChanSyncMap
-
-	mailbox chan IncomingMessage
-
-	refCount uint64
-	refMutex *sync.Mutex
+	Session *smux.Session
 }
 
-// Establishes an outgoing connection a given peer should one not exist already.
+// createPeerClient creates a stub peer client.
+func createPeerClient(network *Network) *PeerClient {
+	return &PeerClient{Network: network}
+}
+
+// establishConnection establishes a session by dialing a peers address. Errors if
+// peer is not dial-able, or if the peer client already is connected.
 func (c *PeerClient) establishConnection(address string) error {
-	if c.Conn == nil && c.Stream == nil {
-		// Block in case the server on the other side isn't erady to respond.
-		ctx, cancel := context.WithTimeout(context.Background(), dialTimeout)
-		defer cancel()
+	if c.Session != nil {
+		return errors.New("connection already established")
+	}
 
-		opts := []grpc.DialOption{
-			grpc.WithInsecure(),
-			grpc.WithBlock(),
-		}
-		conn, err := grpc.DialContext(ctx, address, opts...)
+	dialer, err := kcp.DialWithOptions(address, nil, 10, 3)
 
-		// If the connection failed...
-		if err != nil {
-			return err
-		}
+	// Failed to connect. Continue.
+	if err != nil {
+		glog.Error(err)
+		return err
+	}
 
-		// Setup a RPC client and initialize an one-way stream to the client.
-		client, err := protobuf.NewNoiseClient(conn).Stream(context.Background())
+	c.Session, err = smux.Client(dialer, muxConfig())
 
-		if err != nil {
-			return err
-		}
-
-		// Keep reference of both gRPC connection and stream.
-		c.Conn = conn
-		c.Stream = client
-
-		return nil
+	// Failed to open session. Continue.
+	if err != nil {
+		glog.Error(err)
+		return err
 	}
 
 	return nil
 }
 
-// Creates a client representing a single peer, and has peers start
-// processing for incoming messages through channels.
-func createPeerClient(server *Server) *PeerClient {
-	client := &PeerClient{
-		server:  server,
-		mailbox: make(chan IncomingMessage),
+// Close stops all sessions/streams and cleans up the nodes
+// routing table. Errors if session fails to close.
+func (c *PeerClient) Close() {
+	// Disconnect the user.
+	if c.Id != nil {
+		if c.Network.Routes.PeerExists(*c.Id) {
+			c.Network.Routes.RemovePeer(*c.Id)
+			c.Network.Peers.Delete(c.Id.Address)
 
-		requestNonce: 0,
-		requests:     &Uint64MessageChanSyncMap {},
-
-		refCount: 1,
-		refMutex: &sync.Mutex{},
+			glog.Infof("Peer %s has disconnected.", c.Id.Address)
+		}
 	}
 
-	// Have peers start processing for incoming messages.
-	go client.processIncomingMessages()
-
-	return client
-}
-
-// Refer to current network.
-func (c *PeerClient) Network() *Network {
-	return c.server.network
-}
-
-// Event loop for processing through incoming request/responses.
-func (c *PeerClient) processIncomingMessages() {
-	for item := range c.mailbox {
-		name := reflect.TypeOf(item.Message).String()
-		processor, exists := c.Network().Processors.Load(name)
-
-		if exists {
-			processor := processor.(MessageProcessor)
-			err := processor.Handle(c, &item)
-			if err != nil {
-				glog.Infof("An error occurred handling %x: %x", name, err)
-			}
-		} else {
-			glog.Info("Unknown message type received:", name)
+	if c.Session != nil && !c.Session.IsClosed() {
+		err := c.Session.Close()
+		if err != nil {
+			glog.Error(err)
 		}
 	}
 }
 
-// Marshals message into proto.Message and signs it with this node's private key.
+// prepareMessage marshals a message into a proto.Message and signs it with this nodes private key.
 // Errors if the message is null.
 func (c *PeerClient) prepareMessage(message proto.Message) (*protobuf.Message, error) {
 	if message == nil {
@@ -133,9 +86,9 @@ func (c *PeerClient) prepareMessage(message proto.Message) (*protobuf.Message, e
 		return nil, err
 	}
 
-	id := protobuf.ID(c.Network().ID)
+	id := protobuf.ID(c.Network.ID)
 
-	signature, err := c.Network().Keys.Sign(raw.Value)
+	signature, err := c.Network.Keys.Sign(raw.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -149,111 +102,69 @@ func (c *PeerClient) prepareMessage(message proto.Message) (*protobuf.Message, e
 	return msg, nil
 }
 
-// Asynchronously emit a message to a given peer.
+// Tell asynchronously emit a message to a given peer.
 func (c *PeerClient) Tell(message proto.Message) error {
-	msg, err := c.prepareMessage(message)
+	if c.Session == nil {
+		return errors.New("client session nil")
+	}
+
+	// Open a new stream.
+	stream, err := c.Session.OpenStream()
 	if err != nil {
 		return err
 	}
-	err = c.Stream.Send(msg)
+	defer stream.Close()
+
+	// Send message bytes.
+	err = c.sendMessage(stream, message)
 	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Used within message processors to reply to a given request message.
-func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
-	msg, err := c.prepareMessage(message)
-
-	msg.Nonce = nonce
-	msg.IsResponse = true
-
-	if err != nil {
-		return err
-	}
-
-	err = c.Stream.Send(msg)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Provide a response to a request. Internal use only.
-func (c *PeerClient) handleResponse(nonce uint64, response proto.Message) {
-	// Check if the request is currently looking to be received.
-	if channel, exists := c.requests.Load(nonce); exists {
-		channel <- response
-	}
-}
-
-// Initiate a request/response-style RPC call to the given peer.
-func (c *PeerClient) Request(request *rpc.Request) (proto.Message, error) {
-	msg, err := c.prepareMessage(request.Message)
-	if err != nil {
-		return nil, err
-	}
-
-	// Set the request nonce.
-	msg.Nonce = atomic.AddUint64(&c.requestNonce, 1)
-
-	// Send the client the request.
-	err = c.Stream.Send(msg)
-	if err != nil {
-		return nil, err
-	}
-
-	// Start tracking the request.
-	channel := make(chan proto.Message, 1)
-	c.requests.Store(msg.Nonce, channel)
-
-	// Stop tracking the request.
-	defer close(channel)
-	defer c.requests.Delete(msg.Nonce)
-
-	select {
-	case response := <-channel:
-		return response, nil
-	case <-time.After(request.Timeout): // TODO: Make delay customizable.
-		return nil, errors.New("request timed out")
-	}
-}
-
-// Fails if c.refCount == 0; otherwise increases c.refCount by one
-func (c *PeerClient) open() error {
-	c.refMutex.Lock()
-	defer c.refMutex.Unlock()
-
-	if c.refCount == 0 {
-		return errors.New("attempting to open a closed PeerClient")
-	}
-
-	c.refCount++
-	return nil
-}
-
-// Clean up mailbox for peer client.
-func (c *PeerClient) close() {
-	c.refMutex.Lock()
-
-	old := c.refCount
-	if old > 0 {
-		c.refCount--
-	}
-
-	c.refMutex.Unlock()
-
-	if old == 1 {
-		if c.Conn != nil {
-			c.Network().Peers.Delete(c.Id.Address)
-			c.Conn.Close()
+		if err.Error() == "broken pipe" {
+			c.Close()
 		}
-
-		close(c.mailbox)
-	} else if old <= 0 {
-		glog.Fatal("BUG: old <= 0")
+		return err
 	}
+
+	return nil
+}
+
+// Request requests for a response for a request sent to a given peer.
+func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
+	if c.Session == nil {
+		return nil, errors.New("client session nil")
+	}
+
+	// Open a new stream.
+	stream, err := c.Session.OpenStream()
+	if err != nil {
+		return nil, err
+	}
+	defer stream.Close()
+
+	stream.SetDeadline(time.Now().Add(req.Timeout))
+
+	// Send request bytes.
+	err = c.sendMessage(stream, req.Message)
+	if err != nil {
+		if err.Error() == "broken pipe" {
+			c.Close()
+		}
+		return nil, err
+	}
+
+	// Await for response bytes.
+	res, err := c.receiveMessage(stream)
+	if err != nil {
+		if err.Error() == "broken pipe" {
+			c.Close()
+		}
+		return nil, err
+	}
+
+	// Unmarshal response protobuf.
+	var ptr ptypes.DynamicAny
+	if err := ptypes.UnmarshalAny(res.Message, &ptr); err != nil {
+		return nil, err
+	}
+
+	return ptr.Message, nil
 }

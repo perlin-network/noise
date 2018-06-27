@@ -16,21 +16,24 @@ import (
 type NetworkBuilder struct {
 	keys *crypto.KeyPair
 	host string
-	port int
+	port uint16
 
 	// map[string]MessageProcessor
 	processors *network.StringMessageProcessorSyncMap
 }
 
+// SetKeys pair created from crypto.KeyPair
 func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
 	builder.keys = pair
 }
 
+// SetHost of NetworkBuilder
 func (builder *NetworkBuilder) SetHost(host string) {
 	builder.host = host
 }
 
-func (builder *NetworkBuilder) SetPort(port int) {
+// SetPort of NetworkBuilder
+func (builder *NetworkBuilder) SetPort(port uint16) {
 	builder.port = port
 }
 
@@ -39,7 +42,7 @@ func (builder *NetworkBuilder) SetPort(port int) {
 func (builder *NetworkBuilder) AddProcessor(message proto.Message, processor network.MessageProcessor) {
 	// Initialize map if not exist.
 	if builder.processors == nil {
-		builder.processors = &network.StringMessageProcessorSyncMap {}
+		builder.processors = &network.StringMessageProcessorSyncMap{}
 	}
 
 	name := reflect.TypeOf(message).String()
@@ -52,6 +55,8 @@ func (builder *NetworkBuilder) AddProcessor(message proto.Message, processor net
 	}
 }
 
+// BuildNetwork verifies all parameters of the network and returns either an error due to
+// misconfiguration, or a noise.network.Network.
 func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 	if builder.keys == nil {
 		return nil, errors.New("cryptography keypair not provided to Network; cannot create node Id")
@@ -67,7 +72,7 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 
 	// Initialize map if not exist.
 	if builder.processors == nil {
-		builder.processors = &network.StringMessageProcessorSyncMap {}
+		builder.processors = &network.StringMessageProcessorSyncMap{}
 	}
 
 	unifiedHost, err := network.ToUnifiedHost(builder.host)
@@ -75,7 +80,7 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 		return nil, err
 	}
 
-	id := peer.CreateID(unifiedHost+":"+strconv.Itoa(builder.port), builder.keys.PublicKey)
+	id := peer.CreateID(unifiedHost+":"+strconv.Itoa(int(builder.port)), builder.keys.PublicKey)
 
 	network := &network.Network{
 		Keys: builder.keys,
@@ -87,7 +92,9 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 
 		Routes: dht.CreateRoutingTable(id),
 
-		Peers: &network.StringPeerClientSyncMap {},
+		Peers: &network.StringPeerClientSyncMap{},
+
+		Listening: make(chan struct{}),
 	}
 
 	return network, nil

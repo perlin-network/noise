@@ -43,7 +43,7 @@ func ToUnifiedAddress(address string) (string, error) {
 }
 
 // Filter out duplicate addresses.
-func FilterPeers(host string, port int, peers []string) (filtered []string) {
+func FilterPeers(host string, port uint16, peers []string) (filtered []string) {
 	address := fmt.Sprintf("%s:%d", host, port)
 
 	visited := make(map[string]struct{})
