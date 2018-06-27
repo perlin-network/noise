@@ -167,12 +167,27 @@ func setupTreeNodes() []*TopoNode {
 	return nodes
 }
 
-func topoNode2ClusterNode(ring []*TopoNode) []basic.ClusterNode {
+func topoNode2ClusterNode(nodes []*TopoNode) []basic.ClusterNode {
 	var cluster []basic.ClusterNode
-	for _, node := range ring {
+	for _, node := range nodes {
 		cluster = append(cluster, node)
 	}
 	return cluster
+}
+
+func bootstrapNodes(nodes []*TopoNode) error {
+	for i, node := range nodes {
+		if node.Net() == nil {
+			return fmt.Errorf("expected %d nodes, but node %d is missing a network", len(nodes), i)
+		}
+
+		// get nodes to start talking with each other
+		node.Net().Bootstrap(node.Peers()...)
+
+		// TODO: seems there's another race condition with Bootstrap, use a sleep for now
+		time.Sleep(1 * time.Second)
+	}
+	return nil
 }
 
 func TestRing(t *testing.T) {
@@ -185,16 +200,8 @@ func TestRing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for i, node := range nodes {
-		if node.Net() == nil {
-			t.Fatalf("expected %d nodes, but node %d is missing a network", len(nodes), i)
-		}
-
-		// get nodes to start talking with each other
-		node.Net().Bootstrap(node.Peers()...)
-
-		// TODO: seems there's another race condition with Bootstrap, use a sleep for now
-		time.Sleep(1 * time.Second)
+	if err := bootstrapNodes(nodes); err != nil {
+		t.Fatal(err)
 	}
 
 	// Broadcast is an asynchronous call to send a message to other nodes
