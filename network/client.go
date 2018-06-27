@@ -20,7 +20,7 @@ type PeerClient struct {
 
 	Id *peer.ID
 
-	outgoing *smux.Session
+	Session *smux.Session
 }
 
 func createPeerClient(network *Network) *PeerClient {
@@ -28,7 +28,7 @@ func createPeerClient(network *Network) *PeerClient {
 }
 
 func (c *PeerClient) establishConnection(address string) error {
-	if c.outgoing != nil {
+	if c.Session != nil {
 		return errors.New("connection already established")
 	}
 
@@ -42,7 +42,7 @@ func (c *PeerClient) establishConnection(address string) error {
 
 	config := smux.DefaultConfig()
 
-	c.outgoing, err = smux.Client(dialer, config)
+	c.Session, err = smux.Client(dialer, config)
 
 	// Failed to open session. Continue.
 	if err != nil {
@@ -160,12 +160,12 @@ func (c *PeerClient) prepareMessage(message proto.Message) (*protobuf.Message, e
 
 // Asynchronously emit a message to a given peer.
 func (c *PeerClient) Tell(message proto.Message) error {
-	if c.outgoing == nil {
+	if c.Session == nil {
 		return errors.New("client session nil")
 	}
 
 	// Open a new stream.
-	stream, err := c.outgoing.OpenStream()
+	stream, err := c.Session.OpenStream()
 	if err != nil {
 		return err
 	}
@@ -183,12 +183,12 @@ func (c *PeerClient) Tell(message proto.Message) error {
 
 // Request requests for a response for a request sent to a given peer.
 func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
-	if c.outgoing == nil {
+	if c.Session == nil {
 		return nil, errors.New("client session nil")
 	}
 
 	// Open a new stream.
-	stream, err := c.outgoing.OpenStream()
+	stream, err := c.Session.OpenStream()
 	if err != nil {
 		return nil, err
 	}
