@@ -154,7 +154,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 	return client, nil
 }
 
-// Broadcast asynchronously sends a message to all peer clients.
+// Asynchronously broadcast a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
 	var peerList []string
 	var routeList []string
