@@ -44,6 +44,8 @@ func SetupCluster(nodes []ClusterNode) error {
 		node.SetNet(net)
 
 		go net.Listen()
+
+		<-net.Listening
 	}
 
 	return nil
