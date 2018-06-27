@@ -249,9 +249,6 @@ func TestRing(t *testing.T) {
 func TestMesh(t *testing.T) {
 	t.Parallel()
 
-	// TODO: this one times out in network discovery sometimes
-	return
-
 	// parse to flags to silence the glog library
 	flag.Parse()
 
