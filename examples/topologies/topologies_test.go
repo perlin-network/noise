@@ -11,11 +11,10 @@ import (
 )
 
 const (
-	host      = "localhost"
-	startPort = 5000
+	host = "localhost"
 )
 
-func setupRingNodes() []*TopoNode {
+func setupRingNodes(startPort int) []*TopoNode {
 	numNodes := 4
 	var nodes []*TopoNode
 
@@ -34,7 +33,7 @@ func setupRingNodes() []*TopoNode {
 	return nodes
 }
 
-func setupMeshNodes() []*TopoNode {
+func setupMeshNodes(startPort int) []*TopoNode {
 	var nodes []*TopoNode
 
 	edges := []struct {
@@ -64,7 +63,7 @@ func setupMeshNodes() []*TopoNode {
 	return nodes
 }
 
-func setupStarNodes() []*TopoNode {
+func setupStarNodes(startPort int) []*TopoNode {
 	var nodes []*TopoNode
 
 	edges := []struct {
@@ -93,7 +92,7 @@ func setupStarNodes() []*TopoNode {
 	return nodes
 }
 
-func setupFullyConnectedNodes() []*TopoNode {
+func setupFullyConnectedNodes(startPort int) []*TopoNode {
 	var nodes []*TopoNode
 	var peers []string
 	numNodes := 5
@@ -115,7 +114,7 @@ func setupFullyConnectedNodes() []*TopoNode {
 	return nodes
 }
 
-func setupLineNodes() []*TopoNode {
+func setupLineNodes(startPort int) []*TopoNode {
 	var nodes []*TopoNode
 	numNodes := 5
 
@@ -137,7 +136,7 @@ func setupLineNodes() []*TopoNode {
 	return nodes
 }
 
-func setupTreeNodes() []*TopoNode {
+func setupTreeNodes(startPort int) []*TopoNode {
 	var nodes []*TopoNode
 
 	edges := []struct {
@@ -190,20 +189,7 @@ func bootstrapNodes(nodes []*TopoNode) error {
 	return nil
 }
 
-func TestRing(t *testing.T) {
-	// parse to flags to silence the glog library
-	flag.Parse()
-
-	nodes := setupRingNodes()
-
-	if err := basic.SetupCluster(topoNode2ClusterNode(nodes)); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := bootstrapNodes(nodes); err != nil {
-		t.Fatal(err)
-	}
-
+func sendFromNode0(t *testing.T, nodes []*TopoNode) {
 	// Broadcast is an asynchronous call to send a message to other nodes
 	testMessage := "message from node 0"
 	nodes[0].Net().Broadcast(&messages.BasicMessage{Message: testMessage})
@@ -230,4 +216,123 @@ func TestRing(t *testing.T) {
 			t.Errorf("expected no messages buffered in node %d, found: %v", i, nodes[i].Messages)
 		}
 	}
+}
+
+func TestRing(t *testing.T) {
+	t.Parallel()
+
+	// parse to flags to silence the glog library
+	flag.Parse()
+
+	nodes := setupRingNodes(5010)
+
+	if err := basic.SetupCluster(topoNode2ClusterNode(nodes)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := bootstrapNodes(nodes); err != nil {
+		t.Fatal(err)
+	}
+
+	sendFromNode0(t, nodes)
+
+	// TODO: should close the connection to release the port
+}
+
+func TestMesh(t *testing.T) {
+	t.Parallel()
+
+	// TODO: this one times out in network discovery sometimes
+	return
+
+	// parse to flags to silence the glog library
+	flag.Parse()
+
+	nodes := setupMeshNodes(5020)
+
+	if err := basic.SetupCluster(topoNode2ClusterNode(nodes)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := bootstrapNodes(nodes); err != nil {
+		t.Fatal(err)
+	}
+
+	sendFromNode0(t, nodes)
+}
+
+func TestStar(t *testing.T) {
+	t.Parallel()
+
+	// parse to flags to silence the glog library
+	flag.Parse()
+
+	nodes := setupStarNodes(5030)
+
+	if err := basic.SetupCluster(topoNode2ClusterNode(nodes)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := bootstrapNodes(nodes); err != nil {
+		t.Fatal(err)
+	}
+
+	sendFromNode0(t, nodes)
+}
+
+func TestFullyConnected(t *testing.T) {
+	t.Parallel()
+
+	// parse to flags to silence the glog library
+	flag.Parse()
+
+	nodes := setupFullyConnectedNodes(5040)
+
+	if err := basic.SetupCluster(topoNode2ClusterNode(nodes)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := bootstrapNodes(nodes); err != nil {
+		t.Fatal(err)
+	}
+
+	sendFromNode0(t, nodes)
+}
+
+func TestLine(t *testing.T) {
+	t.Parallel()
+
+	// parse to flags to silence the glog library
+	flag.Parse()
+
+	nodes := setupLineNodes(5050)
+
+	if err := basic.SetupCluster(topoNode2ClusterNode(nodes)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := bootstrapNodes(nodes); err != nil {
+		t.Fatal(err)
+	}
+
+	sendFromNode0(t, nodes)
+}
+
+func TestTree(t *testing.T) {
+	t.Parallel()
+
+	// parse to flags to silence the glog library
+	flag.Parse()
+
+	nodes := setupTreeNodes(5060)
+
+	if err := basic.SetupCluster(topoNode2ClusterNode(nodes)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := bootstrapNodes(nodes); err != nil {
+		t.Fatal(err)
+	}
+
+	sendFromNode0(t, nodes)
 }
