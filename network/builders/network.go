@@ -22,17 +22,17 @@ type NetworkBuilder struct {
 	processors *network.StringMessageProcessorSyncMap
 }
 
-//SetKeys pair created from crypto.KeyPair
+// SetKeys pair created from crypto.KeyPair
 func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
 	builder.keys = pair
 }
 
-//SetHost of NetworkBuilder
+// SetHost of NetworkBuilder
 func (builder *NetworkBuilder) SetHost(host string) {
 	builder.host = host
 }
 
-//SetPort of NetworkBuilder
+// SetPort of NetworkBuilder
 func (builder *NetworkBuilder) SetPort(port uint16) {
 	builder.port = port
 }
@@ -55,6 +55,8 @@ func (builder *NetworkBuilder) AddProcessor(message proto.Message, processor net
 	}
 }
 
+// BuildNetwork verifies all parameters of the network and returns either an error due to
+// misconfiguration, or a noise.network.Network.
 func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 	if builder.keys == nil {
 		return nil, errors.New("cryptography keypair not provided to Network; cannot create node Id")
