@@ -88,11 +88,8 @@ func (n *Network) handleMux(conn net.Conn) {
 	for {
 		stream, err := session.AcceptStream()
 		if err != nil {
-			if err.Error() == "broken pipe" && client.Id != nil {
-				n.Routes.RemovePeer(*client.Id)
-
-				n.Peers.Delete(client.Id.Address)
-				glog.Infof("Peer %s has disconnected.", client.Id.Address)
+			if err.Error() == "broken pipe"  {
+				client.close()
 			}
 			break
 		}
