@@ -210,14 +210,14 @@ func broadcastNode(t *testing.T, nodes []*TopoNode, sendingNodeIdx int) {
 		} else {
 			// this is a receiving node, it should have just the one message buffered up
 			if result := nodes[i].PopMessage(); result == nil {
-				t.Errorf("expected a message in (sending node %d) receiving node %d but it was blank", sendingNodeIdx, i)
+				t.Errorf("expected a message for node %d --> %d, but it was blank", sendingNodeIdx, i)
 			} else {
 				if result.Message != testMessage {
-					t.Errorf("expected message %s in (sending node %d) receiving node %d but got %v", testMessage, sendingNodeIdx, i, result)
+					t.Errorf("expected message %s for node %d --> %d, but got %v", testMessage, sendingNodeIdx, i, result)
 				}
 			}
 			if len(nodes[i].Messages) > 0 {
-				t.Errorf("expected no messages buffered in (sending node %d) receiving node %d, found: %v", sendingNodeIdx, i, nodes[i].Messages)
+				t.Errorf("expected no messages for node %d --> %d, but found: %v", sendingNodeIdx, i, nodes[i].Messages)
 			}
 		}
 	}

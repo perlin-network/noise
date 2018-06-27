@@ -19,8 +19,8 @@ func (e *TopoNode) Host() string {
 	return e.h
 }
 
-func (e *TopoNode) Port() int {
-	return e.p
+func (e *TopoNode) Port() uint16 {
+	return uint16(e.p)
 }
 
 func (e *TopoNode) Peers() []string {
@@ -36,11 +36,9 @@ func (e *TopoNode) SetNet(n *network.Network) {
 }
 
 // Handle implements the network interface callback
-func (e *TopoNode) Handle(client *network.PeerClient, raw *network.IncomingMessage) error {
-	message := raw.Message.(*messages.BasicMessage)
-
+func (e *TopoNode) Handle(ctx *network.MessageContext) error {
+	message := ctx.Message().(*messages.BasicMessage)
 	e.Messages = append(e.Messages, message)
-
 	return nil
 }
 
