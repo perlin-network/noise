@@ -1,6 +1,8 @@
 package network
 
 import (
+	"time"
+
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
@@ -11,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
-	"time"
 )
 
 // PeerClient represents a single incoming peers client.
@@ -68,6 +69,9 @@ func (c *PeerClient) Dial(address string) error {
 		return err
 	}
 
+	// Cache the peer's client.
+	c.Network.Peers.Store(address, c)
+
 	return nil
 }
 
@@ -80,7 +84,7 @@ func (c *PeerClient) Redial() error {
 func (c *PeerClient) Close() {
 	// Disconnect the user.
 	if c.Id != nil {
-		if c.Network.Routes.PeerExists(*c.Id) {
+		if c.Network.Routes != nil && c.Network.Routes.PeerExists(*c.Id) {
 			c.Network.Routes.RemovePeer(*c.Id)
 			c.Network.Peers.Delete(c.Id.Address)
 
@@ -96,9 +100,9 @@ func (c *PeerClient) Close() {
 	}
 }
 
-// prepareMessage marshals a message into a proto.Message and signs it with this nodes private key.
-// Errors if the message is null.
-func (c *PeerClient) prepareMessage(message proto.Message) (*protobuf.Message, error) {
+// PrepareMessage marshals a message into a proto.Message and signs it with this
+// nodes private key. Errors if the message is null.
+func (c *PeerClient) PrepareMessage(message proto.Message) (*protobuf.Message, error) {
 	if message == nil {
 		return nil, errors.New("message is null")
 	}
@@ -173,7 +177,7 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 		return nil, err
 	}
 
-	// Await for response bytes.
+	// Await for response message.
 	res, err := c.receiveMessage(stream)
 	if err != nil {
 		if err.Error() == "broken pipe" {

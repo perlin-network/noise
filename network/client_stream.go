@@ -13,7 +13,7 @@ import (
 
 // sendMessage marshals and sends a message over a stream.
 func (c *PeerClient) sendMessage(stream *smux.Stream, message proto.Message) error {
-	req, err := c.prepareMessage(message)
+	req, err := c.PrepareMessage(message)
 	if err != nil {
 		return err
 	}
