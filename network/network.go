@@ -88,8 +88,8 @@ func (n *Network) handleMux(conn net.Conn) {
 	for {
 		stream, err := session.AcceptStream()
 		if err != nil {
-			if err.Error() == "broken pipe"  {
-				client.Close()
+			if err.Error() == "broken pipe" {
+				client.Redial()
 			}
 			break
 		}
@@ -141,7 +141,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 
 	client := createPeerClient(n)
 
-	err = client.establishConnection(address)
+	err = client.Dial(address)
 	if err != nil {
 		glog.Warningf("Failed to connect to peer %s err=[%+v]\n", address, err)
 		return nil, err
@@ -176,7 +176,7 @@ func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...strin
 				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
 			}
 
-			client.Close()
+			client.Redial()
 		} else {
 			glog.Warningf("Failed to send message to peer %s; peer does not exist.", address)
 		}
@@ -193,7 +193,7 @@ func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
 				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
 			}
 
-			client.Close()
+			client.Redial()
 		} else {
 			glog.Warningf("Failed to send message to peer %s; peer does not exist.", id)
 		}

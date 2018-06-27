@@ -43,7 +43,7 @@ func bootstrapPeers(net *network.Network, target peer.ID, count int) (addresses 
 				response, err := client.Request(request)
 
 				if err != nil {
-					client.Close()
+					client.Redial()
 					return
 				}
 

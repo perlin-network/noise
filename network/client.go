@@ -4,7 +4,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
-	"github.com/jpillora/backoff"
+	"github.com/perlin-network/noise/network/backoff"
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
@@ -30,33 +30,10 @@ func createPeerClient(network *Network) *PeerClient {
 	return &PeerClient{Network: network, Backoff: &backoff.Backoff{}}
 }
 
-// establishConnection establishes a session by dialing a peers address. Errors if
-// peer is not dial-able, or if the peer client already is connected.
-func (c *PeerClient) establishConnection(address string) error {
-	if c.Session != nil {
-		return errors.New("connection already established")
-	}
-
-	dialer, err := kcp.DialWithOptions(address, nil, 10, 3)
-
-	// Failed to connect. Continue.
-	if err != nil {
-		glog.Error(err)
-		return err
-	}
-
-	c.Session, err = smux.Client(dialer, muxConfig())
-
-	// Failed to open session. Continue.
-	if err != nil {
-		glog.Error(err)
-		return err
-	}
-
-	return nil
-}
-
-func (c *PeerClient) reestablishConnection() error {
+// Dial attempts to establish or reestablish a session by dialing a peer's address.
+// If peer is not dial-able, will attempt to retry using backoff until max attempts
+// reached (which will then error).
+func (c *PeerClient) Dial(address string) error {
 	if c.Session != nil && !c.Session.IsClosed() {
 		err := c.Session.Close()
 		if err != nil {
@@ -65,29 +42,37 @@ func (c *PeerClient) reestablishConnection() error {
 		}
 	}
 
+	var dialer *kcp.UDPSession
+	var err error
 	c.Backoff.Reset()
-	c.Session = nil
-	maxAttempts := 5
-	attempt := 0
-
-	for {
-		if attempt >= maxAttempts {
-			c.close()
-			return errors.New("unable to reestablish connection")
-		}
-		attempt++
-
-		err := c.establishConnection(c.Id.Address)
+	for !c.Backoff.TimeoutExceeded() {
+		dialer, err = kcp.DialWithOptions(address, nil, 10, 3)
+		// Failed to open session. Retry.
 		if err != nil {
-			d := c.Backoff.Duration()
+			glog.Error(err)
+			d := c.Backoff.NextDuration()
 			time.Sleep(d)
 			continue
 		}
 
 		break
 	}
+	if c.Backoff.TimeoutExceeded() {
+		c.Close()
+		return errors.New("max connection attempts exceeded")
+	}
+
+	c.Session, err = smux.Client(dialer, muxConfig())
+	if err != nil {
+		glog.Error(err)
+		return err
+	}
 
 	return nil
+}
+
+func (c *PeerClient) Redial() error {
+	return c.Dial(c.Id.Address)
 }
 
 // Close stops all sessions/streams and cleans up the nodes
@@ -156,7 +141,7 @@ func (c *PeerClient) Tell(message proto.Message) error {
 	err = c.sendMessage(stream, message)
 	if err != nil {
 		if err.Error() == "broken pipe" {
-			c.Close()
+			c.Redial()
 		}
 		return err
 	}
@@ -183,7 +168,7 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 	err = c.sendMessage(stream, req.Message)
 	if err != nil {
 		if err.Error() == "broken pipe" {
-			c.Close()
+			c.Redial()
 		}
 		return nil, err
 	}
@@ -192,7 +177,7 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 	res, err := c.receiveMessage(stream)
 	if err != nil {
 		if err.Error() == "broken pipe" {
-			c.Close()
+			c.Redial()
 		}
 		return nil, err
 	}

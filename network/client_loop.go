@@ -1,11 +1,11 @@
 package network
 
 import (
-	"github.com/perlin-network/noise/peer"
-	"reflect"
-	"github.com/xtaci/smux"
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/ptypes"
+	"github.com/perlin-network/noise/peer"
+	"github.com/xtaci/smux"
+	"reflect"
 )
 
 // handleMessage ingests and handles a stream dedicated to representing a single RPC call.
@@ -18,7 +18,7 @@ func (c *PeerClient) handleMessage(stream *smux.Stream) {
 	// Failed to receive message.
 	if err != nil {
 		if err.Error() == "broken pipe" {
-			c.Close()
+			c.Redial()
 		}
 		return
 	}
@@ -30,7 +30,7 @@ func (c *PeerClient) handleMessage(stream *smux.Stream) {
 	if c.Id == nil {
 		c.Id = &id
 
-		err := c.establishConnection(id.Address)
+		err := c.Dial(id.Address)
 
 		// Could not connect to peer; disconnect.
 		if err != nil {
