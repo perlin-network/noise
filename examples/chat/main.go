@@ -70,6 +70,11 @@ func main() {
 	for {
 		input, _ := reader.ReadString('\n')
 
+		// skip blank lines
+		if len(strings.TrimSpace(input)) == 0 {
+			continue
+		}
+
 		glog.Infof("<%s> %s", net.Address(), input)
 
 		net.Broadcast(&messages.ChatMessage{Message: input})

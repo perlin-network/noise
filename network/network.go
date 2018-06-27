@@ -89,7 +89,7 @@ func (n *Network) handleMux(conn net.Conn) {
 	for {
 		stream, err := session.AcceptStream()
 		if err != nil {
-			if err.Error() == "broken pipe"  {
+			if err.Error() == "broken pipe" {
 				client.Close()
 			}
 			break
@@ -167,16 +167,20 @@ func (n *Network) Broadcast(message proto.Message) {
 	// get a list of peers in the peer list
 	n.Peers.Range(func(key string, client *PeerClient) bool {
 		peerList = append(peerList, key)
+		return true
+	})
 
-		glog.Infof("[debug] Sending message to peer=%v msg=%s", client.Id, message)
+	// add missing peers before dialing
+	n.dialMissingPeers(peerList, routeList)
+
+	// get a list of peers in the peer list
+	n.Peers.Range(func(key string, client *PeerClient) bool {
 		if err := client.Tell(message); err != nil {
 			glog.Warningf("Failed to send message to peer %v [err=%s]", client.Id, err)
 		}
 
 		return true
 	})
-
-	n.dialMissingPeers(peerList, routeList)
 }
 
 // Asynchronously broadcast a message to a set of peer clients denoted by their addresses.
@@ -247,16 +251,13 @@ func (n *Network) dialMissingPeers(peerList []string, routeList []string) {
 	// make sure every route has a peer
 	sort.Strings(peerList)
 	sort.Strings(routeList)
-	glog.Infof("[Debug] peerList=%v routeList=%v", peerList, routeList)
 
 	for r, p := 0, 0; r < len(routeList); r++ {
 		if p >= len(peerList) || routeList[r] != peerList[p] {
 			// this is a missing peer, add it to the peers
-			go func() {
-				if _, err := n.Dial(routeList[r]); err != nil {
-					glog.Infof("Could not dial address: %s", routeList[r])
-				}
-			}()
+			if _, err := n.Dial(routeList[r]); err != nil {
+				glog.Infof("Could not dial address: %s", routeList[r])
+			}
 		} else {
 			p++
 		}
