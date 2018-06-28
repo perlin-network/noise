@@ -47,10 +47,9 @@ func setupRingNodes(startPort int) ([]int, map[string][]string) {
 	return ports, peers
 }
 
-/*
-
-func setupMeshNodes(startPort int) []*tNode {
-	var nodes []*tNode
+func setupMeshNodes(startPort int) ([]int, map[string][]string) {
+	var ports []int
+	peers := map[string][]string{}
 
 	edges := []struct {
 		portOffset  int
@@ -64,23 +63,22 @@ func setupMeshNodes(startPort int) []*tNode {
 		{portOffset: 5, peerOffsets: []int{1, 2, 4}},
 	}
 
-	for _, edge := range edges {
-		node := &tNode{}
-		node.Host = host
-		node.Port = startPort + edge.portOffset
+	for i, edge := range edges {
+		ports = append(ports, startPort+i)
+		addr := fmt.Sprintf("%s:%d", host, ports[i])
 
-		nodes = append(nodes, node)
-
+		peers[addr] = []string{}
 		for _, po := range edge.peerOffsets {
-			node.Peers = append(node.Peers, fmt.Sprintf("%s:%d", node.Host, startPort+po))
+			peers[addr] = append(peers[addr], fmt.Sprintf("%s:%d", host, startPort+po))
 		}
 	}
 
-	return nodes
+	return ports, peers
 }
 
-func setupStarNodes(startPort int) []*tNode {
-	var nodes []*tNode
+func setupStarNodes(startPort int) ([]int, map[string][]string) {
+	var ports []int
+	peers := map[string][]string{}
 
 	edges := []struct {
 		portOffset  int
@@ -93,67 +91,64 @@ func setupStarNodes(startPort int) []*tNode {
 		{portOffset: 4, peerOffsets: []int{0}},
 	}
 
-	for _, edge := range edges {
-		node := &tNode{}
-		node.Host = host
-		node.Port = startPort + edge.portOffset
+	for i, edge := range edges {
+		ports = append(ports, startPort+i)
+		addr := fmt.Sprintf("%s:%d", host, ports[i])
 
-		nodes = append(nodes, node)
-
+		peers[addr] = []string{}
 		for _, po := range edge.peerOffsets {
-			node.Peers = append(node.Peers, fmt.Sprintf("%s:%d", node.Host, startPort+po))
+			peers[addr] = append(peers[addr], fmt.Sprintf("%s:%d", host, startPort+po))
 		}
 	}
 
-	return nodes
+	return ports, peers
 }
 
-func setupFullyConnectedNodes(startPort int) []*tNode {
-	var nodes []*tNode
-	var peers []string
+func setupFullyConnectedNodes(startPort int) ([]int, map[string][]string) {
+	var ports []int
+	peers := map[string][]string{}
+	var peerList []string
 	numNodes := 5
 
 	for i := 0; i < numNodes; i++ {
-		node := &tNode{}
-		node.Host = host
-		node.Port = startPort + i
+		ports = append(ports, startPort+i)
 
-		nodes = append(nodes, node)
-		peers = append(peers, fmt.Sprintf("%s:%d", node.Host, node.Port))
+		peerList = append(peerList, fmt.Sprintf("%s:%d", host, ports[i]))
 	}
 
 	// got lazy, even connect to itself
-	for _, node := range nodes {
-		node.Peers = peers
+	for i := 0; i < numNodes; i++ {
+		addr := fmt.Sprintf("%s:%d", host, ports[i])
+		peers[addr] = peerList
 	}
 
-	return nodes
+	return ports, peers
 }
 
-func setupLineNodes(startPort int) []*tNode {
-	var nodes []*tNode
+func setupLineNodes(startPort int) ([]int, map[string][]string) {
+	var ports []int
+	peers := map[string][]string{}
 	numNodes := 5
 
 	for i := 0; i < numNodes; i++ {
-		node := &tNode{}
-		node.Host = host
-		node.Port = startPort + i
+		ports = append(ports, startPort+i)
+		addr := fmt.Sprintf("%s:%d", host, ports[i])
 
-		nodes = append(nodes, node)
-
+		peers[addr] = []string{}
 		if i > 0 {
-			node.Peers = append(node.Peers, fmt.Sprintf("%s:%d", node.Host, node.Port-1))
+			peers[addr] = append(peers[addr], fmt.Sprintf("%s:%d", host, ports[i]-1))
 		}
 		if i < numNodes-1 {
-			node.Peers = append(node.Peers, fmt.Sprintf("%s:%d", node.Host, node.Port+1))
+			peers[addr] = append(peers[addr], fmt.Sprintf("%s:%d", host, ports[i]+1))
 		}
 	}
 
-	return nodes
+	return ports, peers
 }
 
-func setupTreeNodes(startPort int) []*tNode {
-	var nodes []*tNode
+func setupTreeNodes(startPort int) ([]int, map[string][]string) {
+	var ports []int
+	peers := map[string][]string{}
 
 	edges := []struct {
 		portOffset  int
@@ -167,22 +162,18 @@ func setupTreeNodes(startPort int) []*tNode {
 		{portOffset: 5, peerOffsets: []int{3}},
 	}
 
-	for _, edge := range edges {
-		node := &tNode{}
-		node.Host = host
-		node.Port = startPort + edge.portOffset
+	for i, edge := range edges {
+		ports = append(ports, startPort+i)
+		addr := fmt.Sprintf("%s:%d", host, ports[i])
 
-		nodes = append(nodes, node)
-
+		peers[addr] = []string{}
 		for _, po := range edge.peerOffsets {
-			node.Peers = append(node.Peers, fmt.Sprintf("%s:%d", node.Host, startPort+po))
+			peers[addr] = append(peers[addr], fmt.Sprintf("%s:%d", host, startPort+po))
 		}
 	}
 
-	return nodes
+	return ports, peers
 }
-
-*/
 
 // setupNodes sets up a connected group of nodes in a cluster.
 func setupNodes(ports []int) ([]*network.Network, []*tProcessor, error) {
@@ -297,26 +288,31 @@ func TestRing(t *testing.T) {
 	// TODO: should close the connection to release the port
 }
 
-/*
 func TestMesh(t *testing.T) {
 	t.Parallel()
 
 	// parse to flags to silence the glog library
 	flag.Parse()
 
-	nodes := setupMeshNodes(5020)
+	var nodes []*network.Network
+	var processors []*tProcessor
+	var err error
 
-	if err := setupCluster(nodes); err != nil {
+	ports, peers := setupMeshNodes(5020)
+
+	nodes, processors, err = setupNodes(ports)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := bootstrapNodes(nodes); err != nil {
+	if err := bootstrapNodes(nodes, peers); err != nil {
 		t.Fatal(err)
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastNode(t, nodes, i)
+		broadcastTest(t, nodes, processors, i)
 	}
+
 }
 
 func TestStar(t *testing.T) {
@@ -325,18 +321,23 @@ func TestStar(t *testing.T) {
 	// parse to flags to silence the glog library
 	flag.Parse()
 
-	nodes := setupStarNodes(5030)
+	var nodes []*network.Network
+	var processors []*tProcessor
+	var err error
 
-	if err := setupCluster(nodes); err != nil {
+	ports, peers := setupStarNodes(5030)
+
+	nodes, processors, err = setupNodes(ports)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := bootstrapNodes(nodes); err != nil {
+	if err := bootstrapNodes(nodes, peers); err != nil {
 		t.Fatal(err)
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastNode(t, nodes, i)
+		broadcastTest(t, nodes, processors, i)
 	}
 }
 
@@ -346,18 +347,23 @@ func TestFullyConnected(t *testing.T) {
 	// parse to flags to silence the glog library
 	flag.Parse()
 
-	nodes := setupFullyConnectedNodes(5040)
+	var nodes []*network.Network
+	var processors []*tProcessor
+	var err error
 
-	if err := setupCluster(nodes); err != nil {
+	ports, peers := setupFullyConnectedNodes(5040)
+
+	nodes, processors, err = setupNodes(ports)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := bootstrapNodes(nodes); err != nil {
+	if err := bootstrapNodes(nodes, peers); err != nil {
 		t.Fatal(err)
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastNode(t, nodes, i)
+		broadcastTest(t, nodes, processors, i)
 	}
 }
 
@@ -367,18 +373,23 @@ func TestLine(t *testing.T) {
 	// parse to flags to silence the glog library
 	flag.Parse()
 
-	nodes := setupLineNodes(5050)
+	var nodes []*network.Network
+	var processors []*tProcessor
+	var err error
 
-	if err := setupCluster(nodes); err != nil {
+	ports, peers := setupMeshNodes(5050)
+
+	nodes, processors, err = setupNodes(ports)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := bootstrapNodes(nodes); err != nil {
+	if err := bootstrapNodes(nodes, peers); err != nil {
 		t.Fatal(err)
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastNode(t, nodes, i)
+		broadcastTest(t, nodes, processors, i)
 	}
 }
 
@@ -388,18 +399,22 @@ func TestTree(t *testing.T) {
 	// parse to flags to silence the glog library
 	flag.Parse()
 
-	nodes := setupTreeNodes(5060)
+	var nodes []*network.Network
+	var processors []*tProcessor
+	var err error
 
-	if err := setupCluster(nodes); err != nil {
+	ports, peers := setupMeshNodes(5060)
+
+	nodes, processors, err = setupNodes(ports)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := bootstrapNodes(nodes); err != nil {
+	if err := bootstrapNodes(nodes, peers); err != nil {
 		t.Fatal(err)
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastNode(t, nodes, i)
+		broadcastTest(t, nodes, processors, i)
 	}
 }
-*/
