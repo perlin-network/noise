@@ -237,7 +237,7 @@ func broadcastTest(t *testing.T, nodes []*network.Network, processors []*tProces
 		select {
 		case received := <-processors[sender].Mailbox:
 			t.Errorf("expected nothing in sending node %d, got %v", sender, received)
-		case <-time.After(1 * time.Second):
+		case <-time.After(500 * time.Millisecond):
 			// this is the good case, don't want to receive anything
 		}
 	}
@@ -254,7 +254,7 @@ func broadcastTest(t *testing.T, nodes []*network.Network, processors []*tProces
 			if received.Message != expected {
 				t.Errorf("expected message '%s' for node %d --> %d, but got %v", expected, sender, i, received)
 			}
-		case <-time.After(3 * time.Second):
+		case <-time.After(1000 * time.Millisecond):
 			t.Errorf("expected a message for node %d --> %d, but it timed out", sender, i)
 		}
 	}
