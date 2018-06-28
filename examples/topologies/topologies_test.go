@@ -17,8 +17,8 @@ const (
 	host = "localhost"
 )
 
-// TopoNode holds the variables to create the network and implements the message handler
-type TopoNode struct {
+// tNode holds the variables to create the network and implements the message handler
+type tNode struct {
 	Host    string
 	Port    int
 	Peers   []string
@@ -27,24 +27,29 @@ type TopoNode struct {
 }
 
 // Handle implements the network interface callback
-func (n *TopoNode) Handle(ctx *network.MessageContext) error {
+func (n *tNode) Handle(ctx *network.MessageContext) error {
 	message := ctx.Message().(*messages.BasicMessage)
 	n.Mailbox <- message
 	return nil
 }
 
-func setupRingNodes(startPort int) []*TopoNode {
+func setupRingNodes(startPort int) []*tNode {
 	numNodes := 4
-	var nodes []*TopoNode
+	var nodes []*tNode
 
 	for i := 0; i < numNodes; i++ {
-		node := &TopoNode{}
+		node := &tNode{}
 		node.Host = host
 		node.Port = startPort + i
 
 		// in a ring, each node is only connected to 2 others
-		node.Peers = append(node.Peers, fmt.Sprintf("%s:%d", node.Host, (node.Port+1)%(startPort+numNodes)))
-		node.Peers = append(node.Peers, fmt.Sprintf("%s:%d", node.Host, (node.Port-1)%(startPort+numNodes)))
+		//node.Peers = append(node.Peers, fmt.Sprintf("%s:%d", node.Host, (node.Port+1)%(startPort+numNodes)))
+		//node.Peers = append(node.Peers, fmt.Sprintf("%s:%d", node.Host, (node.Port-1)%(startPort+numNodes)))
+
+		// only connect to the first node for now
+		if i > 0 {
+			node.Peers = append(node.Peers, fmt.Sprintf("%s:%d", node.Host, startPort))
+		}
 
 		nodes = append(nodes, node)
 	}
@@ -52,8 +57,10 @@ func setupRingNodes(startPort int) []*TopoNode {
 	return nodes
 }
 
-func setupMeshNodes(startPort int) []*TopoNode {
-	var nodes []*TopoNode
+/*
+
+func setupMeshNodes(startPort int) []*tNode {
+	var nodes []*tNode
 
 	edges := []struct {
 		portOffset  int
@@ -68,7 +75,7 @@ func setupMeshNodes(startPort int) []*TopoNode {
 	}
 
 	for _, edge := range edges {
-		node := &TopoNode{}
+		node := &tNode{}
 		node.Host = host
 		node.Port = startPort + edge.portOffset
 
@@ -82,8 +89,8 @@ func setupMeshNodes(startPort int) []*TopoNode {
 	return nodes
 }
 
-func setupStarNodes(startPort int) []*TopoNode {
-	var nodes []*TopoNode
+func setupStarNodes(startPort int) []*tNode {
+	var nodes []*tNode
 
 	edges := []struct {
 		portOffset  int
@@ -97,7 +104,7 @@ func setupStarNodes(startPort int) []*TopoNode {
 	}
 
 	for _, edge := range edges {
-		node := &TopoNode{}
+		node := &tNode{}
 		node.Host = host
 		node.Port = startPort + edge.portOffset
 
@@ -111,13 +118,13 @@ func setupStarNodes(startPort int) []*TopoNode {
 	return nodes
 }
 
-func setupFullyConnectedNodes(startPort int) []*TopoNode {
-	var nodes []*TopoNode
+func setupFullyConnectedNodes(startPort int) []*tNode {
+	var nodes []*tNode
 	var peers []string
 	numNodes := 5
 
 	for i := 0; i < numNodes; i++ {
-		node := &TopoNode{}
+		node := &tNode{}
 		node.Host = host
 		node.Port = startPort + i
 
@@ -133,12 +140,12 @@ func setupFullyConnectedNodes(startPort int) []*TopoNode {
 	return nodes
 }
 
-func setupLineNodes(startPort int) []*TopoNode {
-	var nodes []*TopoNode
+func setupLineNodes(startPort int) []*tNode {
+	var nodes []*tNode
 	numNodes := 5
 
 	for i := 0; i < numNodes; i++ {
-		node := &TopoNode{}
+		node := &tNode{}
 		node.Host = host
 		node.Port = startPort + i
 
@@ -155,8 +162,8 @@ func setupLineNodes(startPort int) []*TopoNode {
 	return nodes
 }
 
-func setupTreeNodes(startPort int) []*TopoNode {
-	var nodes []*TopoNode
+func setupTreeNodes(startPort int) []*tNode {
+	var nodes []*tNode
 
 	edges := []struct {
 		portOffset  int
@@ -171,7 +178,7 @@ func setupTreeNodes(startPort int) []*TopoNode {
 	}
 
 	for _, edge := range edges {
-		node := &TopoNode{}
+		node := &tNode{}
 		node.Host = host
 		node.Port = startPort + edge.portOffset
 
@@ -185,8 +192,10 @@ func setupTreeNodes(startPort int) []*TopoNode {
 	return nodes
 }
 
+*/
+
 // setupCluster sets up a connected group of nodes in a cluster.
-func setupCluster(nodes []*TopoNode) error {
+func setupCluster(nodes []*tNode) error {
 	for _, node := range nodes {
 		builder := &builders.NetworkBuilder{}
 		builder.SetKeys(crypto.RandomKeyPair())
@@ -204,15 +213,18 @@ func setupCluster(nodes []*TopoNode) error {
 		node.Net = net
 
 		go net.Listen()
+
+		// TODO: seems there's another race condition with Bootstrap, use a sleep for now
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	// Wait for all nodes to finish discovering other peers.
-	time.Sleep(500 * time.Millisecond)
+	//time.Sleep(1 * time.Second)
 
 	return nil
 }
 
-func bootstrapNodes(nodes []*TopoNode) error {
+func bootstrapNodes(nodes []*tNode) error {
 	for i, node := range nodes {
 		if node.Net == nil {
 			return fmt.Errorf("expected %d nodes, but node %d is missing a network", len(nodes), i)
@@ -224,43 +236,51 @@ func bootstrapNodes(nodes []*TopoNode) error {
 
 		// get nodes to start talking with each other
 		node.Net.Bootstrap(node.Peers...)
-	}
 
-	// TODO: seems there's another race condition with Bootstrap, use a sleep for now
-	time.Sleep(1 * time.Second)
+		// TODO: seems there's another race condition with Bootstrap, use a sleep for now
+		time.Sleep(100 * time.Millisecond)
+	}
 	return nil
 }
 
-func broadcastTest(t *testing.T, nodes []*TopoNode, sender int) {
+func broadcastTest(t *testing.T, nodes []*tNode, sender int) {
 	// Broadcast is an asynchronous call to send a message to other nodes
-	testMessage := fmt.Sprintf("message from node %d", sender)
-	nodes[sender].Net.Broadcast(&messages.BasicMessage{Message: testMessage})
+	expected := fmt.Sprintf("message from node %d", sender)
+	nodes[sender].Net.Broadcast(&messages.BasicMessage{Message: expected})
+
+	// make sure the sender didn't get his own message
+	{
+		select {
+		case received := <-nodes[sender].Mailbox:
+			t.Errorf("expected nothing in sending node %d, got %v", sender, received)
+		case <-time.After(1 * time.Second):
+			// this is the good case, don't want to receive anything
+		}
+	}
 
 	// check the messages
 	for i := 0; i < len(nodes); i++ {
+		if i == sender {
+			// sender is checked after
+			continue
+		}
 		select {
 		case received := <-nodes[i].Mailbox:
-			if i == sender {
-				// this is the sending node, it should not have received it's own message
-				t.Errorf("expected nothing in sending node %d, got %v", sender, received)
-			} else {
-				// this is a receiving node, it should have just the one message buffered up
-				if received.Message != testMessage {
-					t.Errorf("expected message '%s' for node %d --> %d, but got %v", testMessage, sender, i, received)
-				}
+			// this is a receiving node, it should have just the one message buffered up
+			if received.Message != expected {
+				t.Errorf("expected message '%s' for node %d --> %d, but got %v", expected, sender, i, received)
 			}
 		case <-time.After(3 * time.Second):
-			if i == sender {
-				// this is good, don't want messages to be sent to itself
-			} else {
-				t.Errorf("expected a message for node %d --> %d, but it timed out", sender, i)
-			}
+			t.Errorf("expected a message for node %d --> %d, but it timed out", sender, i)
 		}
 	}
 }
 
 func TestRing(t *testing.T) {
 	t.Parallel()
+
+	// glog defaults to logging to a file, override this flag to log to console for testing
+	flag.Set("logtostderr", "true")
 
 	// parse to flags to silence the glog library
 	flag.Parse()
@@ -276,13 +296,16 @@ func TestRing(t *testing.T) {
 	}
 
 	broadcastTest(t, nodes, 0)
-	for i := 0; i < len(nodes); i++ {
-		//broadcastNode(t, nodes, i)
-	}
+	/*
+		for i := 0; i < len(nodes); i++ {
+			broadcastNode(t, nodes, i)
+		}
+	*/
 
 	// TODO: should close the connection to release the port
 }
 
+/*
 func TestMesh(t *testing.T) {
 	t.Parallel()
 
@@ -299,9 +322,8 @@ func TestMesh(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	broadcastTest(t, nodes, 0)
 	for i := 0; i < len(nodes); i++ {
-		//broadcastNode(t, nodes, i)
+		broadcastNode(t, nodes, i)
 	}
 }
 
@@ -321,9 +343,8 @@ func TestStar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	broadcastTest(t, nodes, 0)
 	for i := 0; i < len(nodes); i++ {
-		//broadcastNode(t, nodes, i)
+		broadcastNode(t, nodes, i)
 	}
 }
 
@@ -343,9 +364,8 @@ func TestFullyConnected(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	broadcastTest(t, nodes, 0)
 	for i := 0; i < len(nodes); i++ {
-		//broadcastNode(t, nodes, i)
+		broadcastNode(t, nodes, i)
 	}
 }
 
@@ -365,9 +385,8 @@ func TestLine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	broadcastTest(t, nodes, 0)
 	for i := 0; i < len(nodes); i++ {
-		//broadcastNode(t, nodes, i)
+		broadcastNode(t, nodes, i)
 	}
 }
 
@@ -387,8 +406,8 @@ func TestTree(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	broadcastTest(t, nodes, 0)
 	for i := 0; i < len(nodes); i++ {
-		//	broadcastNode(t, nodes, i)
+		broadcastNode(t, nodes, i)
 	}
 }
+*/
