@@ -99,7 +99,8 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 
 // BlockUntilListening blocks until this node is listening for new peers.
 func (n *Network) BlockUntilListening() {
-	for len(n.Listening) == 0 {}
+	for len(n.Listening) == 0 {
+	}
 }
 
 // Bootstrap with a number of peers and commence a handshake.
@@ -142,9 +143,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 
 // Broadcast asynchronously broadcasts a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
-	var peers []string
 	n.Peers.Range(func(key string, client *PeerClient) bool {
-		peers = append(peers, fmt.Sprintf("%s(%s)", key, client.Id.Address))
 		err := client.Tell(message)
 
 		if err != nil {
