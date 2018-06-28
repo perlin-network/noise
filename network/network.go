@@ -137,8 +137,6 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 
 // Broadcast asynchronously broadcasts a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
-	fmt.Printf("[debug] broadcasting ...\n")
-
 	var peers []string
 	n.Peers.Range(func(key string, client *PeerClient) bool {
 		peers = append(peers, fmt.Sprintf("%s(%s)", key, client.Id.Address))
@@ -150,9 +148,6 @@ func (n *Network) Broadcast(message proto.Message) {
 
 		return true
 	})
-
-	fmt.Printf("[debug] peers %v\n", peers)
-
 }
 
 // BroadcastByAddresses broadcasts a message to a set of peer clients denoted by their addresses.
