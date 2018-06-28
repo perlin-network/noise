@@ -34,6 +34,7 @@ func createPeerClient(network *Network) *PeerClient {
 	return &PeerClient{Network: network, Requests: new(Uint64MessageChannelSyncMap), RequestNonce: 0}
 }
 
+// nextNonce gets the next most available request nonce. TODO: Have nonce recycled over time.
 func (c *PeerClient) nextNonce() uint64 {
 	return atomic.AddUint64(&c.RequestNonce, 1)
 }

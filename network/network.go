@@ -71,6 +71,7 @@ func (n *Network) Listen() {
 	}
 }
 
+// Client either creates or returns a cached peer client given its host address.
 func (n *Network) Client(address string) (*PeerClient, error) {
 	address = strings.TrimSpace(address)
 	if len(address) == 0 {
@@ -118,6 +119,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 	}
 }
 
+// Dial establishes a connection to a peer and returns a PeerClient instance to it.
 func (n *Network) Dial(address string) (*PeerClient, error) {
 	client, err := n.Client(address)
 	if err != nil {
@@ -133,7 +135,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 	return client, nil
 }
 
-// Asynchronously broadcast a message to all peer clients.
+// Broadcast asynchronously broadcasts a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
 	n.Peers.Range(func(key string, client *PeerClient) bool {
 		err := client.Tell(message)
@@ -146,7 +148,7 @@ func (n *Network) Broadcast(message proto.Message) {
 	})
 }
 
-// Asynchronously broadcast a message to a set of peer clients denoted by their addresses.
+// BroadcastByAddresses broadcasts a message to a set of peer clients denoted by their addresses.
 func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
 	for _, address := range addresses {
 		if client, ok := n.Peers.Load(address); ok {
@@ -163,7 +165,7 @@ func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...strin
 	}
 }
 
-// Asynchronously broadcast a message to a set of peer clients denoted by their peer IDs.
+// BroadcastByIds broadcasts a message to a set of peer clients denoted by their peer IDs.
 func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
 	for _, id := range ids {
 		if client, ok := n.Peers.Load(id.Address); ok {
@@ -180,7 +182,7 @@ func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
 	}
 }
 
-// Asynchronously broadcast message to random selected K peers.
+// BroadcastRandomly asynchronously broadcast message to random selected K peers.
 // Does not guarantee broadcasting to exactly K peers.
 func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	var addresses []string
