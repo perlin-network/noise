@@ -97,9 +97,14 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 	return client, nil
 }
 
+// BlockUntilListening blocks until this node is listening for new peers.
+func (n *Network) BlockUntilListening() {
+	for len(n.Listening) == 0 {}
+}
+
 // Bootstrap with a number of peers and commence a handshake.
 func (n *Network) Bootstrap(addresses ...string) {
-	<-n.Listening
+	n.BlockUntilListening()
 
 	addresses = FilterPeers(n.Host, n.Port, addresses)
 
