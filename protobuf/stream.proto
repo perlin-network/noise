@@ -8,11 +8,6 @@ option java_outer_classname = "NoiseProto";
 
 import "google/protobuf/any.proto";
 
-service Noise {
-    rpc Stream (stream Message) returns (stream Message) {
-    }
-}
-
 message ID {
     bytes public_key = 1;
     string address = 2;
@@ -29,9 +24,6 @@ message Message {
 
     // Nonce is the request/response ID. Null if ID associated to a message is not a request/response.
     uint64 nonce = 4;
-
-    // Is this message a response?
-    bool is_response = 5;
 }
 
 message HandshakeRequest {

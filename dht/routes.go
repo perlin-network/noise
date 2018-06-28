@@ -122,7 +122,7 @@ func (t *RoutingTable) GetPeerAddresses() (peers []string) {
 }
 
 // Removes a peer from the routing table. O(bucket_size).
-func (t *RoutingTable) RemovePeer(target peer.ID) {
+func (t *RoutingTable) RemovePeer(target peer.ID) bool {
 	bucketId := target.Xor(t.self).PrefixLen()
 	bucket := t.Bucket(bucketId)
 
@@ -131,10 +131,15 @@ func (t *RoutingTable) RemovePeer(target peer.ID) {
 	for e := bucket.Front(); e != nil; e = e.Next() {
 		if e.Value.(peer.ID).Equals(target) {
 			bucket.Remove(e)
+
+			bucket.mutex.Unlock()
+			return true
 		}
 	}
 
 	bucket.mutex.Unlock()
+
+	return false
 }
 
 // Determines if a peer exists in the routing table. O(bucket_size).

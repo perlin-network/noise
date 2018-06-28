@@ -3,10 +3,8 @@ package network
 import (
 	"fmt"
 	"math/rand"
-	"net"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
@@ -14,9 +12,11 @@ import (
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
-	"google.golang.org/grpc"
+	"github.com/pkg/errors"
+	"github.com/xtaci/kcp-go"
 )
 
+// Network represents the current networking state for this node.
 type Network struct {
 	// Routing table.
 	Routes *dht.RoutingTable
@@ -27,91 +27,52 @@ type Network struct {
 	// Node's Network information.
 	// The Address is `Host:Port`.
 	Host string
-	Port int
+	Port uint16
 
-	// Map of incoming message processors for the Network.
+	// Map of incomingStream message processors for the Network.
 	// map[string]MessageProcessor
 	Processors *StringMessageProcessorSyncMap
 
 	// Node's cryptographic ID.
 	ID peer.ID
 
-	listener net.Listener
-	server   *Server
-
-	// Map of connection addresses (string) <-> *network.PeerClient
-	// so that the network doesn't dial multiple times to the same ip
+	// Map of connection addresses (string) <-> *Network.PeerClient
+	// so that the Network doesn't dial multiple times to the same ip
 	Peers *StringPeerClientSyncMap
+
+	// <-Listening will block a goroutine until this node is listening for peers.
+	Listening chan struct{}
 }
 
-var (
-	dialTimeout = 3 * time.Second
-)
-
+// Address returns a formated host:port string
 func (n *Network) Address() string {
-	return n.Host + ":" + strconv.Itoa(n.Port)
+	return n.Host + ":" + strconv.Itoa(int(n.Port))
 }
 
-// Listen for peers on a port specified on instantation of Network{}.
+// Listen starts listening for peers on a port.
 func (n *Network) Listen() {
-	listener, err := net.Listen("tcp", ":"+strconv.Itoa(n.Port))
+	listener, err := kcp.ListenWithOptions(":"+strconv.Itoa(int(n.Port)), nil, 10, 3)
 	if err != nil {
 		glog.Fatal(err)
 		return
 	}
 
-	client := grpc.NewServer()
-	server := createServer(n)
-
-	protobuf.RegisterNoiseServer(client, server)
-
-	n.listener = listener
-	n.server = server
+	n.Listening <- struct{}{}
 
 	glog.Infof("Listening for peers on port %d.", n.Port)
 
-	err = client.Serve(listener)
-	if err != nil {
-		glog.Fatal(err)
-		return
-	}
-}
-
-// Bootstrap with a number of peers and commence a handshake.
-func (n *Network) Bootstrap(addresses ...string) {
-	addresses = FilterPeers(n.Host, n.Port, addresses)
-
-	for _, address := range addresses {
-		client, err := n.Dial(address)
-		if err != nil {
-			continue
-		}
-
-		// Send a handshake request.
-		err = client.Tell(&protobuf.HandshakeRequest{})
-		if err != nil {
-			continue
+	// Handle new clients.
+	for {
+		if conn, err := listener.Accept(); err == nil {
+			go n.Ingest(conn)
+		} else {
+			glog.Error(err)
 		}
 	}
 }
 
-// Loads the peer from n.Peers and opens it
-func (n *Network) GetPeer(address string) (*PeerClient, bool) {
-	client, ok := n.Peers.Load(address)
-	if !ok || client == nil {
-		return nil, false
-	}
-
-	err := client.open()
-	if err != nil {
-		return nil, false
-	}
-
-	return client, true
-}
-
-// Dials a peer via. gRPC.
-func (n *Network) Dial(address string) (*PeerClient, error) {
+// Client either creates or returns a cached peer client given its host address.
+func (n *Network) Client(address string) (*PeerClient, error) {
 	address = strings.TrimSpace(address)
 	if len(address) == 0 {
 		return nil, fmt.Errorf("cannot dial, address was empty")
@@ -122,77 +83,106 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 		return nil, err
 	}
 
-	// load a cached connection
-	if client, ok := n.GetPeer(address); ok && client != nil {
+	if address == n.Address() {
+		return nil, errors.New("peer should not dial itself")
+	}
+
+	if client, exists := n.Peers.Load(address); exists {
 		return client, nil
 	}
 
-	client := createPeerClient(n.server)
-	if client == nil {
-		return nil, fmt.Errorf("unable to create peer client for address %s", address)
-	}
-
-	err = client.establishConnection(address)
-	if err != nil {
-		glog.Infof(fmt.Sprintf("Failed to connect to peer %s err=[%+v]\n", address, err))
-		client.close()
-		return nil, err
-	}
-
-	// Cache the peer's client.
+	client := createPeerClient(n)
 	n.Peers.Store(address, client)
 
 	return client, nil
 }
 
-// Asynchronously broadcast a message to all peer clients.
+// Bootstrap with a number of peers and commence a handshake.
+func (n *Network) Bootstrap(addresses ...string) {
+	<-n.Listening
+
+	addresses = FilterPeers(n.Host, n.Port, addresses)
+
+	for _, address := range addresses {
+		client, err := n.Dial(address)
+		if err != nil {
+			glog.Warning(err)
+			continue
+		}
+
+		// Send a handshake request.
+		err = client.Tell(&protobuf.HandshakeRequest{})
+		if err != nil {
+			glog.Error(err)
+			continue
+		}
+	}
+}
+
+// Dial establishes a connection to a peer and returns a PeerClient instance to it.
+func (n *Network) Dial(address string) (*PeerClient, error) {
+	client, err := n.Client(address)
+	if err != nil {
+		return nil, err
+	}
+
+	err = client.establishConnection(address)
+	if err != nil {
+		glog.Warningf("Failed to connect to peer %s err=[%+v]\n", address, err)
+		return nil, err
+	}
+
+	return client, nil
+}
+
+// Broadcast asynchronously broadcasts a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
 	n.Peers.Range(func(key string, client *PeerClient) bool {
 		err := client.Tell(message)
 
 		if err != nil {
-			glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+			glog.Warningf("Failed to send message to peer %v [err=%s]", client.Id, err)
 		}
 
 		return true
 	})
 }
 
-// Asynchronously broadcast a message to a set of peer clients denoted by their addresses.
+// BroadcastByAddresses broadcasts a message to a set of peer clients denoted by their addresses.
 func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
 	for _, address := range addresses {
-		if client, ok := n.GetPeer(address); ok {
+		if client, ok := n.Peers.Load(address); ok {
 			err := client.Tell(message)
 
 			if err != nil {
 				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
 			}
 
-			client.close()
+			client.Close()
 		} else {
 			glog.Warningf("Failed to send message to peer %s; peer does not exist.", address)
 		}
 	}
 }
 
-// Asynchronously broadcast a message to a set of peer clients denoted by their peer IDs.
+// BroadcastByIds broadcasts a message to a set of peer clients denoted by their peer IDs.
 func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
 	for _, id := range ids {
-		if client, ok := n.GetPeer(id.Address); ok {
+		if client, ok := n.Peers.Load(id.Address); ok {
 			err := client.Tell(message)
 
 			if err != nil {
 				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
 			}
 
-			client.close()
+			client.Close()
 		} else {
 			glog.Warningf("Failed to send message to peer %s; peer does not exist.", id)
 		}
 	}
 }
 
-// Asynchronously broadcast message to random selected K peers.
+// BroadcastRandomly asynchronously broadcast message to random selected K peers.
 // Does not guarantee broadcasting to exactly K peers.
 func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	var addresses []string

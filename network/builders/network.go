@@ -17,24 +17,24 @@ import (
 type NetworkBuilder struct {
 	keys *crypto.KeyPair
 	host string
-	port int
+	port uint16
 
 	// map[string]MessageProcessor
 	processors *network.StringMessageProcessorSyncMap
 }
 
-//SetKeys produced by crypto.RandomKeyPair()
+// SetKeys pair created from crypto.KeyPair
 func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
 	builder.keys = pair
 }
 
-//SetHost of builder e.g. "127.0.0.1"
+// SetHost of NetworkBuilder e.g. "127.0.0.1"
 func (builder *NetworkBuilder) SetHost(host string) {
 	builder.host = host
 }
 
-//SetPort of builder e.g. 12345
-func (builder *NetworkBuilder) SetPort(port int) {
+// SetPort of NetworkBuilder
+func (builder *NetworkBuilder) SetPort(port uint16) {
 	builder.port = port
 }
 
@@ -56,7 +56,8 @@ func (builder *NetworkBuilder) AddProcessor(message proto.Message, processor net
 	}
 }
 
-//BuildNetwork runs the builder configurations a return a network.Network
+// BuildNetwork verifies all parameters of the network and returns either an error due to
+// misconfiguration, or a noise.network.Network.
 func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 	if builder.keys == nil {
 		return nil, errors.New("cryptography keypair not provided to Network; cannot create node Id")
@@ -80,9 +81,9 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 		return nil, err
 	}
 
-	id := peer.CreateID(unifiedHost+":"+strconv.Itoa(builder.port), builder.keys.PublicKey)
+	id := peer.CreateID(unifiedHost+":"+strconv.Itoa(int(builder.port)), builder.keys.PublicKey)
 
-	network := &network.Network{
+	net := &network.Network{
 		Keys: builder.keys,
 		Host: unifiedHost,
 		Port: builder.port,
@@ -93,7 +94,9 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 		Routes: dht.CreateRoutingTable(id),
 
 		Peers: &network.StringPeerClientSyncMap{},
+
+		Listening: make(chan struct{}, 1),
 	}
 
-	return network, nil
+	return net, nil
 }

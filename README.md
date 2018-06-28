@@ -20,7 +20,9 @@ go get -u golang.org/x/vgo
 
 # download the dependencies to vendor folder and run main.go
 vgo mod -vendor
-vgo run main.go
+[terminal 1] vgo run main.go -port 3000
+[terminal 2] vgo run main.go -port 3001 peers localhost:3000
+[terminal 3] vgo run main.go -port 3002 peers localhost:3000
 
 # build and run the main.go noise binary
 vgo build
