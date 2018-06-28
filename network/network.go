@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -19,6 +18,7 @@ import (
 	"github.com/xtaci/smux"
 )
 
+// Network represents the current networking state for this node.
 type Network struct {
 	// Routing table.
 	Routes *dht.RoutingTable
@@ -38,12 +38,11 @@ type Network struct {
 	// Node's cryptographic ID.
 	ID peer.ID
 
-	listener net.Listener
-
 	// Map of connection addresses (string) <-> *Network.PeerClient
 	// so that the Network doesn't dial multiple times to the same ip
 	Peers *StringPeerClientSyncMap
 
+	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
 }
 
@@ -96,12 +95,14 @@ func (n *Network) handleMux(conn net.Conn) {
 		}
 
 		// One goroutine per request stream.
-		go client.handleMessage(stream)
+		go client.ingest(stream)
 	}
 }
 
 // Bootstrap with a number of peers and commence a handshake.
 func (n *Network) Bootstrap(addresses ...string) {
+	<-n.Listening
+
 	addresses = FilterPeers(n.Host, n.Port, addresses)
 
 	for _, address := range addresses {
@@ -135,7 +136,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 		return nil, errors.New("peer should not dial itself")
 	}
 
-	// load a cached connection
+	// Load a cached connection.
 	if client, exists := n.Peers.Load(address); exists && client != nil {
 		return client, nil
 	}
@@ -148,34 +149,15 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 		return nil, err
 	}
 
-	// Cache the peer's client.
-	n.Peers.Store(address, client)
-
 	return client, nil
 }
 
 // Asynchronously broadcast a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
-	var peerList []string
-	var routeList []string
-
-	// get a list of peers in the routing table
-	for _, peer := range n.Routes.GetPeers() {
-		routeList = append(routeList, peer.Address)
-	}
-
-	// get a list of peers in the peer list
 	n.Peers.Range(func(key string, client *PeerClient) bool {
-		peerList = append(peerList, key)
-		return true
-	})
+		err := client.Tell(message)
 
-	// add missing peers before dialing
-	n.dialMissingPeers(peerList, routeList)
-
-	// tell all the peers
-	n.Peers.Range(func(key string, client *PeerClient) bool {
-		if err := client.Tell(message); err != nil {
+		if err != nil {
 			glog.Warningf("Failed to send message to peer %v [err=%s]", client.Id, err)
 		}
 
@@ -243,23 +225,4 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	}
 
 	n.BroadcastByAddresses(message, addresses[:K]...)
-}
-
-func (n *Network) dialMissingPeers(peerList []string, routeList []string) {
-	// TODO: can cache the listHashes and skip the check
-
-	// make sure every route has a peer
-	sort.Strings(peerList)
-	sort.Strings(routeList)
-
-	for r, p := 0, 0; r < len(routeList); r++ {
-		if p >= len(peerList) || routeList[r] != peerList[p] {
-			// this is a missing peer, add it to the peers
-			if _, err := n.Dial(routeList[r]); err != nil {
-				glog.Infof("Could not dial address: %s", routeList[r])
-			}
-		} else {
-			p++
-		}
-	}
 }
