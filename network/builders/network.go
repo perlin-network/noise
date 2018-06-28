@@ -82,7 +82,7 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 
 	id := peer.CreateID(unifiedHost+":"+strconv.Itoa(int(builder.port)), builder.keys.PublicKey)
 
-	network := &network.Network{
+	net := &network.Network{
 		Keys: builder.keys,
 		Host: unifiedHost,
 		Port: builder.port,
@@ -97,5 +97,5 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 		Listening: make(chan struct{}, 1),
 	}
 
-	return network, nil
+	return net, nil
 }

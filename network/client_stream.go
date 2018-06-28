@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/protobuf"
@@ -12,13 +13,8 @@ import (
 )
 
 // sendMessage marshals and sends a message over a stream.
-func (c *PeerClient) sendMessage(stream *smux.Stream, message proto.Message) error {
-	req, err := c.PrepareMessage(message)
-	if err != nil {
-		return err
-	}
-
-	bytes, err := proto.Marshal(req)
+func (n *Network) sendMessage(stream *smux.Stream, message proto.Message) error {
+	bytes, err := proto.Marshal(message)
 	if err != nil {
 		return err
 	}
@@ -33,7 +29,7 @@ func (c *PeerClient) sendMessage(stream *smux.Stream, message proto.Message) err
 	writer := bufio.NewWriter(stream)
 
 	// Send request bytes.
-	n, err := writer.Write(bytes)
+	written, err := writer.Write(bytes)
 	if err != nil {
 		return err
 	}
@@ -41,21 +37,18 @@ func (c *PeerClient) sendMessage(stream *smux.Stream, message proto.Message) err
 	// Flush writer.
 	err = writer.Flush()
 	if err != nil {
-		if err == io.EOF {
-			c.Redial()
-		}
 		return err
 	}
 
-	if n != len(bytes) {
-		return errors.New("failed to write all bytes to stream")
+	if written != len(bytes) {
+		return fmt.Errorf("only wrote %d / %d bytes to stream", written, len(bytes))
 	}
 
 	return nil
 }
 
 // receiveMessage reads, unmarshals and verifies a message from a stream.
-func (c *PeerClient) receiveMessage(stream *smux.Stream) (*protobuf.Message, error) {
+func (n *Network) receiveMessage(stream *smux.Stream) (*protobuf.Message, error) {
 	reader := bufio.NewReader(stream)
 
 	buffer := make([]byte, binary.MaxVarintLen64)
@@ -66,10 +59,10 @@ func (c *PeerClient) receiveMessage(stream *smux.Stream) (*protobuf.Message, err
 	}
 
 	// Decode unsigned varint representing message size.
-	size, n := binary.Uvarint(buffer)
+	size, read := binary.Uvarint(buffer)
 
 	// Check if unsigned varint overflows, or if protobuf message is too large.
-	if n <= 0 || size > 1<<31-1 {
+	if read <= 0 || size > 1<<31-1 {
 		return nil, errors.New("message len is either broken or too large")
 	}
 
@@ -78,10 +71,6 @@ func (c *PeerClient) receiveMessage(stream *smux.Stream) (*protobuf.Message, err
 	_, err = io.ReadFull(reader, buffer)
 
 	if err != nil {
-		if err == io.EOF {
-			c.Redial()
-		}
-
 		return nil, err
 	}
 
