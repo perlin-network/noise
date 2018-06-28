@@ -55,6 +55,7 @@ func TestDiscovery(t *testing.T) {
 		"*protobuf.HandshakeResponse",
 		"*protobuf.LookupNodeRequest",
 	}
+
 	processors := fmt.Sprintf("%v", network.Processors)
 
 	for _, name := range expected {

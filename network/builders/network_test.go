@@ -21,7 +21,6 @@ var (
 type MockProcessor struct{}
 
 func (p *MockProcessor) Handle(ctx *network.MessageContext) error {
-	// Send handshake response to peer.
 	err := ctx.Reply(&protobuf.HandshakeResponse{})
 
 	if err != nil {
@@ -97,10 +96,10 @@ func TestPeers(t *testing.T) {
 		nodes = append(nodes, net)
 	}
 
-	for i := 0; i < len(nodes); i++ {
-		for exc := range []int{0, 1} {
-			if _, err := nodes[i].Client(addresses[peers[i][exc]]); err != nil {
-				t.Fatalf("nodes[%d] missing peer: %s", i, addresses[peers[i][exc]])
+	for x := 0; x < len(nodes); x++ {
+		for y := 0; y < 2; y++ {
+			if _, err := nodes[x].Client(addresses[peers[x][y]]); err != nil {
+				t.Fatalf("nodes[%d] missing peer: %s", x, addresses[peers[x][y]])
 			}
 		}
 	}
