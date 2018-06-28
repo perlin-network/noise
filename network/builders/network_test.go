@@ -19,7 +19,7 @@ var (
 	port = uint16(12345)
 )
 
-//MockProcessor so to keep independency to incoming.go and outgoing.go
+// MockProcessor so to keep independency to incoming.go and outgoing.go
 type MockProcessor struct{}
 
 func (p *MockProcessor) Handle(ctx *network.MessageContext) error {
@@ -89,7 +89,6 @@ func TestPeers(t *testing.T) {
 		if i != 0 {
 			net.Bootstrap(resolvedAddrs[0])
 		}
-		net.BlockUntilListening()
 		nets = append(nets, net)
 	}
 	for i := 0; i < len(nets); i++ {
@@ -102,4 +101,4 @@ func TestPeers(t *testing.T) {
 
 }
 
-//Boardcast functions can be tested using examples
+// Boardcast functions can be tested using examples

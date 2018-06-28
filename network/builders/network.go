@@ -13,7 +13,7 @@ import (
 	"github.com/perlin-network/noise/peer"
 )
 
-//NetworkBuilder is a Address->processors struct
+// NetworkBuilder is a Address->processors struct
 type NetworkBuilder struct {
 	keys *crypto.KeyPair
 	host string
