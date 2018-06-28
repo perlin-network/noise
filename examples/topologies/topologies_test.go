@@ -64,7 +64,7 @@ func setupMeshNodes(startPort int) ([]int, map[string][]string) {
 	}
 
 	for i, edge := range edges {
-		ports = append(ports, startPort+i)
+		ports = append(ports, startPort+edge.portOffset)
 		addr := fmt.Sprintf("%s:%d", host, ports[i])
 
 		peers[addr] = []string{}
@@ -92,7 +92,7 @@ func setupStarNodes(startPort int) ([]int, map[string][]string) {
 	}
 
 	for i, edge := range edges {
-		ports = append(ports, startPort+i)
+		ports = append(ports, startPort+edge.portOffset)
 		addr := fmt.Sprintf("%s:%d", host, ports[i])
 
 		peers[addr] = []string{}
@@ -163,7 +163,7 @@ func setupTreeNodes(startPort int) ([]int, map[string][]string) {
 	}
 
 	for i, edge := range edges {
-		ports = append(ports, startPort+i)
+		ports = append(ports, startPort+edge.portOffset)
 		addr := fmt.Sprintf("%s:%d", host, ports[i])
 
 		peers[addr] = []string{}
@@ -261,7 +261,7 @@ func broadcastTest(t *testing.T, nodes []*network.Network, processors []*tProces
 }
 
 func TestRing(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	// parse to flags to silence the glog library
 	flag.Parse()
@@ -289,7 +289,7 @@ func TestRing(t *testing.T) {
 }
 
 func TestMesh(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	// parse to flags to silence the glog library
 	flag.Parse()
@@ -316,7 +316,7 @@ func TestMesh(t *testing.T) {
 }
 
 func TestStar(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	// parse to flags to silence the glog library
 	flag.Parse()
@@ -342,7 +342,7 @@ func TestStar(t *testing.T) {
 }
 
 func TestFullyConnected(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	// parse to flags to silence the glog library
 	flag.Parse()
@@ -368,7 +368,7 @@ func TestFullyConnected(t *testing.T) {
 }
 
 func TestLine(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	// parse to flags to silence the glog library
 	flag.Parse()
@@ -394,7 +394,7 @@ func TestLine(t *testing.T) {
 }
 
 func TestTree(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	// parse to flags to silence the glog library
 	flag.Parse()
