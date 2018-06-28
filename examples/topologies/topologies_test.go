@@ -228,6 +228,8 @@ func bootstrapNodes(nodes []*network.Network, peers map[string][]string) error {
 }
 
 func broadcastTest(t *testing.T, nodes []*network.Network, processors []*tProcessor, sender int) {
+	timeout := 250 * time.Millisecond
+
 	// Broadcast is an asynchronous call to send a message to other nodes
 	expected := fmt.Sprintf("message from node %d", sender)
 	nodes[sender].Broadcast(&messages.BasicMessage{Message: expected})
@@ -237,7 +239,7 @@ func broadcastTest(t *testing.T, nodes []*network.Network, processors []*tProces
 		select {
 		case received := <-processors[sender].Mailbox:
 			t.Errorf("expected nothing in sending node %d, got %v", sender, received)
-		case <-time.After(500 * time.Millisecond):
+		case <-time.After(timeout):
 			// this is the good case, don't want to receive anything
 		}
 	}
@@ -254,7 +256,7 @@ func broadcastTest(t *testing.T, nodes []*network.Network, processors []*tProces
 			if received.Message != expected {
 				t.Errorf("expected message '%s' for node %d --> %d, but got %v", expected, sender, i, received)
 			}
-		case <-time.After(1000 * time.Millisecond):
+		case <-time.After(timeout):
 			t.Errorf("expected a message for node %d --> %d, but it timed out", sender, i)
 		}
 	}
