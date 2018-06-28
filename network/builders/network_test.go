@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	kp   = crypto.RandomKeyPair()
-	host = "localhost"
-	port = uint16(12345)
+	keypair = crypto.RandomKeyPair()
+	host    = "localhost"
+	port    = uint16(12345)
 )
 
 // MockProcessor so to keep independency to incoming.go and outgoing.go
@@ -33,9 +33,9 @@ func (p *MockProcessor) Handle(ctx *network.MessageContext) error {
 	return nil
 }
 
-func buildNet(port uint16) (*network.Network, error) {
+func buildNetwork(port uint16) (*network.Network, error) {
 	builder := &builders.NetworkBuilder{}
-	builder.SetKeys(kp)
+	builder.SetKeys(keypair)
 	builder.SetHost(host)
 	builder.SetPort(port)
 
@@ -45,7 +45,7 @@ func buildNet(port uint16) (*network.Network, error) {
 }
 
 func TestBuildNetwork(t *testing.T) {
-	_, err := buildNet(port)
+	_, err := buildNetwork(port)
 
 	if err != nil {
 		t.Fatalf("testbuildnetwork error: %v", err)
@@ -53,7 +53,7 @@ func TestBuildNetwork(t *testing.T) {
 }
 
 func TestSetters(t *testing.T) {
-	net, _ := buildNet(port)
+	net, _ := buildNetwork(port)
 	if net.Address() != fmt.Sprintf("127.0.0.1:%d", port) { //unified
 		t.Fatalf("address is wrong: expected %s but got %s", fmt.Sprintf("127.0.0.1:%d", port), net.Address())
 	}
@@ -61,16 +61,16 @@ func TestSetters(t *testing.T) {
 		t.Fatal("host is wrong")
 	}
 
-	comparee := peer.CreateID("localhost:12345", kp.PublicKey)
+	comparee := peer.CreateID("localhost:12345", keypair.PublicKey)
 	if !net.ID.Equals(comparee) {
 		t.Fatalf("address is wrong %s", net.ID)
 	}
 
-	if !bytes.Equal(net.Keys.PrivateKey, kp.PrivateKey) {
+	if !bytes.Equal(net.Keys.PrivateKey, keypair.PrivateKey) {
 		t.Fatalf("private key is wrong")
 	}
 
-	if !bytes.Equal(net.Keys.PublicKey, kp.PublicKey) {
+	if !bytes.Equal(net.Keys.PublicKey, keypair.PublicKey) {
 		t.Fatalf("public key is wrong")
 	}
 
@@ -83,7 +83,7 @@ func TestPeers(t *testing.T) {
 	// Build
 	for i := 0; i < 3; i++ {
 		myport := port + uint16(i)
-		net, _ := buildNet(myport)
+		net, _ := buildNetwork(myport)
 		go net.Listen()
 		net.BlockUntilListening()
 		if i != 0 {

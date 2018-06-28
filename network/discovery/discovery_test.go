@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	kp   = crypto.RandomKeyPair()
-	host = "localhost"
-	port = 12345
+	keypair = crypto.RandomKeyPair()
+	host    = "localhost"
+	port    = 12345
 )
 
 // MockProcessor so to keep independency to incoming.go and outgoing.go
@@ -33,9 +33,9 @@ func (p *MockProcessor) Handle(ctx *network.MessageContext) error {
 	return nil
 }
 
-func buildNet(port uint16) *builders.NetworkBuilder {
+func buildNetwork(port uint16) *builders.NetworkBuilder {
 	builder := &builders.NetworkBuilder{}
-	builder.SetKeys(kp)
+	builder.SetKeys(keypair)
 	builder.SetHost(host)
 	builder.SetPort(port)
 
@@ -45,19 +45,19 @@ func buildNet(port uint16) *builders.NetworkBuilder {
 }
 
 func TestDiscovery(t *testing.T) {
-	nb1 := buildNet(uint16(port))
-	discovery.BootstrapPeerDiscovery(nb1)
-	net1, _ := nb1.BuildNetwork()
-	expected := []string{
+	builder := buildNetwork(uint16(port))
+	discovery.BootstrapPeerDiscovery(builder)
+	network, _ := builder.BuildNetwork()
+	expectedProcessors := []string{
 		"*protobuf.HandshakeRequest",
 		"*protobuf.HandshakeResponse",
 		"*protobuf.LookupNodeRequest",
 	}
-	processors := fmt.Sprintf("%v", net1.Processors)
+	processors := fmt.Sprintf("%v", network.Processors)
 	// expected: &{{{0 0} {{map[] true}} map[*protobuf.HandshakeRequest:0xc4200c4068 *protobuf.HandshakeResponse:0xc4200c4070 *protobuf.LookupNodeRequest:0xc4200c4078] 0}}
-	for _, v := range expected {
-		if !strings.Contains(processors, v) {
-			t.Fatalf("not enough processor: %s", v)
+	for _, processor := range expectedProcessors {
+		if !strings.Contains(processors, processor) {
+			t.Fatalf("not enough processor: %s", processor)
 		}
 	}
 }
