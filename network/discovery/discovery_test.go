@@ -22,9 +22,9 @@ var (
 //MockProcessor so to keep independency to incoming.go and outgoing.go
 type MockProcessor struct{}
 
-func (p *MockProcessor) Handle(client *network.PeerClient, message *network.IncomingMessage) error {
+func (p *MockProcessor) Handle(ctx *network.MessageContext) error {
 	// Send handshake response to peer.
-	err := client.Tell(&protobuf.HandshakeResponse{})
+	err := ctx.Reply(&protobuf.HandshakeResponse{})
 
 	if err != nil {
 		glog.Error(err)
@@ -33,7 +33,7 @@ func (p *MockProcessor) Handle(client *network.PeerClient, message *network.Inco
 	return nil
 }
 
-func buildNet(port int) *builders.NetworkBuilder {
+func buildNet(port uint16) *builders.NetworkBuilder {
 	builder := &builders.NetworkBuilder{}
 	builder.SetKeys(kp)
 	builder.SetHost(host)
@@ -45,7 +45,7 @@ func buildNet(port int) *builders.NetworkBuilder {
 }
 
 func TestDiscovery(t *testing.T) {
-	nb1 := buildNet(port)
+	nb1 := buildNet(uint16(port))
 	discovery.BootstrapPeerDiscovery(nb1)
 	net1, _ := nb1.BuildNetwork()
 	expected := []string{

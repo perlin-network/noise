@@ -9,7 +9,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/grpc_utils"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/peer"
@@ -19,15 +18,15 @@ import (
 var (
 	kp   = crypto.RandomKeyPair()
 	host = "localhost"
-	port = 12345
+	port = uint16(12345)
 )
 
 //MockProcessor so to keep independency to incoming.go and outgoing.go
 type MockProcessor struct{}
 
-func (p *MockProcessor) Handle(client *network.PeerClient, message *network.IncomingMessage) error {
+func (p *MockProcessor) Handle(ctx *network.MessageContext) error {
 	// Send handshake response to peer.
-	err := client.Tell(&protobuf.HandshakeResponse{})
+	err := ctx.Reply(&protobuf.HandshakeResponse{})
 
 	if err != nil {
 		glog.Error(err)
@@ -36,7 +35,7 @@ func (p *MockProcessor) Handle(client *network.PeerClient, message *network.Inco
 	return nil
 }
 
-func buildNet(port int) (*network.Network, error) {
+func buildNet(port uint16) (*network.Network, error) {
 	builder := &builders.NetworkBuilder{}
 	builder.SetKeys(kp)
 	builder.SetHost(host)
@@ -87,9 +86,6 @@ func TestPeers(t *testing.T) {
 	go net1.Listen()
 	go net2.Listen()
 	go net3.Listen()
-	grpc_utils.BlockUntilConnectionReady(host, 12345, 10)
-	grpc_utils.BlockUntilConnectionReady(host, 12346, 10)
-	grpc_utils.BlockUntilConnectionReady(host, 12347, 10)
 
 	//goroutines race for some reason
 	time.Sleep(1 * time.Millisecond)
@@ -99,6 +95,8 @@ func TestPeers(t *testing.T) {
 	net1.Bootstrap(peers...)
 	net2.Bootstrap(peers...)
 	net3.Bootstrap(peers...)
+	//Give some time for discovery
+	time.Sleep(1 * time.Second)
 
 	resolvedHost := "127.0.0.1"
 	resolvedAddr1 := fmt.Sprintf("%s:12345", resolvedHost)
@@ -109,6 +107,7 @@ func TestPeers(t *testing.T) {
 		!strings.Contains(fmt.Sprintf("%v", net1.Peers), resolvedAddr3) {
 		t.Fatalf("missing Peers 0")
 	}
+
 	if _, ok := net1.GetPeer(resolvedAddr2); !ok {
 		t.Fatalf("net1 missing peer: %s", resolvedAddr2)
 	}
@@ -129,4 +128,4 @@ func TestPeers(t *testing.T) {
 	}
 }
 
-//Boardcast functions can be tested using examples/clusters
+//Boardcast functions can be tested using examples

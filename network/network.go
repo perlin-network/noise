@@ -209,3 +209,13 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 
 	n.BroadcastByAddresses(message, addresses[:K]...)
 }
+
+// GetPeer Loads the peer from n.Peers
+func (n *Network) GetPeer(address string) (*PeerClient, bool) {
+	client, ok := n.Peers.Load(address)
+	if !ok || client == nil {
+		return nil, false
+	}
+
+	return client, true
+}
