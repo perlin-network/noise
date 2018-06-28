@@ -60,7 +60,7 @@ func (builder *NetworkBuilder) AddProcessor(message proto.Message, processor net
 // misconfiguration, or a noise.network.Network.
 func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 	if builder.keys == nil {
-		return nil, errors.New("cryptography keypair not provided to Network; cannot create node Id")
+		return nil, errors.New("cryptography keys not provided to Network; cannot create node Id")
 	}
 
 	if len(builder.host) == 0 {

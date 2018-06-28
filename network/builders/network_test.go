@@ -8,15 +8,14 @@ import (
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 )
 
 var (
-	keypair = crypto.RandomKeyPair()
-	host    = "localhost"
-	port    = uint16(12345)
+	keys = crypto.RandomKeyPair()
+	host = "localhost"
+	port = uint16(12345)
 )
 
 // MockProcessor so to keep independency to incoming.go and outgoing.go
@@ -34,8 +33,8 @@ func (p *MockProcessor) Handle(ctx *network.MessageContext) error {
 }
 
 func buildNetwork(port uint16) (*network.Network, error) {
-	builder := &builders.NetworkBuilder{}
-	builder.SetKeys(keypair)
+	builder := &NetworkBuilder{}
+	builder.SetKeys(keys)
 	builder.SetHost(host)
 	builder.SetPort(port)
 
@@ -48,29 +47,29 @@ func TestBuildNetwork(t *testing.T) {
 	_, err := buildNetwork(port)
 
 	if err != nil {
-		t.Fatalf("testbuildnetwork error: %v", err)
+		t.Fatalf("error: %v", err)
 	}
 }
 
 func TestSetters(t *testing.T) {
 	net, _ := buildNetwork(port)
-	if net.Address() != fmt.Sprintf("127.0.0.1:%d", port) { //unified
+	if net.Address() != fmt.Sprintf("127.0.0.1:%d", port) { // Unified address.
 		t.Fatalf("address is wrong: expected %s but got %s", fmt.Sprintf("127.0.0.1:%d", port), net.Address())
 	}
-	if net.Host != fmt.Sprintf("127.0.0.1") { //unified
+	if net.Host != fmt.Sprintf("127.0.0.1") { // Unified address.
 		t.Fatal("host is wrong")
 	}
 
-	comparee := peer.CreateID("localhost:12345", keypair.PublicKey)
+	comparee := peer.CreateID("localhost:12345", keys.PublicKey)
 	if !net.ID.Equals(comparee) {
 		t.Fatalf("address is wrong %s", net.ID)
 	}
 
-	if !bytes.Equal(net.Keys.PrivateKey, keypair.PrivateKey) {
+	if !bytes.Equal(net.Keys.PrivateKey, keys.PrivateKey) {
 		t.Fatalf("private key is wrong")
 	}
 
-	if !bytes.Equal(net.Keys.PublicKey, keypair.PublicKey) {
+	if !bytes.Equal(net.Keys.PublicKey, keys.PublicKey) {
 		t.Fatalf("public key is wrong")
 	}
 
@@ -101,4 +100,4 @@ func TestPeers(t *testing.T) {
 
 }
 
-// Boardcast functions can be tested using examples
+// Broadcast functions are tested through examples.
