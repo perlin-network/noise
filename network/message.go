@@ -19,16 +19,12 @@ type MessageContext struct {
 	client  *PeerClient
 	stream  *smux.Stream
 	message proto.Message
-}
-
-// Send opens a new stream and send a message to a client.
-func (ctx *MessageContext) Send(message proto.Message) error {
-	return ctx.client.Tell(message)
+	nonce   uint64
 }
 
 // Reply sends back a message to an incoming message's incoming stream.
 func (ctx *MessageContext) Reply(message proto.Message) error {
-	return ctx.client.sendMessage(ctx.stream, message)
+	return ctx.client.Reply(ctx.nonce, message)
 }
 
 // Message returns the decoded protobuf message.

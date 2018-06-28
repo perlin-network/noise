@@ -12,7 +12,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
+	"sync/atomic"
 )
+
+type MessageChannel chan proto.Message
 
 // PeerClient represents a single incoming peers client.
 type PeerClient struct {
@@ -21,18 +24,25 @@ type PeerClient struct {
 	Id *peer.ID
 
 	Session *smux.Session
+
+	Requests     *Uint64MessageChannelSyncMap
+	RequestNonce uint64
 }
 
 // createPeerClient creates a stub peer client.
 func createPeerClient(network *Network) *PeerClient {
-	return &PeerClient{Network: network}
+	return &PeerClient{Network: network, Requests: new(Uint64MessageChannelSyncMap), RequestNonce: 0}
+}
+
+func (c *PeerClient) nextNonce() uint64 {
+	return atomic.AddUint64(&c.RequestNonce, 1)
 }
 
 // establishConnection establishes a session by dialing a peers address. Errors if
 // peer is not dial-able, or if the peer client already is connected.
 func (c *PeerClient) establishConnection(address string) error {
 	if c.Session != nil {
-		return errors.New("connection already established")
+		return nil
 	}
 
 	dialer, err := kcp.DialWithOptions(address, nil, 10, 3)
@@ -78,9 +88,9 @@ func (c *PeerClient) Close() {
 	}
 }
 
-// PrepareMessage marshals a message into a proto.Message and signs it with this
+// prepareMessage marshals a message into a proto.Message and signs it with this
 // nodes private key. Errors if the message is null.
-func (c *PeerClient) PrepareMessage(message proto.Message) (*protobuf.Message, error) {
+func (c *PeerClient) prepareMessage(message proto.Message) (*protobuf.Message, error) {
 	if message == nil {
 		return nil, errors.New("message is null")
 	}
@@ -108,27 +118,8 @@ func (c *PeerClient) PrepareMessage(message proto.Message) (*protobuf.Message, e
 
 // Tell asynchronously emit a message to a given peer.
 func (c *PeerClient) Tell(message proto.Message) error {
-	if c.Session == nil {
-		return errors.New("client session nil")
-	}
-
-	// Open a new stream.
-	stream, err := c.Session.OpenStream()
-	if err != nil {
-		return err
-	}
-	defer stream.Close()
-
-	// Send message bytes.
-	err = c.sendMessage(stream, message)
-	if err != nil {
-		if err.Error() == "broken pipe" {
-			c.Close()
-		}
-		return err
-	}
-
-	return nil
+	// A nonce of 0 indicates a message that is not a request/response.
+	return c.Reply(0, message)
 }
 
 // Request requests for a response for a request sent to a given peer.
@@ -146,29 +137,64 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 
 	stream.SetDeadline(time.Now().Add(req.Timeout))
 
+	// Prepare message.
+	msg, err := c.prepareMessage(req.Message)
+	if err != nil {
+		return nil, err
+	}
+
+	msg.Nonce = c.nextNonce()
+
 	// Send request bytes.
-	err = c.sendMessage(stream, req.Message)
+	err = c.Network.sendMessage(stream, msg)
 	if err != nil {
-		if err.Error() == "broken pipe" {
-			c.Close()
-		}
 		return nil, err
 	}
 
-	// Await for response message.
-	res, err := c.receiveMessage(stream)
+	// Start tracking the request.
+	channel := make(MessageChannel, 1)
+	c.Requests.Store(msg.Nonce, channel)
+
+	// Stop tracking the request.
+	defer close(channel)
+	defer c.Requests.Delete(msg.Nonce)
+
+	select {
+	case res := <-channel:
+		return res, nil
+	case <-time.After(req.Timeout):
+		return nil, errors.New("request timed out")
+	}
+
+	return nil, errors.New("request timed out")
+}
+
+// Reply is equivalent to Tell() with an appended nonce to signal a reply.
+func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
+	if c.Session == nil {
+		return errors.New("client session nil")
+	}
+
+	// Open a new stream.
+	stream, err := c.Session.OpenStream()
 	if err != nil {
-		if err.Error() == "broken pipe" {
-			c.Close()
-		}
-		return nil, err
+		return err
+	}
+	defer stream.Close()
+
+	// Prepare message.
+	msg, err := c.prepareMessage(message)
+	if err != nil {
+		return err
 	}
 
-	// Unmarshal response protobuf.
-	var ptr ptypes.DynamicAny
-	if err := ptypes.UnmarshalAny(res.Message, &ptr); err != nil {
-		return nil, err
+	msg.Nonce = nonce
+
+	// Send message bytes.
+	err = c.Network.sendMessage(stream, msg)
+	if err != nil {
+		return err
 	}
 
-	return ptr.Message, nil
+	return nil
 }
