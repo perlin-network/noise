@@ -96,7 +96,9 @@ func TestPeers(t *testing.T) {
 	net2.Bootstrap(peers...)
 	net3.Bootstrap(peers...)
 	//Give some time for discovery
-	time.Sleep(1 * time.Second)
+	net1.BlockUntilListening()
+	net2.BlockUntilListening()
+	net3.BlockUntilListening()
 
 	resolvedHost := "127.0.0.1"
 	resolvedAddr1 := fmt.Sprintf("%s:12345", resolvedHost)
