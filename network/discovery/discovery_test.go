@@ -18,7 +18,7 @@ var (
 	port = 12345
 )
 
-// MockProcessor to keep independent from incoming.go and outgoing.go
+// MockProcessor to keep independent from incoming.go and outgoing.go.
 type MockProcessor struct{}
 
 func (p *MockProcessor) Handle(ctx *network.MessageContext) error {
