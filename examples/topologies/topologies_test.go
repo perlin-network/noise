@@ -14,47 +14,37 @@ import (
 )
 
 const (
-	host = "localhost"
+	host = "127.0.0.1"
 )
 
-// tNode holds the variables to create the network and implements the message handler
-type tNode struct {
-	Host    string
-	Port    int
-	Peers   []string
-	Net     *network.Network
+// tProcessor implements the message handler
+type tProcessor struct {
 	Mailbox chan *messages.BasicMessage
 }
 
 // Handle implements the network interface callback
-func (n *tNode) Handle(ctx *network.MessageContext) error {
+func (n *tProcessor) Handle(ctx *network.MessageContext) error {
 	message := ctx.Message().(*messages.BasicMessage)
 	n.Mailbox <- message
 	return nil
 }
 
-func setupRingNodes(startPort int) []*tNode {
+func setupRingNodes(startPort int) ([]int, map[string][]string) {
 	numNodes := 4
-	var nodes []*tNode
+	var ports []int
+	peers := map[string][]string{}
 
 	for i := 0; i < numNodes; i++ {
-		node := &tNode{}
-		node.Host = host
-		node.Port = startPort + i
+		ports = append(ports, startPort+i)
+		addr := fmt.Sprintf("%s:%d", host, ports[i])
 
 		// in a ring, each node is only connected to 2 others
-		//node.Peers = append(node.Peers, fmt.Sprintf("%s:%d", node.Host, (node.Port+1)%(startPort+numNodes)))
-		//node.Peers = append(node.Peers, fmt.Sprintf("%s:%d", node.Host, (node.Port-1)%(startPort+numNodes)))
-
-		// only connect to the first node for now
-		if i > 0 {
-			node.Peers = append(node.Peers, fmt.Sprintf("%s:%d", node.Host, startPort))
-		}
-
-		nodes = append(nodes, node)
+		peers[addr] = []string{}
+		peers[addr] = append(peers[addr], fmt.Sprintf("%s:%d", host, ports[i]+(numNodes+i+1)%numNodes))
+		peers[addr] = append(peers[addr], fmt.Sprintf("%s:%d", host, ports[i]+(numNodes+i-1)%numNodes))
 	}
 
-	return nodes
+	return ports, peers
 }
 
 /*
@@ -194,64 +184,67 @@ func setupTreeNodes(startPort int) []*tNode {
 
 */
 
-// setupCluster sets up a connected group of nodes in a cluster.
-func setupCluster(nodes []*tNode) error {
-	for _, node := range nodes {
+// setupNodes sets up a connected group of nodes in a cluster.
+func setupNodes(ports []int) ([]*network.Network, []*tProcessor, error) {
+	var nodes []*network.Network
+	var processors []*tProcessor
+
+	for _, port := range ports {
 		builder := &builders.NetworkBuilder{}
 		builder.SetKeys(crypto.RandomKeyPair())
-		builder.SetHost(node.Host)
-		builder.SetPort(uint16(node.Port))
+		builder.SetHost(host)
+		builder.SetPort(uint16(port))
 
 		discovery.BootstrapPeerDiscovery(builder)
 
-		builder.AddProcessor((*messages.BasicMessage)(nil), node)
+		processor := &tProcessor{Mailbox: make(chan *messages.BasicMessage, 1)}
+		builder.AddProcessor((*messages.BasicMessage)(nil), processor)
 
-		net, err := builder.BuildNetwork()
+		node, err := builder.BuildNetwork()
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
-		node.Net = net
+		nodes = append(nodes, node)
+		processors = append(processors, processor)
 
-		go net.Listen()
-
-		// TODO: seems there's another race condition with Bootstrap, use a sleep for now
-		time.Sleep(1000 * time.Millisecond)
+		go node.Listen()
 	}
 
+	//for _, node := range nodes {
+	//	node.BlockUntilListening()
+	//}
 	// Wait for all nodes to finish discovering other peers.
-	//time.Sleep(1 * time.Second)
+	time.Sleep(1000 * time.Millisecond)
 
-	return nil
+	return nodes, processors, nil
 }
 
-func bootstrapNodes(nodes []*tNode) error {
-	for i, node := range nodes {
-		if node.Net == nil {
-			return fmt.Errorf("expected %d nodes, but node %d is missing a network", len(nodes), i)
-		}
-
-		if len(node.Peers) == 0 {
+func bootstrapNodes(nodes []*network.Network, peers map[string][]string) error {
+	for _, node := range nodes {
+		if len(peers[node.Address()]) == 0 {
 			continue
 		}
 
 		// get nodes to start talking with each other
-		node.Net.Bootstrap(node.Peers...)
+		node.Bootstrap(peers[node.Address()]...)
 
-		// TODO: seems there's another race condition with Bootstrap, use a sleep for now
-		time.Sleep(1000 * time.Millisecond)
 	}
+
+	// Wait for all nodes to finish discovering other peers.
+	time.Sleep(1000 * time.Millisecond)
+
 	return nil
 }
 
-func broadcastTest(t *testing.T, nodes []*tNode, sender int) {
+func broadcastTest(t *testing.T, nodes []*network.Network, processors []*tProcessor, sender int) {
 	// Broadcast is an asynchronous call to send a message to other nodes
 	expected := fmt.Sprintf("message from node %d", sender)
-	nodes[sender].Net.Broadcast(&messages.BasicMessage{Message: expected})
+	nodes[sender].Broadcast(&messages.BasicMessage{Message: expected})
 
 	// make sure the sender didn't get his own message
 	{
 		select {
-		case received := <-nodes[sender].Mailbox:
+		case received := <-processors[sender].Mailbox:
 			t.Errorf("expected nothing in sending node %d, got %v", sender, received)
 		case <-time.After(1 * time.Second):
 			// this is the good case, don't want to receive anything
@@ -265,7 +258,7 @@ func broadcastTest(t *testing.T, nodes []*tNode, sender int) {
 			continue
 		}
 		select {
-		case received := <-nodes[i].Mailbox:
+		case received := <-processors[i].Mailbox:
 			// this is a receiving node, it should have just the one message buffered up
 			if received.Message != expected {
 				t.Errorf("expected message '%s' for node %d --> %d, but got %v", expected, sender, i, received)
@@ -279,28 +272,27 @@ func broadcastTest(t *testing.T, nodes []*tNode, sender int) {
 func TestRing(t *testing.T) {
 	t.Parallel()
 
-	// glog defaults to logging to a file, override this flag to log to console for testing
-	flag.Set("logtostderr", "true")
-
 	// parse to flags to silence the glog library
 	flag.Parse()
 
-	nodes := setupRingNodes(5010)
+	var nodes []*network.Network
+	var processors []*tProcessor
+	var err error
 
-	if err := setupCluster(nodes); err != nil {
+	ports, peers := setupRingNodes(5010)
+
+	nodes, processors, err = setupNodes(ports)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := bootstrapNodes(nodes); err != nil {
+	if err := bootstrapNodes(nodes, peers); err != nil {
 		t.Fatal(err)
 	}
 
-	broadcastTest(t, nodes, 0)
-	/*
-		for i := 0; i < len(nodes); i++ {
-			broadcastNode(t, nodes, i)
-		}
-	*/
+	for i := 0; i < len(nodes); i++ {
+		broadcastTest(t, nodes, processors, i)
+	}
 
 	// TODO: should close the connection to release the port
 }
