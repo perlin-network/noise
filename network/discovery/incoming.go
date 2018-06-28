@@ -15,7 +15,7 @@ type HandshakeRequestProcessor struct{}
 
 func (HandshakeRequestProcessor) Handle(ctx *network.MessageContext) error {
 	// Send handshake response to peer.
-	err := ctx.Send(&protobuf.HandshakeResponse{})
+	err := ctx.Reply(&protobuf.HandshakeResponse{})
 
 	if err != nil {
 		glog.Error(err)
