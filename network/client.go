@@ -75,7 +75,13 @@ func (c *PeerClient) Dial(address string) error {
 	return nil
 }
 
+// Attempts to re-establish a connect with a client that was
+// already previously connected to
 func (c *PeerClient) Redial() error {
+	if c.Id == nil {
+		return errors.New("client id is null")
+	}
+
 	return c.Dial(c.Id.Address)
 }
 
