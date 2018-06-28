@@ -377,7 +377,7 @@ func TestLine(t *testing.T) {
 	var processors []*tProcessor
 	var err error
 
-	ports, peers := setupMeshNodes(5050)
+	ports, peers := setupLineNodes(5050)
 
 	nodes, processors, err = setupNodes(ports)
 	if err != nil {
@@ -403,7 +403,7 @@ func TestTree(t *testing.T) {
 	var processors []*tProcessor
 	var err error
 
-	ports, peers := setupMeshNodes(5060)
+	ports, peers := setupTreeNodes(5060)
 
 	nodes, processors, err = setupNodes(ports)
 	if err != nil {
