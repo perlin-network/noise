@@ -215,7 +215,7 @@ func setupCluster(nodes []*tNode) error {
 		go net.Listen()
 
 		// TODO: seems there's another race condition with Bootstrap, use a sleep for now
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 	}
 
 	// Wait for all nodes to finish discovering other peers.
@@ -238,7 +238,7 @@ func bootstrapNodes(nodes []*tNode) error {
 		node.Net.Bootstrap(node.Peers...)
 
 		// TODO: seems there's another race condition with Bootstrap, use a sleep for now
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 	}
 	return nil
 }
