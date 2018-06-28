@@ -108,22 +108,22 @@ func TestPeers(t *testing.T) {
 		t.Fatalf("missing Peers 0")
 	}
 
-	if _, ok := net1.GetPeer(resolvedAddr2); !ok {
+	if _, err := net1.Client(resolvedAddr2); err != nil {
 		t.Fatalf("net1 missing peer: %s", resolvedAddr2)
 	}
-	if _, ok := net1.GetPeer(resolvedAddr3); !ok {
+	if _, err := net1.Client(resolvedAddr3); err != nil {
 		t.Fatalf("net1 missing peer: %s", resolvedAddr3)
 	}
-	if _, ok := net2.GetPeer(resolvedAddr1); !ok {
+	if _, err := net2.Client(resolvedAddr1); err != nil {
 		t.Fatalf("net2 missing peer: %s", resolvedAddr1)
 	}
-	if _, ok := net2.GetPeer(resolvedAddr3); !ok {
+	if _, err := net2.Client(resolvedAddr3); err != nil {
 		t.Fatalf("net2 missing peer: %s", resolvedAddr3)
 	}
-	if _, ok := net3.GetPeer(resolvedAddr1); !ok {
+	if _, err := net3.Client(resolvedAddr1); err != nil {
 		t.Fatalf("net3 missing peer: %s", resolvedAddr1)
 	}
-	if _, ok := net3.GetPeer(resolvedAddr2); !ok {
+	if _, err := net3.Client(resolvedAddr2); err != nil {
 		t.Fatalf("net3 missing peer: %s", resolvedAddr2)
 	}
 }
