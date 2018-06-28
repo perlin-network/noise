@@ -41,6 +41,7 @@ func (n *Network) Ingest(conn net.Conn) {
 
 			// Failed to receive message.
 			if err != nil {
+				glog.Warning(err)
 				return
 			}
 
@@ -49,6 +50,7 @@ func (n *Network) Ingest(conn net.Conn) {
 				client, err = n.Client(msg.Sender.Address)
 
 				if err != nil {
+					glog.Warning(err)
 					return
 				}
 			}
