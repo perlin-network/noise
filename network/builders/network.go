@@ -95,7 +95,7 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 
 		Peers: &network.StringPeerClientSyncMap{},
 
-		Listening: make(chan struct{}, 1),
+		Listening: make(chan struct{}),
 	}
 
 	return net, nil

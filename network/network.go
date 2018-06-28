@@ -57,7 +57,7 @@ func (n *Network) Listen() {
 		return
 	}
 
-	n.Listening <- struct{}{}
+	close(n.Listening)
 
 	glog.Infof("Listening for peers on port %d.", n.Port)
 
@@ -99,8 +99,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 
 // BlockUntilListening blocks until this node is listening for new peers.
 func (n *Network) BlockUntilListening() {
-	for len(n.Listening) == 0 {
-	}
+	<-n.Listening
 }
 
 // Bootstrap with a number of peers and commence a handshake.
