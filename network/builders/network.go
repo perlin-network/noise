@@ -13,6 +13,7 @@ import (
 	"github.com/perlin-network/noise/peer"
 )
 
+// NetworkBuilder is a Address->processors struct
 type NetworkBuilder struct {
 	keys *crypto.KeyPair
 	host string
@@ -27,7 +28,7 @@ func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
 	builder.keys = pair
 }
 
-// SetHost of NetworkBuilder
+// SetHost of NetworkBuilder e.g. "127.0.0.1"
 func (builder *NetworkBuilder) SetHost(host string) {
 	builder.host = host
 }
@@ -37,7 +38,7 @@ func (builder *NetworkBuilder) SetPort(port uint16) {
 	builder.port = port
 }
 
-// Sets a processor for a given message,
+// AddProcessor for a given message,
 // Example: builder.AddProcessor((*protobuf.LookupNodeRequest)(nil), MessageProcessor{})
 func (builder *NetworkBuilder) AddProcessor(message proto.Message, processor network.MessageProcessor) {
 	// Initialize map if not exist.

@@ -3,6 +3,8 @@ package network
 import (
 	"time"
 
+	"sync/atomic"
+
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
@@ -12,7 +14,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
-	"sync/atomic"
 )
 
 type MessageChannel chan proto.Message
