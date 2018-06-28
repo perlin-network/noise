@@ -3,7 +3,6 @@ package network
 import (
 	"fmt"
 	"math/rand"
-	"net"
 	"strconv"
 	"strings"
 
@@ -15,7 +14,6 @@ import (
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
-	"github.com/xtaci/smux"
 )
 
 // Network represents the current networking state for this node.
@@ -66,37 +64,37 @@ func (n *Network) Listen() {
 	// Handle new clients.
 	for {
 		if conn, err := listener.Accept(); err == nil {
-			go n.handleMux(conn)
+			go n.Ingest(conn)
 		} else {
 			glog.Error(err)
 		}
 	}
 }
 
-func (n *Network) handleMux(conn net.Conn) {
-	session, err := smux.Server(conn, muxConfig())
-	if err != nil {
-		glog.Error(err)
-		return
+// Client either creates or returns a cached peer client given its host address.
+func (n *Network) Client(address string) (*PeerClient, error) {
+	address = strings.TrimSpace(address)
+	if len(address) == 0 {
+		return nil, fmt.Errorf("cannot dial, address was empty")
 	}
 
-	defer session.Close()
+	address, err := ToUnifiedAddress(address)
+	if err != nil {
+		return nil, err
+	}
+
+	if address == n.Address() {
+		return nil, errors.New("peer should not dial itself")
+	}
+
+	if client, exists := n.Peers.Load(address); exists {
+		return client, nil
+	}
 
 	client := createPeerClient(n)
+	n.Peers.Store(address, client)
 
-	// Handle new streams and process their incoming messages.
-	for {
-		stream, err := session.AcceptStream()
-		if err != nil {
-			if err.Error() == "broken pipe" {
-				client.Close()
-			}
-			break
-		}
-
-		// One goroutine per request stream.
-		go client.ingest(stream)
-	}
+	return client, nil
 }
 
 // Bootstrap with a number of peers and commence a handshake.
@@ -121,27 +119,12 @@ func (n *Network) Bootstrap(addresses ...string) {
 	}
 }
 
+// Dial establishes a connection to a peer and returns a PeerClient instance to it.
 func (n *Network) Dial(address string) (*PeerClient, error) {
-	address = strings.TrimSpace(address)
-	if len(address) == 0 {
-		return nil, fmt.Errorf("cannot dial, address was empty")
-	}
-
-	address, err := ToUnifiedAddress(address)
+	client, err := n.Client(address)
 	if err != nil {
 		return nil, err
 	}
-
-	if address == n.Address() {
-		return nil, errors.New("peer should not dial itself")
-	}
-
-	// Load a cached connection.
-	if client, exists := n.Peers.Load(address); exists && client != nil {
-		return client, nil
-	}
-
-	client := createPeerClient(n)
 
 	err = client.establishConnection(address)
 	if err != nil {
@@ -152,7 +135,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 	return client, nil
 }
 
-// Asynchronously broadcast a message to all peer clients.
+// Broadcast asynchronously broadcasts a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
 	n.Peers.Range(func(key string, client *PeerClient) bool {
 		err := client.Tell(message)
@@ -165,7 +148,7 @@ func (n *Network) Broadcast(message proto.Message) {
 	})
 }
 
-// Asynchronously broadcast a message to a set of peer clients denoted by their addresses.
+// BroadcastByAddresses broadcasts a message to a set of peer clients denoted by their addresses.
 func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
 	for _, address := range addresses {
 		if client, ok := n.Peers.Load(address); ok {
@@ -182,7 +165,7 @@ func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...strin
 	}
 }
 
-// Asynchronously broadcast a message to a set of peer clients denoted by their peer IDs.
+// BroadcastByIds broadcasts a message to a set of peer clients denoted by their peer IDs.
 func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
 	for _, id := range ids {
 		if client, ok := n.Peers.Load(id.Address); ok {
@@ -199,7 +182,7 @@ func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
 	}
 }
 
-// Asynchronously broadcast message to random selected K peers.
+// BroadcastRandomly asynchronously broadcast message to random selected K peers.
 // Does not guarantee broadcasting to exactly K peers.
 func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	var addresses []string
