@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/protobuf"
@@ -40,7 +41,7 @@ func (n *Network) sendMessage(stream *smux.Stream, message proto.Message) error 
 	}
 
 	if written != len(bytes) {
-		return errors.New("failed to write all bytes to stream")
+		return fmt.Errorf("only wrote %d / %d bytes to stream", written, len(bytes))
 	}
 
 	return nil
