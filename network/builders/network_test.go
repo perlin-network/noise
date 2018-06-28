@@ -3,9 +3,7 @@ package builders
 import (
 	"bytes"
 	"fmt"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
@@ -78,56 +76,30 @@ func TestSetters(t *testing.T) {
 
 }
 func TestPeers(t *testing.T) {
-	net1, _ := buildNet(port)
 
-	net2, _ := buildNet(12346)
-	net3, _ := buildNet(12347)
-
-	go net1.Listen()
-	go net2.Listen()
-	go net3.Listen()
-
-	//goroutines race for some reason
-	time.Sleep(1 * time.Millisecond)
-	peers := []string{}
-	peers = append(peers, "localhost:12346")
-	peers = append(peers, "localhost:12347")
-	net1.Bootstrap(peers...)
-	net2.Bootstrap(peers...)
-	net3.Bootstrap(peers...)
-	//Give some time for discovery
-	net1.BlockUntilListening()
-	net2.BlockUntilListening()
-	net3.BlockUntilListening()
-
-	resolvedHost := "127.0.0.1"
-	resolvedAddr1 := fmt.Sprintf("%s:12345", resolvedHost)
-	resolvedAddr2 := fmt.Sprintf("%s:12346", resolvedHost)
-	resolvedAddr3 := fmt.Sprintf("%s:12347", resolvedHost)
-
-	if !strings.Contains(fmt.Sprintf("%v", net1.Peers), resolvedAddr2) ||
-		!strings.Contains(fmt.Sprintf("%v", net1.Peers), resolvedAddr3) {
-		t.Fatalf("missing Peers 0")
+	var nets []*network.Network
+	resolvedAddrs := []string{"127.0.0.1:12345", "127.0.0.1:12346", "127.0.0.1:12347"}
+	excl := [][2]int{{1, 2}, {0, 2}, {0, 1}}
+	// Build
+	for i := 0; i < 3; i++ {
+		myport := port + uint16(i)
+		net, _ := buildNet(myport)
+		go net.Listen()
+		net.BlockUntilListening()
+		if i != 0 {
+			net.Bootstrap(resolvedAddrs[0])
+		}
+		net.BlockUntilListening()
+		nets = append(nets, net)
+	}
+	for i := 0; i < len(nets); i++ {
+		for exc := range []int{0, 1} {
+			if _, err := nets[i].Client(resolvedAddrs[excl[i][exc]]); err != nil {
+				t.Fatalf("nets[%d] missing peer: %s", i, resolvedAddrs[excl[i][exc]])
+			}
+		}
 	}
 
-	if _, err := net1.Client(resolvedAddr2); err != nil {
-		t.Fatalf("net1 missing peer: %s", resolvedAddr2)
-	}
-	if _, err := net1.Client(resolvedAddr3); err != nil {
-		t.Fatalf("net1 missing peer: %s", resolvedAddr3)
-	}
-	if _, err := net2.Client(resolvedAddr1); err != nil {
-		t.Fatalf("net2 missing peer: %s", resolvedAddr1)
-	}
-	if _, err := net2.Client(resolvedAddr3); err != nil {
-		t.Fatalf("net2 missing peer: %s", resolvedAddr3)
-	}
-	if _, err := net3.Client(resolvedAddr1); err != nil {
-		t.Fatalf("net3 missing peer: %s", resolvedAddr1)
-	}
-	if _, err := net3.Client(resolvedAddr2); err != nil {
-		t.Fatalf("net3 missing peer: %s", resolvedAddr2)
-	}
 }
 
 //Boardcast functions can be tested using examples
