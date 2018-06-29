@@ -185,7 +185,7 @@ func setupNodes(ports []int) ([]*network.Network, []*TopologyProcessor, error) {
 		builder.SetHost(host)
 		builder.SetPort(uint16(port))
 
-		// Not doing peer discovery to maintain the topology
+		// excluding peer discovery to test non-fully connected topology
 		//discovery.BootstrapPeerDiscovery(builder)
 
 		processor := &TopologyProcessor{Mailbox: make(chan *messages.BasicMessage, 1)}
