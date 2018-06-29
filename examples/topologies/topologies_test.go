@@ -29,27 +29,27 @@ func (n *tProcessor) Handle(ctx *network.MessageContext) error {
 	return nil
 }
 
-func setupRingNodes(startPort int) ([]int, map[string][]string) {
-	numNodes := 4
+func setupRingNodes(startPort int) ([]int, map[string]map[string]struct{}) {
 	var ports []int
-	peers := map[string][]string{}
+	peers := map[string]map[string]struct{}{}
+	numNodes := 4
 
 	for i := 0; i < numNodes; i++ {
 		ports = append(ports, startPort+i)
 		addr := fmt.Sprintf("%s:%d", host, ports[i])
 
 		// in a ring, each node is only connected to 2 others
-		peers[addr] = []string{}
-		peers[addr] = append(peers[addr], fmt.Sprintf("%s:%d", host, ports[i]+(numNodes+i+1)%numNodes))
-		peers[addr] = append(peers[addr], fmt.Sprintf("%s:%d", host, ports[i]+(numNodes+i-1)%numNodes))
+		peers[addr] = map[string]struct{}{}
+		peers[addr][fmt.Sprintf("%s:%d", host, ports[i]+(numNodes+i+1)%numNodes)] = struct{}{}
+		peers[addr][fmt.Sprintf("%s:%d", host, ports[i]+(numNodes+i-1)%numNodes)] = struct{}{}
 	}
 
 	return ports, peers
 }
 
-func setupMeshNodes(startPort int) ([]int, map[string][]string) {
+func setupMeshNodes(startPort int) ([]int, map[string]map[string]struct{}) {
 	var ports []int
-	peers := map[string][]string{}
+	peers := map[string]map[string]struct{}{}
 
 	edges := []struct {
 		portOffset  int
@@ -67,18 +67,18 @@ func setupMeshNodes(startPort int) ([]int, map[string][]string) {
 		ports = append(ports, startPort+edge.portOffset)
 		addr := fmt.Sprintf("%s:%d", host, ports[i])
 
-		peers[addr] = []string{}
+		peers[addr] = map[string]struct{}{}
 		for _, po := range edge.peerOffsets {
-			peers[addr] = append(peers[addr], fmt.Sprintf("%s:%d", host, startPort+po))
+			peers[addr][fmt.Sprintf("%s:%d", host, startPort+po)] = struct{}{}
 		}
 	}
 
 	return ports, peers
 }
 
-func setupStarNodes(startPort int) ([]int, map[string][]string) {
+func setupStarNodes(startPort int) ([]int, map[string]map[string]struct{}) {
 	var ports []int
-	peers := map[string][]string{}
+	peers := map[string]map[string]struct{}{}
 
 	edges := []struct {
 		portOffset  int
@@ -95,60 +95,60 @@ func setupStarNodes(startPort int) ([]int, map[string][]string) {
 		ports = append(ports, startPort+edge.portOffset)
 		addr := fmt.Sprintf("%s:%d", host, ports[i])
 
-		peers[addr] = []string{}
+		peers[addr] = map[string]struct{}{}
 		for _, po := range edge.peerOffsets {
-			peers[addr] = append(peers[addr], fmt.Sprintf("%s:%d", host, startPort+po))
+			peers[addr][fmt.Sprintf("%s:%d", host, startPort+po)] = struct{}{}
 		}
 	}
 
 	return ports, peers
 }
 
-func setupFullyConnectedNodes(startPort int) ([]int, map[string][]string) {
+func setupFullyConnectedNodes(startPort int) ([]int, map[string]map[string]struct{}) {
 	var ports []int
-	peers := map[string][]string{}
-	var peerList []string
+	peers := map[string]map[string]struct{}{}
+	peerMap := map[string]struct{}{}
 	numNodes := 5
 
 	for i := 0; i < numNodes; i++ {
 		ports = append(ports, startPort+i)
 
-		peerList = append(peerList, fmt.Sprintf("%s:%d", host, ports[i]))
+		peerMap[fmt.Sprintf("%s:%d", host, ports[i])] = struct{}{}
 	}
 
 	// got lazy, even connect to itself
 	for i := 0; i < numNodes; i++ {
 		addr := fmt.Sprintf("%s:%d", host, ports[i])
-		peers[addr] = peerList
+		peers[addr] = peerMap
 	}
 
 	return ports, peers
 }
 
-func setupLineNodes(startPort int) ([]int, map[string][]string) {
+func setupLineNodes(startPort int) ([]int, map[string]map[string]struct{}) {
 	var ports []int
-	peers := map[string][]string{}
+	peers := map[string]map[string]struct{}{}
 	numNodes := 5
 
 	for i := 0; i < numNodes; i++ {
 		ports = append(ports, startPort+i)
 		addr := fmt.Sprintf("%s:%d", host, ports[i])
 
-		peers[addr] = []string{}
+		peers[addr] = map[string]struct{}{}
 		if i > 0 {
-			peers[addr] = append(peers[addr], fmt.Sprintf("%s:%d", host, ports[i]-1))
+			peers[addr][fmt.Sprintf("%s:%d", host, ports[i]-1)] = struct{}{}
 		}
 		if i < numNodes-1 {
-			peers[addr] = append(peers[addr], fmt.Sprintf("%s:%d", host, ports[i]+1))
+			peers[addr][fmt.Sprintf("%s:%d", host, ports[i]+1)] = struct{}{}
 		}
 	}
 
 	return ports, peers
 }
 
-func setupTreeNodes(startPort int) ([]int, map[string][]string) {
+func setupTreeNodes(startPort int) ([]int, map[string]map[string]struct{}) {
 	var ports []int
-	peers := map[string][]string{}
+	peers := map[string]map[string]struct{}{}
 
 	edges := []struct {
 		portOffset  int
@@ -166,9 +166,9 @@ func setupTreeNodes(startPort int) ([]int, map[string][]string) {
 		ports = append(ports, startPort+edge.portOffset)
 		addr := fmt.Sprintf("%s:%d", host, ports[i])
 
-		peers[addr] = []string{}
+		peers[addr] = map[string]struct{}{}
 		for _, po := range edge.peerOffsets {
-			peers[addr] = append(peers[addr], fmt.Sprintf("%s:%d", host, startPort+po))
+			peers[addr][fmt.Sprintf("%s:%d", host, startPort+po)] = struct{}{}
 		}
 	}
 
@@ -210,14 +210,19 @@ func setupNodes(ports []int) ([]*network.Network, []*tProcessor, error) {
 	return nodes, processors, nil
 }
 
-func bootstrapNodes(nodes []*network.Network, peers map[string][]string) error {
+func bootstrapNodes(nodes []*network.Network, peers map[string]map[string]struct{}) error {
 	for _, node := range nodes {
 		if len(peers[node.Address()]) == 0 {
 			continue
 		}
 
+		var peerList []string
+		for k := range peers[node.Address()] {
+			peerList = append(peerList, k)
+		}
+
 		// get nodes to start talking with each other
-		node.Bootstrap(peers[node.Address()]...)
+		node.Bootstrap(peerList...)
 
 	}
 
@@ -227,37 +232,34 @@ func bootstrapNodes(nodes []*network.Network, peers map[string][]string) error {
 	return nil
 }
 
-func broadcastTest(t *testing.T, nodes []*network.Network, processors []*tProcessor, sender int) {
+func broadcastTest(t *testing.T, nodes []*network.Network, processors []*tProcessor, sender int, peers map[string]map[string]struct{}) {
 	timeout := 250 * time.Millisecond
 
 	// Broadcast is an asynchronous call to send a message to other nodes
 	expected := fmt.Sprintf("message from node %d", sender)
 	nodes[sender].Broadcast(&messages.BasicMessage{Message: expected})
 
-	// make sure the sender didn't get his own message
-	{
-		select {
-		case received := <-processors[sender].Mailbox:
-			t.Errorf("expected nothing in sending node %d, got %v", sender, received)
-		case <-time.After(timeout):
-			// this is the good case, don't want to receive anything
-		}
-	}
-
 	// check the messages
 	for i := 0; i < len(nodes); i++ {
-		if i == sender {
-			// sender is checked after
-			continue
-		}
-		select {
-		case received := <-processors[i].Mailbox:
-			// this is a receiving node, it should have just the one message buffered up
-			if received.Message != expected {
-				t.Errorf("expected message '%s' for node %d --> %d, but got %v", expected, sender, i, received)
+		if _, isPeer := peers[nodes[i].Address()][nodes[sender].Address()]; !isPeer || i == sender {
+			// if not a peer or not the sender, should not receive anything
+			select {
+			case received := <-processors[sender].Mailbox:
+				t.Errorf("expected nothing in sending node %d, got %v", sender, received)
+			case <-time.After(timeout):
+				// this is the good case, don't want to receive anything
 			}
-		case <-time.After(timeout):
-			t.Errorf("expected a message for node %d --> %d, but it timed out", sender, i)
+		} else {
+			// this is a connected peer, it should receive something
+			select {
+			case received := <-processors[i].Mailbox:
+				// this is a receiving node, it should have just the one message buffered up
+				if received.Message != expected {
+					t.Errorf("expected message '%s' for node %d --> %d, but got %v", expected, sender, i, received)
+				}
+			case <-time.After(timeout):
+				t.Errorf("expected a message for node %d --> %d, but it timed out", sender, i)
+			}
 		}
 	}
 }
@@ -284,7 +286,7 @@ func TestRing(t *testing.T) {
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, i)
+		broadcastTest(t, nodes, processors, i, peers)
 	}
 
 	// TODO: should close the connection to release the port
@@ -312,7 +314,7 @@ func TestMesh(t *testing.T) {
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, i)
+		broadcastTest(t, nodes, processors, i, peers)
 	}
 
 }
@@ -339,7 +341,7 @@ func TestStar(t *testing.T) {
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, i)
+		broadcastTest(t, nodes, processors, i, peers)
 	}
 }
 
@@ -365,7 +367,7 @@ func TestFullyConnected(t *testing.T) {
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, i)
+		broadcastTest(t, nodes, processors, i, peers)
 	}
 }
 
@@ -391,7 +393,7 @@ func TestLine(t *testing.T) {
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, i)
+		broadcastTest(t, nodes, processors, i, peers)
 	}
 }
 
@@ -417,6 +419,6 @@ func TestTree(t *testing.T) {
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, i)
+		broadcastTest(t, nodes, processors, i, peers)
 	}
 }
