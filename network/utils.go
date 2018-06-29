@@ -6,6 +6,7 @@ import (
 	"net"
 )
 
+// ToUnifiedHost resolves a domain host.
 func ToUnifiedHost(host string) (string, error) {
 	if net.ParseIP(host) == nil {
 		// Probably a domain name is provided.
@@ -28,6 +29,7 @@ func ToUnifiedHost(host string) (string, error) {
 	return host, nil
 }
 
+// ToUnifiedAddress resolves and normalizes a network address.
 func ToUnifiedAddress(address string) (string, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
@@ -42,7 +44,7 @@ func ToUnifiedAddress(address string) (string, error) {
 	return net.JoinHostPort(host, port), nil
 }
 
-// Filter out duplicate addresses.
+// FilterPeers out duplicate addresses.
 func FilterPeers(host string, port uint16, peers []string) (filtered []string) {
 	address := fmt.Sprintf("%s:%d", host, port)
 
