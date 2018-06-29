@@ -2,7 +2,6 @@ package topologies
 
 import (
 	"fmt"
-	"testing"
 	"time"
 
 	"github.com/perlin-network/noise/crypto"
@@ -227,13 +226,13 @@ func bootstrapNodes(nodes []*network.Network, peers map[string]map[string]struct
 	}
 
 	// Wait for all nodes to finish discovering other peers.
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(time.Duration(100*len(nodes)) * time.Millisecond)
 
 	return nil
 }
 
 // broadcastTest will broadcast a message from the sender node, checks if the right peers receive it
-func broadcastTest(t *testing.T, nodes []*network.Network, processors []*TopologyProcessor, peers map[string]map[string]struct{}, sender int) {
+func broadcastTest(nodes []*network.Network, processors []*TopologyProcessor, peers map[string]map[string]struct{}, sender int) {
 	timeout := 250 * time.Millisecond
 
 	// Broadcast is an asynchronous call to send a message to other nodes
@@ -246,7 +245,7 @@ func broadcastTest(t *testing.T, nodes []*network.Network, processors []*Topolog
 			// if not a peer or not the sender, should not receive anything
 			select {
 			case received := <-processors[sender].Mailbox:
-				t.Errorf("Expected nothing in sending node %d, got %v", sender, received)
+				fmt.Printf("Expected nothing in sending node %d, got %v\n", sender, received)
 			case <-time.After(timeout):
 				// this is the good case, don't want to receive anything
 			}
@@ -256,18 +255,16 @@ func broadcastTest(t *testing.T, nodes []*network.Network, processors []*Topolog
 			case received := <-processors[i].Mailbox:
 				// this is a receiving node, it should have just the one message buffered up
 				if received.Message != expected {
-					t.Errorf("Expected message '%s' for node %d --> %d, but got %v", expected, sender, i, received)
+					fmt.Printf("Expected message '%s' for node %d --> %d, but got %v\n", expected, sender, i, received)
 				}
 			case <-time.After(timeout):
-				t.Errorf("Expected a message for node %d --> %d, but it timed out", sender, i)
+				fmt.Printf("Expected a message for node %d --> %d, but it timed out\n", sender, i)
 			}
 		}
 	}
 }
 
-func TestRing(t *testing.T) {
-	t.Parallel()
-
+func ExampleRing() {
 	var nodes []*network.Network
 	var processors []*TopologyProcessor
 	var err error
@@ -278,25 +275,29 @@ func TestRing(t *testing.T) {
 	// setup the cluster
 	nodes, processors, err = setupNodes(ports)
 	if err != nil {
-		t.Fatal(err)
+		fmt.Println(err)
+		return
 	}
 
 	// setup node connections
 	if err := bootstrapNodes(nodes, peers); err != nil {
-		t.Fatal(err)
+		fmt.Println(err)
+		return
 	}
+	fmt.Println("Nodes setup as a ring topology.")
 
 	// have everyone send messages
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, peers, i)
+		broadcastTest(nodes, processors, peers, i)
 	}
+	fmt.Printf("Messages sent from each node.")
 
-	// TODO: clean up connections to release the port for other tests
+	// Output:
+	// Nodes setup as a ring topology.
+	// Messages sent from each node.
 }
 
-func TestMesh(t *testing.T) {
-	t.Parallel()
-
+func ExampleMesh() {
 	var nodes []*network.Network
 	var processors []*TopologyProcessor
 	var err error
@@ -305,22 +306,27 @@ func TestMesh(t *testing.T) {
 
 	nodes, processors, err = setupNodes(ports)
 	if err != nil {
-		t.Fatal(err)
+		fmt.Println(err)
+		return
 	}
 
 	if err := bootstrapNodes(nodes, peers); err != nil {
-		t.Fatal(err)
+		fmt.Println(err)
+		return
 	}
+	fmt.Println("Nodes setup as a mesh topology.")
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, peers, i)
+		broadcastTest(nodes, processors, peers, i)
 	}
+	fmt.Printf("Messages sent from each node.")
 
+	// Output:
+	// Nodes setup as a mesh topology.
+	// Messages sent from each node.
 }
 
-func TestStar(t *testing.T) {
-	t.Parallel()
-
+func ExampleStar() {
 	var nodes []*network.Network
 	var processors []*TopologyProcessor
 	var err error
@@ -329,21 +335,27 @@ func TestStar(t *testing.T) {
 
 	nodes, processors, err = setupNodes(ports)
 	if err != nil {
-		t.Fatal(err)
+		fmt.Println(err)
+		return
 	}
 
 	if err := bootstrapNodes(nodes, peers); err != nil {
-		t.Fatal(err)
+		fmt.Println(err)
+		return
 	}
+	fmt.Println("Nodes setup as a star topology.")
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, peers, i)
+		broadcastTest(nodes, processors, peers, i)
 	}
+	fmt.Printf("Messages sent from each node.")
+
+	// Output:
+	// Nodes setup as a star topology.
+	// Messages sent from each node.
 }
 
-func TestFullyConnected(t *testing.T) {
-	t.Parallel()
-
+func ExampleFullyConnected() {
 	var nodes []*network.Network
 	var processors []*TopologyProcessor
 	var err error
@@ -352,21 +364,27 @@ func TestFullyConnected(t *testing.T) {
 
 	nodes, processors, err = setupNodes(ports)
 	if err != nil {
-		t.Fatal(err)
+		fmt.Println(err)
+		return
 	}
 
 	if err := bootstrapNodes(nodes, peers); err != nil {
-		t.Fatal(err)
+		fmt.Println(err)
+		return
 	}
+	fmt.Println("Nodes setup as a fully connected topology.")
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, peers, i)
+		broadcastTest(nodes, processors, peers, i)
 	}
+	fmt.Printf("Messages sent from each node.")
+
+	// Output:
+	// Nodes setup as a fully connected topology.
+	// Messages sent from each node.
 }
 
-func TestLine(t *testing.T) {
-	t.Parallel()
-
+func ExampleLine() {
 	var nodes []*network.Network
 	var processors []*TopologyProcessor
 	var err error
@@ -375,21 +393,27 @@ func TestLine(t *testing.T) {
 
 	nodes, processors, err = setupNodes(ports)
 	if err != nil {
-		t.Fatal(err)
+		fmt.Println(err)
+		return
 	}
 
 	if err := bootstrapNodes(nodes, peers); err != nil {
-		t.Fatal(err)
+		fmt.Println(err)
+		return
 	}
+	fmt.Println("Nodes setup as a line topology.")
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, peers, i)
+		broadcastTest(nodes, processors, peers, i)
 	}
+	fmt.Printf("Messages sent from each node.")
+
+	// Output:
+	// Nodes setup as a line topology.
+	// Messages sent from each node.
 }
 
-func TestTree(t *testing.T) {
-	t.Parallel()
-
+func ExampleTree() {
 	var nodes []*network.Network
 	var processors []*TopologyProcessor
 	var err error
@@ -398,14 +422,22 @@ func TestTree(t *testing.T) {
 
 	nodes, processors, err = setupNodes(ports)
 	if err != nil {
-		t.Fatal(err)
+		fmt.Println(err)
+		return
 	}
 
 	if err := bootstrapNodes(nodes, peers); err != nil {
-		t.Fatal(err)
+		fmt.Println(err)
+		return
 	}
+	fmt.Println("Nodes setup as a tree topology.")
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, peers, i)
+		broadcastTest(nodes, processors, peers, i)
 	}
+	fmt.Printf("Messages sent from each node.")
+
+	// Output:
+	// Nodes setup as a tree topology.
+	// Messages sent from each node.
 }
