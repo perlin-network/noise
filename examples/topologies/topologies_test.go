@@ -27,6 +27,7 @@ func (n *TopologyProcessor) Handle(ctx *network.MessageContext) error {
 	return nil
 }
 
+// setupRingNodes setups the parameters of a ring topology
 func setupRingNodes(startPort int) ([]int, map[string]map[string]struct{}) {
 	var ports []int
 	peers := map[string]map[string]struct{}{}
@@ -236,7 +237,7 @@ func broadcastTest(t *testing.T, nodes []*network.Network, processors []*Topolog
 	timeout := 250 * time.Millisecond
 
 	// Broadcast is an asynchronous call to send a message to other nodes
-	expected := fmt.Sprintf("message from node %d", sender)
+	expected := fmt.Sprintf("This is a broadcasted message from Node %d", sender)
 	nodes[sender].Broadcast(&messages.BasicMessage{Message: expected})
 
 	// check the messages
@@ -245,7 +246,7 @@ func broadcastTest(t *testing.T, nodes []*network.Network, processors []*Topolog
 			// if not a peer or not the sender, should not receive anything
 			select {
 			case received := <-processors[sender].Mailbox:
-				t.Errorf("expected nothing in sending node %d, got %v", sender, received)
+				t.Errorf("Expected nothing in sending node %d, got %v", sender, received)
 			case <-time.After(timeout):
 				// this is the good case, don't want to receive anything
 			}
@@ -255,10 +256,10 @@ func broadcastTest(t *testing.T, nodes []*network.Network, processors []*Topolog
 			case received := <-processors[i].Mailbox:
 				// this is a receiving node, it should have just the one message buffered up
 				if received.Message != expected {
-					t.Errorf("expected message '%s' for node %d --> %d, but got %v", expected, sender, i, received)
+					t.Errorf("Expected message '%s' for node %d --> %d, but got %v", expected, sender, i, received)
 				}
 			case <-time.After(timeout):
-				t.Errorf("expected a message for node %d --> %d, but it timed out", sender, i)
+				t.Errorf("Expected a message for node %d --> %d, but it timed out", sender, i)
 			}
 		}
 	}
