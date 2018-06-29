@@ -1,7 +1,6 @@
 package topologies
 
 import (
-	"flag"
 	"fmt"
 	"testing"
 	"time"
@@ -10,20 +9,19 @@ import (
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
-	"github.com/perlin-network/noise/network/discovery"
 )
 
 const (
 	host = "127.0.0.1"
 )
 
-// tProcessor implements the message handler
-type tProcessor struct {
+// TopologyProcessor implements the message handler
+type TopologyProcessor struct {
 	Mailbox chan *messages.BasicMessage
 }
 
 // Handle implements the network interface callback
-func (n *tProcessor) Handle(ctx *network.MessageContext) error {
+func (n *TopologyProcessor) Handle(ctx *network.MessageContext) error {
 	message := ctx.Message().(*messages.BasicMessage)
 	n.Mailbox <- message
 	return nil
@@ -175,10 +173,10 @@ func setupTreeNodes(startPort int) ([]int, map[string]map[string]struct{}) {
 	return ports, peers
 }
 
-// setupNodes sets up a connected group of nodes in a cluster.
-func setupNodes(ports []int) ([]*network.Network, []*tProcessor, error) {
+// setupNodes sets up the networks and processors
+func setupNodes(ports []int) ([]*network.Network, []*TopologyProcessor, error) {
 	var nodes []*network.Network
-	var processors []*tProcessor
+	var processors []*TopologyProcessor
 
 	for _, port := range ports {
 		builder := &builders.NetworkBuilder{}
@@ -186,9 +184,10 @@ func setupNodes(ports []int) ([]*network.Network, []*tProcessor, error) {
 		builder.SetHost(host)
 		builder.SetPort(uint16(port))
 
-		discovery.BootstrapPeerDiscovery(builder)
+		// Not doing peer discovery to maintain the topology
+		//discovery.BootstrapPeerDiscovery(builder)
 
-		processor := &tProcessor{Mailbox: make(chan *messages.BasicMessage, 1)}
+		processor := &TopologyProcessor{Mailbox: make(chan *messages.BasicMessage, 1)}
 		builder.AddProcessor((*messages.BasicMessage)(nil), processor)
 
 		node, err := builder.BuildNetwork()
@@ -201,15 +200,15 @@ func setupNodes(ports []int) ([]*network.Network, []*tProcessor, error) {
 		go node.Listen()
 	}
 
-	//for _, node := range nodes {
-	//	node.BlockUntilListening()
-	//}
-	// Wait for all nodes to finish discovering other peers.
-	time.Sleep(1000 * time.Millisecond)
+	// make sure all the servers are listening
+	for _, node := range nodes {
+		node.BlockUntilListening()
+	}
 
 	return nodes, processors, nil
 }
 
+// bootstrapNodes will
 func bootstrapNodes(nodes []*network.Network, peers map[string]map[string]struct{}) error {
 	for _, node := range nodes {
 		if len(peers[node.Address()]) == 0 {
@@ -227,12 +226,13 @@ func bootstrapNodes(nodes []*network.Network, peers map[string]map[string]struct
 	}
 
 	// Wait for all nodes to finish discovering other peers.
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 
 	return nil
 }
 
-func broadcastTest(t *testing.T, nodes []*network.Network, processors []*tProcessor, sender int, peers map[string]map[string]struct{}) {
+// broadcastTest will broadcast a message from the sender node, checks if the right peers receive it
+func broadcastTest(t *testing.T, nodes []*network.Network, processors []*TopologyProcessor, peers map[string]map[string]struct{}, sender int) {
 	timeout := 250 * time.Millisecond
 
 	// Broadcast is an asynchronous call to send a message to other nodes
@@ -265,41 +265,39 @@ func broadcastTest(t *testing.T, nodes []*network.Network, processors []*tProces
 }
 
 func TestRing(t *testing.T) {
-	//t.Parallel()
-
-	// parse to flags to silence the glog library
-	flag.Parse()
+	t.Parallel()
 
 	var nodes []*network.Network
-	var processors []*tProcessor
+	var processors []*TopologyProcessor
 	var err error
 
+	// create the topology
 	ports, peers := setupRingNodes(5010)
 
+	// setup the cluster
 	nodes, processors, err = setupNodes(ports)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	// setup node connections
 	if err := bootstrapNodes(nodes, peers); err != nil {
 		t.Fatal(err)
 	}
 
+	// have everyone send messages
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, i, peers)
+		broadcastTest(t, nodes, processors, peers, i)
 	}
 
-	// TODO: should close the connection to release the port
+	// TODO: clean up connections to release the port for other tests
 }
 
 func TestMesh(t *testing.T) {
-	//t.Parallel()
-
-	// parse to flags to silence the glog library
-	flag.Parse()
+	t.Parallel()
 
 	var nodes []*network.Network
-	var processors []*tProcessor
+	var processors []*TopologyProcessor
 	var err error
 
 	ports, peers := setupMeshNodes(5020)
@@ -314,19 +312,16 @@ func TestMesh(t *testing.T) {
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, i, peers)
+		broadcastTest(t, nodes, processors, peers, i)
 	}
 
 }
 
 func TestStar(t *testing.T) {
-	//t.Parallel()
-
-	// parse to flags to silence the glog library
-	flag.Parse()
+	t.Parallel()
 
 	var nodes []*network.Network
-	var processors []*tProcessor
+	var processors []*TopologyProcessor
 	var err error
 
 	ports, peers := setupStarNodes(5030)
@@ -341,18 +336,15 @@ func TestStar(t *testing.T) {
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, i, peers)
+		broadcastTest(t, nodes, processors, peers, i)
 	}
 }
 
 func TestFullyConnected(t *testing.T) {
-	//t.Parallel()
-
-	// parse to flags to silence the glog library
-	flag.Parse()
+	t.Parallel()
 
 	var nodes []*network.Network
-	var processors []*tProcessor
+	var processors []*TopologyProcessor
 	var err error
 
 	ports, peers := setupFullyConnectedNodes(5040)
@@ -367,18 +359,15 @@ func TestFullyConnected(t *testing.T) {
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, i, peers)
+		broadcastTest(t, nodes, processors, peers, i)
 	}
 }
 
 func TestLine(t *testing.T) {
-	//t.Parallel()
-
-	// parse to flags to silence the glog library
-	flag.Parse()
+	t.Parallel()
 
 	var nodes []*network.Network
-	var processors []*tProcessor
+	var processors []*TopologyProcessor
 	var err error
 
 	ports, peers := setupLineNodes(5050)
@@ -393,18 +382,15 @@ func TestLine(t *testing.T) {
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, i, peers)
+		broadcastTest(t, nodes, processors, peers, i)
 	}
 }
 
 func TestTree(t *testing.T) {
-	//t.Parallel()
-
-	// parse to flags to silence the glog library
-	flag.Parse()
+	t.Parallel()
 
 	var nodes []*network.Network
-	var processors []*tProcessor
+	var processors []*TopologyProcessor
 	var err error
 
 	ports, peers := setupTreeNodes(5060)
@@ -419,6 +405,6 @@ func TestTree(t *testing.T) {
 	}
 
 	for i := 0; i < len(nodes); i++ {
-		broadcastTest(t, nodes, processors, i, peers)
+		broadcastTest(t, nodes, processors, peers, i)
 	}
 }
