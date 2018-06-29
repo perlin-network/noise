@@ -126,7 +126,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 		return nil, err
 	}
 
-	err = client.Dial(address)
+	err = client.establishConnection(address)
 	if err != nil {
 		glog.Warningf("Failed to connect to peer %s err=[%+v]\n", address, err)
 		return nil, err

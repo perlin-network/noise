@@ -27,7 +27,7 @@ func (n *Network) Ingest(conn net.Conn) {
 		stream, err := session.AcceptStream()
 		if err != nil {
 			if client != nil && err.Error() == "broken pipe" {
-				client.Close()
+				client.reestablishConnection()
 			}
 			break
 		}
@@ -62,7 +62,7 @@ func (n *Network) Ingest(conn net.Conn) {
 			if client.Id == nil {
 				client.Id = &id
 
-				err := client.Dial(id.Address)
+				err := client.establishConnection(id.Address)
 
 				// Could not connect to peer; disconnect.
 				if err != nil {

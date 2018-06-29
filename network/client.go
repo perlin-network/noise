@@ -27,6 +27,7 @@ type PeerClient struct {
 	Session *smux.Session
 
 	Backoff *backoff.Backoff
+	redialLock uint32
 
 	Requests     *Uint64MessageChannelSyncMap
 	RequestNonce uint64
@@ -42,35 +43,24 @@ func (c *PeerClient) nextNonce() uint64 {
 	return atomic.AddUint64(&c.RequestNonce, 1)
 }
 
-// Dial attempts to establish or reestablish a session by dialing a peer's address.
-// If peer is not dial-able, will attempt to retry using backoff until max attempts
-// reached (which will then error).
-func (c *PeerClient) Dial(address string) error {
+// establishConnection establishes a session by dialing a peers address. Errors if
+// peer is not dial-able, or if the peer client already is connected.
+func (c *PeerClient) establishConnection(address string) error {
 	if c.Session != nil {
 		return nil
 	}
 
-	var dialer *kcp.UDPSession
-	var err error
-	c.Backoff.Reset()
-	for !c.Backoff.TimeoutExceeded() {
-		dialer, err = kcp.DialWithOptions(address, nil, 10, 3)
-		// Failed to open session. Retry.
-		if err != nil {
-			glog.Error(err)
-			d := c.Backoff.NextDuration()
-			time.Sleep(d)
-			continue
-		}
+	dialer, err := kcp.DialWithOptions(address, nil, 10, 3)
 
-		break
-	}
-	if c.Backoff.TimeoutExceeded() {
-		c.Close()
-		return errors.New("max connection attempts exceeded")
+	// Failed to connect.
+	if err != nil {
+		glog.Error(err)
+		return err
 	}
 
 	c.Session, err = smux.Client(dialer, muxConfig())
+
+	// Failed to open session.
 	if err != nil {
 		glog.Error(err)
 		return err
@@ -83,22 +73,61 @@ func (c *PeerClient) Dial(address string) error {
 }
 
 // Attempts to re-establish a connect with a client that was
-// already previously connected to
-func (c *PeerClient) Redial() error {
+// already previously connected to.
+func (c *PeerClient) reestablishConnection() error {
+	// Don't attempt to redial if already in progress.
+	if !atomic.CompareAndSwapUint32(&c.redialLock, 0, 1) {
+		return nil
+	}
+	defer atomic.StoreUint32(&c.redialLock, 0)
+
+	glog.Infof("Lost connection with %s, attempting to reestablish.", c.Id.Address)
+
 	if c.Id == nil {
+		glog.Infof("asdsadfdfds")
 		return errors.New("client id is null")
 	}
 
-	if c.Session != nil && !c.Session.IsClosed() {
-		err := c.Session.Close()
+	// Attempt to reconnect to the original client.
+	c.Backoff.Reset()
+	for !c.Backoff.TimeoutExceeded() {
+		// Close any previous session.
+		if c.Session != nil && !c.Session.IsClosed() {
+			err := c.Session.Close()
+			if err != nil {
+				glog.Error(err)
+				return err
+			}
+		}
+		c.Session = nil
+
+		err := c.establishConnection(c.Id.Address)
 		if err != nil {
 			glog.Error(err)
 			return err
 		}
-	}
-	c.Session = nil
 
-	return c.Dial(c.Id.Address)
+		// Attempt to handshake to verify connection.
+		request := new(rpc.Request)
+		request.SetMessage(&protobuf.HandshakeRequest{})
+		request.SetTimeout(3 * time.Second)
+		_, err = c.Request(request)
+
+		// Handshake failed. Will retry until limit.
+		if err != nil {
+			d := c.Backoff.NextDuration()
+			time.Sleep(d)
+			continue
+		}
+
+		break
+	}
+	if c.Backoff.TimeoutExceeded() {
+		c.Close()
+		return errors.New("max connection attempts exceeded")
+	}
+
+	return nil
 }
 
 // Close stops all sessions/streams and cleans up the nodes
