@@ -40,8 +40,8 @@ func setupRingNodes(startPort int) ([]int, map[string]map[string]struct{}) {
 
 		// in a ring, each node is only connected to 2 others
 		peers[addr] = map[string]struct{}{}
-		peers[addr][fmt.Sprintf("%s:%d", host, ports[i]+(numNodes+i+1)%numNodes)] = struct{}{}
-		peers[addr][fmt.Sprintf("%s:%d", host, ports[i]+(numNodes+i-1)%numNodes)] = struct{}{}
+		peers[addr][fmt.Sprintf("%s:%d", host, startPort+(numNodes+i+1)%numNodes)] = struct{}{}
+		peers[addr][fmt.Sprintf("%s:%d", host, startPort+(numNodes+i-1)%numNodes)] = struct{}{}
 	}
 
 	return ports, peers
