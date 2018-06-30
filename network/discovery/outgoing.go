@@ -48,6 +48,8 @@ func findNode(net *network.Network, target peer.ID, alpha int) (results []peer.I
 	for _, peerId := range net.Routes.FindClosestPeers(target, alpha) {
 		visited[peerId.PublicKeyHex()] = struct{}{}
 		queue = append(queue, peerId)
+
+		results = append(results, peerId)
 	}
 
 	pending := 0
