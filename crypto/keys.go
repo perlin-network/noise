@@ -78,6 +78,11 @@ func GetPublicKey(rawPrivateKey []byte) []byte {
 }
 
 func Verify(publicKey []byte, message []byte, signature []byte) bool {
+	// Public key must be a set size.
+	if len(publicKey) != ed25519.PublicKeySize {
+		return false
+	}
+
 	message = HashBytes(message)
 	return ed25519.Verify(ed25519.PublicKey(publicKey), message, signature)
 }
