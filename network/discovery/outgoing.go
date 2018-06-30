@@ -11,7 +11,7 @@ import (
 	"sort"
 )
 
-func queryPeer(net *network.Network, peerId peer.ID, targetId peer.ID, responses chan []*protobuf.ID) {
+func queryPeerById(net *network.Network, peerId peer.ID, targetId peer.ID, responses chan []*protobuf.ID) {
 	client, err := net.Dial(peerId.Address)
 	if err != nil {
 		responses <- []*protobuf.ID{}
@@ -38,14 +38,14 @@ func queryPeer(net *network.Network, peerId peer.ID, targetId peer.ID, responses
 	}
 }
 
-func findNode(net *network.Network, target peer.ID, alpha int) (results []peer.ID) {
+func findNode(net *network.Network, targetId peer.ID, alpha int) (results []peer.ID) {
 	var queue []peer.ID
 
 	responses, visited := make(chan []*protobuf.ID), make(map[string]struct{})
 
 	// Start searching for target from #ALPHA peers closest to target by queuing
 	// them up and marking them as visited.
-	for _, peerId := range net.Routes.FindClosestPeers(target, alpha) {
+	for _, peerId := range net.Routes.FindClosestPeers(targetId, alpha) {
 		visited[peerId.PublicKeyHex()] = struct{}{}
 		queue = append(queue, peerId)
 
@@ -57,7 +57,7 @@ func findNode(net *network.Network, target peer.ID, alpha int) (results []peer.I
 	// Go through every peer in the entire queue and queue up what peers believe
 	// is closest to a target ID.
 	for ; pending < alpha && len(queue) > 0; pending++ {
-		go queryPeer(net, queue[0], target, responses)
+		go queryPeerById(net, queue[0], targetId, responses)
 
 		results = append(results, queue[0])
 		queue = queue[1:]
@@ -87,7 +87,7 @@ func findNode(net *network.Network, target peer.ID, alpha int) (results []peer.I
 
 		// Queue and request for #ALPHA closest peers to target ID from expanded results.
 		for ; pending < alpha && len(queue) > 0; pending++ {
-			go queryPeer(net, queue[0], target, responses)
+			go queryPeerById(net, queue[0], targetId, responses)
 			queue = queue[1:]
 		}
 
@@ -97,8 +97,8 @@ func findNode(net *network.Network, target peer.ID, alpha int) (results []peer.I
 
 	// Sort resulting peers by XOR distance.
 	sort.Slice(results, func(i, j int) bool {
-		left := results[i].Xor(target)
-		right := results[j].Xor(target)
+		left := results[i].Xor(targetId)
+		right := results[j].Xor(targetId)
 		return left.Less(right)
 	})
 
