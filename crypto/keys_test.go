@@ -20,9 +20,15 @@ func TestSignVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Test if signature works.
 	ok := Verify(kp.PublicKey, message, sig)
 	if !ok {
-		t.Fatal("signature verification failed")
+		t.Fatal("signature verification failed with correct info")
+	}
+
+	ok = Verify(message, message, sig)
+	if ok {
+		t.Fatal("signature verification failed with wrong public key size/contents")
 	}
 
 	sig[0] = ^sig[0]
