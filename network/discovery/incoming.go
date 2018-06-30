@@ -27,11 +27,11 @@ func (HandshakeRequestProcessor) Handle(ctx *network.MessageContext) error {
 type HandshakeResponseProcessor struct{}
 
 func (HandshakeResponseProcessor) Handle(ctx *network.MessageContext) error {
-	addresses, publicKeys := bootstrapPeers(ctx.Network(), ctx.Sender(), dht.BucketSize)
+	peers := bootstrapPeers(ctx.Network(), ctx.Sender(), dht.BucketSize)
 
 	// Update routing table w/ bootstrapped peers.
-	for i := 0; i < len(addresses); i++ {
-		ctx.Network().Routes.Update(peer.CreateID(addresses[i], publicKeys[i]))
+	for _, peerId := range peers {
+		ctx.Network().Routes.Update(peerId)
 	}
 
 	glog.Infof("bootstrapped w/ peer(s): %s.", strings.Join(ctx.Network().Routes.GetPeerAddresses(), ", "))
