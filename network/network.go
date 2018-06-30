@@ -115,8 +115,8 @@ func (n *Network) Bootstrap(addresses ...string) {
 			continue
 		}
 
-		// Send a handshake request.
-		err = client.Tell(&protobuf.HandshakeRequest{})
+		// Send a ping.
+		err = client.Tell(&protobuf.Ping{})
 		if err != nil {
 			glog.Error(err)
 			continue

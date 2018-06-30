@@ -23,7 +23,7 @@ type MockProcessor struct{}
 
 func (p *MockProcessor) Handle(ctx *network.MessageContext) error {
 	// Send handshake response to peer.
-	err := ctx.Reply(&protobuf.HandshakeResponse{})
+	err := ctx.Reply(&protobuf.Pong{})
 
 	if err != nil {
 		glog.Error(err)
@@ -38,7 +38,7 @@ func buildNetwork(port uint16) *builders.NetworkBuilder {
 	builder.SetHost(host)
 	builder.SetPort(port)
 
-	builder.AddProcessor((*protobuf.HandshakeRequest)(nil), new(MockProcessor))
+	builder.AddProcessor((*protobuf.Ping)(nil), new(MockProcessor))
 
 	return builder
 }
@@ -48,15 +48,15 @@ func TestDiscovery(t *testing.T) {
 
 	BootstrapPeerDiscovery(builder)
 
-	network, _ := builder.BuildNetwork()
+	net, _ := builder.BuildNetwork()
 
 	expected := []string{
-		"*protobuf.HandshakeRequest",
-		"*protobuf.HandshakeResponse",
+		"*protobuf.Ping",
+		"*protobuf.Pong",
 		"*protobuf.LookupNodeRequest",
 	}
 
-	processors := fmt.Sprintf("%v", network.Processors)
+	processors := fmt.Sprintf("%v", net.Processors)
 
 	for _, name := range expected {
 		if !strings.Contains(processors, name) {

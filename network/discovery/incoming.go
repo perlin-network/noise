@@ -11,11 +11,11 @@ import (
 	"github.com/perlin-network/noise/protobuf"
 )
 
-type HandshakeRequestProcessor struct{}
+type PingProcessor struct{}
 
-func (HandshakeRequestProcessor) Handle(ctx *network.MessageContext) error {
-	// Send handshake response to peer.
-	err := ctx.Reply(&protobuf.HandshakeResponse{})
+func (PingProcessor) Handle(ctx *network.MessageContext) error {
+	// Send pong to peer.
+	err := ctx.Reply(&protobuf.Pong{})
 
 	if err != nil {
 		glog.Error(err)
@@ -24,9 +24,9 @@ func (HandshakeRequestProcessor) Handle(ctx *network.MessageContext) error {
 	return nil
 }
 
-type HandshakeResponseProcessor struct{}
+type PongProcessor struct{}
 
-func (HandshakeResponseProcessor) Handle(ctx *network.MessageContext) error {
+func (PongProcessor) Handle(ctx *network.MessageContext) error {
 	peers := findNode(ctx.Network(), ctx.Sender(), dht.BucketSize)
 
 	// Update routing table w/ closest peers to self.
@@ -67,7 +67,7 @@ func (LookupNodeRequestProcessor) Handle(ctx *network.MessageContext) error {
 
 // Registers necessary message processors for peer discovery.
 func BootstrapPeerDiscovery(builder *builders.NetworkBuilder) {
-	builder.AddProcessor((*protobuf.HandshakeRequest)(nil), new(HandshakeRequestProcessor))
-	builder.AddProcessor((*protobuf.HandshakeResponse)(nil), new(HandshakeResponseProcessor))
+	builder.AddProcessor((*protobuf.Ping)(nil), new(PingProcessor))
+	builder.AddProcessor((*protobuf.Pong)(nil), new(PongProcessor))
 	builder.AddProcessor((*protobuf.LookupNodeRequest)(nil), new(LookupNodeRequestProcessor))
 }
