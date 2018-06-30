@@ -28,7 +28,7 @@ func TestSignVerify(t *testing.T) {
 
 	ok = Verify(message, message, sig)
 	if ok {
-		t.Fatal("signature verification failed with wrong public key")
+		t.Fatal("signature verification failed with wrong public key size/contents")
 	}
 
 	sig[0] = ^sig[0]
