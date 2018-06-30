@@ -66,12 +66,12 @@ func findNode(net *network.Network, target peer.ID, alpha int) (results []peer.I
 
 	// Asynchronous breadth-first search.
 	for pending > 0 {
-		peers := <-responses
+		response := <-responses
 
 		pending--
 
-		// Expand closest peer results from a responding peer.
-		for _, id := range peers {
+		// Expand responses containing a peer's belief on the closest peers to target ID.
+		for _, id := range response {
 			peerId := peer.ID(*id)
 
 			if _, seen := visited[peerId.PublicKeyHex()]; !seen {
