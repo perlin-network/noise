@@ -38,12 +38,12 @@ func queryPeer(net *network.Network, peerId peer.ID, targetId peer.ID, responses
 	}
 }
 
-func bootstrapPeers(net *network.Network, target peer.ID, alpha int) (results []peer.ID) {
+func findNode(net *network.Network, target peer.ID, alpha int) (results []peer.ID) {
 	var queue []peer.ID
 
 	responses, visited := make(chan []*protobuf.ID), make(map[string]struct{})
 
-	// Start bootstrapping from #ALPHA peers closest to target by queuing
+	// Start searching for target from #ALPHA peers closest to target by queuing
 	// them up and marking them as visited.
 	for _, peerId := range net.Routes.FindClosestPeers(target, alpha) {
 		visited[peerId.PublicKeyHex()] = struct{}{}

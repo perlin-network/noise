@@ -27,9 +27,9 @@ func (HandshakeRequestProcessor) Handle(ctx *network.MessageContext) error {
 type HandshakeResponseProcessor struct{}
 
 func (HandshakeResponseProcessor) Handle(ctx *network.MessageContext) error {
-	peers := bootstrapPeers(ctx.Network(), ctx.Sender(), dht.BucketSize)
+	peers := findNode(ctx.Network(), ctx.Sender(), dht.BucketSize)
 
-	// Update routing table w/ bootstrapped peers.
+	// Update routing table w/ closest peers to self.
 	for _, peerId := range peers {
 		ctx.Network().Routes.Update(peerId)
 	}
