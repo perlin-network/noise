@@ -1,13 +1,13 @@
 package topologies
 
 import (
-	"time"
 	"fmt"
+	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
 	"testing"
-	"github.com/perlin-network/noise/crypto"
+	"time"
 )
 
 const host = "127.0.0.1"

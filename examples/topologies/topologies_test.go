@@ -1,8 +1,8 @@
 package topologies
 
 import (
-	"testing"
 	"github.com/perlin-network/noise/network"
+	"testing"
 )
 
 const basePort = 19700
