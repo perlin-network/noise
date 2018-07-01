@@ -49,19 +49,19 @@ func (c *PeerClient) establishConnection(address string) error {
 		return nil
 	}
 
-	uInfo, err := url.Parse(address)
+	urlInfo, err := url.Parse(address)
 	if err != nil {
 		return err
 	}
 
 	var conn net.Conn
 
-	if uInfo.Scheme == "kcp" {
-		conn, err = kcp.DialWithOptions(uInfo.Host, nil, 10, 3)
-	} else if uInfo.Scheme == "tcp" {
-		conn, err = net.Dial("tcp", uInfo.Host)
+	if urlInfo.Scheme == "kcp" {
+		conn, err = kcp.DialWithOptions(urlInfo.Host, nil, 10, 3)
+	} else if urlInfo.Scheme == "tcp" {
+		conn, err = net.Dial("tcp", urlInfo.Host)
 	} else {
-		err = errors.New("Invalid scheme: " + uInfo.Scheme)
+		err = errors.New("Invalid scheme: " + urlInfo.Scheme)
 	}
 
 	// Failed to connect.

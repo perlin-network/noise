@@ -31,12 +31,12 @@ func ToUnifiedHost(host string) (string, error) {
 
 // ToUnifiedAddress resolves and normalizes a network address.
 func ToUnifiedAddress(address string) (string, error) {
-	u, err := url.Parse(address)
+	urlInfo, err := url.Parse(address)
 	if err != nil {
 		return "", err
 	}
 
-	host, port, err := net.SplitHostPort(u.Host)
+	host, port, err := net.SplitHostPort(urlInfo.Host)
 	if err != nil {
 		return "", err
 	}
@@ -46,7 +46,7 @@ func ToUnifiedAddress(address string) (string, error) {
 		return "", err
 	}
 
-	return u.Scheme + "://" + net.JoinHostPort(host, port), nil
+	return urlInfo.Scheme + "://" + net.JoinHostPort(host, port), nil
 }
 
 // FilterPeers filters out duplicate/empty addresses.
