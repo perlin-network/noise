@@ -10,7 +10,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/network/nat"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
@@ -24,8 +23,6 @@ type Network struct {
 
 	// Full address to listen on. `protocol://host:port`
 	Address string
-
-	UpnpEnabled bool
 
 	// Map of plugins registered to the network.
 	// map[string]Plugin
@@ -73,30 +70,6 @@ func (n *Network) Listen() {
 
 	if err != nil {
 		glog.Fatal(err)
-	}
-
-	if n.UpnpEnabled {
-		glog.Info("Setting up UPnP...")
-
-		mappingInfo, err := nat.ForwardPort(n.GetPort())
-		if err == nil {
-			defer mappingInfo.Close()
-
-			addressInfo, err := ExtractAddressInfo(n.Address)
-			if err != nil {
-				glog.Fatal(err)
-			}
-
-			addressInfo.Host = mappingInfo.ExternalIP
-			addressInfo.Port = mappingInfo.ExternalPort
-
-			n.Address = addressInfo.String()
-
-			// TODO: Remove this hacky workaround
-			n.ID = peer.CreateID(n.Address, n.Keys.PublicKey)
-		} else {
-			glog.Warning("Cannot setup UPnP mapping: ", err)
-		}
 	}
 
 	// Handle 'network starts listening' callback for plugins.

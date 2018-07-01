@@ -11,16 +11,13 @@ import (
 type NetworkBuilder struct {
 	keys        *crypto.KeyPair
 	address     string
-	upnpEnabled bool
 
 	// map[string]PluginInterface
 	plugins *network.StringPluginInterfaceSyncMap
 }
 
 func NewNetworkBuilder() *NetworkBuilder {
-	return &NetworkBuilder{
-		upnpEnabled: false,
-	}
+	return &NetworkBuilder{}
 }
 
 // SetKeys pair created from crypto.KeyPair
@@ -31,12 +28,6 @@ func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
 // SetAddress sets the host address for the network.
 func (builder *NetworkBuilder) SetAddress(address string) {
 	builder.address = address
-}
-
-// SetUpnpEnabled enforces the network to attempt to open ports through
-// the UPnP router interface.
-func (builder *NetworkBuilder) SetUpnpEnabled(enabled bool) {
-	builder.upnpEnabled = enabled
 }
 
 // AddPlugin register a new plugin into the network.
@@ -76,7 +67,6 @@ func (builder *NetworkBuilder) Build() (*network.Network, error) {
 		ID:          id,
 		Keys:        builder.keys,
 		Address:     unifiedAddress,
-		UpnpEnabled: builder.upnpEnabled,
 
 		Plugins: builder.plugins,
 

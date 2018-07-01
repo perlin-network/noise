@@ -14,11 +14,13 @@ type LocalPortMappingInfo struct {
 }
 
 // Close clears a port from remaining open.
-func (m *LocalPortMappingInfo) Close() {
+func (m *LocalPortMappingInfo) Close() error {
 	gateway, err := upnp.Load(m.RouterLocation)
 	if err == nil {
-		gateway.Clear(m.ExternalPort)
+		return gateway.Clear(m.ExternalPort)
 	}
+
+	return err
 }
 
 // ForwardPort accesses the UPnP interface (should it be available) and port-forwards
