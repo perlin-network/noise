@@ -30,8 +30,8 @@ func (PongProcessor) Handle(ctx *network.MessageContext) error {
 	peers := findNode(ctx.Network(), ctx.Sender(), dht.BucketSize)
 
 	// Update routing table w/ closest peers to self.
-	for _, peerId := range peers {
-		ctx.Network().Routes.Update(peerId)
+	for _, peerID := range peers {
+		ctx.Network().Routes.Update(peerID)
 	}
 
 	glog.Infof("bootstrapped w/ peer(s): %s.", strings.Join(ctx.Network().Routes.GetPeerAddresses(), ", "))
@@ -49,8 +49,8 @@ func (LookupNodeRequestProcessor) Handle(ctx *network.MessageContext) error {
 	response := &protobuf.LookupNodeResponse{}
 
 	// Respond back with closest peers to a provided target.
-	for _, id := range ctx.Network().Routes.FindClosestPeers(peer.ID(*msg.Target), dht.BucketSize) {
-		id := protobuf.ID(id)
+	for _, peerID := range ctx.Network().Routes.FindClosestPeers(peer.ID(*msg.Target), dht.BucketSize) {
+		id := protobuf.ID(peerID)
 		response.Peers = append(response.Peers, &id)
 	}
 

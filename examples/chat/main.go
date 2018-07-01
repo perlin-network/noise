@@ -19,7 +19,7 @@ type ChatMessageProcessor struct{}
 
 func (c *ChatMessageProcessor) Handle(ctx *network.MessageContext) error {
 	message := ctx.Message().(*messages.ChatMessage)
-	glog.Infof("<%s> %s", ctx.Client().Id.Address, message.Message)
+	glog.Infof("<%s> %s", ctx.Client().ID.Address, message.Message)
 	return nil
 }
 
