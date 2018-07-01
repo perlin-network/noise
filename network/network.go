@@ -146,7 +146,7 @@ func (n *Network) Broadcast(message proto.Message) {
 		err := client.Tell(message)
 
 		if err != nil {
-			glog.Warningf("Failed to send message to peer %v [err=%s]", client.Id, err)
+			glog.Warningf("Failed to send message to peer %v [err=%s]", client.ID, err)
 		}
 
 		return true
@@ -156,33 +156,29 @@ func (n *Network) Broadcast(message proto.Message) {
 // BroadcastByAddresses broadcasts a message to a set of peer clients denoted by their addresses.
 func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
 	for _, address := range addresses {
-		if client, ok := n.Peers.Load(address); ok {
+		if client, err := n.Client(address); err == nil {
 			err := client.Tell(message)
 
 			if err != nil {
-				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+				glog.Warningf("Failed to send message to peer %s [err=%s]", client.ID.Address, err)
 			}
-
-			client.Close()
 		} else {
-			glog.Warningf("Failed to send message to peer %s; peer does not exist.", address)
+			glog.Warningf("Failed to send message to peer %s; peer does not exist. [err=%s]", address, err)
 		}
 	}
 }
 
-// BroadcastByIds broadcasts a message to a set of peer clients denoted by their peer IDs.
-func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
+// BroadcastByIDs broadcasts a message to a set of peer clients denoted by their peer IDs.
+func (n *Network) BroadcastByIDs(message proto.Message, ids ...peer.ID) {
 	for _, id := range ids {
-		if client, ok := n.Peers.Load(id.Address); ok {
+		if client, err := n.Client(id.Address); err == nil {
 			err := client.Tell(message)
 
 			if err != nil {
-				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+				glog.Warningf("Failed to send message to peer %s [err=%s]", client.ID.Address, err)
 			}
-
-			client.Close()
 		} else {
-			glog.Warningf("Failed to send message to peer %s; peer does not exist.", id)
+			glog.Warningf("Failed to send message to peer %s; peer does not exist. [err=%s]", id, err)
 		}
 	}
 }
@@ -193,7 +189,7 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	var addresses []string
 
 	n.Peers.Range(func(key string, client *PeerClient) bool {
-		addresses = append(addresses, client.Id.Address)
+		addresses = append(addresses, client.ID.Address)
 
 		// Limit total amount of addresses in case we have a lot of peers.
 		if len(addresses) > K*3 {

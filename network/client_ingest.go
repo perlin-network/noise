@@ -59,8 +59,8 @@ func (n *Network) Ingest(conn net.Conn) {
 			// store the peer.
 			id := peer.ID(*msg.Sender)
 
-			if client.Id == nil {
-				client.Id = &id
+			if client.ID == nil {
+				client.ID = &id
 
 				err := client.establishConnection(id.Address)
 
@@ -69,9 +69,9 @@ func (n *Network) Ingest(conn net.Conn) {
 					glog.Errorf("Failed to connect to peer %s err=[%+v]\n", id.Address, err)
 					return
 				}
-			} else if !client.Id.Equals(id) {
+			} else if !client.ID.Equals(id) {
 				// Peer sent message with a completely different ID (???)
-				glog.Errorf("Message signed by peer %s but client is %s", client.Id.Address, id.Address)
+				glog.Errorf("Message signed by peer %s but client is %s", client.ID.Address, id.Address)
 				return
 			}
 
