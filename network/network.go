@@ -47,33 +47,24 @@ type Acceptable interface {
 	Accept() (net.Conn, error)
 }
 
-type KCPAcceptor struct {
-	listener *kcp.Listener
-}
-
-func (a *KCPAcceptor) Accept() (net.Conn, error) {
-	return a.listener.Accept()
-}
-
 // Listen starts listening for peers on a port.
 func (n *Network) Listen() {
-	uInfo, err := url.Parse(n.Address)
+	urlInfo, err := url.Parse(n.Address)
 	if err != nil {
 		glog.Fatal(err)
 	}
 
-	var listener Acceptable
+	var listener net.Listener
 
-	if uInfo.Scheme == "kcp" {
-		var rawListener *kcp.Listener
-		rawListener, err = kcp.ListenWithOptions(uInfo.Host, nil, 10, 3)
-		if err == nil {
-			listener = &KCPAcceptor { listener: rawListener, }
+	if urlInfo.Scheme == "kcp" {
+		listener, err = kcp.ListenWithOptions(urlInfo.Host, nil, 10, 3)
+		if err != nil {
+			glog.Fatal(err)
 		}
-	} else if uInfo.Scheme == "tcp" {
-		listener, err = net.Listen("tcp", uInfo.Host)
+	} else if urlInfo.Scheme == "tcp" {
+		listener, err = net.Listen("tcp", urlInfo.Host)
 	} else {
-		err = errors.New("Invalid scheme: " + uInfo.Scheme)
+		err = errors.New("Invalid scheme: " + urlInfo.Scheme)
 	}
 
 	if err != nil {
