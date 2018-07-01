@@ -36,11 +36,7 @@ func main() {
 
 	builder := &builders.NetworkBuilder{}
 	builder.SetKeys(keys)
-	builder.SetAddress((&network.AddressInfo {
-		Protocol: protocol,
-		Host: host,
-		Port: port,
-	}).String())
+	builder.SetAddress(network.FormatAddress(protocol, host, port))
 	builder.SetUpnpEnabled(upnpEnabled)
 
 	// Register peer discovery RPC handlers.

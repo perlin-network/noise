@@ -39,11 +39,7 @@ func ExampleBasic() {
 	for i := 0; i < numNodes; i++ {
 		builder := &builders.NetworkBuilder{}
 		builder.SetKeys(crypto.RandomKeyPair())
-		builder.SetAddress((&network.AddressInfo {
-			Protocol: kcp,
-			Host: host,
-			Port: uint16(startPort+i),
-		}).String())
+		builder.SetAddress(network.FormatAddress("kcp", host, uint16(startPort+i)))
 
 		discovery.BootstrapPeerDiscovery(builder)
 
