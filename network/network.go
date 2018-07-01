@@ -43,10 +43,6 @@ type Network struct {
 	Listening chan struct{}
 }
 
-type Acceptable interface {
-	Accept() (net.Conn, error)
-}
-
 // Listen starts listening for peers on a port.
 func (n *Network) Listen() {
 	urlInfo, err := url.Parse(n.Address)
