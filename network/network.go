@@ -95,6 +95,10 @@ func (n *Network) Listen() {
 			addressInfo.Port = mappingInfo.ExternalPort
 
 			n.Address = addressInfo.String()
+
+			// TODO: Remove this hacky workaround
+			n.ID = peer.CreateID(n.Address, n.Keys.PublicKey)
+			n.Routes = dht.CreateRoutingTable(n.ID)
 		} else {
 			glog.Warning("Cannot setup UPnP mapping: ", err)
 		}
