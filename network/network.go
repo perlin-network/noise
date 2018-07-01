@@ -28,6 +28,8 @@ type Network struct {
 	// Full address to listen on. `protocol://host:port`
 	Address string
 
+	UpnpEnabled bool
+
 	// Map of incomingStream message processors for the Network.
 	// map[string]MessageProcessor
 	Processors *StringMessageProcessorSyncMap
@@ -41,6 +43,15 @@ type Network struct {
 
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
+}
+
+func (n *Network) GetPort() uint16 {
+	info, err := ExtractAddressInfo(n.Address)
+	if err != nil {
+		glog.Fatal(err)
+	}
+
+	return info.Port
 }
 
 // Listen starts listening for peers on a port.
@@ -66,6 +77,30 @@ func (n *Network) Listen() {
 	if err != nil {
 		glog.Fatal(err)
 	}
+
+	if n.UpnpEnabled {
+		glog.Info("Setting up upnp")
+		mappingInfo, err := AddPersistentLocalPortMapping(n.GetPort())
+		if err == nil {
+			defer mappingInfo.Close()
+
+			addrInfo, err := ExtractAddressInfo(n.Address)
+			if err != nil {
+				glog.Fatal(err)
+			}
+
+			addrInfo.Host = mappingInfo.ExternalIP
+			addrInfo.Port = mappingInfo.ExternalPort
+
+			n.Address  = addrInfo.String()
+		} else {
+			glog.Warning("Cannot setup upnp mapping:")
+			glog.Warning(err)
+		}
+	}
+	
+	n.ID = peer.CreateID(n.Address, n.Keys.PublicKey)
+	n.Routes = dht.CreateRoutingTable(n.ID)
 
 	close(n.Listening)
 
