@@ -14,11 +14,14 @@ import (
 	"github.com/perlin-network/noise/network/discovery"
 )
 
-type ChatMessageProcessor struct{}
+type ChatPlugin struct{ *network.Plugin }
 
-func (c *ChatMessageProcessor) Handle(ctx *network.MessageContext) error {
-	message := ctx.Message().(*messages.ChatMessage)
-	glog.Infof("<%s> %s", ctx.Client().ID.Address, message.Message)
+func (state *ChatPlugin) Receive(ctx *network.MessageContext) error {
+	switch msg := ctx.Message().(type) {
+	case *messages.ChatMessage:
+		glog.Infof("<%s> %s", ctx.Client().ID.Address, msg.Message)
+	}
+
 	return nil
 }
 
@@ -47,10 +50,11 @@ func main() {
 	builder.SetKeys(keys)
 	builder.SetAddress(network.FormatAddress(protocol, host, port))
 
-	// Register peer discovery RPC handlers.
-	discovery.BootstrapPeerDiscovery(builder)
+	// Register peer discovery plugin.
+	builder.AddPlugin("discovery", new(discovery.Plugin))
 
-	builder.AddProcessor((*messages.ChatMessage)(nil), new(ChatMessageProcessor))
+	// Add custom chat plugin.
+	builder.AddPlugin("chat", new(ChatPlugin))
 
 	net, err := builder.Build()
 	if err != nil {

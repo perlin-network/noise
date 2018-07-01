@@ -10,7 +10,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/network/nat"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
@@ -20,9 +19,6 @@ import (
 
 // Network represents the current networking state for this node.
 type Network struct {
-	// Routing table.
-	Routes *dht.RoutingTable
-
 	// Node's keypair.
 	Keys *crypto.KeyPair
 
@@ -31,9 +27,9 @@ type Network struct {
 
 	UpnpEnabled bool
 
-	// Map of incomingStream message processors for the Network.
-	// map[string]MessageProcessor
-	Processors *StringMessageProcessorSyncMap
+	// Map of plugins registered to the network.
+	// map[string]Plugin
+	Plugins *StringPluginInterfaceSyncMap
 
 	// Node's cryptographic ID.
 	ID peer.ID
@@ -98,11 +94,15 @@ func (n *Network) Listen() {
 
 			// TODO: Remove this hacky workaround
 			n.ID = peer.CreateID(n.Address, n.Keys.PublicKey)
-			n.Routes = dht.CreateRoutingTable(n.ID)
 		} else {
 			glog.Warning("Cannot setup UPnP mapping: ", err)
 		}
 	}
+
+	n.Plugins.Range(func(name string, plugin PluginInterface) bool {
+		plugin.Startup(n)
+		return true
+	})
 
 	close(n.Listening)
 
@@ -256,4 +256,8 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	}
 
 	n.BroadcastByAddresses(message, addresses[:K]...)
+}
+
+func (n *Network) Plugin(name string) (PluginInterface, bool) {
+	return n.Plugins.Load(name)
 }

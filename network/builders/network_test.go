@@ -9,6 +9,7 @@ import (
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+	"github.com/perlin-network/noise/network/discovery"
 )
 
 var (
@@ -18,15 +19,20 @@ var (
 	port     = uint16(12345)
 )
 
-// MockProcessor to keep independent from incoming.go and outgoing.go.
-type MockProcessor struct{}
+type MockPlugin struct {
+	*network.Plugin
+}
 
-func (p *MockProcessor) Handle(ctx *network.MessageContext) error {
-	err := ctx.Reply(&protobuf.Pong{})
+func (*MockPlugin) Receive(ctx *network.MessageContext) error {
+	switch ctx.Message().(type) {
+	case *protobuf.Ping:
+		err := ctx.Reply(&protobuf.Pong{})
 
-	if err != nil {
-		return err
+		if err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
 
@@ -37,7 +43,8 @@ func buildNetwork(port uint16) (*network.Network, error) {
 		fmt.Sprintf("%s://%s:%d", protocol, host, port),
 	)
 
-	builder.AddProcessor((*protobuf.Ping)(nil), new(MockProcessor))
+	builder.AddPlugin("discovery", new(discovery.Plugin))
+	builder.AddPlugin("mock", new(MockPlugin))
 
 	return builder.Build()
 }

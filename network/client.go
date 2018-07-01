@@ -87,12 +87,14 @@ func (c *PeerClient) establishConnection(address string) error {
 func (c *PeerClient) Close() {
 	// Disconnect the user.
 	if c.ID != nil {
-		if c.Network.Routes != nil && c.Network.Routes.PeerExists(*c.ID) {
-			c.Network.Routes.RemovePeer(*c.ID)
-			c.Network.Peers.Delete(c.ID.Address)
+		// Handle 'on peer disconnect' callback for plugins.
+		c.Network.Plugins.Range(func(name string, plugin PluginInterface) bool {
+			plugin.PeerDisconnect(c.ID)
+			return true
+		})
 
-			glog.Infof("Peer %s has disconnected.", c.ID.Address)
-		}
+		// Delete peer from network.
+		c.Network.Peers.Delete(c.ID.Address)
 	}
 
 	if c.session != nil && !c.session.IsClosed() {

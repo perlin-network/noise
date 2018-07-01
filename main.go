@@ -39,8 +39,8 @@ func main() {
 	builder.SetAddress(network.FormatAddress(protocol, host, port))
 	builder.SetUpnpEnabled(upnpEnabled)
 
-	// Register peer discovery RPC handlers.
-	discovery.BootstrapPeerDiscovery(builder)
+	// Register peer discovery plugin.
+	builder.AddPlugin("discovery", new(discovery.Plugin))
 
 	net, err := builder.Build()
 	if err != nil {

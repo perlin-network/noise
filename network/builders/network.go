@@ -2,12 +2,7 @@ package builders
 
 import (
 	"errors"
-	"reflect"
-
-	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
 )
@@ -18,8 +13,8 @@ type NetworkBuilder struct {
 	address     string
 	upnpEnabled bool
 
-	// map[string]MessageProcessor
-	processors *network.StringMessageProcessorSyncMap
+	// map[string]PluginInterface
+	plugins *network.StringPluginInterfaceSyncMap
 }
 
 func NewNetworkBuilder() *NetworkBuilder {
@@ -41,22 +36,14 @@ func (builder *NetworkBuilder) SetUpnpEnabled(enabled bool) {
 	builder.upnpEnabled = enabled
 }
 
-// AddProcessor for a given message,
-// Example: builder.AddProcessor((*protobuf.LookupNodeRequest)(nil), MessageProcessor{})
-func (builder *NetworkBuilder) AddProcessor(message proto.Message, processor network.MessageProcessor) {
+// AddPlugin register a new plugin into the network.
+func (builder *NetworkBuilder) AddPlugin(name string, plugin network.PluginInterface) {
 	// Initialize map if not exist.
-	if builder.processors == nil {
-		builder.processors = &network.StringMessageProcessorSyncMap{}
+	if builder.plugins == nil {
+		builder.plugins = &network.StringPluginInterfaceSyncMap{}
 	}
 
-	name := reflect.TypeOf(message).String()
-
-	// Store pointers to message processor only.
-	if value := reflect.ValueOf(message); value.Kind() == reflect.Ptr && value.Pointer() == 0 {
-		builder.processors.Store(name, processor)
-	} else {
-		glog.Fatal("message must be nil")
-	}
+	builder.plugins.Store(name, plugin)
 }
 
 // Build verifies all parameters of the network and returns either an error due to
@@ -71,8 +58,8 @@ func (builder *NetworkBuilder) Build() (*network.Network, error) {
 	}
 
 	// Initialize map if not exist.
-	if builder.processors == nil {
-		builder.processors = &network.StringMessageProcessorSyncMap{}
+	if builder.plugins == nil {
+		builder.plugins = &network.StringPluginInterfaceSyncMap{}
 	}
 
 	unifiedAddress, err := network.ToUnifiedAddress(builder.address)
@@ -88,11 +75,9 @@ func (builder *NetworkBuilder) Build() (*network.Network, error) {
 		Address:     unifiedAddress,
 		UpnpEnabled: builder.upnpEnabled,
 
-		Processors: builder.processors,
+		Plugins: builder.plugins,
 
 		Peers: new(network.StringPeerClientSyncMap),
-
-		Routes: dht.CreateRoutingTable(id),
 
 		Listening: make(chan struct{}),
 	}

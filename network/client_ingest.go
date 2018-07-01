@@ -6,7 +6,6 @@ import (
 	"github.com/perlin-network/noise/peer"
 	"github.com/xtaci/smux"
 	"net"
-	"reflect"
 )
 
 // Ingest handles peer registration and processes incoming message streams consisting of
@@ -75,11 +74,6 @@ func (n *Network) Ingest(conn net.Conn) {
 				return
 			}
 
-			// Update routing table w/ peer's ID.
-			if client.Network.Routes != nil {
-				client.Network.Routes.Update(id)
-			}
-
 			// Unmarshal protobuf.
 			var ptr ptypes.DynamicAny
 			if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
@@ -93,28 +87,24 @@ func (n *Network) Ingest(conn net.Conn) {
 				return
 			}
 
-			// Check if the received request has a message processor. If exists, execute it.
-			name := reflect.TypeOf(ptr.Message).String()
-			processor, exists := client.Network.Processors.Load(name)
+			// Create message execution context.
+			ctx := new(MessageContext)
+			ctx.client = client
+			ctx.stream = stream
+			ctx.message = ptr.Message
+			ctx.nonce = msg.Nonce
 
-			if exists {
-				processor := processor.(MessageProcessor)
+			// Execute 'on receive message' callback for all plugins.
+			n.Plugins.Range(func(name string, plugin PluginInterface) bool {
+				err := plugin.Receive(ctx)
 
-				// Create message execution context.
-				ctx := new(MessageContext)
-				ctx.client = client
-				ctx.stream = stream
-				ctx.message = ptr.Message
-				ctx.nonce = msg.Nonce
-
-				// Process request.
-				err := processor.Handle(ctx)
 				if err != nil {
-					glog.Errorf("An error occurred handling %x: %x", name, err)
+					glog.Error(err)
+					return false
 				}
-			} else {
-				glog.Warning("Unknown message type received:", name)
-			}
+
+				return true
+			})
 		}(stream)
 	}
 }

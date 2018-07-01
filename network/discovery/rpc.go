@@ -39,13 +39,20 @@ func queryPeerByID(net *network.Network, peerID peer.ID, targetID peer.ID, respo
 }
 
 func findNode(net *network.Network, targetID peer.ID, alpha int) (results []peer.ID) {
+	plugin, exists := net.Plugin("discovery")
+
+	// Discovery plugin was not registered. Fail.
+	if !exists {
+		return
+	}
+
 	var queue []peer.ID
 
 	responses, visited := make(chan []*protobuf.ID), make(map[string]struct{})
 
 	// Start searching for target from #ALPHA peers closest to target by queuing
 	// them up and marking them as visited.
-	for _, peerID := range net.Routes.FindClosestPeers(targetID, alpha) {
+	for _, peerID := range plugin.(*Plugin).Routes.FindClosestPeers(targetID, alpha) {
 		visited[peerID.PublicKeyHex()] = struct{}{}
 		queue = append(queue, peerID)
 

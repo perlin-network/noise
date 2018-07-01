@@ -7,19 +7,27 @@ import (
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
-	"github.com/perlin-network/noise/network/discovery"
 	"time"
+	"github.com/perlin-network/noise/network/discovery"
 )
 
-// BasicMessageProcessor buffers all messages into a mailbox for this test.
-type BasicMessageProcessor struct {
+// BasicPlugin buffers all messages into a mailbox for this test.
+type BasicPlugin struct {
+	*network.Plugin
 	Mailbox chan *messages.BasicMessage
 }
 
-func (state *BasicMessageProcessor) Handle(ctx *network.MessageContext) error {
-	message := ctx.Message().(*messages.BasicMessage)
-	state.Mailbox <- message
+func (state *BasicPlugin) Startup(net *network.Network) {
+	// Create mailbox
+	state.Mailbox = make(chan *messages.BasicMessage, 1)
+}
 
+
+func (state *BasicPlugin) Receive(ctx *network.MessageContext) error {
+	switch msg := ctx.Message().(type) {
+	case *messages.BasicMessage:
+		state.Mailbox <- msg
+	}
 	return nil
 }
 
@@ -34,17 +42,17 @@ func ExampleBasic() {
 	startPort := 5000
 
 	var nodes []*network.Network
-	var processors []*BasicMessageProcessor
+	var processors []*BasicPlugin
 
 	for i := 0; i < numNodes; i++ {
 		builder := builders.NewNetworkBuilder()
 		builder.SetKeys(crypto.RandomKeyPair())
 		builder.SetAddress(network.FormatAddress("kcp", host, uint16(startPort+i)))
 
-		discovery.BootstrapPeerDiscovery(builder)
+		builder.AddPlugin("discovery", new(discovery.Plugin))
 
-		processors = append(processors, &BasicMessageProcessor{Mailbox: make(chan *messages.BasicMessage, 1)})
-		builder.AddProcessor((*messages.BasicMessage)(nil), processors[i])
+		processors = append(processors, new(BasicPlugin))
+		builder.AddPlugin("basic", processors[i])
 
 		node, err := builder.Build()
 		if err != nil {
