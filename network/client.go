@@ -70,7 +70,7 @@ func (c *PeerClient) establishConnection(address string) error {
 		return err
 	}
 
-	c.Session, err = smux.Client(conn, muxConfig())
+	c.session, err = smux.Client(conn, muxConfig())
 
 	// Failed to open session.
 	if err != nil {
