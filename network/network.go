@@ -99,10 +99,19 @@ func (n *Network) Listen() {
 		}
 	}
 
+	// Handle 'network starts listening' callback for plugins.
 	n.Plugins.Range(func(name string, plugin PluginInterface) bool {
 		plugin.Startup(n)
 		return true
 	})
+
+	// Handle 'network stops listening' callback for plugins.
+	defer func() {
+		n.Plugins.Range(func(name string, plugin PluginInterface) bool {
+			plugin.Cleanup(n)
+			return true
+		})
+	}()
 
 	close(n.Listening)
 
