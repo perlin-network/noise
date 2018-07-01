@@ -8,33 +8,80 @@ import (
 	"github.com/perlin-network/noise/examples/proxy/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
+	"github.com/perlin-network/noise/peer"
 )
 
 const (
-	host = "127.0.0.1"
+	host      = "127.0.0.1"
+	startPort = 20070
 )
 
-// TopologyProcessor implements the message handler
-type TopologyProcessor struct {
+// MockProcessor implements the message handler
+type MockProcessor struct {
+	Idx     int
 	Mailbox chan *messages.ProxyMessage
 }
 
 // Handle implements the network interface callback
-func (n *TopologyProcessor) Handle(ctx *network.MessageContext) error {
+func (n *MockProcessor) Handle(ctx *network.MessageContext) error {
 	message := ctx.Message().(*messages.ProxyMessage)
+
+	fmt.Printf("Node %d received a message.\n", n.Idx)
+
 	n.Mailbox <- message
+
+	if err := n.ProxyBroadcast(ctx.Network(), ctx.Sender(), message); err != nil {
+		fmt.Println(err)
+	}
+	return nil
+}
+
+func (n *MockProcessor) ProxyBroadcast(node *network.Network, sender peer.ID, msg *messages.ProxyMessage) error {
+	targetID := peer.ID{
+		PublicKey: msg.Destination.PublicKey,
+		Address:   msg.Destination.Address,
+	}
+	if node.ID.Equals(targetID) {
+		// success
+		return nil
+	}
+
+	// find closest node
+	if node.Routes.PeerExists(targetID) {
+		// if it is already in the routing table, then send messages directly there
+		node.BroadcastByIDs(msg, targetID)
+		return nil
+	}
+
+	// find a closest peer that is not the sender
+	closestPeers := node.Routes.FindClosestPeers(targetID, 2)
+
+	// remove the sender from the closest peers list
+	for i, peer := range closestPeers {
+		if peer.Equals(sender) {
+			closestPeers = append(closestPeers[:i], closestPeers[i+1:]...)
+			break
+		}
+	}
+
+	// propagate the message to every
+	if len(closestPeers) == 1 {
+		// send it to the closest peer
+		node.BroadcastByIDs(msg, closestPeers[0])
+	} else {
+		return fmt.Errorf("could not found route to %v", targetID)
+	}
+
 	return nil
 }
 
 func ExampleProxy() {
 	numNodes := 5
-	host := "127.0.0.1"
-	startPort := 20070
-
-	//----------------
+	sender := 0
+	target := numNodes - 1
 
 	var nodes []*network.Network
-	var processors []*TopologyProcessor
+	var processors []*MockProcessor
 
 	for i := 0; i < numNodes; i++ {
 		builder := &builders.NetworkBuilder{}
@@ -44,7 +91,10 @@ func ExampleProxy() {
 		// excluding peer discovery to test non-fully connected topology
 		//discovery.BootstrapPeerDiscovery(builder)
 
-		processor := &TopologyProcessor{Mailbox: make(chan *messages.ProxyMessage, 1)}
+		processor := &MockProcessor{
+			Idx:     i,
+			Mailbox: make(chan *messages.ProxyMessage, 1),
+		}
 		builder.AddProcessor((*messages.ProxyMessage)(nil), processor)
 
 		node, err := builder.BuildNetwork()
@@ -61,8 +111,6 @@ func ExampleProxy() {
 	for _, node := range nodes {
 		node.BlockUntilListening()
 	}
-
-	//----------------
 
 	for i := 0; i < numNodes; i++ {
 		var peerList []string
@@ -83,12 +131,6 @@ func ExampleProxy() {
 
 	fmt.Println("Nodes setup as a line topology.")
 
-	//----------------
-
-	sender := 0
-	target := numNodes - 1
-	target = 1
-
 	// Broadcast is an asynchronous call to send a message to other nodes
 	expectedMsg := &messages.ProxyMessage{
 		Message: fmt.Sprintf("This is a proxy message from Node %d", sender),
@@ -97,7 +139,7 @@ func ExampleProxy() {
 			PublicKey: nodes[target].ID.PublicKey,
 		},
 	}
-	nodes[sender].Broadcast(expectedMsg)
+	processors[sender].ProxyBroadcast(nodes[sender], nodes[sender].ID, expectedMsg)
 
 	fmt.Printf("Node %d sent out a message to node %d.\n", sender, target)
 
@@ -115,6 +157,11 @@ func ExampleProxy() {
 
 	// Output:
 	// Nodes setup as a line topology.
-	// Node 0 sent out a message to node 1.
-	// Node 1 received a message from Node 0.
+	// Node 0 sent out a message to node 4.
+	// Node 1 received a message.
+	// Node 2 received a message.
+	// Node 3 received a message.
+	// Node 4 received a message.
+	// Node 4 received a message from Node 0.
+
 }
