@@ -100,9 +100,6 @@ func (n *Network) Listen() {
 		}
 	}
 
-	n.ID = peer.CreateID(n.Address, n.Keys.PublicKey)
-	n.Routes = dht.CreateRoutingTable(n.ID)
-
 	close(n.Listening)
 
 	glog.Infof("Listening for peers on %s.", n.Address)
