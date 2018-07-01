@@ -1,3 +1,3 @@
-//go:generate protoc --go_out=plugins=grpc:. protobuf/stream.proto
+//go:generate protoc --go_out=. protobuf/stream.proto
 
 package main

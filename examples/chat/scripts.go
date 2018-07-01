@@ -1,3 +1,3 @@
-//go:generate protoc --go_out=plugins=grpc:. messages/chat.proto
+//go:generate protoc --go_out=. messages/chat.proto
 
 package main
