@@ -10,15 +10,15 @@ import (
 func ToUnifiedHost(host string) (string, error) {
 	if net.ParseIP(host) == nil {
 		// Probably a domain name is provided.
-		addrs, err := net.LookupHost(host)
+		addresses, err := net.LookupHost(host)
 		if err != nil {
 			return "", err
 		}
-		if len(addrs) == 0 {
+		if len(addresses) == 0 {
 			return "", errors.New("no available addresses")
 		}
 
-		host = addrs[0]
+		host = addresses[0]
 
 		// Hacky localhost fix.
 		if host == "::1" {

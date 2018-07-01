@@ -9,17 +9,17 @@ import (
 )
 
 func TestToUnifiedAddress(t *testing.T) {
-	addr, err := ToUnifiedAddress("tcp://localhost:1000")
+	address, err := ToUnifiedAddress("tcp://localhost:1000")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	u, err := url.Parse(addr)
+	urlInfo, err := url.Parse(address)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ip, port, err := net.SplitHostPort(u.Host)
+	ip, port, err := net.SplitHostPort(urlInfo.Host)
 	if err != nil {
 		t.Fatal(err)
 	}
