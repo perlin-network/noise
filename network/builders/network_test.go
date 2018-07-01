@@ -12,9 +12,10 @@ import (
 )
 
 var (
-	keys = crypto.RandomKeyPair()
-	host = "localhost"
-	port = uint16(12345)
+	keys     = crypto.RandomKeyPair()
+	host     = "localhost"
+	protocol = "kcp"
+	port     = uint16(12345)
 )
 
 // MockProcessor to keep independent from incoming.go and outgoing.go.
@@ -32,8 +33,9 @@ func (p *MockProcessor) Handle(ctx *network.MessageContext) error {
 func buildNetwork(port uint16) (*network.Network, error) {
 	builder := &NetworkBuilder{}
 	builder.SetKeys(keys)
-	builder.SetHost(host)
-	builder.SetPort(port)
+	builder.SetAddress(
+		fmt.Sprintf("%s://%s:%d", protocol, host, port),
+	)
 
 	builder.AddProcessor((*protobuf.Ping)(nil), new(MockProcessor))
 
@@ -54,11 +56,8 @@ func TestSetters(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if net.Address() != fmt.Sprintf("127.0.0.1:%d", port) { // Unified address.
-		t.Fatalf("address is wrong: expected %s but got %s", fmt.Sprintf("127.0.0.1:%d", port), net.Address())
-	}
-	if net.Host != fmt.Sprintf("127.0.0.1") { // Unified address.
-		t.Fatal("host is wrong")
+	if net.Address != fmt.Sprintf("kcp://127.0.0.1:%d", port) { // Unified address.
+		t.Fatalf("address is wrong: expected %s but got %s", fmt.Sprintf("kcp://127.0.0.1:%d", port), net.Address)
 	}
 
 	comparee := peer.CreateID("localhost:12345", keys.PublicKey)
@@ -78,7 +77,7 @@ func TestSetters(t *testing.T) {
 
 func TestPeers(t *testing.T) {
 	var nodes []*network.Network
-	addresses := []string{"127.0.0.1:12345", "127.0.0.1:12346", "127.0.0.1:12347"}
+	addresses := []string{"kcp://127.0.0.1:12345", "kcp://127.0.0.1:12346", "kcp://127.0.0.1:12347"}
 	peers := [][2]int{{1, 2}, {0, 2}, {0, 1}}
 
 	for i := 0; i < 3; i++ {

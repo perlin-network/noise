@@ -2,23 +2,23 @@ package network
 
 import (
 	"errors"
-	"fmt"
 	"net"
+	"net/url"
 )
 
 // ToUnifiedHost resolves a domain host.
 func ToUnifiedHost(host string) (string, error) {
 	if net.ParseIP(host) == nil {
 		// Probably a domain name is provided.
-		addrs, err := net.LookupHost(host)
+		addresses, err := net.LookupHost(host)
 		if err != nil {
 			return "", err
 		}
-		if len(addrs) == 0 {
+		if len(addresses) == 0 {
 			return "", errors.New("no available addresses")
 		}
 
-		host = addrs[0]
+		host = addresses[0]
 
 		// Hacky localhost fix.
 		if host == "::1" {
@@ -31,7 +31,12 @@ func ToUnifiedHost(host string) (string, error) {
 
 // ToUnifiedAddress resolves and normalizes a network address.
 func ToUnifiedAddress(address string) (string, error) {
-	host, port, err := net.SplitHostPort(address)
+	urlInfo, err := url.Parse(address)
+	if err != nil {
+		return "", err
+	}
+
+	host, port, err := net.SplitHostPort(urlInfo.Host)
 	if err != nil {
 		return "", err
 	}
@@ -41,18 +46,20 @@ func ToUnifiedAddress(address string) (string, error) {
 		return "", err
 	}
 
-	return net.JoinHostPort(host, port), nil
+	return urlInfo.Scheme + "://" + net.JoinHostPort(host, port), nil
 }
 
-// FilterPeers out duplicate addresses.
-func FilterPeers(host string, port uint16, peers []string) (filtered []string) {
-	address := fmt.Sprintf("%s:%d", host, port)
-
+// FilterPeers filters out duplicate/empty addresses.
+func FilterPeers(address string, peers []string) (filtered []string) {
 	visited := make(map[string]struct{})
 	visited[address] = struct{}{}
 
-	for _, peer := range peers {
-		resolved, err := ToUnifiedAddress(peer)
+	for _, peerAddress := range peers {
+		if len(peerAddress) == 0 {
+			continue
+		}
+
+		resolved, err := ToUnifiedAddress(peerAddress)
 		if err != nil {
 			continue
 		}

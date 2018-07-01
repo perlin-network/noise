@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	keys = crypto.RandomKeyPair()
-	host = "localhost"
-	port = 12345
+	keys     = crypto.RandomKeyPair()
+	host     = "localhost"
+	protocol = "kcp"
+	port     = 12345
 )
 
 // MockProcessor to keep independent from incoming.go and outgoing.go.
@@ -35,8 +36,9 @@ func (p *MockProcessor) Handle(ctx *network.MessageContext) error {
 func buildNetwork(port uint16) *builders.NetworkBuilder {
 	builder := &builders.NetworkBuilder{}
 	builder.SetKeys(keys)
-	builder.SetHost(host)
-	builder.SetPort(port)
+	builder.SetAddress(
+		fmt.Sprintf("%s://%s:%d", protocol, host, port),
+	)
 
 	builder.AddProcessor((*protobuf.Ping)(nil), new(MockProcessor))
 

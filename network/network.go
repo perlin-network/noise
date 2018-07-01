@@ -3,7 +3,8 @@ package network
 import (
 	"fmt"
 	"math/rand"
-	"strconv"
+	"net"
+	"net/url"
 	"strings"
 
 	"github.com/golang/glog"
@@ -24,10 +25,8 @@ type Network struct {
 	// Node's keypair.
 	Keys *crypto.KeyPair
 
-	// Node's Network information.
-	// The Address is `Host:Port`.
-	Host string
-	Port uint16
+	// Full address to listen on. `protocol://host:port`
+	Address string
 
 	// Map of incomingStream message processors for the Network.
 	// map[string]MessageProcessor
@@ -44,22 +43,33 @@ type Network struct {
 	Listening chan struct{}
 }
 
-// Address returns a formated host:port string
-func (n *Network) Address() string {
-	return n.Host + ":" + strconv.Itoa(int(n.Port))
-}
-
 // Listen starts listening for peers on a port.
 func (n *Network) Listen() {
-	listener, err := kcp.ListenWithOptions(":"+strconv.Itoa(int(n.Port)), nil, 10, 3)
+	urlInfo, err := url.Parse(n.Address)
 	if err != nil {
 		glog.Fatal(err)
-		return
+	}
+
+	var listener net.Listener
+
+	if urlInfo.Scheme == "kcp" {
+		listener, err = kcp.ListenWithOptions(urlInfo.Host, nil, 10, 3)
+		if err != nil {
+			glog.Fatal(err)
+		}
+	} else if urlInfo.Scheme == "tcp" {
+		listener, err = net.Listen("tcp", urlInfo.Host)
+	} else {
+		err = errors.New("Invalid scheme: " + urlInfo.Scheme)
+	}
+
+	if err != nil {
+		glog.Fatal(err)
 	}
 
 	close(n.Listening)
 
-	glog.Infof("Listening for peers on port %d.", n.Port)
+	glog.Infof("Listening for peers on %s.", n.Address)
 
 	// Handle new clients.
 	for {
@@ -83,7 +93,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		return nil, err
 	}
 
-	if address == n.Address() {
+	if address == n.Address {
 		return nil, errors.New("peer should not dial itself")
 	}
 
@@ -106,7 +116,7 @@ func (n *Network) BlockUntilListening() {
 func (n *Network) Bootstrap(addresses ...string) {
 	n.BlockUntilListening()
 
-	addresses = FilterPeers(n.Host, n.Port, addresses)
+	addresses = FilterPeers(n.Address, addresses)
 
 	for _, address := range addresses {
 		client, err := n.Dial(address)

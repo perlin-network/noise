@@ -39,8 +39,9 @@ func ExampleBasic() {
 	for i := 0; i < numNodes; i++ {
 		builder := &builders.NetworkBuilder{}
 		builder.SetKeys(crypto.RandomKeyPair())
-		builder.SetHost(host)
-		builder.SetPort(uint16(startPort + i))
+		builder.SetAddress(
+			fmt.Sprintf("kcp://%s:%d", host, uint16(startPort+i)),
+		)
 
 		discovery.BootstrapPeerDiscovery(builder)
 
@@ -56,7 +57,7 @@ func ExampleBasic() {
 
 		// Bootstrap to Node 0.
 		if i != 0 {
-			node.Bootstrap(nodes[0].Address())
+			node.Bootstrap(nodes[0].Address)
 		}
 
 		nodes = append(nodes, node)
