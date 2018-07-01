@@ -1,11 +1,11 @@
-package topologies
+package proxy
 
 import (
 	"fmt"
 	"time"
 
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/examples/basic/messages"
+	"github.com/perlin-network/noise/examples/proxy/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
 )
@@ -16,53 +16,20 @@ const (
 
 // TopologyProcessor implements the message handler
 type TopologyProcessor struct {
-	Mailbox chan *messages.BasicMessage
+	Mailbox chan *messages.ProxyMessage
 }
 
 // Handle implements the network interface callback
 func (n *TopologyProcessor) Handle(ctx *network.MessageContext) error {
-	message := ctx.Message().(*messages.BasicMessage)
+	message := ctx.Message().(*messages.ProxyMessage)
 	n.Mailbox <- message
 	return nil
-}
-
-// broadcastTest will broadcast a message from the sender node, checks if the right peers receive it
-func broadcastTest(nodes []*network.Network, processors []*TopologyProcessor, peers map[string]map[string]struct{}, sender int) {
-	timeout := 250 * time.Millisecond
-
-	// Broadcast is an asynchronous call to send a message to other nodes
-	expected := fmt.Sprintf("This is a broadcasted message from Node %d", sender)
-	nodes[sender].Broadcast(&messages.BasicMessage{Message: expected})
-
-	// check the messages
-	for i := 0; i < len(nodes); i++ {
-		if _, isPeer := peers[nodes[i].Address][nodes[sender].Address]; !isPeer || i == sender {
-			// if not a peer or not the sender, should not receive anything
-			select {
-			case received := <-processors[sender].Mailbox:
-				fmt.Printf("Expected nothing in sending node %d, got %v\n", sender, received)
-			case <-time.After(timeout):
-				// this is the good case, don't want to receive anything
-			}
-		} else {
-			// this is a connected peer, it should receive something
-			select {
-			case received := <-processors[i].Mailbox:
-				// this is a receiving node, it should have just the one message buffered up
-				if received.Message != expected {
-					fmt.Printf("Expected message '%s' for node %d --> %d, but got %v\n", expected, sender, i, received)
-				}
-			case <-time.After(timeout):
-				fmt.Printf("Expected a message for node %d --> %d, but it timed out\n", sender, i)
-			}
-		}
-	}
 }
 
 func ExampleProxy() {
 	numNodes := 5
 	host := "127.0.0.1"
-	startPort := 5070
+	startPort := 20070
 
 	//----------------
 
@@ -77,8 +44,8 @@ func ExampleProxy() {
 		// excluding peer discovery to test non-fully connected topology
 		//discovery.BootstrapPeerDiscovery(builder)
 
-		processor := &TopologyProcessor{Mailbox: make(chan *messages.BasicMessage, 1)}
-		builder.AddProcessor((*messages.BasicMessage)(nil), processor)
+		processor := &TopologyProcessor{Mailbox: make(chan *messages.ProxyMessage, 1)}
+		builder.AddProcessor((*messages.ProxyMessage)(nil), processor)
 
 		node, err := builder.BuildNetwork()
 		if err != nil {
@@ -118,41 +85,35 @@ func ExampleProxy() {
 
 	//----------------
 
-	timeout := 250 * time.Millisecond
 	sender := 0
-	dest := numNodes - 1
+	target := numNodes - 1
+	target = 1
 
 	// Broadcast is an asynchronous call to send a message to other nodes
-	expected := fmt.Sprintf("This is a broadcasted message from Node %d", sender)
-	nodes[sender].Broadcast(&messages.BasicMessage{Message: expected})
-
-	// check the messages
-	for i := 0; i < len(nodes); i++ {
-		if _, isPeer := peers[nodes[i].Address][nodes[sender].Address]; !isPeer || i == sender {
-			// if not a peer or not the sender, should not receive anything
-			select {
-			case received := <-processors[sender].Mailbox:
-				fmt.Printf("Expected nothing in sending node %d, got %v\n", sender, received)
-			case <-time.After(timeout):
-				// this is the good case, don't want to receive anything
-			}
-		} else {
-			// this is a connected peer, it should receive something
-			select {
-			case received := <-processors[i].Mailbox:
-				// this is a receiving node, it should have just the one message buffered up
-				if received.Message != expected {
-					fmt.Printf("Expected message '%s' for node %d --> %d, but got %v\n", expected, sender, i, received)
-				}
-			case <-time.After(timeout):
-				fmt.Printf("Expected a message for node %d --> %d, but it timed out\n", sender, i)
-			}
-		}
+	expectedMsg := &messages.ProxyMessage{
+		Message: fmt.Sprintf("This is a proxy message from Node %d", sender),
 	}
+	nodes[sender].Broadcast(expectedMsg)
 
-	fmt.Printf("Messages sent from each node.")
+	fmt.Printf("Node %d sent out a message to node %d.\n", sender, target)
+
+	// Check if message was received by target node.
+	select {
+	case received := <-processors[target].Mailbox:
+		if received.Message != expectedMsg.Message {
+			fmt.Printf("Expected message (%v) to be received by node %d but got (%v).\n", expectedMsg, target, received)
+		} else {
+			fmt.Printf("Node %d received a message from Node %d.\n", target, sender)
+		}
+	case <-time.After(time.Duration(numNodes+1) * time.Second):
+		fmt.Printf("Timed out attempting to receive message from Node %d.\n", sender)
+	}
 
 	// Output:
 	// Nodes setup as a line topology.
-	// Messages sent from each node.
+	// Node 0 sent out a message to node 4.
+	// Node 1 received a message from Node 0.
+	// Node 2 received a message from Node 1.
+	// Node 3 received a message from Node 2.
+	// Node 4 received a message from Node 3.
 }
