@@ -10,15 +10,15 @@ import (
 
 type AddressInfo struct {
 	Protocol string
-	Host string
-	Port uint16
+	Host     string
+	Port     uint16
 }
 
 func NewAddressInfo(protocol, host string, port uint16) *AddressInfo {
-	return &AddressInfo {
+	return &AddressInfo{
 		Protocol: protocol,
-		Host: host,
-		Port: port,
+		Host:     host,
+		Port:     port,
 	}
 }
 
@@ -53,10 +53,10 @@ func ExtractAddressInfo(address string) (*AddressInfo, error) {
 		return nil, err
 	}
 
-	return &AddressInfo {
+	return &AddressInfo{
 		Protocol: urlInfo.Scheme,
-		Host: host,
-		Port: uint16(port),
+		Host:     host,
+		Port:     uint16(port),
 	}, nil
 }
 

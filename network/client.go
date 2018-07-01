@@ -18,8 +18,6 @@ import (
 	"github.com/xtaci/smux"
 )
 
-type MessageChannel chan proto.Message
-
 // PeerClient represents a single incoming peers client.
 type PeerClient struct {
 	Network *Network

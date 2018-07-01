@@ -8,12 +8,13 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/network"
+	"github.com/perlin-network/noise/peer"
 )
 
 // NetworkBuilder is a Address->processors struct
 type NetworkBuilder struct {
-	keys    *crypto.KeyPair
-	address string
+	keys        *crypto.KeyPair
+	address     string
 	upnpEnabled bool
 
 	// map[string]MessageProcessor
@@ -21,7 +22,7 @@ type NetworkBuilder struct {
 }
 
 func NewNetworkBuilder() *NetworkBuilder {
-	return &NetworkBuilder {
+	return &NetworkBuilder{
 		upnpEnabled: false,
 	}
 }
@@ -73,19 +74,22 @@ func (builder *NetworkBuilder) Build() (*network.Network, error) {
 		builder.processors = &network.StringMessageProcessorSyncMap{}
 	}
 
-	unifiedAddr, err := network.ToUnifiedAddress(builder.address)
+	unifiedAddress, err := network.ToUnifiedAddress(builder.address)
 	if err != nil {
 		return nil, err
 	}
 
+	id := peer.CreateID(unifiedAddress, builder.keys.PublicKey)
+
 	net := &network.Network{
-		Keys:    builder.keys,
-		Address: unifiedAddr,
+		ID:          id,
+		Keys:        builder.keys,
+		Address:     unifiedAddress,
 		UpnpEnabled: builder.upnpEnabled,
 
 		Processors: builder.processors,
 
-		Peers: &network.StringPeerClientSyncMap{},
+		Peers: new(network.StringPeerClientSyncMap),
 
 		Listening: make(chan struct{}),
 	}

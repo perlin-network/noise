@@ -11,6 +11,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/dht"
+	"github.com/perlin-network/noise/network/nat"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
@@ -79,26 +80,26 @@ func (n *Network) Listen() {
 	}
 
 	if n.UpnpEnabled {
-		glog.Info("Setting up upnp")
-		mappingInfo, err := AddPersistentLocalPortMapping(n.GetPort())
+		glog.Info("Setting up UPnP...")
+
+		mappingInfo, err := nat.PortForward(n.GetPort())
 		if err == nil {
 			defer mappingInfo.Close()
 
-			addrInfo, err := ExtractAddressInfo(n.Address)
+			addressInfo, err := ExtractAddressInfo(n.Address)
 			if err != nil {
 				glog.Fatal(err)
 			}
 
-			addrInfo.Host = mappingInfo.ExternalIP
-			addrInfo.Port = mappingInfo.ExternalPort
+			addressInfo.Host = mappingInfo.ExternalIP
+			addressInfo.Port = mappingInfo.ExternalPort
 
-			n.Address  = addrInfo.String()
+			n.Address = addressInfo.String()
 		} else {
-			glog.Warning("Cannot setup upnp mapping:")
-			glog.Warning(err)
+			glog.Warning("Cannot setup UPnP mapping: ", err)
 		}
 	}
-	
+
 	n.ID = peer.CreateID(n.Address, n.Keys.PublicKey)
 	n.Routes = dht.CreateRoutingTable(n.ID)
 

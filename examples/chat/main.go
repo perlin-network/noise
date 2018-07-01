@@ -31,13 +31,11 @@ func main() {
 	hostFlag := flag.String("host", "localhost", "host to listen to")
 	protocolFlag := flag.String("protocol", "kcp", "protocol to use (kcp/tcp)")
 	peersFlag := flag.String("peers", "", "peers to connect to")
-	upnpFlag := flag.Bool("upnp", false, "enable upnp")
 	flag.Parse()
 
 	port := uint16(*portFlag)
 	host := *hostFlag
 	protocol := *protocolFlag
-	upnpEnabled := *upnpFlag
 	peers := strings.Split(*peersFlag, ",")
 
 	keys := crypto.RandomKeyPair()
@@ -48,7 +46,6 @@ func main() {
 	builder := builders.NewNetworkBuilder()
 	builder.SetKeys(keys)
 	builder.SetAddress(network.FormatAddress(protocol, host, port))
-	builder.SetUpnpEnabled(upnpEnabled)
 
 	// Register peer discovery RPC handlers.
 	discovery.BootstrapPeerDiscovery(builder)
