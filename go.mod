@@ -8,7 +8,10 @@ require (
 	github.com/klauspost/crc32 v0.0.0-20170628072449-bab58d77464a
 	github.com/klauspost/reedsolomon v0.0.0-20180504130200-7d9453e171e9
 	github.com/pkg/errors v0.8.0
-	github.com/xtaci/kcp-go v1.0.1
+	github.com/templexxx/cpufeat v0.0.0-20170927014610-3794dfbfb047
+	github.com/templexxx/xor v0.0.0-20170926022130-0af8e873c554
+	github.com/tjfoc/gmsm v1.0.1
+	github.com/xtaci/kcp-go v0.0.0-20180203133237-42bc1dfefff5
 	github.com/xtaci/smux v1.0.7
 	golang.org/x/crypto v0.0.0-20180614221331-a8fb68e7206f
 	golang.org/x/net v0.0.0-20180611182652-db08ff08e862

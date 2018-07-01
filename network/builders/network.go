@@ -3,7 +3,6 @@ package builders
 import (
 	"errors"
 	"reflect"
-	"strconv"
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
@@ -16,8 +15,7 @@ import (
 // NetworkBuilder is a Address->processors struct
 type NetworkBuilder struct {
 	keys *crypto.KeyPair
-	host string
-	port uint16
+	address string
 
 	// map[string]MessageProcessor
 	processors *network.StringMessageProcessorSyncMap
@@ -28,14 +26,8 @@ func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
 	builder.keys = pair
 }
 
-// SetHost of NetworkBuilder e.g. "127.0.0.1"
-func (builder *NetworkBuilder) SetHost(host string) {
-	builder.host = host
-}
-
-// SetPort of NetworkBuilder
-func (builder *NetworkBuilder) SetPort(port uint16) {
-	builder.port = port
+func (builder *NetworkBuilder) SetAddress(address string) {
+	builder.address = address
 }
 
 // AddProcessor for a given message,
@@ -63,12 +55,8 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 		return nil, errors.New("cryptography keys not provided to Network; cannot create node ID")
 	}
 
-	if len(builder.host) == 0 {
+	if len(builder.address) == 0 {
 		return nil, errors.New("Network requires public server IP for peers to connect to")
-	}
-
-	if builder.port <= 0 || builder.port >= 65535 {
-		return nil, errors.New("port to listen for peers on must be within the range (0, 65535)")
 	}
 
 	// Initialize map if not exist.
@@ -76,17 +64,16 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 		builder.processors = &network.StringMessageProcessorSyncMap{}
 	}
 
-	unifiedHost, err := network.ToUnifiedHost(builder.host)
+	unifiedAddr, err := network.ToUnifiedAddress(builder.address)
 	if err != nil {
 		return nil, err
 	}
 
-	id := peer.CreateID(unifiedHost+":"+strconv.Itoa(int(builder.port)), builder.keys.PublicKey)
+	id := peer.CreateID(unifiedAddr, builder.keys.PublicKey)
 
 	net := &network.Network{
 		Keys: builder.keys,
-		Host: unifiedHost,
-		Port: builder.port,
+		Address: unifiedAddr,
 		ID:   id,
 
 		Processors: builder.processors,

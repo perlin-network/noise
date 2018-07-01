@@ -1,8 +1,10 @@
 package main
 
 import (
+	"net"
 	"flag"
 	"strings"
+	"strconv"
 
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
@@ -17,11 +19,13 @@ func main() {
 	// process other flags
 	portFlag := flag.Int("port", 3000, "port to listen to")
 	hostFlag := flag.String("host", "localhost", "host to listen to")
+	protocolFlag := flag.String("protocol", "kcp", "protocol to use (kcp/tcp)")
 	peersFlag := flag.String("peers", "", "peers to connect to")
 	flag.Parse()
 
 	port := uint16(*portFlag)
 	host := *hostFlag
+	protocol := *protocolFlag
 	peers := strings.Split(*peersFlag, ",")
 
 	keys := crypto.RandomKeyPair()
@@ -31,8 +35,7 @@ func main() {
 
 	builder := &builders.NetworkBuilder{}
 	builder.SetKeys(keys)
-	builder.SetHost(host)
-	builder.SetPort(port)
+	builder.SetAddress(protocol + "://" + net.JoinHostPort(host, strconv.Itoa(int(port))))
 
 	// Register peer discovery RPC handlers.
 	discovery.BootstrapPeerDiscovery(builder)
