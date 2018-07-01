@@ -49,13 +49,17 @@ func ToUnifiedAddress(address string) (string, error) {
 	return u.Scheme + "://" + net.JoinHostPort(host, port), nil
 }
 
-// FilterPeers out duplicate addresses.
+// FilterPeers filters out duplicate/empty addresses.
 func FilterPeers(address string, peers []string) (filtered []string) {
 	visited := make(map[string]struct{})
 	visited[address] = struct{}{}
 
-	for _, peer := range peers {
-		resolved, err := ToUnifiedAddress(peer)
+	for _, peerAddress := range peers {
+		if len(peerAddress) == 0 {
+			continue
+		}
+
+		resolved, err := ToUnifiedAddress(peerAddress)
 		if err != nil {
 			continue
 		}
