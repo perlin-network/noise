@@ -22,7 +22,7 @@ type MessageChannel chan proto.Message
 type PeerClient struct {
 	Network *Network
 
-	Id *peer.ID
+	ID *peer.ID
 
 	session *smux.Session
 
@@ -73,12 +73,12 @@ func (c *PeerClient) establishConnection(address string) error {
 // routing table. Errors if session fails to close.
 func (c *PeerClient) Close() {
 	// Disconnect the user.
-	if c.Id != nil {
-		if c.Network.Routes != nil && c.Network.Routes.PeerExists(*c.Id) {
-			c.Network.Routes.RemovePeer(*c.Id)
-			c.Network.Peers.Delete(c.Id.Address)
+	if c.ID != nil {
+		if c.Network.Routes != nil && c.Network.Routes.PeerExists(*c.ID) {
+			c.Network.Routes.RemovePeer(*c.ID)
+			c.Network.Peers.Delete(c.ID.Address)
 
-			glog.Infof("Peer %s has disconnected.", c.Id.Address)
+			glog.Infof("Peer %s has disconnected.", c.ID.Address)
 		}
 	}
 

@@ -49,5 +49,5 @@ func (ctx *MessageContext) Self() peer.ID {
 
 // Sender returns the peer's ID.
 func (ctx *MessageContext) Sender() peer.ID {
-	return *ctx.client.Id
+	return *ctx.client.ID
 }

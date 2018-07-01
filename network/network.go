@@ -146,7 +146,7 @@ func (n *Network) Broadcast(message proto.Message) {
 		err := client.Tell(message)
 
 		if err != nil {
-			glog.Warningf("Failed to send message to peer %v [err=%s]", client.Id, err)
+			glog.Warningf("Failed to send message to peer %v [err=%s]", client.ID, err)
 		}
 
 		return true
@@ -160,7 +160,7 @@ func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...strin
 			err := client.Tell(message)
 
 			if err != nil {
-				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+				glog.Warningf("Failed to send message to peer %s [err=%s]", client.ID.Address, err)
 			}
 		} else {
 			glog.Warningf("Failed to send message to peer %s; peer does not exist. [err=%s]", address, err)
@@ -168,14 +168,14 @@ func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...strin
 	}
 }
 
-// BroadcastByIds broadcasts a message to a set of peer clients denoted by their peer IDs.
-func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
+// BroadcastByIDs broadcasts a message to a set of peer clients denoted by their peer IDs.
+func (n *Network) BroadcastByIDs(message proto.Message, ids ...peer.ID) {
 	for _, id := range ids {
 		if client, err := n.Client(id.Address); err == nil {
 			err := client.Tell(message)
 
 			if err != nil {
-				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
+				glog.Warningf("Failed to send message to peer %s [err=%s]", client.ID.Address, err)
 			}
 		} else {
 			glog.Warningf("Failed to send message to peer %s; peer does not exist. [err=%s]", id, err)
@@ -189,7 +189,7 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	var addresses []string
 
 	n.Peers.Range(func(key string, client *PeerClient) bool {
-		addresses = append(addresses, client.Id.Address)
+		addresses = append(addresses, client.ID.Address)
 
 		// Limit total amount of addresses in case we have a lot of peers.
 		if len(addresses) > K*3 {

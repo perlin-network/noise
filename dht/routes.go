@@ -32,9 +32,9 @@ func NewBucket() *Bucket {
 func CreateRoutingTable(id peer.ID) *RoutingTable {
 	table := &RoutingTable{
 		self:    id,
-		buckets: make([]*Bucket, peer.IdSize*8),
+		buckets: make([]*Bucket, peer.IDSize*8),
 	}
-	for i := 0; i < peer.IdSize*8; i++ {
+	for i := 0; i < peer.IDSize*8; i++ {
 		table.buckets[i] = NewBucket()
 	}
 
@@ -50,8 +50,8 @@ func (t *RoutingTable) Self() peer.ID {
 
 // Moves a peer to the front of a bucket int he routing table.
 func (t *RoutingTable) Update(target peer.ID) {
-	bucketId := target.Xor(t.self).PrefixLen()
-	bucket := t.Bucket(bucketId)
+	bucketID := target.Xor(t.self).PrefixLen()
+	bucket := t.Bucket(bucketID)
 
 	var element *list.Element
 
@@ -123,8 +123,8 @@ func (t *RoutingTable) GetPeerAddresses() (peers []string) {
 
 // Removes a peer from the routing table. O(bucket_size).
 func (t *RoutingTable) RemovePeer(target peer.ID) bool {
-	bucketId := target.Xor(t.self).PrefixLen()
-	bucket := t.Bucket(bucketId)
+	bucketID := target.Xor(t.self).PrefixLen()
+	bucket := t.Bucket(bucketID)
 
 	bucket.mutex.Lock()
 
@@ -144,8 +144,8 @@ func (t *RoutingTable) RemovePeer(target peer.ID) bool {
 
 // Determines if a peer exists in the routing table. O(bucket_size).
 func (t *RoutingTable) PeerExists(target peer.ID) bool {
-	bucketId := target.Xor(t.self).PrefixLen()
-	bucket := t.Bucket(bucketId)
+	bucketID := target.Xor(t.self).PrefixLen()
+	bucket := t.Bucket(bucketID)
 
 	bucket.mutex.Lock()
 
@@ -161,8 +161,8 @@ func (t *RoutingTable) PeerExists(target peer.ID) bool {
 }
 
 func (t *RoutingTable) FindClosestPeers(target peer.ID, count int) (peers []peer.ID) {
-	bucketId := target.Xor(t.self).PrefixLen()
-	bucket := t.Bucket(bucketId)
+	bucketID := target.Xor(t.self).PrefixLen()
+	bucket := t.Bucket(bucketID)
 
 	bucket.mutex.RLock()
 
@@ -170,15 +170,15 @@ func (t *RoutingTable) FindClosestPeers(target peer.ID, count int) (peers []peer
 		peers = append(peers, e.Value.(peer.ID))
 	}
 
-	for i := 1; len(peers) < count && (bucketId-i >= 0 || bucketId+i < peer.IdSize*8); i++ {
-		if bucketId-i >= 0 {
-			for e := t.Bucket(bucketId - i).Front(); e != nil; e = e.Next() {
+	for i := 1; len(peers) < count && (bucketID-i >= 0 || bucketID+i < peer.IDSize*8); i++ {
+		if bucketID-i >= 0 {
+			for e := t.Bucket(bucketID - i).Front(); e != nil; e = e.Next() {
 				peers = append(peers, e.Value.(peer.ID))
 			}
 		}
 
-		if bucketId+i < peer.IdSize*8 {
-			for e := t.Bucket(bucketId + i).Front(); e != nil; e = e.Next() {
+		if bucketID+i < peer.IDSize*8 {
+			for e := t.Bucket(bucketID + i).Front(); e != nil; e = e.Next() {
 				peers = append(peers, e.Value.(peer.ID))
 			}
 		}
