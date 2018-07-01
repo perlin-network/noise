@@ -1,10 +1,10 @@
 package main
 
 import (
-	"net"
 	"flag"
-	"strings"
+	"net"
 	"strconv"
+	"strings"
 
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"

@@ -3,9 +3,9 @@ package network
 import (
 	"fmt"
 	"math/rand"
-	"strings"
 	"net"
 	"net/url"
+	"strings"
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"

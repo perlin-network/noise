@@ -14,7 +14,7 @@ import (
 
 // NetworkBuilder is a Address->processors struct
 type NetworkBuilder struct {
-	keys *crypto.KeyPair
+	keys    *crypto.KeyPair
 	address string
 
 	// map[string]MessageProcessor
@@ -72,9 +72,9 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 	id := peer.CreateID(unifiedAddr, builder.keys.PublicKey)
 
 	net := &network.Network{
-		Keys: builder.keys,
+		Keys:    builder.keys,
 		Address: unifiedAddr,
-		ID:   id,
+		ID:      id,
 
 		Processors: builder.processors,
 

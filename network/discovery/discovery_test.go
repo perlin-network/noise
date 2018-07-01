@@ -13,10 +13,10 @@ import (
 )
 
 var (
-	keys = crypto.RandomKeyPair()
-	host = "localhost"
+	keys     = crypto.RandomKeyPair()
+	host     = "localhost"
 	protocol = "kcp"
-	port = 12345
+	port     = 12345
 )
 
 // MockProcessor to keep independent from incoming.go and outgoing.go.

@@ -1,10 +1,10 @@
 package network
 
 import (
-	"net"
-	"time"
-	"net/url"
 	"errors"
+	"net"
+	"net/url"
+	"time"
 
 	"sync/atomic"
 

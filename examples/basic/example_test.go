@@ -40,7 +40,7 @@ func ExampleBasic() {
 		builder := &builders.NetworkBuilder{}
 		builder.SetKeys(crypto.RandomKeyPair())
 		builder.SetAddress(
-			fmt.Sprintf("kcp://%s:%d", host, uint16(startPort + i)),
+			fmt.Sprintf("kcp://%s:%d", host, uint16(startPort+i)),
 		)
 
 		discovery.BootstrapPeerDiscovery(builder)
