@@ -181,8 +181,7 @@ func setupNodes(ports []int) ([]*network.Network, []*TopologyProcessor, error) {
 	for _, port := range ports {
 		builder := &builders.NetworkBuilder{}
 		builder.SetKeys(crypto.RandomKeyPair())
-		builder.SetHost(host)
-		builder.SetPort(uint16(port))
+		builder.SetAddress(fmt.Sprintf("kcp://%s:%d", host, port))
 
 		// excluding peer discovery to test non-fully connected topology
 		//discovery.BootstrapPeerDiscovery(builder)
@@ -211,12 +210,12 @@ func setupNodes(ports []int) ([]*network.Network, []*TopologyProcessor, error) {
 // bootstrapNodes will
 func bootstrapNodes(nodes []*network.Network, peers map[string]map[string]struct{}) error {
 	for _, node := range nodes {
-		if len(peers[node.Address()]) == 0 {
+		if len(peers[node.Address]) == 0 {
 			continue
 		}
 
 		var peerList []string
-		for k := range peers[node.Address()] {
+		for k := range peers[node.Address] {
 			peerList = append(peerList, k)
 		}
 
@@ -241,7 +240,7 @@ func broadcastTest(nodes []*network.Network, processors []*TopologyProcessor, pe
 
 	// check the messages
 	for i := 0; i < len(nodes); i++ {
-		if _, isPeer := peers[nodes[i].Address()][nodes[sender].Address()]; !isPeer || i == sender {
+		if _, isPeer := peers[nodes[i].Address][nodes[sender].Address]; !isPeer || i == sender {
 			// if not a peer or not the sender, should not receive anything
 			select {
 			case received := <-processors[sender].Mailbox:
