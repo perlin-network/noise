@@ -26,9 +26,9 @@ message Message {
     uint64 nonce = 4;
 }
 
-message HandshakeRequest {
+message Ping {
 }
-message HandshakeResponse {
+message Pong {
 }
 message LookupNodeRequest {
     ID target = 1;

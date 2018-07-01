@@ -11,11 +11,11 @@ import (
 	"github.com/perlin-network/noise/protobuf"
 )
 
-type HandshakeRequestProcessor struct{}
+type PingProcessor struct{}
 
-func (HandshakeRequestProcessor) Handle(ctx *network.MessageContext) error {
-	// Send handshake response to peer.
-	err := ctx.Reply(&protobuf.HandshakeResponse{})
+func (PingProcessor) Handle(ctx *network.MessageContext) error {
+	// Send pong to peer.
+	err := ctx.Reply(&protobuf.Pong{})
 
 	if err != nil {
 		glog.Error(err)
@@ -24,14 +24,14 @@ func (HandshakeRequestProcessor) Handle(ctx *network.MessageContext) error {
 	return nil
 }
 
-type HandshakeResponseProcessor struct{}
+type PongProcessor struct{}
 
-func (HandshakeResponseProcessor) Handle(ctx *network.MessageContext) error {
-	addresses, publicKeys := bootstrapPeers(ctx.Network(), ctx.Sender(), dht.BucketSize)
+func (PongProcessor) Handle(ctx *network.MessageContext) error {
+	peers := findNode(ctx.Network(), ctx.Sender(), dht.BucketSize)
 
-	// Update routing table w/ bootstrapped peers.
-	for i := 0; i < len(addresses); i++ {
-		ctx.Network().Routes.Update(peer.CreateID(addresses[i], publicKeys[i]))
+	// Update routing table w/ closest peers to self.
+	for _, peerID := range peers {
+		ctx.Network().Routes.Update(peerID)
 	}
 
 	glog.Infof("bootstrapped w/ peer(s): %s.", strings.Join(ctx.Network().Routes.GetPeerAddresses(), ", "))
@@ -49,8 +49,8 @@ func (LookupNodeRequestProcessor) Handle(ctx *network.MessageContext) error {
 	response := &protobuf.LookupNodeResponse{}
 
 	// Respond back with closest peers to a provided target.
-	for _, id := range ctx.Network().Routes.FindClosestPeers(peer.ID(*msg.Target), dht.BucketSize) {
-		id := protobuf.ID(id)
+	for _, peerID := range ctx.Network().Routes.FindClosestPeers(peer.ID(*msg.Target), dht.BucketSize) {
+		id := protobuf.ID(peerID)
 		response.Peers = append(response.Peers, &id)
 	}
 
@@ -67,7 +67,7 @@ func (LookupNodeRequestProcessor) Handle(ctx *network.MessageContext) error {
 
 // Registers necessary message processors for peer discovery.
 func BootstrapPeerDiscovery(builder *builders.NetworkBuilder) {
-	builder.AddProcessor((*protobuf.HandshakeRequest)(nil), new(HandshakeRequestProcessor))
-	builder.AddProcessor((*protobuf.HandshakeResponse)(nil), new(HandshakeResponseProcessor))
+	builder.AddProcessor((*protobuf.Ping)(nil), new(PingProcessor))
+	builder.AddProcessor((*protobuf.Pong)(nil), new(PongProcessor))
 	builder.AddProcessor((*protobuf.LookupNodeRequest)(nil), new(LookupNodeRequestProcessor))
 }

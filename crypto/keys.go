@@ -19,10 +19,11 @@ type KeyPair struct {
 }
 
 func (k *KeyPair) Sign(message []byte) ([]byte, error) {
-	message = HashBytes(message)
 	if len(k.PrivateKey) != ed25519.PrivateKeySize {
 		return nil, ErrPrivKeySize
 	}
+
+	message = HashBytes(message)
 
 	signature := ed25519.Sign(ed25519.PrivateKey(k.PrivateKey), message)
 	return signature, nil
@@ -63,7 +64,7 @@ func FromPrivateKeyBytes(rawPrivateKey []byte) (*KeyPair, error) {
 		return nil, ErrPrivKeySize
 	}
 
-	rawPublicKey := GetPublicKey(rawPrivateKey)
+	rawPublicKey := ed25519.PrivateKey(rawPrivateKey).Public().(ed25519.PublicKey)
 
 	keyPair := &KeyPair{
 		PrivateKey: rawPrivateKey,
@@ -73,11 +74,12 @@ func FromPrivateKeyBytes(rawPrivateKey []byte) (*KeyPair, error) {
 	return keyPair, nil
 }
 
-func GetPublicKey(rawPrivateKey []byte) []byte {
-	return ed25519.PrivateKey(rawPrivateKey).Public().(ed25519.PublicKey)
-}
-
 func Verify(publicKey []byte, message []byte, signature []byte) bool {
+	// Public key must be a set size.
+	if len(publicKey) != ed25519.PublicKeySize {
+		return false
+	}
+
 	message = HashBytes(message)
 	return ed25519.Verify(ed25519.PublicKey(publicKey), message, signature)
 }

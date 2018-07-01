@@ -1,85 +1,111 @@
 package discovery
 
 import (
-	"sync"
-
 	"time"
 
+	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+	"sort"
 )
 
-func bootstrapPeers(net *network.Network, target peer.ID, count int) (addresses []string, publicKeys [][]byte) {
-	queue := []peer.ID{target}
+func queryPeerByID(net *network.Network, peerID peer.ID, targetID peer.ID, responses chan []*protobuf.ID) {
+	client, err := net.Dial(peerID.Address)
+	if err != nil {
+		responses <- []*protobuf.ID{}
+		return
+	}
 
-	visited := make(map[string]struct{})
-	visited[net.Keys.PublicKeyHex()] = struct{}{}
-	visited[target.PublicKeyHex()] = struct{}{}
+	targetProtoID := protobuf.ID(targetID)
 
-	for len(queue) > 0 {
-		var wait sync.WaitGroup
-		wait.Add(len(queue))
+	request := new(rpc.Request)
+	request.SetMessage(&protobuf.LookupNodeRequest{Target: &targetProtoID})
+	request.SetTimeout(3 * time.Second)
 
-		responses := make(chan *protobuf.LookupNodeResponse, len(queue))
+	response, err := client.Request(request)
 
-		// Queue up all work into worker pools for contacting peers.
-		for _, popped := range queue {
-			go func(peerId peer.ID) {
-				defer wait.Done()
+	if err != nil {
+		responses <- []*protobuf.ID{}
+		return
+	}
 
-				client, err := net.Dial(peerId.Address)
-				if err != nil {
-					return
-				}
+	if response, ok := response.(*protobuf.LookupNodeResponse); ok {
+		responses <- response.Peers
+	} else {
+		responses <- []*protobuf.ID{}
+	}
+}
 
-				protoID := protobuf.ID(peerId)
+func findNode(net *network.Network, targetID peer.ID, alpha int) (results []peer.ID) {
+	var queue []peer.ID
 
-				request := new(rpc.Request)
-				request.SetMessage(&protobuf.LookupNodeRequest{Target: &protoID})
-				request.SetTimeout(3 * time.Second)
+	responses, visited := make(chan []*protobuf.ID), make(map[string]struct{})
 
-				response, err := client.Request(request)
+	// Start searching for target from #ALPHA peers closest to target by queuing
+	// them up and marking them as visited.
+	for _, peerID := range net.Routes.FindClosestPeers(targetID, alpha) {
+		visited[peerID.PublicKeyHex()] = struct{}{}
+		queue = append(queue, peerID)
 
-				if err != nil {
-					client.Close()
-					return
-				}
+		results = append(results, peerID)
+	}
 
-				if response, ok := response.(*protobuf.LookupNodeResponse); ok {
-					responses <- response
-				}
-			}(popped)
-		}
+	pending := 0
 
-		// Empty the queue.
-		queue = []peer.ID{}
+	// Go through every peer in the entire queue and queue up what peers believe
+	// is closest to a target ID.
+	for ; pending < alpha && len(queue) > 0; pending++ {
+		go queryPeerByID(net, queue[0], targetID, responses)
 
-		// Wait until all responses from peers come back.
-		wait.Wait()
+		results = append(results, queue[0])
+		queue = queue[1:]
+	}
 
-		// Expand nodes in breadth-first search.
-		close(responses)
-		for response := range responses {
-			// Queue up expanded nodes.
-			for _, id := range response.Peers {
-				p := peer.ID(*id)
+	// Empty queue.
+	queue = []peer.ID{}
 
-				if _, seen := visited[p.PublicKeyHex()]; !seen && p.Address != net.Address() {
+	// Asynchronous breadth-first search.
+	for pending > 0 {
+		response := <-responses
 
-					queue = append(queue, p)
-					visited[p.PublicKeyHex()] = struct{}{}
+		pending--
 
-					addresses = append(addresses, p.Address)
+		// Expand responses containing a peer's belief on the closest peers to target ID.
+		for _, id := range response {
+			peerID := peer.ID(*id)
 
-					publicKey := make([]byte, peer.IdSize)
-					copy(publicKey, p.PublicKey[:])
+			if _, seen := visited[peerID.PublicKeyHex()]; !seen {
+				// Append new peer to be queued by the routing table.
+				results = append(results, peerID)
 
-					publicKeys = append(publicKeys, publicKey)
-				}
+				queue = append(queue, peerID)
+				visited[peerID.PublicKeyHex()] = struct{}{}
 			}
 		}
+
+		// Queue and request for #ALPHA closest peers to target ID from expanded results.
+		for ; pending < alpha && len(queue) > 0; pending++ {
+			go queryPeerByID(net, queue[0], targetID, responses)
+			queue = queue[1:]
+		}
+
+		// Empty queue.
+		queue = []peer.ID{}
+	}
+
+	// Sort resulting peers by XOR distance.
+	sort.Slice(results, func(i, j int) bool {
+		left := results[i].Xor(targetID)
+		right := results[j].Xor(targetID)
+		return left.Less(right)
+	})
+
+	// Cut off list of results to only have the routing table focus on the
+	// #dht.BucketSize closest peers to the current node.
+	if len(results) > dht.BucketSize {
+		results = results[:dht.BucketSize]
 	}
 
 	return

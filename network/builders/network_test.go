@@ -21,7 +21,7 @@ var (
 type MockProcessor struct{}
 
 func (p *MockProcessor) Handle(ctx *network.MessageContext) error {
-	err := ctx.Reply(&protobuf.HandshakeResponse{})
+	err := ctx.Reply(&protobuf.Pong{})
 
 	if err != nil {
 		return err
@@ -35,7 +35,7 @@ func buildNetwork(port uint16) (*network.Network, error) {
 	builder.SetHost(host)
 	builder.SetPort(port)
 
-	builder.AddProcessor((*protobuf.HandshakeRequest)(nil), new(MockProcessor))
+	builder.AddProcessor((*protobuf.Ping)(nil), new(MockProcessor))
 
 	return builder.BuildNetwork()
 }
