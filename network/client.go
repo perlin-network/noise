@@ -1,7 +1,10 @@
 package network
 
 import (
+	"net"
 	"time"
+	"net/url"
+	"errors"
 
 	"sync/atomic"
 
@@ -11,7 +14,6 @@ import (
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
-	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
 )
@@ -47,7 +49,20 @@ func (c *PeerClient) establishConnection(address string) error {
 		return nil
 	}
 
-	dialer, err := kcp.DialWithOptions(address, nil, 10, 3)
+	uInfo, err := url.Parse(address)
+	if err != nil {
+		return err
+	}
+
+	var conn net.Conn
+
+	if uInfo.Scheme == "kcp" {
+		conn, err = kcp.DialWithOptions(uInfo.Host, nil, 10, 3)
+	} else if uInfo.Scheme == "tcp" {
+		conn, err = net.Dial("tcp", uInfo.Host)
+	} else {
+		err = errors.New("Invalid scheme: " + uInfo.Scheme)
+	}
 
 	// Failed to connect.
 	if err != nil {
@@ -55,7 +70,7 @@ func (c *PeerClient) establishConnection(address string) error {
 		return err
 	}
 
-	c.Session, err = smux.Client(dialer, muxConfig())
+	c.Session, err = smux.Client(conn, muxConfig())
 
 	// Failed to open session.
 	if err != nil {
