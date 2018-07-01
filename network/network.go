@@ -50,11 +50,6 @@ func (n *Network) GetPort() uint16 {
 
 // Listen starts listening for peers on a port.
 func (n *Network) Listen() {
-	urlInfo, err := url.Parse(n.Address)
-	if err != nil {
-		glog.Fatal(err)
-	}
-
 	// Handle 'network starts listening' callback for plugins.
 	n.Plugins.Range(func(name string, plugin PluginInterface) bool {
 		plugin.Startup(n)
@@ -68,6 +63,11 @@ func (n *Network) Listen() {
 			return true
 		})
 	}()
+
+	urlInfo, err := url.Parse(n.Address)
+	if err != nil {
+		glog.Fatal(err)
+	}
 
 	var listener net.Listener
 
