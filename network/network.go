@@ -55,6 +55,20 @@ func (n *Network) Listen() {
 		glog.Fatal(err)
 	}
 
+	// Handle 'network starts listening' callback for plugins.
+	n.Plugins.Range(func(name string, plugin PluginInterface) bool {
+		plugin.Startup(n)
+		return true
+	})
+
+	// Handle 'network stops listening' callback for plugins.
+	defer func() {
+		n.Plugins.Range(func(name string, plugin PluginInterface) bool {
+			plugin.Cleanup(n)
+			return true
+		})
+	}()
+
 	var listener net.Listener
 
 	if urlInfo.Scheme == "kcp" {
@@ -71,20 +85,6 @@ func (n *Network) Listen() {
 	if err != nil {
 		glog.Fatal(err)
 	}
-
-	// Handle 'network starts listening' callback for plugins.
-	n.Plugins.Range(func(name string, plugin PluginInterface) bool {
-		plugin.Startup(n)
-		return true
-	})
-
-	// Handle 'network stops listening' callback for plugins.
-	defer func() {
-		n.Plugins.Range(func(name string, plugin PluginInterface) bool {
-			plugin.Cleanup(n)
-			return true
-		})
-	}()
 
 	close(n.Listening)
 
