@@ -7,10 +7,13 @@ import (
 	"strconv"
 )
 
+// FormatAddress properly marshals a destinations information into a string.
 func FormatAddress(protocol, host string, port uint16) string {
 	return NewAddressInfo(protocol, host, port).String()
 }
 
+// ExtractAddressInfo derives a network scheme, host and port of a destinations
+// information. Errors should the provided destination address be malformed.
 func ExtractAddressInfo(address string) (*AddressInfo, error) {
 	urlInfo, err := url.Parse(address)
 	if err != nil {

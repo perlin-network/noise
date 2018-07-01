@@ -4,6 +4,8 @@ import (
 	"github.com/NebulousLabs/go-upnp"
 )
 
+// LocalPortMappingInfo denotes a single port being forwarde on the
+// UPnP interface.
 type LocalPortMappingInfo struct {
 	LocalPort      uint16
 	ExternalPort   uint16
@@ -11,6 +13,7 @@ type LocalPortMappingInfo struct {
 	RouterLocation string
 }
 
+// Close clears a port from remaining open.
 func (m *LocalPortMappingInfo) Close() {
 	gateway, err := upnp.Load(m.RouterLocation)
 	if err == nil {
@@ -18,7 +21,9 @@ func (m *LocalPortMappingInfo) Close() {
 	}
 }
 
-func PortForward(localPort uint16) (*LocalPortMappingInfo, error) {
+// ForwardPort accesses the UPnP interface (should it be available) and port-forwards
+// a specified local port.
+func ForwardPort(localPort uint16) (*LocalPortMappingInfo, error) {
 	gateway, err := upnp.Discover()
 	if err != nil {
 		return nil, err

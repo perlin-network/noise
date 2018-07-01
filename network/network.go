@@ -82,7 +82,7 @@ func (n *Network) Listen() {
 	if n.UpnpEnabled {
 		glog.Info("Setting up UPnP...")
 
-		mappingInfo, err := nat.PortForward(n.GetPort())
+		mappingInfo, err := nat.ForwardPort(n.GetPort())
 		if err == nil {
 			defer mappingInfo.Close()
 
