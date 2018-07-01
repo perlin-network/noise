@@ -39,7 +39,7 @@ func buildNetwork(port uint16) (*network.Network, error) {
 
 	builder.AddProcessor((*protobuf.Ping)(nil), new(MockProcessor))
 
-	return builder.BuildNetwork()
+	return builder.Build()
 }
 
 func TestBuildNetwork(t *testing.T) {

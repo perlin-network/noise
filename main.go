@@ -42,7 +42,7 @@ func main() {
 	// Register peer discovery RPC handlers.
 	discovery.BootstrapPeerDiscovery(builder)
 
-	net, err := builder.BuildNetwork()
+	net, err := builder.Build()
 	if err != nil {
 		glog.Fatal(err)
 		return

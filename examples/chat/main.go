@@ -55,7 +55,7 @@ func main() {
 
 	builder.AddProcessor((*messages.ChatMessage)(nil), new(ChatMessageProcessor))
 
-	net, err := builder.BuildNetwork()
+	net, err := builder.Build()
 	if err != nil {
 		glog.Fatal(err)
 		return

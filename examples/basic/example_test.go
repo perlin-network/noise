@@ -46,7 +46,7 @@ func ExampleBasic() {
 		processors = append(processors, &BasicMessageProcessor{Mailbox: make(chan *messages.BasicMessage, 1)})
 		builder.AddProcessor((*messages.BasicMessage)(nil), processors[i])
 
-		node, err := builder.BuildNetwork()
+		node, err := builder.Build()
 		if err != nil {
 			fmt.Println(err)
 		}

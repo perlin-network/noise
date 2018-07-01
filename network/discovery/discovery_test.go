@@ -50,7 +50,7 @@ func TestDiscovery(t *testing.T) {
 
 	BootstrapPeerDiscovery(builder)
 
-	net, _ := builder.BuildNetwork()
+	net, _ := builder.Build()
 
 	expected := []string{
 		"*protobuf.Ping",
