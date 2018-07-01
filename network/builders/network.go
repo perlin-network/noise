@@ -7,15 +7,14 @@ import (
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/peer"
 )
 
 // NetworkBuilder is a Address->processors struct
 type NetworkBuilder struct {
 	keys    *crypto.KeyPair
 	address string
+	upnpEnabled bool
 
 	// map[string]MessageProcessor
 	processors *network.StringMessageProcessorSyncMap
@@ -28,6 +27,10 @@ func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
 
 func (builder *NetworkBuilder) SetAddress(address string) {
 	builder.address = address
+}
+
+func (builder *NetworkBuilder) SetUpnpEnabled(enabled bool) {
+	builder.upnpEnabled = enabled
 }
 
 // AddProcessor for a given message,
@@ -69,16 +72,12 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 		return nil, err
 	}
 
-	id := peer.CreateID(unifiedAddr, builder.keys.PublicKey)
-
 	net := &network.Network{
 		Keys:    builder.keys,
 		Address: unifiedAddr,
-		ID:      id,
+		UpnpEnabled: builder.upnpEnabled,
 
 		Processors: builder.processors,
-
-		Routes: dht.CreateRoutingTable(id),
 
 		Peers: &network.StringPeerClientSyncMap{},
 
