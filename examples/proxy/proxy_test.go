@@ -92,6 +92,10 @@ func ExampleProxy() {
 	// Broadcast is an asynchronous call to send a message to other nodes
 	expectedMsg := &messages.ProxyMessage{
 		Message: fmt.Sprintf("This is a proxy message from Node %d", sender),
+		Destination: &messages.ID{
+			Address:   nodes[target].ID.Address,
+			PublicKey: nodes[target].ID.PublicKey,
+		},
 	}
 	nodes[sender].Broadcast(expectedMsg)
 
@@ -111,9 +115,6 @@ func ExampleProxy() {
 
 	// Output:
 	// Nodes setup as a line topology.
-	// Node 0 sent out a message to node 4.
+	// Node 0 sent out a message to node 1.
 	// Node 1 received a message from Node 0.
-	// Node 2 received a message from Node 1.
-	// Node 3 received a message from Node 2.
-	// Node 4 received a message from Node 3.
 }
