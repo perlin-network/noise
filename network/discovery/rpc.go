@@ -38,7 +38,10 @@ func queryPeerByID(net *network.Network, peerID peer.ID, targetID peer.ID, respo
 	}
 }
 
-func findNode(net *network.Network, targetID peer.ID, alpha int) (results []peer.ID) {
+// FindNode queries all peers this current node acknowledges for the closest peers
+// to a specified target ID. Queries at most #ALPHA nodes at a time, and returns
+// a bucket filled with the closest peers.
+func FindNode(net *network.Network, targetID peer.ID, alpha int) (results []peer.ID) {
 	plugin, exists := net.Plugin("discovery")
 
 	// Discovery plugin was not registered. Fail.

@@ -28,10 +28,13 @@ func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
 	builder.keys = pair
 }
 
+// SetAddress sets the host address for the network.
 func (builder *NetworkBuilder) SetAddress(address string) {
 	builder.address = address
 }
 
+// SetUpnpEnabled enforces the network to attempt to open ports through
+// the UPnP router interface.
 func (builder *NetworkBuilder) SetUpnpEnabled(enabled bool) {
 	builder.upnpEnabled = enabled
 }

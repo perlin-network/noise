@@ -2,6 +2,7 @@ package network
 
 import "github.com/perlin-network/noise/peer"
 
+// PluginInterface is used to proxy callbacks to a particular Plugin instance.
 type PluginInterface interface {
 	// Callback for when the network starts listening for peers.
 	Startup(net *Network)
@@ -17,8 +18,10 @@ type PluginInterface interface {
 	PeerDisconnect(id *peer.ID)
 }
 
+// Plugin is an abstract class which all plugins extend.
 type Plugin struct{}
-func (*Plugin) Startup(net *Network)             {}
+
+func (*Plugin) Startup(net *Network)              {}
 func (*Plugin) Receive(ctx *MessageContext) error { return nil }
-func (*Plugin) Cleanup(net *Network)             {}
-func (*Plugin) PeerDisconnect(id *peer.ID) {}
+func (*Plugin) Cleanup(net *Network)              {}
+func (*Plugin) PeerDisconnect(id *peer.ID)        {}

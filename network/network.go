@@ -258,6 +258,8 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	n.BroadcastByAddresses(message, addresses[:K]...)
 }
 
+// Plugin returns a plugins proxy interface should it be registered with the
+// network. The second returning parameter is false otherwise.
 func (n *Network) Plugin(name string) (PluginInterface, bool) {
 	return n.Plugins.Load(name)
 }
