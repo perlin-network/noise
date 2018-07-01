@@ -12,15 +12,16 @@ import (
 
 const (
 	host = "127.0.0.1"
+	startPort = 19700
 )
 
-// TopologyProcessor implements the message handler
-type TopologyProcessor struct {
+// MockProcessor implements the message handler
+type MockProcessor struct {
 	Mailbox chan *messages.BasicMessage
 }
 
 // Handle implements the network interface callback
-func (n *TopologyProcessor) Handle(ctx *network.MessageContext) error {
+func (n *MockProcessor) Handle(ctx *network.MessageContext) error {
 	message := ctx.Message().(*messages.BasicMessage)
 	n.Mailbox <- message
 	return nil
@@ -114,7 +115,6 @@ func setupFullyConnectedNodes(startPort int) ([]int, map[string]map[string]struc
 		peerMap[fmt.Sprintf("%s:%d", host, ports[i])] = struct{}{}
 	}
 
-	// got lazy, even connect to itself
 	for i := 0; i < numNodes; i++ {
 		addr := fmt.Sprintf("%s:%d", host, ports[i])
 		peers[addr] = peerMap
@@ -173,20 +173,20 @@ func setupTreeNodes(startPort int) ([]int, map[string]map[string]struct{}) {
 	return ports, peers
 }
 
-// setupNodes sets up the networks and processors
-func setupNodes(ports []int) ([]*network.Network, []*TopologyProcessor, error) {
+// setupNodes sets up the networks and processors.
+func setupNodes(ports []int) ([]*network.Network, []*MockProcessor, error) {
 	var nodes []*network.Network
-	var processors []*TopologyProcessor
+	var processors []*MockProcessor
 
 	for _, port := range ports {
 		builder := &builders.NetworkBuilder{}
 		builder.SetKeys(crypto.RandomKeyPair())
 		builder.SetAddress(fmt.Sprintf("kcp://%s:%d", host, port))
 
-		// excluding peer discovery to test non-fully connected topology
+		// Excluding peer discovery to test non-fully connected topology.
 		//discovery.BootstrapPeerDiscovery(builder)
 
-		processor := &TopologyProcessor{Mailbox: make(chan *messages.BasicMessage, 1)}
+		processor := &MockProcessor{Mailbox: make(chan *messages.BasicMessage, 1)}
 		builder.AddProcessor((*messages.BasicMessage)(nil), processor)
 
 		node, err := builder.BuildNetwork()
@@ -207,7 +207,7 @@ func setupNodes(ports []int) ([]*network.Network, []*TopologyProcessor, error) {
 	return nodes, processors, nil
 }
 
-// bootstrapNodes will
+// bootstrapNodes bootstraps assigned peers to specific nodes.
 func bootstrapNodes(nodes []*network.Network, peers map[string]map[string]struct{}) error {
 	for _, node := range nodes {
 		if len(peers[node.Address]) == 0 {
@@ -231,7 +231,7 @@ func bootstrapNodes(nodes []*network.Network, peers map[string]map[string]struct
 }
 
 // broadcastTest will broadcast a message from the sender node, checks if the right peers receive it
-func broadcastTest(nodes []*network.Network, processors []*TopologyProcessor, peers map[string]map[string]struct{}, sender int) {
+func broadcastTest(nodes []*network.Network, processors []*MockProcessor, peers map[string]map[string]struct{}, sender int) {
 	timeout := 250 * time.Millisecond
 
 	// Broadcast is an asynchronous call to send a message to other nodes
@@ -265,11 +265,11 @@ func broadcastTest(nodes []*network.Network, processors []*TopologyProcessor, pe
 
 func ExampleRing() {
 	var nodes []*network.Network
-	var processors []*TopologyProcessor
+	var processors []*MockProcessor
 	var err error
 
 	// create the topology
-	ports, peers := setupRingNodes(5010)
+	ports, peers := setupRingNodes(startPort)
 
 	// setup the cluster
 	nodes, processors, err = setupNodes(ports)
@@ -298,10 +298,10 @@ func ExampleRing() {
 
 func ExampleMesh() {
 	var nodes []*network.Network
-	var processors []*TopologyProcessor
+	var processors []*MockProcessor
 	var err error
 
-	ports, peers := setupMeshNodes(5020)
+	ports, peers := setupMeshNodes(startPort + 10)
 
 	nodes, processors, err = setupNodes(ports)
 	if err != nil {
@@ -327,10 +327,10 @@ func ExampleMesh() {
 
 func ExampleStar() {
 	var nodes []*network.Network
-	var processors []*TopologyProcessor
+	var processors []*MockProcessor
 	var err error
 
-	ports, peers := setupStarNodes(5030)
+	ports, peers := setupStarNodes(startPort + 20)
 
 	nodes, processors, err = setupNodes(ports)
 	if err != nil {
@@ -356,10 +356,10 @@ func ExampleStar() {
 
 func ExampleFullyConnected() {
 	var nodes []*network.Network
-	var processors []*TopologyProcessor
+	var processors []*MockProcessor
 	var err error
 
-	ports, peers := setupFullyConnectedNodes(5040)
+	ports, peers := setupFullyConnectedNodes(startPort + 30)
 
 	nodes, processors, err = setupNodes(ports)
 	if err != nil {
@@ -385,10 +385,10 @@ func ExampleFullyConnected() {
 
 func ExampleLine() {
 	var nodes []*network.Network
-	var processors []*TopologyProcessor
+	var processors []*MockProcessor
 	var err error
 
-	ports, peers := setupLineNodes(5050)
+	ports, peers := setupLineNodes(startPort + 40)
 
 	nodes, processors, err = setupNodes(ports)
 	if err != nil {
@@ -414,10 +414,10 @@ func ExampleLine() {
 
 func ExampleTree() {
 	var nodes []*network.Network
-	var processors []*TopologyProcessor
+	var processors []*MockProcessor
 	var err error
 
-	ports, peers := setupTreeNodes(5060)
+	ports, peers := setupTreeNodes(startPort + 50)
 
 	nodes, processors, err = setupNodes(ports)
 	if err != nil {
