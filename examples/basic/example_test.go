@@ -37,7 +37,7 @@ func ExampleBasic() {
 	var processors []*BasicMessageProcessor
 
 	for i := 0; i < numNodes; i++ {
-		builder := &builders.NetworkBuilder{}
+		builder := builders.NewNetworkBuilder()
 		builder.SetKeys(crypto.RandomKeyPair())
 		builder.SetAddress(network.FormatAddress("kcp", host, uint16(startPort+i)))
 

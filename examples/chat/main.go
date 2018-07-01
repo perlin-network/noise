@@ -45,7 +45,7 @@ func main() {
 	glog.Infof("Private Key: %s", keys.PrivateKeyHex())
 	glog.Infof("Public Key: %s", keys.PublicKeyHex())
 
-	builder := &builders.NetworkBuilder{}
+	builder := builders.NewNetworkBuilder()
 	builder.SetKeys(keys)
 	builder.SetAddress(network.FormatAddress(protocol, host, port))
 	builder.SetUpnpEnabled(upnpEnabled)

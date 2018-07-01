@@ -34,7 +34,7 @@ func (p *MockProcessor) Handle(ctx *network.MessageContext) error {
 }
 
 func buildNetwork(port uint16) *builders.NetworkBuilder {
-	builder := &builders.NetworkBuilder{}
+	builder := builders.NewNetworkBuilder()
 	builder.SetKeys(keys)
 	builder.SetAddress(
 		fmt.Sprintf("%s://%s:%d", protocol, host, port),
