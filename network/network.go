@@ -3,8 +3,9 @@ package network
 import (
 	"fmt"
 	"math/rand"
-	"strconv"
 	"strings"
+	"net"
+	"net/url"
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
@@ -24,10 +25,8 @@ type Network struct {
 	// Node's keypair.
 	Keys *crypto.KeyPair
 
-	// Node's Network information.
-	// The Address is `Host:Port`.
-	Host string
-	Port uint16
+	// Full address to listen on. `protocol://host:port`
+	Address string
 
 	// Map of incomingStream message processors for the Network.
 	// map[string]MessageProcessor
@@ -44,22 +43,46 @@ type Network struct {
 	Listening chan struct{}
 }
 
-// Address returns a formated host:port string
-func (n *Network) Address() string {
-	return n.Host + ":" + strconv.Itoa(int(n.Port))
+type Acceptable interface {
+	Accept() (net.Conn, error)
+}
+
+type KCPAcceptor struct {
+	listener *kcp.Listener
+}
+
+func (a *KCPAcceptor) Accept() (net.Conn, error) {
+	return a.listener.Accept()
 }
 
 // Listen starts listening for peers on a port.
 func (n *Network) Listen() {
-	listener, err := kcp.ListenWithOptions(":"+strconv.Itoa(int(n.Port)), nil, 10, 3)
+	uInfo, err := url.Parse(n.Address)
 	if err != nil {
 		glog.Fatal(err)
-		return
+	}
+
+	var listener Acceptable
+
+	if uInfo.Scheme == "kcp" {
+		var rawListener *kcp.Listener
+		rawListener, err = kcp.ListenWithOptions(uInfo.Host, nil, 10, 3)
+		if err == nil {
+			listener = &KCPAcceptor { listener: rawListener, }
+		}
+	} else if uInfo.Scheme == "tcp" {
+		listener, err = net.Listen("tcp", uInfo.Host)
+	} else {
+		err = errors.New("Invalid scheme: " + uInfo.Scheme)
+	}
+
+	if err != nil {
+		glog.Fatal(err)
 	}
 
 	close(n.Listening)
 
-	glog.Infof("Listening for peers on port %d.", n.Port)
+	glog.Infof("Listening for peers on %s.", n.Address)
 
 	// Handle new clients.
 	for {
@@ -83,7 +106,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		return nil, err
 	}
 
-	if address == n.Address() {
+	if address == n.Address {
 		return nil, errors.New("peer should not dial itself")
 	}
 
@@ -106,7 +129,7 @@ func (n *Network) BlockUntilListening() {
 func (n *Network) Bootstrap(addresses ...string) {
 	n.BlockUntilListening()
 
-	addresses = FilterPeers(n.Host, n.Port, addresses)
+	addresses = FilterPeers(n.Address, addresses)
 
 	for _, address := range addresses {
 		client, err := n.Dial(address)
