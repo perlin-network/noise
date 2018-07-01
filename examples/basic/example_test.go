@@ -48,7 +48,7 @@ func ExampleBasic() {
 		builder.SetKeys(crypto.RandomKeyPair())
 		builder.SetAddress(network.FormatAddress("kcp", host, uint16(startPort+i)))
 
-		builder.AddPlugin("discovery", new(discovery.Plugin))
+		builder.AddPlugin(discovery.PluginID, new(discovery.Plugin))
 
 		processors = append(processors, new(BasicPlugin))
 		builder.AddPlugin("basic", processors[i])

@@ -51,7 +51,7 @@ func main() {
 	builder.SetAddress(network.FormatAddress(protocol, host, port))
 
 	// Register peer discovery plugin.
-	builder.AddPlugin("discovery", new(discovery.Plugin))
+	builder.AddPlugin(discovery.PluginID, new(discovery.Plugin))
 
 	// Add custom chat plugin.
 	builder.AddPlugin("chat", new(ChatPlugin))

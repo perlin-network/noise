@@ -40,7 +40,7 @@ func main() {
 	builder.SetUpnpEnabled(upnpEnabled)
 
 	// Register peer discovery plugin.
-	builder.AddPlugin("discovery", new(discovery.Plugin))
+	builder.AddPlugin(discovery.PluginID, new(discovery.Plugin))
 
 	net, err := builder.Build()
 	if err != nil {

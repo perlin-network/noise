@@ -43,7 +43,7 @@ func buildNetwork(port uint16) (*network.Network, error) {
 		fmt.Sprintf("%s://%s:%d", protocol, host, port),
 	)
 
-	builder.AddPlugin("discovery", new(discovery.Plugin))
+	builder.AddPlugin(discovery.PluginID, new(discovery.Plugin))
 	builder.AddPlugin("mock", new(MockPlugin))
 
 	return builder.Build()
