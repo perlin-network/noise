@@ -2,7 +2,6 @@ package network
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"net/url"
 	"strconv"
@@ -27,14 +26,11 @@ func FormatAddress(protocol, host string, port uint16) string {
 }
 
 func (info *AddressInfo) String() string {
-	return fmt.Sprintf(
-		"%s://%s",
-		info.Protocol,
-		net.JoinHostPort(
-			info.Host,
-			fmt.Sprintf("%d", info.Port),
-		),
-	)
+	address := net.JoinHostPort(info.Host, strconv.Itoa(int(info.Port)))
+	if len(info.Protocol) > 0 {
+		address = info.Protocol + "://" + address
+	}
+	return address
 }
 
 func ExtractAddressInfo(address string) (*AddressInfo, error) {
