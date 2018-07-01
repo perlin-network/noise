@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"flag"
-	"fmt"
 	"os"
 	"strings"
 
@@ -44,18 +43,16 @@ func main() {
 	glog.Infof("Private Key: %s", keys.PrivateKeyHex())
 	glog.Infof("Public Key: %s", keys.PublicKeyHex())
 
-	builder := &builders.NetworkBuilder{}
+	builder := builders.NewNetworkBuilder()
 	builder.SetKeys(keys)
-	builder.SetAddress(
-		fmt.Sprintf("%s://%s:%d", protocol, host, port),
-	)
+	builder.SetAddress(network.FormatAddress(protocol, host, port))
 
 	// Register peer discovery RPC handlers.
 	discovery.BootstrapPeerDiscovery(builder)
 
 	builder.AddProcessor((*messages.ChatMessage)(nil), new(ChatMessageProcessor))
 
-	net, err := builder.BuildNetwork()
+	net, err := builder.Build()
 	if err != nil {
 		glog.Fatal(err)
 		return

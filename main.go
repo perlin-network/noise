@@ -2,12 +2,11 @@ package main
 
 import (
 	"flag"
-	"net"
-	"strconv"
 	"strings"
 
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
 )
@@ -21,11 +20,13 @@ func main() {
 	hostFlag := flag.String("host", "localhost", "host to listen to")
 	protocolFlag := flag.String("protocol", "kcp", "protocol to use (kcp/tcp)")
 	peersFlag := flag.String("peers", "", "peers to connect to")
+	upnpFlag := flag.Bool("upnp", false, "enable upnp")
 	flag.Parse()
 
 	port := uint16(*portFlag)
 	host := *hostFlag
 	protocol := *protocolFlag
+	upnpEnabled := *upnpFlag
 	peers := strings.Split(*peersFlag, ",")
 
 	keys := crypto.RandomKeyPair()
@@ -33,14 +34,15 @@ func main() {
 	glog.Infof("Private Key: %s", keys.PrivateKeyHex())
 	glog.Infof("Public Key: %s", keys.PublicKeyHex())
 
-	builder := &builders.NetworkBuilder{}
+	builder := builders.NewNetworkBuilder()
 	builder.SetKeys(keys)
-	builder.SetAddress(protocol + "://" + net.JoinHostPort(host, strconv.Itoa(int(port))))
+	builder.SetAddress(network.FormatAddress(protocol, host, port))
+	builder.SetUpnpEnabled(upnpEnabled)
 
 	// Register peer discovery RPC handlers.
 	discovery.BootstrapPeerDiscovery(builder)
 
-	net, err := builder.BuildNetwork()
+	net, err := builder.Build()
 	if err != nil {
 		glog.Fatal(err)
 		return

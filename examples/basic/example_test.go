@@ -37,18 +37,16 @@ func ExampleBasic() {
 	var processors []*BasicMessageProcessor
 
 	for i := 0; i < numNodes; i++ {
-		builder := &builders.NetworkBuilder{}
+		builder := builders.NewNetworkBuilder()
 		builder.SetKeys(crypto.RandomKeyPair())
-		builder.SetAddress(
-			fmt.Sprintf("kcp://%s:%d", host, uint16(startPort+i)),
-		)
+		builder.SetAddress(network.FormatAddress("kcp", host, uint16(startPort+i)))
 
 		discovery.BootstrapPeerDiscovery(builder)
 
 		processors = append(processors, &BasicMessageProcessor{Mailbox: make(chan *messages.BasicMessage, 1)})
 		builder.AddProcessor((*messages.BasicMessage)(nil), processors[i])
 
-		node, err := builder.BuildNetwork()
+		node, err := builder.Build()
 		if err != nil {
 			fmt.Println(err)
 		}
