@@ -2,9 +2,51 @@ package network
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 )
+
+type AddressInfo struct {
+	Protocol string
+	Host string
+	Port uint16
+}
+
+func (info *AddressInfo) String() string {
+	return fmt.Sprintf(
+		"%s://%s",
+		info.Protocol,
+		net.JoinHostPort(
+			info.Host,
+			fmt.Sprintf("%d", info.Port),
+		),
+	)
+}
+
+func ExtractAddressInfo(address string) (*AddressInfo, error) {
+	urlInfo, err := url.Parse(address)
+	if err != nil {
+		return nil, err
+	}
+
+	host, rawPort, err := net.SplitHostPort(urlInfo.Host)
+	if err != nil {
+		return nil, err
+	}
+
+	port, err := strconv.ParseUint(rawPort, 10, 16)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AddressInfo {
+		Protocol: urlInfo.Scheme,
+		Host: host,
+		Port: uint16(port),
+	}, nil
+}
 
 // ToUnifiedHost resolves a domain host.
 func ToUnifiedHost(host string) (string, error) {
@@ -31,22 +73,17 @@ func ToUnifiedHost(host string) (string, error) {
 
 // ToUnifiedAddress resolves and normalizes a network address.
 func ToUnifiedAddress(address string) (string, error) {
-	urlInfo, err := url.Parse(address)
+	info, err := ExtractAddressInfo(address)
 	if err != nil {
 		return "", err
 	}
 
-	host, port, err := net.SplitHostPort(urlInfo.Host)
+	info.Host, err = ToUnifiedHost(info.Host)
 	if err != nil {
 		return "", err
 	}
 
-	host, err = ToUnifiedHost(host)
-	if err != nil {
-		return "", err
-	}
-
-	return urlInfo.Scheme + "://" + net.JoinHostPort(host, port), nil
+	return info.String(), nil
 }
 
 // FilterPeers filters out duplicate/empty addresses.
