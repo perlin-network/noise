@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"flag"
-	"fmt"
 	"os"
 	"strings"
 
@@ -32,11 +31,13 @@ func main() {
 	hostFlag := flag.String("host", "localhost", "host to listen to")
 	protocolFlag := flag.String("protocol", "kcp", "protocol to use (kcp/tcp)")
 	peersFlag := flag.String("peers", "", "peers to connect to")
+	upnpFlag := flag.Bool("upnp", false, "enable upnp")
 	flag.Parse()
 
 	port := uint16(*portFlag)
 	host := *hostFlag
 	protocol := *protocolFlag
+	upnpEnabled := *upnpFlag
 	peers := strings.Split(*peersFlag, ",")
 
 	keys := crypto.RandomKeyPair()
@@ -46,9 +47,12 @@ func main() {
 
 	builder := &builders.NetworkBuilder{}
 	builder.SetKeys(keys)
-	builder.SetAddress(
-		fmt.Sprintf("%s://%s:%d", protocol, host, port),
-	)
+	builder.SetAddress((&network.AddressInfo {
+		Protocol: protocol,
+		Host: host,
+		Port: port,
+	}).String())
+	builder.SetUpnpEnabled(upnpEnabled)
 
 	// Register peer discovery RPC handlers.
 	discovery.BootstrapPeerDiscovery(builder)
