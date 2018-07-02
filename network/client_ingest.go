@@ -96,7 +96,7 @@ func (n *Network) Ingest(conn net.Conn) {
 			ctx.nonce = msg.Nonce
 
 			// Execute 'on receive message' callback for all plugins.
-			n.Plugins.Each(func(key string, plugin PluginInterface) {
+			n.Plugins.Each(func(plugin PluginInterface) {
 				err := plugin.Receive(ctx)
 
 				if err != nil {

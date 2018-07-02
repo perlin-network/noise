@@ -109,10 +109,10 @@ func ExampleProxy() {
 		builder.SetKeys(crypto.RandomKeyPair())
 		builder.SetAddress(addr)
 
-		builder.AddPlugin(discovery.PluginID, new(discovery.Plugin))
+		builder.AddPlugin(new(discovery.Plugin))
 
 		processors = append(processors, new(ProxyPlugin))
-		builder.AddPlugin("proxy", processors[i])
+		builder.AddPlugin(processors[i])
 
 		node, err := builder.Build()
 		if err != nil {

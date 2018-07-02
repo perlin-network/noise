@@ -49,10 +49,10 @@ func ExampleBasic() {
 		builder.SetKeys(crypto.RandomKeyPair())
 		builder.SetAddress(network.FormatAddress("kcp", host, uint16(startPort+i)))
 
-		builder.AddPlugin(discovery.PluginID, new(discovery.Plugin))
+		builder.AddPlugin(new(discovery.Plugin))
 
 		processors = append(processors, new(BasicPlugin))
-		builder.AddPlugin("basic", processors[i])
+		builder.AddPlugin(processors[i])
 
 		node, err := builder.Build()
 		if err != nil {

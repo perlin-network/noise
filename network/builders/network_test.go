@@ -42,8 +42,8 @@ func buildNetwork(port uint16) (*network.Network, error) {
 		fmt.Sprintf("%s://%s:%d", protocol, host, port),
 	)
 
-	builder.AddPluginWithPriority(1, discovery.PluginID, new(discovery.Plugin))
-	builder.AddPluginWithPriority(2, "mock", new(MockPlugin))
+	builder.AddPluginWithPriority(1, new(discovery.Plugin))
+	builder.AddPluginWithPriority(2, new(MockPlugin))
 
 	return builder.Build()
 }
