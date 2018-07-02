@@ -2,6 +2,7 @@ package network
 
 import (
 	"net"
+	"sync"
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/ptypes"
@@ -21,6 +22,8 @@ func (n *Network) Ingest(conn net.Conn) {
 	defer session.Close()
 
 	var client *PeerClient
+	var clientInit sync.Once
+	var initError error
 
 	// Handle new streams and process their incoming messages.
 	for {
@@ -45,31 +48,37 @@ func (n *Network) Ingest(conn net.Conn) {
 				return
 			}
 
-			// Create a client if not exists.
-			if client == nil {
-				client, err = n.Client(msg.Sender.Address)
-
-				if err != nil {
-					glog.Warning(err)
-					return
-				}
-			}
-
-			// Derive, set the peer ID, connect to the peer, and additionally
-			// store the peer.
 			id := peer.ID(*msg.Sender)
 
-			if client.ID == nil {
-				client.ID = &id
-
-				err := client.establishConnection(id.Address)
-
-				// Could not connect to peer; disconnect.
+			clientInit.Do(func() {
+				var err error
+				if client != nil {
+					glog.Fatal("Invalid state (1)")
+				}
+				client, err = n.Client(msg.Sender.Address)
 				if err != nil {
-					glog.Errorf("Failed to connect to peer %s err=[%+v]\n", id.Address, err)
+					initError = err
 					return
 				}
-			} else if !client.ID.Equals(id) {
+				client.ID = &id
+				err = client.establishConnection(id.Address)
+				if err != nil {
+					glog.Errorf("Failed to connect to peer %s err=[%+v]\n", id.Address, err)
+					initError = err
+					return
+				}
+			})
+
+			if initError != nil {
+				glog.Warning(initError)
+				return
+			}
+
+			if client == nil {
+				glog.Fatal("Invalid state (2)")
+			}
+
+			if !client.ID.Equals(id) {
 				// Peer sent message with a completely different ID (???)
 				glog.Errorf("Message signed by peer %s but client is %s", client.ID.Address, id.Address)
 				return

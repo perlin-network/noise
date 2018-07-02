@@ -172,15 +172,21 @@ func (t *RoutingTable) FindClosestPeers(target peer.ID, count int) (peers []peer
 
 	for i := 1; len(peers) < count && (bucketID-i >= 0 || bucketID+i < peer.IDSize*8); i++ {
 		if bucketID-i >= 0 {
-			for e := t.Bucket(bucketID - i).Front(); e != nil; e = e.Next() {
+			other := t.Bucket(bucketID - i)
+			other.mutex.RLock()
+			for e := other.Front(); e != nil; e = e.Next() {
 				peers = append(peers, e.Value.(peer.ID))
 			}
+			other.mutex.RUnlock()
 		}
 
 		if bucketID+i < peer.IDSize*8 {
-			for e := t.Bucket(bucketID + i).Front(); e != nil; e = e.Next() {
+			other := t.Bucket(bucketID + i)
+			other.mutex.RLock()
+			for e := other.Front(); e != nil; e = e.Next() {
 				peers = append(peers, e.Value.(peer.ID))
 			}
+			other.mutex.RUnlock()
 		}
 	}
 
