@@ -7,6 +7,7 @@ import (
 	"github.com/perlin-network/noise/network/discovery"
 
 	"errors"
+
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/examples/proxy/messages"
 	"github.com/perlin-network/noise/network"
@@ -109,7 +110,9 @@ func ExampleProxy() {
 		builder.SetKeys(crypto.RandomKeyPair())
 		builder.SetAddress(addr)
 
-		builder.AddPlugin(new(discovery.Plugin))
+		discovery := new(discovery.Plugin)
+		discovery.DisablePong = true
+		builder.AddPlugin(discovery)
 
 		processors = append(processors, new(ProxyPlugin))
 		builder.AddPlugin(processors[i])
@@ -155,7 +158,9 @@ func ExampleProxy() {
 			PublicKey: nodes[target].ID.PublicKey,
 		},
 	}
-	processors[sender].ProxyBroadcast(nodes[sender], nodes[sender].ID, expected)
+	if err := processors[sender].ProxyBroadcast(nodes[sender], nodes[sender].ID, expected); err != nil {
+		fmt.Println(err)
+	}
 
 	fmt.Printf("Node %d sent out a message to node %d.\n", sender, target)
 

@@ -1,18 +1,22 @@
 package discovery
 
 import (
+	"strings"
+
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
-	"strings"
 )
 
 type Plugin struct {
 	*network.Plugin
 
 	Routes *dht.RoutingTable
+
+	// DisablePong when enable overrides dialing out to new nodes (default: false)
+	DisablePong bool
 }
 
 var PluginID = (*Plugin)(nil)
@@ -37,6 +41,10 @@ func (state *Plugin) Receive(ctx *network.MessageContext) error {
 			return err
 		}
 	case *protobuf.Pong:
+		if state.DisablePong {
+			break
+		}
+
 		peers := FindNode(ctx.Network(), ctx.Sender(), dht.BucketSize)
 
 		// Update routing table w/ closest peers to self.
