@@ -13,7 +13,6 @@ require (
 	github.com/templexxx/cpufeat v0.0.0-20170927014610-3794dfbfb047
 	github.com/templexxx/xor v0.0.0-20170926022130-0af8e873c554
 	github.com/tjfoc/gmsm v1.0.1
-	github.com/umpc/go-sortedmap v0.0.0-20180422175548-64ab94c482f4
 	github.com/xtaci/kcp-go v0.0.0-20180203133237-42bc1dfefff5
 	github.com/xtaci/smux v1.0.7
 	golang.org/x/crypto v0.0.0-20180614221331-a8fb68e7206f
