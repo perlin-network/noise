@@ -9,8 +9,6 @@ import (
 	"strings"
 )
 
-const PluginID = "discovery"
-
 type Plugin struct {
 	*network.Plugin
 
