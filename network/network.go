@@ -28,6 +28,9 @@ type Network struct {
 	// map[string]Plugin
 	Plugins *StringPluginInterfaceSyncMap
 
+	// list of plugin names ordered by priority
+	PluginOrder []string
+
 	// Node's cryptographic ID.
 	ID peer.ID
 
@@ -51,17 +54,25 @@ func (n *Network) GetPort() uint16 {
 // Listen starts listening for peers on a port.
 func (n *Network) Listen() {
 	// Handle 'network starts listening' callback for plugins.
-	n.Plugins.Range(func(name string, plugin PluginInterface) bool {
-		plugin.Startup(n)
-		return true
-	})
+	for _, name := range n.PluginOrder {
+		if p, ok := n.Plugin(name); !ok {
+			glog.Warningf("Missing plugin implementation for '%s' for Startup.", name)
+			continue
+		} else {
+			p.Startup(n)
+		}
+	}
 
 	// Handle 'network stops listening' callback for plugins.
 	defer func() {
-		n.Plugins.Range(func(name string, plugin PluginInterface) bool {
-			plugin.Cleanup(n)
-			return true
-		})
+		for _, name := range n.PluginOrder {
+			if p, ok := n.Plugin(name); !ok {
+				glog.Warningf("Missing plugin implementation for '%s' for Cleanup.", name)
+				continue
+			} else {
+				p.Cleanup(n)
+			}
+		}
 	}()
 
 	urlInfo, err := url.Parse(n.Address)

@@ -3,12 +3,13 @@ package basic
 import (
 	"flag"
 	"fmt"
+	"time"
+
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
-	"time"
 )
 
 // BasicPlugin buffers all messages into a mailbox for this test.
@@ -48,10 +49,10 @@ func ExampleBasic() {
 		builder.SetKeys(crypto.RandomKeyPair())
 		builder.SetAddress(network.FormatAddress("kcp", host, uint16(startPort+i)))
 
-		builder.AddPlugin(discovery.PluginID, new(discovery.Plugin))
+		builder.AddPlugin(1, discovery.PluginID, new(discovery.Plugin))
 
 		processors = append(processors, new(BasicPlugin))
-		builder.AddPlugin("basic", processors[i])
+		builder.AddPlugin(2, "basic", processors[i])
 
 		node, err := builder.Build()
 		if err != nil {

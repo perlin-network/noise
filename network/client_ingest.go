@@ -1,11 +1,12 @@
 package network
 
 import (
+	"net"
+
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/peer"
 	"github.com/xtaci/smux"
-	"net"
 )
 
 // Ingest handles peer registration and processes incoming message streams consisting of
@@ -95,16 +96,18 @@ func (n *Network) Ingest(conn net.Conn) {
 			ctx.nonce = msg.Nonce
 
 			// Execute 'on receive message' callback for all plugins.
-			n.Plugins.Range(func(name string, plugin PluginInterface) bool {
-				err := plugin.Receive(ctx)
+			for _, name := range n.PluginOrder {
+				if p, ok := n.Plugin(name); !ok {
+					glog.Infof("Missing plugin implementation for '%s' for Receive.", name)
+					continue
+				} else {
+					err := p.Receive(ctx)
 
-				if err != nil {
-					glog.Error(err)
-					return false
+					if err != nil {
+						glog.Error(err)
+					}
 				}
-
-				return true
-			})
+			}
 		}(stream)
 	}
 }
