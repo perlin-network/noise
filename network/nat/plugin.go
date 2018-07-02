@@ -4,22 +4,18 @@ import (
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
+	"github.com/perlin-network/noise/network/builders"
 )
 
 const PluginID = "upnp"
 
-// Plugin for automating port-forwarding of this nodes listening socket through
-// the UPnP interface.
-//
-// NOTE: This must be the first plugin registered onto the network!!!
-// TODO: Enforce priority on which plugin gets executed first.
-type Plugin struct {
+type plugin struct {
 	*network.Plugin
 
 	mapping *LocalPortMappingInfo
 }
 
-func (state *Plugin) Startup(net *network.Network) {
+func (state *plugin) Startup(net *network.Network) {
 	glog.Info("Setting up UPnP...")
 
 	mapping, err := ForwardPort(net.GetPort())
@@ -45,7 +41,7 @@ func (state *Plugin) Startup(net *network.Network) {
 	}
 }
 
-func (state *Plugin) Cleanup(net *network.Network) {
+func (state *plugin) Cleanup(net *network.Network) {
 	if state.mapping != nil {
 		glog.Info("Removing UPnP port binding...")
 
@@ -54,4 +50,12 @@ func (state *Plugin) Cleanup(net *network.Network) {
 			glog.Error(err)
 		}
 	}
+}
+
+// RegisterPlugin registers a plugin that automates port-forwarding of this nodes
+// listening socket through any available UPnP interface.
+//
+// The plugin is registered with a priority of -999999, and thus is executed first.
+func RegisterPlugin(builder *builders.NetworkBuilder) {
+	builder.AddPluginWithPriority(-99999, PluginID, new(plugin))
 }

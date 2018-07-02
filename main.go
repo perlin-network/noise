@@ -41,7 +41,7 @@ func main() {
 
 	// Register UPnP plugin.
 	if upnpEnabled {
-		builder.AddPlugin(nat.PluginID, new(nat.Plugin))
+		nat.RegisterPlugin(builder)
 	}
 
 	// Register peer discovery plugin.
