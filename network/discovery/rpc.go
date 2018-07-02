@@ -42,7 +42,7 @@ func queryPeerByID(net *network.Network, peerID peer.ID, targetID peer.ID, respo
 // to a specified target ID. Queries at most #ALPHA nodes at a time, and returns
 // a bucket filled with the closest peers.
 func FindNode(net *network.Network, targetID peer.ID, alpha int) (results []peer.ID) {
-	plugin, exists := net.Plugin((*Plugin)(nil))
+	plugin, exists := net.Plugin(PluginID)
 
 	// Discovery plugin was not registered. Fail.
 	if !exists {

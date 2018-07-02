@@ -71,9 +71,9 @@ func (builder *NetworkBuilder) Build() (*network.Network, error) {
 	// Initialize plugin list if not exist.
 	if builder.plugins == nil {
 		builder.plugins = network.NewPluginList()
+	} else {
+		builder.plugins.SortByPriority()
 	}
-
-	builder.plugins.Fixup()
 
 	unifiedAddress, err := network.ToUnifiedAddress(builder.address)
 	if err != nil {

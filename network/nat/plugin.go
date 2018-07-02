@@ -3,8 +3,8 @@ package nat
 import (
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/network/builders"
+	"github.com/perlin-network/noise/peer"
 )
 
 type plugin struct {

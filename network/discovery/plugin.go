@@ -15,6 +15,8 @@ type Plugin struct {
 	Routes *dht.RoutingTable
 }
 
+var PluginID = (*Plugin)(nil)
+
 func (state *Plugin) Startup(net *network.Network) {
 	// Create routing table.
 	state.Routes = dht.CreateRoutingTable(net.ID)
