@@ -239,6 +239,6 @@ func (n *Network) Tell(targetAddress string, msg proto.Message) error {
 
 // Plugin returns a plugins proxy interface should it be registered with the
 // network. The second returning parameter is false otherwise.
-func (n *Network) Plugin(name string) (PluginInterface, bool) {
-	return n.Plugins.Get(name)
+func (n *Network) Plugin(withTy interface{}) (PluginInterface, bool) {
+	return n.Plugins.Get(withTy)
 }
