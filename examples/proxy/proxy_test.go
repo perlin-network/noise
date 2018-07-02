@@ -38,10 +38,10 @@ func (n *ProxyPlugin) Receive(ctx *network.MessageContext) error {
 	// Handle the proxy message.
 	switch msg := ctx.Message().(type) {
 	case *messages.ProxyMessage:
-		fmt.Printf("Node %d received a message from node %d.\n", ids[ctx.Network().Address], ids[ctx.Sender().Address])
 		n.Mailbox <- msg
+
 		if err := n.ProxyBroadcast(ctx.Network(), ctx.Sender(), msg); err != nil {
-			fmt.Println(err)
+			panic(err)
 		}
 	}
 	return nil
@@ -99,7 +99,7 @@ func ExampleProxy() {
 	target := numNodes - 1
 
 	var nodes []*network.Network
-	var processors []*ProxyPlugin
+	var plugins []*ProxyPlugin
 
 	for i := 0; i < numNodes; i++ {
 		addr := fmt.Sprintf("kcp://%s:%d", host, startPort+i)
@@ -111,8 +111,8 @@ func ExampleProxy() {
 
 		builder.AddPlugin(new(discovery.Plugin))
 
-		processors = append(processors, new(ProxyPlugin))
-		builder.AddPlugin(processors[i])
+		plugins = append(plugins, new(ProxyPlugin))
+		builder.AddPlugin(plugins[i])
 
 		node, err := builder.Build()
 		if err != nil {
@@ -143,7 +143,7 @@ func ExampleProxy() {
 	}
 
 	// Wait for all nodes to finish discovering other peers.
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 
 	fmt.Println("Nodes setup as a line topology.")
 
@@ -155,13 +155,13 @@ func ExampleProxy() {
 			PublicKey: nodes[target].ID.PublicKey,
 		},
 	}
-	processors[sender].ProxyBroadcast(nodes[sender], nodes[sender].ID, expected)
+	plugins[sender].ProxyBroadcast(nodes[sender], nodes[sender].ID, expected)
 
-	fmt.Printf("Node %d sent out a message to node %d.\n", sender, target)
+	fmt.Printf("Node %d sent out a message targeting for node %d.\n", sender, target)
 
 	// Check if message was received by target node.
 	select {
-	case received := <-processors[target].Mailbox:
+	case received := <-plugins[target].Mailbox:
 		if received.Message != expected.Message {
 			fmt.Printf("Expected message (%v) to be received by node %d but got (%v).\n", expected, target, received)
 		} else {
@@ -173,11 +173,7 @@ func ExampleProxy() {
 
 	// Output:
 	// Nodes setup as a line topology.
-	// Node 0 sent out a message to node 4.
-	// Node 1 received a message from node 0.
-	// Node 2 received a message from node 1.
-	// Node 3 received a message from node 2.
-	// Node 4 received a message from node 3.
+	// Node 0 sent out a message targeting for node 4.
 	// Node 0 successfully proxied a message to node 4.
 
 }
