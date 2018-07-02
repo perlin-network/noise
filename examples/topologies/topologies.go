@@ -190,7 +190,7 @@ func setupNodes(ports []int) ([]*network.Network, []*MockPlugin, error) {
 
 		// Attach mock plugin.
 		processors = append(processors, new(MockPlugin))
-		builder.AddPlugin(1, "mock", processors[i])
+		builder.AddPlugin("mock", processors[i])
 
 		node, err := builder.Build()
 		if err != nil {

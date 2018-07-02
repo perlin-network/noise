@@ -96,18 +96,13 @@ func (n *Network) Ingest(conn net.Conn) {
 			ctx.nonce = msg.Nonce
 
 			// Execute 'on receive message' callback for all plugins.
-			for _, name := range n.PluginOrder {
-				if p, ok := n.Plugin(name); !ok {
-					glog.Infof("Missing plugin implementation for '%s' for Receive.", name)
-					continue
-				} else {
-					err := p.Receive(ctx)
+			n.Plugins.Each(func(key string, plugin PluginInterface) {
+				err := plugin.Receive(ctx)
 
-					if err != nil {
-						glog.Error(err)
-					}
+				if err != nil {
+					glog.Error(err)
 				}
-			}
+			})
 		}(stream)
 	}
 }

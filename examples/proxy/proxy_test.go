@@ -6,6 +6,7 @@ import (
 
 	"github.com/perlin-network/noise/network/discovery"
 
+	"errors"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/examples/proxy/messages"
 	"github.com/perlin-network/noise/network"
@@ -23,27 +24,17 @@ var addrToID map[string]int
 // ProxyPlugin buffers all messages into a mailbox for this test.
 type ProxyPlugin struct {
 	*network.Plugin
-	Discovery *discovery.Plugin
-	Mailbox   chan *messages.ProxyMessage
+	Mailbox chan *messages.ProxyMessage
 }
 
 func (n *ProxyPlugin) Startup(net *network.Network) {
-	// create a routing table for each node
-	n.Discovery = new(discovery.Plugin)
-	n.Discovery.Startup(net)
-
 	// Create mailbox
 	n.Mailbox = make(chan *messages.ProxyMessage, 1)
 }
 
 // Handle implements the network interface callback
 func (n *ProxyPlugin) Receive(ctx *network.MessageContext) error {
-	// update the routes first
-	if err := n.Discovery.Receive(ctx); err != nil {
-		return err
-	}
-
-	// then handle the proxy message
+	// Handle the proxy message.
 	switch msg := ctx.Message().(type) {
 	case *messages.ProxyMessage:
 		fmt.Printf("Node %d received a message from node %d.\n", addrToID[ctx.Network().Address], addrToID[ctx.Sender().Address])
@@ -68,15 +59,22 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 		return nil
 	}
 
+	plugin, registered := node.Plugin(discovery.PluginID)
+	if !registered {
+		return errors.New("discovery plugin not registered")
+	}
+
+	routes := plugin.(*discovery.Plugin).Routes
+
 	// check if the target is a directly connected peer
-	if n.Discovery.Routes.PeerExists(targetID) {
+	if routes.PeerExists(targetID) {
 		// if it is already in the routing table, then send messages directly there
 		node.BroadcastByIDs(msg, targetID)
 		return nil
 	}
 
 	// find the 2 closest peer with the Kademlia table
-	closestPeers := n.Discovery.Routes.FindClosestPeers(targetID, 2)
+	closestPeers := routes.FindClosestPeers(targetID, 2)
 
 	// if one of the 2 is the sender, remove it from the list
 	for i, peer := range closestPeers {
@@ -95,14 +93,6 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 	node.BroadcastByIDs(msg, closestPeers[0])
 
 	return nil
-}
-
-func (n *ProxyPlugin) Cleanup(net *network.Network) {
-	n.Discovery.Cleanup(net)
-}
-
-func (n *ProxyPlugin) PeerDisconnect(id *peer.ID) {
-	n.Discovery.PeerDisconnect(id)
 }
 
 // ExampleProxy demonstrates how to send a message to nodes which do not directly have connections.
@@ -126,10 +116,10 @@ func ExampleProxy() {
 
 		// excluding peer discovery to test non-fully connected topology
 		//discovery.BootstrapPeerDiscovery(builder)
-		builder.AddPlugin(1, discovery.PluginID, new(discovery.Plugin))
+		builder.AddPlugin(discovery.PluginID, new(discovery.Plugin))
 
 		processors = append(processors, new(ProxyPlugin))
-		builder.AddPlugin(2, "proxy", processors[i])
+		builder.AddPlugin("proxy", processors[i])
 
 		node, err := builder.Build()
 		if err != nil {

@@ -1,10 +1,9 @@
 package nat
 
 import (
-	"github.com/perlin-network/noise/network"
 	"github.com/golang/glog"
+	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
-	"github.com/AsynkronIT/protoactor-go/log"
 )
 
 const PluginID = "upnp"
@@ -52,7 +51,7 @@ func (state *Plugin) Cleanup(net *network.Network) {
 
 		err := state.mapping.Close()
 		if err != nil {
-			log.Error(err)
+			glog.Error(err)
 		}
 	}
 }

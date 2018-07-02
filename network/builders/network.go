@@ -14,10 +14,8 @@ type NetworkBuilder struct {
 	keys    *crypto.KeyPair
 	address string
 
-	// map[string]PluginInterface
-	plugins *network.StringPluginInterfaceSyncMap
-
-	pluginOrder pluginPriorities
+	plugins     *network.PluginList
+	pluginCount int
 }
 
 // NewNetworkBuilder lets you configure a network to build
@@ -35,24 +33,26 @@ func (builder *NetworkBuilder) SetAddress(address string) {
 	builder.address = address
 }
 
-// AddPlugin register a new plugin into the network.
-func (builder *NetworkBuilder) AddPlugin(priority int, name string, plugin network.PluginInterface) error {
-	// Initialize map if not exist.
+// AddPluginWithPriority register a new plugin into the network.
+func (builder *NetworkBuilder) AddPluginWithPriority(priority int, name string, plugin network.PluginInterface) error {
+	// Initialize plugin list if not exist.
 	if builder.plugins == nil {
-		builder.plugins = &network.StringPluginInterfaceSyncMap{}
+		builder.plugins = network.NewPluginList()
 	}
 
-	if _, exists := builder.plugins.Load(name); exists {
+	if _, exists := builder.plugins.Get(name); exists {
 		return fmt.Errorf("plugin %s is already registered", name)
 	}
 
-	builder.pluginOrder = append(builder.pluginOrder, &pluginPriority{
-		Priority:  priority,
-		Name:      name,
-		InsertIdx: len(builder.pluginOrder),
-	})
-	builder.plugins.Store(name, plugin)
+	builder.plugins.Put(name, &network.PluginInfo{Priority: priority, Plugin: plugin})
+
 	return nil
+}
+
+func (builder *NetworkBuilder) AddPlugin(name string, plugin network.PluginInterface) error {
+	err := builder.AddPluginWithPriority(builder.pluginCount, name, plugin)
+	builder.pluginCount++
+	return err
 }
 
 // Build verifies all parameters of the network and returns either an error due to
@@ -66,9 +66,9 @@ func (builder *NetworkBuilder) Build() (*network.Network, error) {
 		return nil, errors.New("Network requires public server IP for peers to connect to")
 	}
 
-	// Initialize map if not exist.
+	// Initialize plugin list if not exist.
 	if builder.plugins == nil {
-		builder.plugins = &network.StringPluginInterfaceSyncMap{}
+		builder.plugins = network.NewPluginList()
 	}
 
 	unifiedAddress, err := network.ToUnifiedAddress(builder.address)
@@ -84,8 +84,6 @@ func (builder *NetworkBuilder) Build() (*network.Network, error) {
 		Address: unifiedAddress,
 
 		Plugins: builder.plugins,
-
-		PluginOrder: builder.pluginOrder.GetSortedNames(),
 
 		Peers: new(network.StringPeerClientSyncMap),
 

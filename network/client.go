@@ -88,14 +88,9 @@ func (c *PeerClient) Close() {
 	// Disconnect the user.
 	if c.ID != nil {
 		// Handle 'on peer disconnect' callback for plugins.
-		for _, name := range c.Network.PluginOrder {
-			if p, ok := c.Network.Plugin(name); !ok {
-				glog.Warningf("Missing plugin implementation for '%s' for PeerDisconnect.", name)
-				continue
-			} else {
-				p.PeerDisconnect(c.ID)
-			}
-		}
+		c.Network.Plugins.Each(func(key string, plugin PluginInterface) {
+			plugin.PeerDisconnect(c.ID)
+		})
 
 		// Delete peer from network.
 		c.Network.Peers.Delete(c.ID.Address)

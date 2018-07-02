@@ -41,11 +41,11 @@ func main() {
 
 	// Register UPnP plugin.
 	if upnpEnabled {
-		builder.AddPlugin(1, nat.PluginID, new(nat.Plugin))
+		builder.AddPlugin(nat.PluginID, new(nat.Plugin))
 	}
 
 	// Register peer discovery plugin.
-	builder.AddPlugin(2, discovery.PluginID, new(discovery.Plugin))
+	builder.AddPlugin(discovery.PluginID, new(discovery.Plugin))
 
 	net, err := builder.Build()
 	if err != nil {

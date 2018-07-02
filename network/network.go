@@ -26,10 +26,7 @@ type Network struct {
 
 	// Map of plugins registered to the network.
 	// map[string]Plugin
-	Plugins *StringPluginInterfaceSyncMap
-
-	// list of plugin names ordered by priority
-	PluginOrder []string
+	Plugins *PluginList
 
 	// Node's cryptographic ID.
 	ID peer.ID
@@ -54,25 +51,15 @@ func (n *Network) GetPort() uint16 {
 // Listen starts listening for peers on a port.
 func (n *Network) Listen() {
 	// Handle 'network starts listening' callback for plugins.
-	for _, name := range n.PluginOrder {
-		if p, ok := n.Plugin(name); !ok {
-			glog.Warningf("Missing plugin implementation for '%s' for Startup.", name)
-			continue
-		} else {
-			p.Startup(n)
-		}
-	}
+	n.Plugins.Each(func(key string, plugin PluginInterface) {
+		plugin.Startup(n)
+	})
 
 	// Handle 'network stops listening' callback for plugins.
 	defer func() {
-		for _, name := range n.PluginOrder {
-			if p, ok := n.Plugin(name); !ok {
-				glog.Warningf("Missing plugin implementation for '%s' for Cleanup.", name)
-				continue
-			} else {
-				p.Cleanup(n)
-			}
-		}
+		n.Plugins.Each(func(key string, plugin PluginInterface) {
+			plugin.Cleanup(n)
+		})
 	}()
 
 	urlInfo, err := url.Parse(n.Address)
@@ -254,5 +241,5 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 // Plugin returns a plugins proxy interface should it be registered with the
 // network. The second returning parameter is false otherwise.
 func (n *Network) Plugin(name string) (PluginInterface, bool) {
-	return n.Plugins.Load(name)
+	return n.Plugins.Get(name)
 }
