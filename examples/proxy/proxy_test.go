@@ -19,6 +19,7 @@ const (
 	startPort = 20070
 )
 
+// A map of addresses to node IDs.
 var ids = make(map[string]int)
 
 // ProxyPlugin buffers all messages into a mailbox for this test.
@@ -28,7 +29,7 @@ type ProxyPlugin struct {
 }
 
 func (n *ProxyPlugin) Startup(net *network.Network) {
-	// Create mailbox
+	// Create mailbox.
 	n.Mailbox = make(chan *messages.ProxyMessage, 1)
 }
 
@@ -46,16 +47,12 @@ func (n *ProxyPlugin) Receive(ctx *network.MessageContext) error {
 	return nil
 }
 
-// ProxyBroadcast forwards messages to nodes
+// ProxyBroadcast proxies a message until it reaches a target ID destination.
 func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg *messages.ProxyMessage) error {
-	targetID := peer.ID{
-		PublicKey: msg.Destination.PublicKey,
-		Address:   msg.Destination.Address,
-	}
+	targetID := peer.ID(*msg.Destination)
 
-	// check if we've reached the target
+	// Check if we are the target.
 	if node.ID.Equals(targetID) {
-		// success
 		return nil
 	}
 
@@ -66,37 +63,48 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 
 	routes := plugin.(*discovery.Plugin).Routes
 
-	// check if the target is a directly connected peer
+	// If the target is in our routing table, directly proxy the message to them.
 	if routes.PeerExists(targetID) {
-		// if it is already in the routing table, then send messages directly there
-		node.BroadcastByIDs(msg, targetID)
-		return nil
+		client, err := node.Client(targetID.Address)
+		if err != nil {
+			return err
+		}
+
+		err = client.Tell(msg)
+		return err
 	}
 
-	// find the 2 closest peer with the Kademlia table
+	// Find the 2 closest peers from a nodes point of view (might include us).
 	closestPeers := routes.FindClosestPeers(targetID, 2)
 
-	// if one of the 2 is the sender, remove it from the list
-	for i, peer := range closestPeers {
-		if peer.Equals(sender) {
+	// Remove sender from the list.
+	for i, id := range closestPeers {
+		if id.Equals(sender) {
 			closestPeers = append(closestPeers[:i], closestPeers[i+1:]...)
 			break
 		}
 	}
 
-	// if no valid peers, may not be able to propagate
+	// Seems we have ran out of peers to attempt to propagate to.
 	if len(closestPeers) == 0 {
 		return fmt.Errorf("could not found route from node %d to node %d", ids[node.Address], ids[targetID.Address])
 	}
 
-	// propagate the message it to the closest peer
-	node.BroadcastByIDs(msg, closestPeers[0])
+	// Propagate message to the closest peer.
+
+	client, err := node.Client(closestPeers[0].Address)
+	if err != nil {
+		return err
+	}
+
+	err = client.Tell(msg)
 
 	return nil
 }
 
-// ExampleProxy demonstrates how to send a message to nodes which do not directly have connections.
-// Messages are proxied to closer nodes using the Kademlia table.
+// ExampleProxy demonstrates how to send a message to nodes which do not directly have connections
+// to their desired messaging target. Messages are proxied to closer nodes using the Kademlia
+// routing table.
 func ExampleProxy() {
 	numNodes := 5
 	sender := 0
@@ -127,7 +135,7 @@ func ExampleProxy() {
 		go node.Listen()
 	}
 
-	// make sure all the servers are listening
+	// Make sure all nodes are listening for incoming peers.
 	for _, node := range nodes {
 		node.BlockUntilListening()
 	}
@@ -141,7 +149,7 @@ func ExampleProxy() {
 			peerList = append(peerList, nodes[i+1].Address)
 		}
 
-		// get nodes to start talking with each other
+		// Bootstrap nodes to their assignd peers.
 		nodes[i].Bootstrap(peerList...)
 
 	}
