@@ -136,7 +136,7 @@ func ExampleProxy() {
 	}
 
 	// Wait for all nodes to finish discovering other peers.
-	time.Sleep(time.Duration(100*len(nodes)) * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 
 	fmt.Println("Nodes setup as a line topology.")
 
@@ -160,7 +160,7 @@ func ExampleProxy() {
 		} else {
 			fmt.Printf("Node %d successfully proxied a message to node %d.\n", sender, target)
 		}
-	case <-time.After(time.Duration(numNodes+1) * time.Second):
+	case <-time.After(1 * time.Second):
 		fmt.Printf("Timed out attempting to receive message from Node %d.\n", sender)
 	}
 
