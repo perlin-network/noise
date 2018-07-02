@@ -3,6 +3,7 @@ package builders
 import (
 	"errors"
 	"fmt"
+	"reflect"
 
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/network"
@@ -34,25 +35,25 @@ func (builder *NetworkBuilder) SetAddress(address string) {
 }
 
 // AddPluginWithPriority register a new plugin onto the network with a set priority.
-func (builder *NetworkBuilder) AddPluginWithPriority(priority int, name string, plugin network.PluginInterface) error {
+func (builder *NetworkBuilder) AddPluginWithPriority(priority int, plugin network.PluginInterface) error {
 	// Initialize plugin list if not exist.
 	if builder.plugins == nil {
 		builder.plugins = network.NewPluginList()
 	}
 
-	if _, exists := builder.plugins.Get(name); exists {
-		return fmt.Errorf("plugin %s is already registered", name)
+	if !builder.plugins.Put(priority, plugin) {
+		return fmt.Errorf("plugin %s is already registered", reflect.TypeOf(plugin).String())
 	}
-
-	builder.plugins.Put(name, priority, plugin)
 
 	return nil
 }
 
 // AddPlugin register a new plugin onto the network.
-func (builder *NetworkBuilder) AddPlugin(name string, plugin network.PluginInterface) error {
-	err := builder.AddPluginWithPriority(builder.pluginCount, name, plugin)
-	builder.pluginCount++
+func (builder *NetworkBuilder) AddPlugin(plugin network.PluginInterface) error {
+	err := builder.AddPluginWithPriority(builder.pluginCount, plugin)
+	if err == nil {
+		builder.pluginCount++
+	}
 	return err
 }
 
@@ -71,6 +72,8 @@ func (builder *NetworkBuilder) Build() (*network.Network, error) {
 	if builder.plugins == nil {
 		builder.plugins = network.NewPluginList()
 	}
+
+	builder.plugins.Fixup()
 
 	unifiedAddress, err := network.ToUnifiedAddress(builder.address)
 	if err != nil {
