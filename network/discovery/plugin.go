@@ -15,8 +15,8 @@ type Plugin struct {
 
 	Routes *dht.RoutingTable
 
-	// DisableDialing when enable overrides dialing out to new nodes (default: false)
-	DisableDialing bool
+	// DisablePong when enable overrides dialing out to new nodes (default: false)
+	DisablePong bool
 }
 
 var PluginID = (*Plugin)(nil)
@@ -41,8 +41,7 @@ func (state *Plugin) Receive(ctx *network.MessageContext) error {
 			return err
 		}
 	case *protobuf.Pong:
-		if state.DisableDialing {
-			// override dial behavior
+		if state.DisablePong {
 			break
 		}
 

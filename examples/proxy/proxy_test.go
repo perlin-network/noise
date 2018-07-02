@@ -111,7 +111,7 @@ func ExampleProxy() {
 		builder.SetAddress(addr)
 
 		discovery := new(discovery.Plugin)
-		discovery.DisableDialing = true
+		discovery.DisablePong = true
 		builder.AddPlugin(discovery)
 
 		processors = append(processors, new(ProxyPlugin))
