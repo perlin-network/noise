@@ -65,13 +65,7 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 
 	// If the target is in our routing table, directly proxy the message to them.
 	if routes.PeerExists(targetID) {
-		client, err := node.Client(targetID.Address)
-		if err != nil {
-			return err
-		}
-
-		err = client.Tell(msg)
-		return err
+		return node.Tell(targetID.Address, msg)
 	}
 
 	// Find the 2 closest peers from a nodes point of view (might include us).
@@ -91,20 +85,14 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 	}
 
 	// Propagate message to the closest peer.
-
-	client, err := node.Client(closestPeers[0].Address)
-	if err != nil {
-		return err
-	}
-
-	err = client.Tell(msg)
-
-	return nil
+	return node.Tell(closestPeers[0].Address, msg)
 }
 
 // ExampleProxy demonstrates how to send a message to nodes which do not directly have connections
-// to their desired messaging target. Messages are proxied to closer nodes using the Kademlia
-// routing table.
+// to their desired messaging target.
+//
+// Messages are proxied to closer nodes using the Kademlia routing table.
+// TODO: Test broken.
 func ExampleProxy() {
 	numNodes := 5
 	sender := 0
@@ -155,7 +143,7 @@ func ExampleProxy() {
 	}
 
 	// Wait for all nodes to finish discovering other peers.
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 
 	fmt.Println("Nodes setup as a line topology.")
 

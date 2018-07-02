@@ -183,30 +183,14 @@ func (n *Network) Broadcast(message proto.Message) {
 // BroadcastByAddresses broadcasts a message to a set of peer clients denoted by their addresses.
 func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
 	for _, address := range addresses {
-		if client, err := n.Client(address); err == nil {
-			err := client.Tell(message)
-
-			if err != nil {
-				glog.Warningf("Failed to send message to peer %s [err=%s]", client.ID.Address, err)
-			}
-		} else {
-			glog.Warningf("Failed to send message to peer %s; peer does not exist. [err=%s]", address, err)
-		}
+		n.Tell(address, message)
 	}
 }
 
 // BroadcastByIDs broadcasts a message to a set of peer clients denoted by their peer IDs.
 func (n *Network) BroadcastByIDs(message proto.Message, ids ...peer.ID) {
 	for _, id := range ids {
-		if client, err := n.Client(id.Address); err == nil {
-			err := client.Tell(message)
-
-			if err != nil {
-				glog.Warningf("Failed to send message to peer %s [err=%s]", client.ID.Address, err)
-			}
-		} else {
-			glog.Warningf("Failed to send message to peer %s; peer does not exist. [err=%s]", id, err)
-		}
+		n.Tell(id.Address, message)
 	}
 }
 
@@ -236,6 +220,21 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	}
 
 	n.BroadcastByAddresses(message, addresses[:K]...)
+}
+
+// Tell asynchronously emit a message to a denoted target address.
+func (n *Network) Tell(targetAddress string, msg proto.Message) error {
+	if client, err := n.Client(targetAddress); err == nil {
+		err := client.Tell(msg)
+
+		if err != nil {
+			return fmt.Errorf("failed to send message to peer %s [err=%s]", targetAddress, err)
+		}
+	} else {
+		return fmt.Errorf("failed to send message to peer %s; peer does not exist. [err=%s]", targetAddress, err)
+	}
+
+	return nil
 }
 
 // Plugin returns a plugins proxy interface should it be registered with the

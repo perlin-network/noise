@@ -104,7 +104,7 @@ func (c *PeerClient) Close() {
 	}
 }
 
-// prepareMessage marshals a message into a proto.Message and signs it with this
+// prepareMessage marshals a message into a proto.Tell and signs it with this
 // nodes private key. Errors if the message is null.
 func (c *PeerClient) prepareMessage(message proto.Message) (*protobuf.Message, error) {
 	if message == nil {
