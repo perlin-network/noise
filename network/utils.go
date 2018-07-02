@@ -4,7 +4,38 @@ import (
 	"errors"
 	"net"
 	"net/url"
+	"strconv"
 )
+
+// FormatAddress properly marshals a destinations information into a string.
+func FormatAddress(protocol, host string, port uint16) string {
+	return NewAddressInfo(protocol, host, port).String()
+}
+
+// ExtractAddressInfo derives a network scheme, host and port of a destinations
+// information. Errors should the provided destination address be malformed.
+func ExtractAddressInfo(address string) (*AddressInfo, error) {
+	urlInfo, err := url.Parse(address)
+	if err != nil {
+		return nil, err
+	}
+
+	host, rawPort, err := net.SplitHostPort(urlInfo.Host)
+	if err != nil {
+		return nil, err
+	}
+
+	port, err := strconv.ParseUint(rawPort, 10, 16)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AddressInfo{
+		Protocol: urlInfo.Scheme,
+		Host:     host,
+		Port:     uint16(port),
+	}, nil
+}
 
 // ToUnifiedHost resolves a domain host.
 func ToUnifiedHost(host string) (string, error) {
@@ -31,22 +62,17 @@ func ToUnifiedHost(host string) (string, error) {
 
 // ToUnifiedAddress resolves and normalizes a network address.
 func ToUnifiedAddress(address string) (string, error) {
-	urlInfo, err := url.Parse(address)
+	info, err := ExtractAddressInfo(address)
 	if err != nil {
 		return "", err
 	}
 
-	host, port, err := net.SplitHostPort(urlInfo.Host)
+	info.Host, err = ToUnifiedHost(info.Host)
 	if err != nil {
 		return "", err
 	}
 
-	host, err = ToUnifiedHost(host)
-	if err != nil {
-		return "", err
-	}
-
-	return urlInfo.Scheme + "://" + net.JoinHostPort(host, port), nil
+	return info.String(), nil
 }
 
 // FilterPeers filters out duplicate/empty addresses.

@@ -11,6 +11,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/dht"
+	"github.com/perlin-network/noise/network/nat"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
@@ -28,6 +29,8 @@ type Network struct {
 	// Full address to listen on. `protocol://host:port`
 	Address string
 
+	UpnpEnabled bool
+
 	// Map of incomingStream message processors for the Network.
 	// map[string]MessageProcessor
 	Processors *StringMessageProcessorSyncMap
@@ -41,6 +44,15 @@ type Network struct {
 
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
+}
+
+func (n *Network) GetPort() uint16 {
+	info, err := ExtractAddressInfo(n.Address)
+	if err != nil {
+		glog.Fatal(err)
+	}
+
+	return info.Port
 }
 
 // Listen starts listening for peers on a port.
@@ -65,6 +77,31 @@ func (n *Network) Listen() {
 
 	if err != nil {
 		glog.Fatal(err)
+	}
+
+	if n.UpnpEnabled {
+		glog.Info("Setting up UPnP...")
+
+		mappingInfo, err := nat.ForwardPort(n.GetPort())
+		if err == nil {
+			defer mappingInfo.Close()
+
+			addressInfo, err := ExtractAddressInfo(n.Address)
+			if err != nil {
+				glog.Fatal(err)
+			}
+
+			addressInfo.Host = mappingInfo.ExternalIP
+			addressInfo.Port = mappingInfo.ExternalPort
+
+			n.Address = addressInfo.String()
+
+			// TODO: Remove this hacky workaround
+			n.ID = peer.CreateID(n.Address, n.Keys.PublicKey)
+			n.Routes = dht.CreateRoutingTable(n.ID)
+		} else {
+			glog.Warning("Cannot setup UPnP mapping: ", err)
+		}
 	}
 
 	close(n.Listening)

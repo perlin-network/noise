@@ -14,11 +14,18 @@ import (
 
 // NetworkBuilder is a Address->processors struct
 type NetworkBuilder struct {
-	keys    *crypto.KeyPair
-	address string
+	keys        *crypto.KeyPair
+	address     string
+	upnpEnabled bool
 
 	// map[string]MessageProcessor
 	processors *network.StringMessageProcessorSyncMap
+}
+
+func NewNetworkBuilder() *NetworkBuilder {
+	return &NetworkBuilder{
+		upnpEnabled: false,
+	}
 }
 
 // SetKeys pair created from crypto.KeyPair
@@ -28,6 +35,10 @@ func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
 
 func (builder *NetworkBuilder) SetAddress(address string) {
 	builder.address = address
+}
+
+func (builder *NetworkBuilder) SetUpnpEnabled(enabled bool) {
+	builder.upnpEnabled = enabled
 }
 
 // AddProcessor for a given message,
@@ -48,9 +59,9 @@ func (builder *NetworkBuilder) AddProcessor(message proto.Message, processor net
 	}
 }
 
-// BuildNetwork verifies all parameters of the network and returns either an error due to
+// Build verifies all parameters of the network and returns either an error due to
 // misconfiguration, or a noise.network.Network.
-func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
+func (builder *NetworkBuilder) Build() (*network.Network, error) {
 	if builder.keys == nil {
 		return nil, errors.New("cryptography keys not provided to Network; cannot create node ID")
 	}
@@ -64,23 +75,24 @@ func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
 		builder.processors = &network.StringMessageProcessorSyncMap{}
 	}
 
-	unifiedAddr, err := network.ToUnifiedAddress(builder.address)
+	unifiedAddress, err := network.ToUnifiedAddress(builder.address)
 	if err != nil {
 		return nil, err
 	}
 
-	id := peer.CreateID(unifiedAddr, builder.keys.PublicKey)
+	id := peer.CreateID(unifiedAddress, builder.keys.PublicKey)
 
 	net := &network.Network{
-		Keys:    builder.keys,
-		Address: unifiedAddr,
-		ID:      id,
+		ID:          id,
+		Keys:        builder.keys,
+		Address:     unifiedAddress,
+		UpnpEnabled: builder.upnpEnabled,
 
 		Processors: builder.processors,
 
-		Routes: dht.CreateRoutingTable(id),
+		Peers: new(network.StringPeerClientSyncMap),
 
-		Peers: &network.StringPeerClientSyncMap{},
+		Routes: dht.CreateRoutingTable(id),
 
 		Listening: make(chan struct{}),
 	}
