@@ -165,7 +165,6 @@ func (t *RoutingTable) FindClosestPeers(target peer.ID, count int) (peers []peer
 	bucket := t.Bucket(bucketID)
 
 	bucket.mutex.RLock()
-	defer bucket.mutex.RUnlock()
 
 	for e := bucket.Front(); e != nil; e = e.Next() {
 		peers = append(peers, e.Value.(peer.ID))
@@ -184,6 +183,8 @@ func (t *RoutingTable) FindClosestPeers(target peer.ID, count int) (peers []peer
 			}
 		}
 	}
+
+	bucket.mutex.RUnlock()
 
 	// Sort peers by XOR distance.
 	sort.Slice(peers, func(i, j int) bool {
