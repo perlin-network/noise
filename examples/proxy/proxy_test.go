@@ -37,27 +37,30 @@ func (n *MockProcessor) Handle(ctx *network.MessageContext) error {
 	return nil
 }
 
+// ProxyBroadcast forwards messages to nodes
 func (n *MockProcessor) ProxyBroadcast(node *network.Network, sender peer.ID, msg *messages.ProxyMessage) error {
 	targetID := peer.ID{
 		PublicKey: msg.Destination.PublicKey,
 		Address:   msg.Destination.Address,
 	}
+
+	// check if we've reached the target
 	if node.ID.Equals(targetID) {
 		// success
 		return nil
 	}
 
-	// find closest node
+	// check if the target is a directly connected peer
 	if node.Routes.PeerExists(targetID) {
 		// if it is already in the routing table, then send messages directly there
 		node.BroadcastByIDs(msg, targetID)
 		return nil
 	}
 
-	// find a closest peer that is not the sender
+	// find the 2 closest peer with the Kademlia table
 	closestPeers := node.Routes.FindClosestPeers(targetID, 2)
 
-	// remove the sender from the closest peers list
+	// if one of the 2 is the sender, remove it from the list
 	for i, peer := range closestPeers {
 		if peer.Equals(sender) {
 			closestPeers = append(closestPeers[:i], closestPeers[i+1:]...)
@@ -65,6 +68,7 @@ func (n *MockProcessor) ProxyBroadcast(node *network.Network, sender peer.ID, ms
 		}
 	}
 
+	// if no valid peers, may not be able to propagate
 	if len(closestPeers) == 0 {
 		return fmt.Errorf("could not found route from node %d to node %d", addrToID[node.Address], addrToID[targetID.Address])
 	}
@@ -75,6 +79,8 @@ func (n *MockProcessor) ProxyBroadcast(node *network.Network, sender peer.ID, ms
 	return nil
 }
 
+// ExampleProxy demonstrates how to send a message to nodes which do not directly have connections.
+// Messages are proxied to closer nodes using the Kademlia table.
 func ExampleProxy() {
 	numNodes := 5
 	sender := 0
