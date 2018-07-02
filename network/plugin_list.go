@@ -1,73 +1,79 @@
 package network
 
 import (
-	"github.com/umpc/go-sortedmap"
+	"sort"
+	"reflect"
 )
 
 // PluginInfo wraps a priority level with a plugin interface.
 type PluginInfo struct {
 	Priority int
-	Plugin   PluginInterface
+	Plugin PluginInterface
 }
 
 // PluginList holds a statically-typed sorted map of plugins
 // registered on Noise.
 type PluginList struct {
-	inner *sortedmap.SortedMap
-}
-
-// Highest priority is considered to be on the lower end of the spectrum.
-func byPriority(a, b interface{}) bool {
-	return a.(*PluginInfo).Priority < b.(*PluginInfo).Priority
+	byType map[reflect.Type]*PluginInfo
+	byPriority []*PluginInfo
 }
 
 // NewPluginList creates a new instance of a sorted plugin list.
 func NewPluginList() *PluginList {
-	return &PluginList{inner: sortedmap.New(4, byPriority)}
+	return &PluginList {
+		byType: make(map[reflect.Type]*PluginInfo),
+		byPriority: make([]*PluginInfo, 0),
+	}
+}
+
+func (m *PluginList) Fixup() {
+	sort.SliceStable(m.byPriority, func (i, j int) bool {
+		return m.byPriority[i].Priority < m.byPriority[j].Priority
+	})
 }
 
 // PutInfo places a new plugins info onto the list.
-func (m *PluginList) PutInfo(key string, plugin *PluginInfo) bool {
-	return m.inner.Insert(key, plugin)
+func (m *PluginList) PutInfo(plugin *PluginInfo) bool {
+	ty := reflect.TypeOf(plugin.Plugin)
+	if _, ok := m.byType[ty]; ok {
+		return false
+	}
+	m.byType[ty] = plugin
+	m.byPriority = append(m.byPriority, plugin)
+	return true
 }
 
-
 // Put places a new plugin with a set priority onto the list.
-func (m *PluginList) Put(key string, priority int, plugin PluginInterface) bool {
-	return m.PutInfo(key, &PluginInfo{Priority: priority, Plugin: plugin})
+func (m *PluginList) Put(priority int, plugin PluginInterface) bool {
+	return m.PutInfo(&PluginInfo {
+		Priority: priority,
+		Plugin: plugin,
+	})
 }
 
 // Len returns the number of plugins in the plugin list.
 func (m *PluginList) Len() int {
-	return m.inner.Len()
-}
-
-// Delete deletes a plugin by its ID from the list. Returns false if not exist.
-func (m *PluginList) Delete(key string) bool {
-	return m.inner.Delete(key)
+	return len(m.byType)
 }
 
 // GetInfo gets the priority and plugin interface given a plugin ID. Returns nil if not exists.
-func (m *PluginList) GetInfo(key string) (*PluginInfo, bool) {
-	info, exists := m.inner.Get(key)
-	return info.(*PluginInfo), exists
+func (m *PluginList) GetInfo(withTy interface{}) (*PluginInfo, bool) {
+	item, ok := m.byType[reflect.TypeOf(withTy)]
+	return item, ok
 }
 
 // Get returns the plugin interface given a plugin ID. Returns nil if not exists.
-func (m *PluginList) Get(key string) (PluginInterface, bool) {
-	info, exists := m.inner.Get(key)
-
-	if exists {
-		return info.(*PluginInfo).Plugin, exists
+func (m *PluginList) Get(withTy interface{}) (PluginInterface, bool) {
+	if info, ok := m.GetInfo(withTy); ok {
+		return info.Plugin, true
 	} else {
 		return nil, false
 	}
 }
 
 // Each goes through every plugin in ascending order of priority of the plugin list.
-func (m *PluginList) Each(f func(key string, value PluginInterface)) {
-	m.inner.IterFunc(false, func(rec sortedmap.Record) bool {
-		f(rec.Key.(string), rec.Val.(*PluginInfo).Plugin)
-		return true
-	})
+func (m *PluginList) Each(f func(value PluginInterface)) {
+	for _, item := range m.byPriority {
+		f(item.Plugin)
+	}
 }
