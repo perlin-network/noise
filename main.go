@@ -9,6 +9,7 @@ import (
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
+	"github.com/perlin-network/noise/network/nat"
 )
 
 func main() {
@@ -37,10 +38,14 @@ func main() {
 	builder := builders.NewNetworkBuilder()
 	builder.SetKeys(keys)
 	builder.SetAddress(network.FormatAddress(protocol, host, port))
-	builder.SetUpnpEnabled(upnpEnabled)
 
-	// Register peer discovery RPC handlers.
-	discovery.BootstrapPeerDiscovery(builder)
+	// Register UPnP plugin.
+	if upnpEnabled {
+		nat.RegisterPlugin(builder)
+	}
+
+	// Register peer discovery plugin.
+	builder.AddPlugin(new(discovery.Plugin))
 
 	net, err := builder.Build()
 	if err != nil {

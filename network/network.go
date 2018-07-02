@@ -10,8 +10,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/dht"
-	"github.com/perlin-network/noise/network/nat"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
@@ -20,20 +18,15 @@ import (
 
 // Network represents the current networking state for this node.
 type Network struct {
-	// Routing table.
-	Routes *dht.RoutingTable
-
 	// Node's keypair.
 	Keys *crypto.KeyPair
 
 	// Full address to listen on. `protocol://host:port`
 	Address string
 
-	UpnpEnabled bool
-
-	// Map of incomingStream message processors for the Network.
-	// map[string]MessageProcessor
-	Processors *StringMessageProcessorSyncMap
+	// Map of plugins registered to the network.
+	// map[string]Plugin
+	Plugins *PluginList
 
 	// Node's cryptographic ID.
 	ID peer.ID
@@ -57,6 +50,18 @@ func (n *Network) GetPort() uint16 {
 
 // Listen starts listening for peers on a port.
 func (n *Network) Listen() {
+	// Handle 'network starts listening' callback for plugins.
+	n.Plugins.Each(func(plugin PluginInterface) {
+		plugin.Startup(n)
+	})
+
+	// Handle 'network stops listening' callback for plugins.
+	defer func() {
+		n.Plugins.Each(func(plugin PluginInterface) {
+			plugin.Cleanup(n)
+		})
+	}()
+
 	urlInfo, err := url.Parse(n.Address)
 	if err != nil {
 		glog.Fatal(err)
@@ -77,31 +82,6 @@ func (n *Network) Listen() {
 
 	if err != nil {
 		glog.Fatal(err)
-	}
-
-	if n.UpnpEnabled {
-		glog.Info("Setting up UPnP...")
-
-		mappingInfo, err := nat.ForwardPort(n.GetPort())
-		if err == nil {
-			defer mappingInfo.Close()
-
-			addressInfo, err := ExtractAddressInfo(n.Address)
-			if err != nil {
-				glog.Fatal(err)
-			}
-
-			addressInfo.Host = mappingInfo.ExternalIP
-			addressInfo.Port = mappingInfo.ExternalPort
-
-			n.Address = addressInfo.String()
-
-			// TODO: Remove this hacky workaround
-			n.ID = peer.CreateID(n.Address, n.Keys.PublicKey)
-			n.Routes = dht.CreateRoutingTable(n.ID)
-		} else {
-			glog.Warning("Cannot setup UPnP mapping: ", err)
-		}
 	}
 
 	close(n.Listening)
@@ -203,30 +183,14 @@ func (n *Network) Broadcast(message proto.Message) {
 // BroadcastByAddresses broadcasts a message to a set of peer clients denoted by their addresses.
 func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
 	for _, address := range addresses {
-		if client, err := n.Client(address); err == nil {
-			err := client.Tell(message)
-
-			if err != nil {
-				glog.Warningf("Failed to send message to peer %s [err=%s]", client.ID.Address, err)
-			}
-		} else {
-			glog.Warningf("Failed to send message to peer %s; peer does not exist. [err=%s]", address, err)
-		}
+		n.Tell(address, message)
 	}
 }
 
 // BroadcastByIDs broadcasts a message to a set of peer clients denoted by their peer IDs.
 func (n *Network) BroadcastByIDs(message proto.Message, ids ...peer.ID) {
 	for _, id := range ids {
-		if client, err := n.Client(id.Address); err == nil {
-			err := client.Tell(message)
-
-			if err != nil {
-				glog.Warningf("Failed to send message to peer %s [err=%s]", client.ID.Address, err)
-			}
-		} else {
-			glog.Warningf("Failed to send message to peer %s; peer does not exist. [err=%s]", id, err)
-		}
+		n.Tell(id.Address, message)
 	}
 }
 
@@ -256,4 +220,27 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	}
 
 	n.BroadcastByAddresses(message, addresses[:K]...)
+}
+
+// Tell asynchronously emit a message to a denoted target address.
+func (n *Network) Tell(targetAddress string, msg proto.Message) error {
+	if client, err := n.Client(targetAddress); err == nil {
+		err := client.Tell(msg)
+
+		if err != nil {
+			return fmt.Errorf("failed to send message to peer %s [err=%s]", targetAddress, err)
+		}
+	} else {
+		return fmt.Errorf("failed to send message to peer %s; peer does not exist. [err=%s]", targetAddress, err)
+	}
+
+	return nil
+}
+
+// Plugin returns a plugins proxy interface should it be registered with the
+// network. The second returning parameter is false otherwise.
+//
+// Example: network.Plugin((*Plugin)(nil))
+func (n *Network) Plugin(key interface{}) (PluginInterface, bool) {
+	return n.Plugins.Get(key)
 }

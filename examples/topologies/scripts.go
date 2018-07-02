@@ -1,3 +1,3 @@
-//go:generate protoc --go_out=plugins=grpc:. messages/topoology.proto
+//go:generate protoc --go_out=. messages/topology.proto
 
 package topologies

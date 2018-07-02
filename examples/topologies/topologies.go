@@ -13,15 +13,22 @@ import (
 
 const host = "127.0.0.1"
 
-// MockProcessor implements the message handler
-type MockProcessor struct {
+// MockPlugin buffers all messages into a mailbox for this test.
+type MockPlugin struct {
+	*network.Plugin
 	Mailbox chan *messages.BasicMessage
 }
 
-// Handle implements the network interface callback
-func (n *MockProcessor) Handle(ctx *network.MessageContext) error {
-	message := ctx.Message().(*messages.BasicMessage)
-	n.Mailbox <- message
+func (state *MockPlugin) Startup(net *network.Network) {
+	// Create mailbox
+	state.Mailbox = make(chan *messages.BasicMessage, 1)
+}
+
+func (state *MockPlugin) Receive(ctx *network.MessageContext) error {
+	switch msg := ctx.Message().(type) {
+	case *messages.BasicMessage:
+		state.Mailbox <- msg
+	}
 	return nil
 }
 
@@ -172,27 +179,24 @@ func setupTreeNodes(startPort int) ([]int, map[string]map[string]struct{}) {
 }
 
 // setupNodes sets up the networks and processors.
-func setupNodes(ports []int) ([]*network.Network, []*MockProcessor, error) {
+func setupNodes(ports []int) ([]*network.Network, []*MockPlugin, error) {
 	var nodes []*network.Network
-	var processors []*MockProcessor
+	var processors []*MockPlugin
 
-	for _, port := range ports {
-		builder := builders.NewNetworkBuilder()
+	for i, port := range ports {
+		builder := &builders.NetworkBuilder{}
 		builder.SetKeys(crypto.RandomKeyPair())
 		builder.SetAddress(fmt.Sprintf("kcp://%s:%d", host, port))
 
-		// Excluding peer discovery to test non-fully connected topology.
-		//discovery.BootstrapPeerDiscovery(builder)
-
-		processor := &MockProcessor{Mailbox: make(chan *messages.BasicMessage, 1)}
-		builder.AddProcessor((*messages.BasicMessage)(nil), processor)
+		// Attach mock plugin.
+		processors = append(processors, new(MockPlugin))
+		builder.AddPlugin(processors[i])
 
 		node, err := builder.Build()
 		if err != nil {
 			return nil, nil, err
 		}
 		nodes = append(nodes, node)
-		processors = append(processors, processor)
 
 		go node.Listen()
 	}
@@ -229,7 +233,7 @@ func bootstrapNodes(nodes []*network.Network, peers map[string]map[string]struct
 }
 
 // broadcastTest will broadcast a message from the sender node, checks if the right peers receive it
-func broadcastTest(t *testing.T, nodes []*network.Network, processors []*MockProcessor, peers map[string]map[string]struct{}, sender int) {
+func broadcastTest(t *testing.T, nodes []*network.Network, processors []*MockPlugin, peers map[string]map[string]struct{}, sender int) {
 	timeout := 250 * time.Millisecond
 
 	// Broadcast is an asynchronous call to send a message to other nodes

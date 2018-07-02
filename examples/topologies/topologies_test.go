@@ -14,7 +14,7 @@ func TestRing(t *testing.T) {
 	}
 
 	var nodes []*network.Network
-	var processors []*MockProcessor
+	var processors []*MockPlugin
 	var err error
 
 	// create the topology
@@ -44,7 +44,7 @@ func TestMesh(t *testing.T) {
 	}
 
 	var nodes []*network.Network
-	var processors []*MockProcessor
+	var processors []*MockPlugin
 	var err error
 
 	ports, peers := setupMeshNodes(basePort + 10)
@@ -70,7 +70,7 @@ func TestStar(t *testing.T) {
 	}
 
 	var nodes []*network.Network
-	var processors []*MockProcessor
+	var processors []*MockPlugin
 	var err error
 
 	ports, peers := setupStarNodes(basePort + 20)
@@ -96,7 +96,7 @@ func TestFullyConnected(t *testing.T) {
 	}
 
 	var nodes []*network.Network
-	var processors []*MockProcessor
+	var processors []*MockPlugin
 	var err error
 
 	ports, peers := setupFullyConnectedNodes(basePort + 30)
@@ -122,7 +122,7 @@ func TestLine(t *testing.T) {
 	}
 
 	var nodes []*network.Network
-	var processors []*MockProcessor
+	var processors []*MockPlugin
 	var err error
 
 	ports, peers := setupLineNodes(basePort + 40)
@@ -148,7 +148,7 @@ func TestTree(t *testing.T) {
 	}
 
 	var nodes []*network.Network
-	var processors []*MockProcessor
+	var processors []*MockPlugin
 	var err error
 
 	ports, peers := setupTreeNodes(basePort + 50)

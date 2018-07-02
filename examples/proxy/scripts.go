@@ -1,3 +1,3 @@
-//go:generate protoc --go_out=plugins=grpc:. messages/proxy.proto
+//go:generate protoc --go_out=. messages/proxy.proto
 
 package proxy
