@@ -51,13 +51,13 @@ func (n *Network) GetPort() uint16 {
 // Listen starts listening for peers on a port.
 func (n *Network) Listen() {
 	// Handle 'network starts listening' callback for plugins.
-	n.Plugins.Each(func(key string, plugin PluginInterface) {
+	n.Plugins.Each(func(plugin PluginInterface) {
 		plugin.Startup(n)
 	})
 
 	// Handle 'network stops listening' callback for plugins.
 	defer func() {
-		n.Plugins.Each(func(key string, plugin PluginInterface) {
+		n.Plugins.Each(func(plugin PluginInterface) {
 			plugin.Cleanup(n)
 		})
 	}()

@@ -88,7 +88,7 @@ func (c *PeerClient) Close() {
 	// Disconnect the user.
 	if c.ID != nil {
 		// Handle 'on peer disconnect' callback for plugins.
-		c.Network.Plugins.Each(func(key string, plugin PluginInterface) {
+		c.Network.Plugins.Each(func(plugin PluginInterface) {
 			plugin.PeerDisconnect(c.ID)
 		})
 
