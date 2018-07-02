@@ -42,7 +42,7 @@ func ExampleBasic() {
 	startPort := 5000
 
 	var nodes []*network.Network
-	var processors []*BasicPlugin
+	var plugins []*BasicPlugin
 
 	for i := 0; i < numNodes; i++ {
 		builder := builders.NewNetworkBuilder()
@@ -51,8 +51,8 @@ func ExampleBasic() {
 
 		builder.AddPlugin(new(discovery.Plugin))
 
-		processors = append(processors, new(BasicPlugin))
-		builder.AddPlugin(processors[i])
+		plugins = append(plugins, new(BasicPlugin))
+		builder.AddPlugin(plugins[i])
 
 		node, err := builder.Build()
 		if err != nil {
@@ -81,7 +81,7 @@ func ExampleBasic() {
 	// Check if message was received by other nodes.
 	for i := 1; i < len(nodes); i++ {
 		select {
-		case received := <-processors[i].Mailbox:
+		case received := <-plugins[i].Mailbox:
 			if received.Message != expected {
 				fmt.Printf("Expected message %s to be received by node %d but got %v\n", expected, i, received.Message)
 			} else {

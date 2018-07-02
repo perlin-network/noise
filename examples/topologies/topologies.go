@@ -181,7 +181,7 @@ func setupTreeNodes(startPort int) ([]int, map[string]map[string]struct{}) {
 // setupNodes sets up the networks and processors.
 func setupNodes(ports []int) ([]*network.Network, []*MockPlugin, error) {
 	var nodes []*network.Network
-	var processors []*MockPlugin
+	var plugins []*MockPlugin
 
 	for i, port := range ports {
 		builder := &builders.NetworkBuilder{}
@@ -189,8 +189,8 @@ func setupNodes(ports []int) ([]*network.Network, []*MockPlugin, error) {
 		builder.SetAddress(fmt.Sprintf("kcp://%s:%d", host, port))
 
 		// Attach mock plugin.
-		processors = append(processors, new(MockPlugin))
-		builder.AddPlugin(processors[i])
+		plugins = append(plugins, new(MockPlugin))
+		builder.AddPlugin(plugins[i])
 
 		node, err := builder.Build()
 		if err != nil {
@@ -206,7 +206,7 @@ func setupNodes(ports []int) ([]*network.Network, []*MockPlugin, error) {
 		node.BlockUntilListening()
 	}
 
-	return nodes, processors, nil
+	return nodes, plugins, nil
 }
 
 // bootstrapNodes bootstraps assigned peers to specific nodes.
