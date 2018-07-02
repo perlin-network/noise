@@ -14,10 +14,12 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/pprof"
+	"strconv"
 	"time"
 )
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+var port = flag.Uint("port", 0, "port to listen on")
 var receiver = "kcp://127.0.0.1:3001"
 
 func main() {
@@ -47,7 +49,7 @@ func main() {
 	}
 
 	builder := builders.NewNetworkBuilder()
-	builder.SetAddress("kcp://localhost:3003")
+	builder.SetAddress("kcp://localhost:" + strconv.Itoa(int(*port)))
 	builder.SetKeys(crypto.RandomKeyPair())
 
 	net, err := builder.Build()
