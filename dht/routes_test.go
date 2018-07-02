@@ -25,7 +25,7 @@ func RandByte() byte {
 
 func TestRoutingTable(t *testing.T) {
 	const ID_POOL_SIZE = 16
-	const CONCURRENT_COUNT = 2
+	const CONCURRENT_COUNT = 16
 
 	pk0 := MustReadRand(32)
 	ids := make([]unsafe.Pointer, ID_POOL_SIZE) // Element type: *peer.ID
