@@ -7,8 +7,6 @@ import (
 	"github.com/perlin-network/noise/network/builders"
 )
 
-const PluginID = "upnp"
-
 type plugin struct {
 	*network.Plugin
 
@@ -57,5 +55,5 @@ func (state *plugin) Cleanup(net *network.Network) {
 //
 // The plugin is registered with a priority of -999999, and thus is executed first.
 func RegisterPlugin(builder *builders.NetworkBuilder) {
-	builder.AddPluginWithPriority(-99999, PluginID, new(plugin))
+	builder.AddPluginWithPriority(-99999, new(plugin))
 }
