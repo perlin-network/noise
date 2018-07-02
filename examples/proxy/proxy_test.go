@@ -16,9 +16,10 @@ const (
 	startPort = 20070
 )
 
+var addrToID map[string]int
+
 // MockProcessor implements the message handler
 type MockProcessor struct {
-	Idx     int
 	Mailbox chan *messages.ProxyMessage
 }
 
@@ -26,7 +27,7 @@ type MockProcessor struct {
 func (n *MockProcessor) Handle(ctx *network.MessageContext) error {
 	message := ctx.Message().(*messages.ProxyMessage)
 
-	fmt.Printf("Node %d received a message.\n", n.Idx)
+	fmt.Printf("Node %d received a message from node %d.\n", addrToID[ctx.Network().Address], addrToID[ctx.Sender().Address])
 
 	n.Mailbox <- message
 
@@ -64,13 +65,12 @@ func (n *MockProcessor) ProxyBroadcast(node *network.Network, sender peer.ID, ms
 		}
 	}
 
-	// propagate the message to every
-	if len(closestPeers) == 1 {
-		// send it to the closest peer
-		node.BroadcastByIDs(msg, closestPeers[0])
-	} else {
-		return fmt.Errorf("could not found route to %v", targetID)
+	if len(closestPeers) == 0 {
+		return fmt.Errorf("could not found route from node %d to node %d", addrToID[node.Address], addrToID[targetID.Address])
 	}
+
+	// propagate the message it to the closest peer
+	node.BroadcastByIDs(msg, closestPeers[0])
 
 	return nil
 }
@@ -82,22 +82,25 @@ func ExampleProxy() {
 
 	var nodes []*network.Network
 	var processors []*MockProcessor
+	addrToID = map[string]int{}
 
 	for i := 0; i < numNodes; i++ {
-		builder := &builders.NetworkBuilder{}
+		addr := fmt.Sprintf("kcp://%s:%d", host, startPort+i)
+		addrToID[addr] = i
+
+		builder := builders.NewNetworkBuilder()
 		builder.SetKeys(crypto.RandomKeyPair())
-		builder.SetAddress(fmt.Sprintf("kcp://%s:%d", host, startPort+i))
+		builder.SetAddress(addr)
 
 		// excluding peer discovery to test non-fully connected topology
 		//discovery.BootstrapPeerDiscovery(builder)
 
 		processor := &MockProcessor{
-			Idx:     i,
 			Mailbox: make(chan *messages.ProxyMessage, 1),
 		}
 		builder.AddProcessor((*messages.ProxyMessage)(nil), processor)
 
-		node, err := builder.BuildNetwork()
+		node, err := builder.Build()
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -149,7 +152,7 @@ func ExampleProxy() {
 		if received.Message != expectedMsg.Message {
 			fmt.Printf("Expected message (%v) to be received by node %d but got (%v).\n", expectedMsg, target, received)
 		} else {
-			fmt.Printf("Node %d received a message from Node %d.\n", target, sender)
+			fmt.Printf("Node %d successfully proxied a message to node %d.\n", sender, target)
 		}
 	case <-time.After(time.Duration(numNodes+1) * time.Second):
 		fmt.Printf("Timed out attempting to receive message from Node %d.\n", sender)
@@ -158,10 +161,10 @@ func ExampleProxy() {
 	// Output:
 	// Nodes setup as a line topology.
 	// Node 0 sent out a message to node 4.
-	// Node 1 received a message.
-	// Node 2 received a message.
-	// Node 3 received a message.
-	// Node 4 received a message.
-	// Node 4 received a message from Node 0.
+	// Node 1 received a message from node 0.
+	// Node 2 received a message from node 1.
+	// Node 3 received a message from node 2.
+	// Node 4 received a message from node 3.
+	// Node 0 successfully proxied a message to node 4.
 
 }
