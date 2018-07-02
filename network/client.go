@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"time"
 
+	"sync"
 	"sync/atomic"
 
 	"github.com/golang/glog"
@@ -25,6 +26,7 @@ type PeerClient struct {
 	ID *peer.ID
 
 	session *smux.Session
+	sessionInitMutex sync.Mutex
 
 	Requests     *Uint64MessageChannelSyncMap
 	RequestNonce uint64
@@ -43,6 +45,9 @@ func (c *PeerClient) nextNonce() uint64 {
 // establishConnection establishes a session by dialing a peers address. Errors if
 // peer is not dial-able, or if the peer client already is connected.
 func (c *PeerClient) establishConnection(address string) error {
+	c.sessionInitMutex.Lock()
+	defer c.sessionInitMutex.Unlock()
+
 	if c.session != nil {
 		return nil
 	}
