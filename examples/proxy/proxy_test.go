@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/perlin-network/noise/network/discovery"
+
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/examples/proxy/messages"
 	"github.com/perlin-network/noise/network"
@@ -18,27 +20,43 @@ const (
 
 var addrToID map[string]int
 
-// MockProcessor implements the message handler
-type MockProcessor struct {
-	Mailbox chan *messages.ProxyMessage
+// ProxyPlugin buffers all messages into a mailbox for this test.
+type ProxyPlugin struct {
+	*network.Plugin
+	Discovery *discovery.Plugin
+	Mailbox   chan *messages.ProxyMessage
+}
+
+func (n *ProxyPlugin) Startup(net *network.Network) {
+	// create a routing table for each node
+	n.Discovery = new(discovery.Plugin)
+	n.Discovery.Startup(net)
+
+	// Create mailbox
+	n.Mailbox = make(chan *messages.ProxyMessage, 1)
 }
 
 // Handle implements the network interface callback
-func (n *MockProcessor) Handle(ctx *network.MessageContext) error {
-	message := ctx.Message().(*messages.ProxyMessage)
+func (n *ProxyPlugin) Receive(ctx *network.MessageContext) error {
+	// update the routes first
+	if err := n.Discovery.Receive(ctx); err != nil {
+		return err
+	}
 
-	fmt.Printf("Node %d received a message from node %d.\n", addrToID[ctx.Network().Address], addrToID[ctx.Sender().Address])
-
-	n.Mailbox <- message
-
-	if err := n.ProxyBroadcast(ctx.Network(), ctx.Sender(), message); err != nil {
-		fmt.Println(err)
+	// then handle the proxy message
+	switch msg := ctx.Message().(type) {
+	case *messages.ProxyMessage:
+		fmt.Printf("Node %d received a message from node %d.\n", addrToID[ctx.Network().Address], addrToID[ctx.Sender().Address])
+		n.Mailbox <- msg
+		if err := n.ProxyBroadcast(ctx.Network(), ctx.Sender(), msg); err != nil {
+			fmt.Println(err)
+		}
 	}
 	return nil
 }
 
 // ProxyBroadcast forwards messages to nodes
-func (n *MockProcessor) ProxyBroadcast(node *network.Network, sender peer.ID, msg *messages.ProxyMessage) error {
+func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg *messages.ProxyMessage) error {
 	targetID := peer.ID{
 		PublicKey: msg.Destination.PublicKey,
 		Address:   msg.Destination.Address,
@@ -51,14 +69,14 @@ func (n *MockProcessor) ProxyBroadcast(node *network.Network, sender peer.ID, ms
 	}
 
 	// check if the target is a directly connected peer
-	if node.Routes.PeerExists(targetID) {
+	if n.Discovery.Routes.PeerExists(targetID) {
 		// if it is already in the routing table, then send messages directly there
 		node.BroadcastByIDs(msg, targetID)
 		return nil
 	}
 
 	// find the 2 closest peer with the Kademlia table
-	closestPeers := node.Routes.FindClosestPeers(targetID, 2)
+	closestPeers := n.Discovery.Routes.FindClosestPeers(targetID, 2)
 
 	// if one of the 2 is the sender, remove it from the list
 	for i, peer := range closestPeers {
@@ -79,6 +97,14 @@ func (n *MockProcessor) ProxyBroadcast(node *network.Network, sender peer.ID, ms
 	return nil
 }
 
+func (n *ProxyPlugin) Cleanup(net *network.Network) {
+	n.Discovery.Cleanup(net)
+}
+
+func (n *ProxyPlugin) PeerDisconnect(id *peer.ID) {
+	n.Discovery.PeerDisconnect(id)
+}
+
 // ExampleProxy demonstrates how to send a message to nodes which do not directly have connections.
 // Messages are proxied to closer nodes using the Kademlia table.
 func ExampleProxy() {
@@ -87,7 +113,7 @@ func ExampleProxy() {
 	target := numNodes - 1
 
 	var nodes []*network.Network
-	var processors []*MockProcessor
+	var processors []*ProxyPlugin
 	addrToID = map[string]int{}
 
 	for i := 0; i < numNodes; i++ {
@@ -100,18 +126,16 @@ func ExampleProxy() {
 
 		// excluding peer discovery to test non-fully connected topology
 		//discovery.BootstrapPeerDiscovery(builder)
+		builder.AddPlugin(1, discovery.PluginID, new(discovery.Plugin))
 
-		processor := &MockProcessor{
-			Mailbox: make(chan *messages.ProxyMessage, 1),
-		}
-		builder.AddProcessor((*messages.ProxyMessage)(nil), processor)
+		processors = append(processors, new(ProxyPlugin))
+		builder.AddPlugin(2, "proxy", processors[i])
 
 		node, err := builder.Build()
 		if err != nil {
 			fmt.Println(err)
 		}
 		nodes = append(nodes, node)
-		processors = append(processors, processor)
 
 		go node.Listen()
 	}
