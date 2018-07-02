@@ -1,13 +1,13 @@
 package dht
 
 import (
-	"sync"
-	"sync/atomic"
-	"unsafe"
-	"testing"
 	"crypto/rand"
 	"encoding/hex"
 	"github.com/perlin-network/noise/peer"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"unsafe"
 )
 
 func MustReadRand(size int) []byte {
@@ -32,7 +32,7 @@ func TestRoutingTable(t *testing.T) {
 
 	table := CreateRoutingTable(peer.CreateID("000", pk0))
 
-	wg := &sync.WaitGroup {}
+	wg := &sync.WaitGroup{}
 	wg.Add(CONCURRENT_COUNT)
 
 	for i := 0; i < CONCURRENT_COUNT; i++ {
@@ -44,7 +44,8 @@ func TestRoutingTable(t *testing.T) {
 
 			for _, indice := range indices {
 				switch int(indice) % 4 {
-					case 0: {
+				case 0:
+					{
 						addrRaw := MustReadRand(8)
 						addr := hex.EncodeToString(addrRaw)
 						pk := MustReadRand(32)
@@ -52,22 +53,25 @@ func TestRoutingTable(t *testing.T) {
 						id := peer.CreateID(addr, pk)
 						table.Update(id)
 
-						atomic.StorePointer(&ids[int(RandByte()) % ID_POOL_SIZE], unsafe.Pointer(&id))
+						atomic.StorePointer(&ids[int(RandByte())%ID_POOL_SIZE], unsafe.Pointer(&id))
 					}
-					case 1: {
-						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte()) % ID_POOL_SIZE]))
+				case 1:
+					{
+						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte())%ID_POOL_SIZE]))
 						if id != nil {
 							table.RemovePeer(*id)
 						}
 					}
-					case 2: {
-						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte()) % ID_POOL_SIZE]))
+				case 2:
+					{
+						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte())%ID_POOL_SIZE]))
 						if id != nil {
 							table.PeerExists(*id)
 						}
 					}
-					case 3: {
-						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte()) % ID_POOL_SIZE]))
+				case 3:
+					{
+						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte())%ID_POOL_SIZE]))
 						if id != nil {
 							table.FindClosestPeers(*id, 5)
 						}

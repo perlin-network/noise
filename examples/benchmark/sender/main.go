@@ -3,17 +3,17 @@ package main
 import _ "net/http/pprof"
 
 import (
-	"github.com/perlin-network/noise/network/builders"
-	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/examples/benchmark/messages"
 	"flag"
 	"fmt"
-	"runtime"
-	"os"
+	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/examples/benchmark/messages"
+	"github.com/perlin-network/noise/network/builders"
 	"log"
-	"runtime/pprof"
-	"os/signal"
 	"net/http"
+	"os"
+	"os/signal"
+	"runtime"
+	"runtime/pprof"
 	"time"
 )
 

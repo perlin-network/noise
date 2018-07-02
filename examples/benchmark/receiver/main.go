@@ -3,19 +3,19 @@ package main
 import _ "net/http/pprof"
 
 import (
+	"flag"
+	"fmt"
+	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/examples/benchmark/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
-	"github.com/perlin-network/noise/crypto"
-	"flag"
-	"github.com/perlin-network/noise/examples/benchmark/messages"
-	"fmt"
-	"time"
-	"runtime"
-	"os"
 	"log"
-	"runtime/pprof"
-	"os/signal"
 	"net/http"
+	"os"
+	"os/signal"
+	"runtime"
+	"runtime/pprof"
+	"time"
 )
 
 type BenchmarkPlugin struct {
@@ -77,7 +77,7 @@ func main() {
 	fmt.Println("Waiting for sender on kcp://localhost:3001.")
 
 	// Run loop every 1 second.
-	for _ = range time.Tick(1*time.Second) {
+	for _ = range time.Tick(1 * time.Second) {
 		fmt.Printf("Got %d messages.\n", state.counter)
 
 		state.counter = 0
