@@ -2,12 +2,13 @@ package topologies
 
 import (
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/examples/topologies/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
-	"testing"
-	"time"
 )
 
 const host = "127.0.0.1"
@@ -176,7 +177,7 @@ func setupNodes(ports []int) ([]*network.Network, []*MockProcessor, error) {
 	var processors []*MockProcessor
 
 	for _, port := range ports {
-		builder := &builders.NetworkBuilder{}
+		builder := builders.NewNetworkBuilder()
 		builder.SetKeys(crypto.RandomKeyPair())
 		builder.SetAddress(fmt.Sprintf("kcp://%s:%d", host, port))
 
@@ -186,7 +187,7 @@ func setupNodes(ports []int) ([]*network.Network, []*MockProcessor, error) {
 		processor := &MockProcessor{Mailbox: make(chan *messages.BasicMessage, 1)}
 		builder.AddProcessor((*messages.BasicMessage)(nil), processor)
 
-		node, err := builder.BuildNetwork()
+		node, err := builder.Build()
 		if err != nil {
 			return nil, nil, err
 		}
