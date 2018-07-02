@@ -33,7 +33,7 @@ func (builder *NetworkBuilder) SetAddress(address string) {
 	builder.address = address
 }
 
-// AddPluginWithPriority register a new plugin into the network.
+// AddPluginWithPriority register a new plugin onto the network with a set priority.
 func (builder *NetworkBuilder) AddPluginWithPriority(priority int, name string, plugin network.PluginInterface) error {
 	// Initialize plugin list if not exist.
 	if builder.plugins == nil {
@@ -44,11 +44,12 @@ func (builder *NetworkBuilder) AddPluginWithPriority(priority int, name string, 
 		return fmt.Errorf("plugin %s is already registered", name)
 	}
 
-	builder.plugins.Put(name, &network.PluginInfo{Priority: priority, Plugin: plugin})
+	builder.plugins.Put(name, priority, plugin)
 
 	return nil
 }
 
+// AddPlugin register a new plugin onto the network.
 func (builder *NetworkBuilder) AddPlugin(name string, plugin network.PluginInterface) error {
 	err := builder.AddPluginWithPriority(builder.pluginCount, name, plugin)
 	builder.pluginCount++
