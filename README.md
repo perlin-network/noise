@@ -10,17 +10,17 @@
 [5]: https://img.shields.io/badge/license-MIT-blue.svg  
 [6]: LICENSE  
   
-**noise** is an opinionated, easy-to-use P2P network stack for *decentralized applications, and cryptographic protocols* written in Go by Perlin Network.
+**noise** is an opinionated, easy-to-use P2P network stack for *decentralized applications, and cryptographic protocols* written in [Go](https://golang.org/) by Perlin Network.
   
 **noise** is made to be robust, developer-friendly, performant, secure, and cross-platform across multitudes of devices by making use of well-tested, production-grade dependencies.
   
 ## Features  
   
-- Real-time, bidirectional streaming between peers via. KCP/TCP and Protobufs.  
-- NaCL/Ed25519 scheme for peer identities and signatures.  
+- Real-time, bidirectional streaming between peers via. [KCP](https://github.com/xtaci/kcp-go)/TCP and [Protobufs](https://developers.google.com/protocol-buffers/).
+- [NaCL/Ed25519](https://tweetnacl.cr.yp.to/) scheme for peer identities and signatures.
 - Kademlia DHT-inspired peer discovery.  
 - Request/Response and Messaging RPC.  
-- Logging via. Google glog.  
+- Logging via. [glog](https://github.com/golang/glog) .
 - UPnP/NAT Port Forwarding.  
 - Plugin system.  
   
@@ -144,14 +144,14 @@ func (*Plugin) PeerDisconnect(client *PeerClient) {}
   
 They are registered through `builders.NetworkBuilder` through the following:  
   
-```  
+```go
 builder := builders.NewNetworkBuilder()  
   
 // Add plugin.  
 builder.AddPlugin(new(Plugin))  
 ```  
   
-All messages that pass through Noise are serialized/deserialized as protobufs.  
+All messages that pass through Noise are serialized/deserialized as [protobufs](https://developers.google.com/protocol-buffers/).
   
 Once generated, you may create a plugin and override the `Receive(ctx *MessageContext)` method to process specific incoming message types.  
   
