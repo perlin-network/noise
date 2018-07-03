@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+var profile = flag.String("profile", "", "write cpu profile to file")
 var port = flag.Uint("port", 0, "port to listen on")
 var receiver = "kcp://localhost:3001"
 
@@ -40,8 +40,8 @@ func main() {
 		os.Exit(0)
 	}()
 
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
+	if *profile != "" {
+		f, err := os.Create(*profile)
 		if err != nil {
 			log.Fatal(err)
 		}
