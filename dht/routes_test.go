@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"reflect"
 	"sort"
 	"sync"
@@ -56,7 +55,6 @@ func TestPeerExists(t *testing.T) {
 	if !routingTable.PeerExists(id1) {
 		t.Fatal("peerexists() targeting self failed")
 	}
-	fmt.Printf("%v", routingTable.GetPeers())
 	if !routingTable.PeerExists(id2) {
 		t.Fatal("peerexists() targeting others failed")
 	}
