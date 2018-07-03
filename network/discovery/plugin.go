@@ -71,11 +71,13 @@ func (state *Plugin) Cleanup(net *network.Network) {
 	// TODO: Save routing table?
 }
 
-func (state *Plugin) PeerDisconnect(id *peer.ID) {
+func (state *Plugin) PeerDisconnect(client *network.PeerClient) {
 	// Delete peer if in routing table.
-	if state.Routes.PeerExists(*id) {
-		state.Routes.RemovePeer(*id)
-
-		glog.Infof("Peer %s has disconnected.", id.Address)
+	if client.ID != nil {
+		if state.Routes.PeerExists(*client.ID) {
+			state.Routes.RemovePeer(*client.ID)
+	
+			glog.Infof("Peer %s has disconnected.", client.ID.Address)
+		}
 	}
 }
