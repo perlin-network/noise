@@ -151,9 +151,25 @@ builder := builders.NewNetworkBuilder()
 builder.AddPlugin(new(Plugin))  
 ```  
   
-All messages that pass through Noise are serialized/deserialized as [protobufs](https://developers.google.com/protocol-buffers/).
+A couple of plugins which **noise** comes with is: `discovery.Plugin` and `nat.Plugin`.
+
+```go
+// Enables peer discovery through the network. Check documentation for more info.
+builder.AddPlugin(new(discovery.Plugin))
+
+// Enables automated UPnP port forwarding for your node. Check docuemntation for more info.
+builder.AddPlugin(new(nat.Plugin))
+```
+
+Make sure to register `discovery.Plugin` if you want to make use of automatic peer discovery within your application.
+
+## Handling Messages
+
+All messages that pass through **noise** are serialized/deserialized as [protobufs](https://developers.google.com/protocol-buffers/).
   
-Once generated, you may create a plugin and override the `Receive(ctx *MessageContext)` method to process specific incoming message types.  
+Once you have modeled your messages as protobufs, you may process them being received over the network by creating a plugin and overriding the `Receive(ctx *MessageContext)` method to process specific incoming message types.
+
+Here's a simple example:
   
 ```go  
 // An example chat plugin that will print out a formatted chat message.  
@@ -171,7 +187,7 @@ func (state *ChatPlugin) Receive(ctx *network.MessageContext) error {
 builder.AddPlugin(new(ChatPlugin))
 ```  
   
-Through a `ctx *network.MessageContext`, you get access to a large number of methods to gain complete flexibility in how you handle/interact with your peer network. All messages are signed and verified on Noise.  
+Through a `ctx *network.MessageContext`, you get access to a large number of methods to gain complete flexibility in how you handle/interact with your peer network. All messages are signed and verified with one's cryptographic keys.
   
 ```go  
 // Reply with a message should the incoming message be a request.  
