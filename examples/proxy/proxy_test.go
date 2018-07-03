@@ -112,6 +112,7 @@ func ExampleProxy() {
 		builder.SetKeys(crypto.RandomKeyPair())
 		builder.SetAddress(addr)
 
+		// DisablePong will preserve the line topology
 		builder.AddPlugin(discovery.NewPlugin(&discovery.Config{
 			DisablePong: true,
 		}))
