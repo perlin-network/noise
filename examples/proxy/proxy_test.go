@@ -113,7 +113,9 @@ func ExampleProxy() {
 		builder.SetKeys(crypto.RandomKeyPair())
 		builder.SetAddress(addr)
 
-		builder.AddPlugin(new(discovery.Plugin))
+		builder.AddPlugin(discovery.NewPlugin(&discovery.Config{
+			DisablePong: true,
+		}))
 
 		plugins = append(plugins, new(ProxyPlugin))
 		builder.AddPlugin(plugins[i])
