@@ -76,7 +76,7 @@ msg := []byte{ ... }
 // Sign a message.  
 signature, err := keys.Sign(msg)  
 if err != nil {  
- panic(err)
+    panic(err)
 }
   
 glog.Info("Signature: ", hex.EncodeToString(signature))  
@@ -106,7 +106,7 @@ builder.SetKeys(keys)
 // Build the network.  
 net, err := builder.Build()  
 if err != nil {  
- panic()
+    panic(err)
 }
   
 // Have the server start listening for peers.  
@@ -160,8 +160,11 @@ Once generated, you may create a plugin and override the `Receive(ctx *MessageCo
 type ChatPlugin struct{ *network.Plugin }  
   
 func (state *ChatPlugin) Receive(ctx *network.MessageContext) error {  
- switch msg := ctx.Message().(type) { case *messages.ChatMessage: glog.Infof("<%s> %s", ctx.Client().ID.Address, msg.Message) }  
- return nil
+    switch msg := ctx.Message().(type) {
+        case *messages.ChatMessage:
+            glog.Infof("<%s> %s", ctx.Client().ID.Address, msg.Message)
+    }
+    return nil
 }
 ```  
   
@@ -171,7 +174,7 @@ Through a `ctx *network.MessageContext`, you get access to a large number of met
 // Reply with a message should the incoming message be a request.  
 err := ctx.Reply(message here)  
 if err != nil {  
- return err
+    return err
 }
   
 // Get an instance of your own nodes ID.  
