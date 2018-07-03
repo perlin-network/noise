@@ -166,6 +166,9 @@ func (state *ChatPlugin) Receive(ctx *network.MessageContext) error {
     }
     return nil
 }
+
+// Register plugin to *builders.NetworkBuilder.
+builder.AddPlugin(new(ChatPlugin))
 ```  
   
 Through a `ctx *network.MessageContext`, you get access to a large number of methods to gain complete flexibility in how you handle/interact with your peer network. All messages are signed and verified on Noise.  
