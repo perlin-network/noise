@@ -20,7 +20,7 @@ import (
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var port = flag.Uint("port", 0, "port to listen on")
-var receiver = "kcp://127.0.0.1:3001"
+var receiver = "kcp://localhost:3001"
 
 func main() {
 	go func() {
