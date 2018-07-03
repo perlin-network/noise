@@ -143,7 +143,7 @@ func ExampleProxy() {
 	}
 
 	// Wait for all nodes to finish discovering other peers.
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	fmt.Println("Nodes setup as a line topology.")
 
