@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/perlin-network/noise/network/discovery"
@@ -42,7 +41,7 @@ func (n *ProxyPlugin) Receive(ctx *network.MessageContext) error {
 	case *messages.ProxyMessage:
 		n.Mailbox <- msg
 
-		fmt.Fprintf(os.Stderr, "Node %d received a message from node %d.\n", ids[ctx.Network().Address], ids[ctx.Sender().Address])
+		//fmt.Fprintf(os.Stderr, "Node %d received a message from node %d.\n", ids[ctx.Network().Address], ids[ctx.Sender().Address])
 
 		if err := n.ProxyBroadcast(ctx.Network(), ctx.Sender(), msg); err != nil {
 			panic(err)
@@ -98,7 +97,7 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 // Messages are proxied to closer nodes using the Kademlia routing table.
 // TODO: Test broken.
 func ExampleProxy() {
-	numNodes := 15
+	numNodes := 5
 	sender := 0
 	target := numNodes - 1
 
@@ -151,8 +150,6 @@ func ExampleProxy() {
 	// Wait for all nodes to finish discovering other peers.
 	time.Sleep(1 * time.Second)
 
-	debugPeers(nodes)
-
 	fmt.Println("Nodes setup as a line topology.")
 
 	// Broadcast is an asynchronous call to send a message to other nodes
@@ -175,26 +172,13 @@ func ExampleProxy() {
 		} else {
 			fmt.Printf("Node %d successfully proxied a message to node %d.\n", sender, target)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(1 * time.Second):
 		fmt.Printf("Timed out attempting to receive message from Node %d.\n", sender)
 	}
-
-	debugPeers(nodes)
 
 	// Output:
 	// Nodes setup as a line topology.
 	// Node 0 sent out a message targeting for node 4.
 	// Node 0 successfully proxied a message to node 4.
 
-}
-
-func debugPeers(nodes []*network.Network) {
-	for i, node := range nodes {
-		var peers []string
-		node.Peers.Range(func(k string, c *network.PeerClient) bool {
-			peers = append(peers, k)
-			return true
-		})
-		fmt.Fprintf(os.Stderr, "Node %d peers=%v.\n", i, peers)
-	}
 }
