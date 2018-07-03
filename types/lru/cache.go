@@ -10,9 +10,9 @@ type cacheItem struct {
 	element *list.Element
 }
 
-// LRUCache is a simple concurrent-safe cache with a least-recently-used (LRU)
+// Cache is a simple concurrent-safe cache with a least-recently-used (LRU)
 // eviction policy.
-type LRUCache struct {
+type Cache struct {
 	order *list.List
 	items map[string]*cacheItem
 
@@ -22,12 +22,12 @@ type LRUCache struct {
 }
 
 // NewCache instantiates a new concurrent-safe LRU cache.
-func NewCache(limit int) *LRUCache {
-	return &LRUCache{order: list.New(), items: make(map[string]*cacheItem), limit: limit, mutex: &sync.Mutex{}}
+func NewCache(limit int) *Cache {
+	return &Cache{order: list.New(), items: make(map[string]*cacheItem), limit: limit, mutex: &sync.Mutex{}}
 }
 
 // Get returns a cached value for a key, and initializes it otherwise should it not exist.
-func (c *LRUCache) Get(key string, init func() (interface{}, error)) (interface{}, error) {
+func (c *Cache) Get(key string, init func() (interface{}, error)) (interface{}, error) {
 	c.mutex.Lock()
 	// Evict least recently used.
 	if c.order.Len() >= c.limit {
