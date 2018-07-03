@@ -32,7 +32,7 @@ func (state *BenchmarkPlugin) Receive(ctx *network.MessageContext) error {
 	return nil
 }
 
-var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+var profile = flag.String("profile", "", "write cpu profile to file")
 
 func main() {
 	go func() {
@@ -52,8 +52,8 @@ func main() {
 		os.Exit(0)
 	}()
 
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
+	if *profile != "" {
+		f, err := os.Create(*profile)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -77,7 +77,7 @@ func main() {
 	fmt.Println("Waiting for sender on kcp://localhost:3001.")
 
 	// Run loop every 1 second.
-	for _ = range time.Tick(1 * time.Second) {
+	for range time.Tick(1 * time.Second) {
 		fmt.Printf("Got %d messages.\n", state.counter)
 
 		state.counter = 0

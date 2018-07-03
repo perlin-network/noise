@@ -2,10 +2,13 @@ package network
 
 import (
 	"errors"
+	"github.com/perlin-network/noise/types/lru"
 	"net"
 	"net/url"
 	"strconv"
 )
+
+var domainLookupCache = lru.NewCache(1000)
 
 // FormatAddress properly marshals a destinations information into a string.
 func FormatAddress(protocol, host string, port uint16) string {
@@ -39,25 +42,29 @@ func ExtractAddressInfo(address string) (*AddressInfo, error) {
 
 // ToUnifiedHost resolves a domain host.
 func ToUnifiedHost(host string) (string, error) {
-	if net.ParseIP(host) == nil {
-		// Probably a domain name is provided.
-		addresses, err := net.LookupHost(host)
-		if err != nil {
-			return "", err
-		}
-		if len(addresses) == 0 {
-			return "", errors.New("no available addresses")
+	unifiedHost, err := domainLookupCache.Get(host, func() (interface{}, error) {
+		if net.ParseIP(host) == nil {
+			// Probably a domain name is provided.
+			addresses, err := net.LookupHost(host)
+			if err != nil {
+				return "", err
+			}
+			if len(addresses) == 0 {
+				return "", errors.New("no available addresses")
+			}
+
+			host = addresses[0]
+
+			// Hacky localhost fix.
+			if host == "::1" {
+				host = "127.0.0.1"
+			}
 		}
 
-		host = addresses[0]
+		return host, nil
+	})
 
-		// Hacky localhost fix.
-		if host == "::1" {
-			host = "127.0.0.1"
-		}
-	}
-
-	return host, nil
+	return unifiedHost.(string), err
 }
 
 // ToUnifiedAddress resolves and normalizes a network address.
