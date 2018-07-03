@@ -7,6 +7,7 @@ import (
 
 type cacheItem struct {
 	key     string
+	value interface{}
 	element *list.Element
 }
 
@@ -35,7 +36,7 @@ func (c *Cache) Get(key string, init func() (interface{}, error)) (interface{}, 
 		c.order.MoveToFront(item.element)
 
 		c.mutex.Unlock()
-		return item.element.Value, nil
+		return item.value, nil
 	}
 
 	// Evict least recently used.
@@ -48,14 +49,14 @@ func (c *Cache) Get(key string, init func() (interface{}, error)) (interface{}, 
 	// If key does not exist, push it to the front.
 	value, err := init()
 	if err != nil {
-
 		c.mutex.Unlock()
 		return nil, err
 	}
 
-	element := c.order.PushFront(value)
-	c.items[key] = &cacheItem{key: key, element: element}
+	item := &cacheItem{key: key, value: value}
+	item.element = c.order.PushFront(item)
+	c.items[key] = item
 
 	c.mutex.Unlock()
-	return element.Value, nil
+	return item.value, nil
 }
