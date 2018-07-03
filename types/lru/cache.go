@@ -29,12 +29,6 @@ func NewCache(limit int) *Cache {
 // Get returns a cached value for a key, and initializes it otherwise should it not exist.
 func (c *Cache) Get(key string, init func() (interface{}, error)) (interface{}, error) {
 	c.mutex.Lock()
-	// Evict least recently used.
-	if c.order.Len() >= c.limit {
-		// Pop last element.
-		item := c.order.Remove(c.order.Back()).(*cacheItem)
-		delete(c.items, item.key)
-	}
 
 	// If key exists, mark it as used and return it.
 	if item, exists := c.items[key]; exists {
@@ -42,6 +36,13 @@ func (c *Cache) Get(key string, init func() (interface{}, error)) (interface{}, 
 
 		c.mutex.Unlock()
 		return item.element.Value, nil
+	}
+
+	// Evict least recently used.
+	if c.order.Len() >= c.limit {
+		// Pop last element.
+		item := c.order.Remove(c.order.Back()).(*cacheItem)
+		delete(c.items, item.key)
 	}
 
 	// If key does not exist, push it to the front.

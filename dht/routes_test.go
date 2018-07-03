@@ -128,7 +128,7 @@ func TestFindClosestPeers(t *testing.T) {
 		testee = append(testee, peer)
 	}
 	if len(testee) != 2 {
-		t.Fatalf("findclosestpeers() error, size of return should be 3, but found %d", len(testee))
+		t.Fatalf("findclosestpeers() error, size of return should be 2, but found %d", len(testee))
 	}
 	answerKeys = []int{4, 2}
 	for i := 0; i <= 1; i++ {
