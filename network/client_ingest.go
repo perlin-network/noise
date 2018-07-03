@@ -7,6 +7,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/peer"
+	"github.com/perlin-network/noise/protobuf"
 	"github.com/xtaci/smux"
 )
 
@@ -94,6 +95,13 @@ func (n *Network) Ingest(conn net.Conn) {
 			// Check if the incoming message is a response.
 			if channel, exists := client.Requests.Load(msg.Nonce); exists && msg.Nonce > 0 {
 				channel <- ptr.Message
+				return
+			}
+
+			switch ptr.Message.(type) {
+			case *protobuf.StreamPacket:
+				pkt := ptr.Message.(*protobuf.StreamPacket)
+				client.handleStreamPacket(pkt.Data)
 				return
 			}
 
