@@ -10,7 +10,7 @@
 [5]: https://img.shields.io/badge/license-MIT-blue.svg  
 [6]: LICENSE  
   
-**noise** is an opinionated, easy-to-use P2P network stack for *decentralized applications, cryptographic protocols, games, and file sharing platforms* written in Go by Perlin Network.  
+**noise** is an opinionated, easy-to-use P2P network stack for *decentralized applications, and cryptographic protocols* written in Go by Perlin Network.
   
 **noise** is made to be robust, developer-friendly, performant, secure, and cross-platform across multitudes of devices by making use of well-tested, production-grade dependencies.
   
@@ -76,7 +76,8 @@ msg := []byte{ ... }
 // Sign a message.  
 signature, err := keys.Sign(msg)  
 if err != nil {  
- panic(err)}  
+ panic(err)
+}
   
 glog.Info("Signature: ", hex.EncodeToString(signature))  
   
@@ -105,7 +106,8 @@ builder.SetKeys(keys)
 // Build the network.  
 net, err := builder.Build()  
 if err != nil {  
- panic()}  
+ panic()
+}
   
 // Have the server start listening for peers.  
 go net.Listen()  
@@ -159,7 +161,8 @@ type ChatPlugin struct{ *network.Plugin }
   
 func (state *ChatPlugin) Receive(ctx *network.MessageContext) error {  
  switch msg := ctx.Message().(type) { case *messages.ChatMessage: glog.Infof("<%s> %s", ctx.Client().ID.Address, msg.Message) }  
- return nil}  
+ return nil
+}
 ```  
   
 Through a `ctx *network.MessageContext`, you get access to a large number of methods to gain complete flexibility in how you handle/interact with your peer network. All messages are signed and verified on Noise.  
@@ -168,7 +171,8 @@ Through a `ctx *network.MessageContext`, you get access to a large number of met
 // Reply with a message should the incoming message be a request.  
 err := ctx.Reply(message here)  
 if err != nil {  
- return err}  
+ return err
+}
   
 // Get an instance of your own nodes ID.  
 self := ctx.Self()  
@@ -191,12 +195,18 @@ In Perlin, we love reaching out to the open-source community and are open to acc
   
 For all code contributions, please ensure they adhere as close as possible to the following guidelines:  
   
-- Strictly follows the formatting and styling rules denoted [here](https://github.com/golang/go/wiki/CodeReviewComments).  
-- Commit messages are in format `module_name: Change typed down as a sentence.`. This allows our maintainers and everyone else to know what specific code changes you wish to address.  
-    - Example: `network: Added in message broadcasting methods.`  
-    - Example: `builders/network: Added in new option to address PoW in generating peer IDs.`  
-- Consider backwards compatibility. New methods are perfectly fine, though changing the `builders.NetworkBuilder` pattern radically for example should only be done should there be a good reason.  
+1. **Strictly** follows the formatting and styling rules denoted [here](https://github.com/golang/go/wiki/CodeReviewComments).
+2. Commit messages are in format `module_name: Change typed down as a sentence.` This allows our maintainers and everyone else to know what specific code changes you wish to address.
+    - `network: Added in message broadcasting methods.`
+    - `builders/network: Added in new option to address PoW in generating peer IDs.`
+3. Consider backwards compatibility. New methods are perfectly fine, though changing the `builders.NetworkBuilder` pattern radically for example should only be done should there be a good reason.
   
-If you love the work we are doing, want to work full-time with us, or are interested in getting paid for working on open-source projects: we're hiring.
+If you...
+
+1. love the work we are doing,
+2. want to work full-time with us,
+3. or are interested in getting paid for working on open-source projects
+
+... **we're hiring**.
   
 To grab our attention, just make a PR and start contributing.
