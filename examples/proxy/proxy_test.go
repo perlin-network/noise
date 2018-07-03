@@ -7,6 +7,7 @@ import (
 	"github.com/perlin-network/noise/network/discovery"
 
 	"errors"
+
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/examples/proxy/messages"
 	"github.com/perlin-network/noise/network"
@@ -39,6 +40,8 @@ func (n *ProxyPlugin) Receive(ctx *network.MessageContext) error {
 	switch msg := ctx.Message().(type) {
 	case *messages.ProxyMessage:
 		n.Mailbox <- msg
+
+		//fmt.Fprintf(os.Stderr, "Node %d received a message from node %d.\n", ids[ctx.Network().Address], ids[ctx.Sender().Address])
 
 		if err := n.ProxyBroadcast(ctx.Network(), ctx.Sender(), msg); err != nil {
 			panic(err)
@@ -109,7 +112,10 @@ func ExampleProxy() {
 		builder.SetKeys(crypto.RandomKeyPair())
 		builder.SetAddress(addr)
 
-		builder.AddPlugin(new(discovery.Plugin))
+		// DisablePong will preserve the line topology
+		builder.AddPlugin(&discovery.Plugin{
+			DisablePong: true,
+		})
 
 		plugins = append(plugins, new(ProxyPlugin))
 		builder.AddPlugin(plugins[i])

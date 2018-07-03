@@ -1,16 +1,21 @@
 package discovery
 
 import (
+	"strings"
+
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
-	"strings"
 )
 
 type Plugin struct {
 	*network.Plugin
+
+	DisablePing   bool
+	DisablePong   bool
+	DisableLookup bool
 
 	Routes *dht.RoutingTable
 }
@@ -29,6 +34,10 @@ func (state *Plugin) Receive(ctx *network.MessageContext) error {
 	// Handle RPC.
 	switch msg := ctx.Message().(type) {
 	case *protobuf.Ping:
+		if state.DisablePing {
+			break
+		}
+
 		// Send pong to peer.
 		err := ctx.Reply(&protobuf.Pong{})
 
@@ -37,6 +46,10 @@ func (state *Plugin) Receive(ctx *network.MessageContext) error {
 			return err
 		}
 	case *protobuf.Pong:
+		if state.DisablePong {
+			break
+		}
+
 		peers := FindNode(ctx.Network(), ctx.Sender(), dht.BucketSize)
 
 		// Update routing table w/ closest peers to self.
@@ -46,6 +59,10 @@ func (state *Plugin) Receive(ctx *network.MessageContext) error {
 
 		glog.Infof("bootstrapped w/ peer(s): %s.", strings.Join(state.Routes.GetPeerAddresses(), ", "))
 	case *protobuf.LookupNodeRequest:
+		if state.DisableLookup {
+			break
+		}
+
 		// Prepare response.
 		response := &protobuf.LookupNodeResponse{}
 
