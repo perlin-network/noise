@@ -128,7 +128,7 @@ func TestFindClosestPeers(t *testing.T) {
 		testee = append(testee, peer)
 	}
 	if len(testee) != 2 {
-		t.Fatalf("findclosestpeers() error, size of return should be 3, but found %d", len(testee))
+		t.Fatalf("findclosestpeers() error, size of return should be 2, but found %d", len(testee))
 	}
 	answerKeys = []int{4, 2}
 	for i := 0; i <= 1; i++ {
@@ -141,18 +141,18 @@ func TestFindClosestPeers(t *testing.T) {
 }
 
 func TestRoutingTable(t *testing.T) {
-	const ID_POOL_SIZE = 16
-	const CONCURRENT_COUNT = 16
+	const IDPoolSize = 16
+	const concurrentCount = 16
 
 	pk0 := MustReadRand(32)
-	ids := make([]unsafe.Pointer, ID_POOL_SIZE) // Element type: *peer.ID
+	ids := make([]unsafe.Pointer, IDPoolSize) // Element type: *peer.ID
 
 	table := CreateRoutingTable(peer.CreateID("000", pk0))
 
 	wg := &sync.WaitGroup{}
-	wg.Add(CONCURRENT_COUNT)
+	wg.Add(concurrentCount)
 
-	for i := 0; i < CONCURRENT_COUNT; i++ {
+	for i := 0; i < concurrentCount; i++ {
 		go func() {
 			defer func() {
 				wg.Done()
@@ -170,25 +170,25 @@ func TestRoutingTable(t *testing.T) {
 						id := peer.CreateID(addr, pk)
 						table.Update(id)
 
-						atomic.StorePointer(&ids[int(RandByte())%ID_POOL_SIZE], unsafe.Pointer(&id))
+						atomic.StorePointer(&ids[int(RandByte())%IDPoolSize], unsafe.Pointer(&id))
 					}
 				case 1:
 					{
-						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte())%ID_POOL_SIZE]))
+						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte())%IDPoolSize]))
 						if id != nil {
 							table.RemovePeer(*id)
 						}
 					}
 				case 2:
 					{
-						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte())%ID_POOL_SIZE]))
+						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte())%IDPoolSize]))
 						if id != nil {
 							table.PeerExists(*id)
 						}
 					}
 				case 3:
 					{
-						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte())%ID_POOL_SIZE]))
+						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte())%IDPoolSize]))
 						if id != nil {
 							table.FindClosestPeers(*id, 5)
 						}
