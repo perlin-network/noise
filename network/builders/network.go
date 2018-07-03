@@ -2,25 +2,26 @@ package builders
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
-	"strconv"
 
-	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
 )
 
 // NetworkBuilder is a Address->processors struct
 type NetworkBuilder struct {
-	keys *crypto.KeyPair
-	host string
-	port uint16
+	keys    *crypto.KeyPair
+	address string
 
-	// map[string]MessageProcessor
-	processors *network.StringMessageProcessorSyncMap
+	plugins     *network.PluginList
+	pluginCount int
+}
+
+// NewNetworkBuilder lets you configure a network to build
+func NewNetworkBuilder() *NetworkBuilder {
+	return &NetworkBuilder{}
 }
 
 // SetKeys pair created from crypto.KeyPair
@@ -28,72 +29,67 @@ func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
 	builder.keys = pair
 }
 
-// SetHost of NetworkBuilder e.g. "127.0.0.1"
-func (builder *NetworkBuilder) SetHost(host string) {
-	builder.host = host
+// SetAddress sets the host address for the network.
+func (builder *NetworkBuilder) SetAddress(address string) {
+	builder.address = address
 }
 
-// SetPort of NetworkBuilder
-func (builder *NetworkBuilder) SetPort(port uint16) {
-	builder.port = port
-}
-
-// AddProcessor for a given message,
-// Example: builder.AddProcessor((*protobuf.LookupNodeRequest)(nil), MessageProcessor{})
-func (builder *NetworkBuilder) AddProcessor(message proto.Message, processor network.MessageProcessor) {
-	// Initialize map if not exist.
-	if builder.processors == nil {
-		builder.processors = &network.StringMessageProcessorSyncMap{}
+// AddPluginWithPriority register a new plugin onto the network with a set priority.
+func (builder *NetworkBuilder) AddPluginWithPriority(priority int, plugin network.PluginInterface) error {
+	// Initialize plugin list if not exist.
+	if builder.plugins == nil {
+		builder.plugins = network.NewPluginList()
 	}
 
-	name := reflect.TypeOf(message).String()
-
-	// Store pointers to message processor only.
-	if value := reflect.ValueOf(message); value.Kind() == reflect.Ptr && value.Pointer() == 0 {
-		builder.processors.Store(name, processor)
-	} else {
-		glog.Fatal("message must be nil")
+	if !builder.plugins.Put(priority, plugin) {
+		return fmt.Errorf("plugin %s is already registered", reflect.TypeOf(plugin).String())
 	}
+
+	return nil
 }
 
-// BuildNetwork verifies all parameters of the network and returns either an error due to
+// AddPlugin register a new plugin onto the network.
+func (builder *NetworkBuilder) AddPlugin(plugin network.PluginInterface) error {
+	err := builder.AddPluginWithPriority(builder.pluginCount, plugin)
+	if err == nil {
+		builder.pluginCount++
+	}
+	return err
+}
+
+// Build verifies all parameters of the network and returns either an error due to
 // misconfiguration, or a noise.network.Network.
-func (builder *NetworkBuilder) BuildNetwork() (*network.Network, error) {
+func (builder *NetworkBuilder) Build() (*network.Network, error) {
 	if builder.keys == nil {
-		return nil, errors.New("cryptography keys not provided to Network; cannot create node Id")
+		return nil, errors.New("cryptography keys not provided to Network; cannot create node ID")
 	}
 
-	if len(builder.host) == 0 {
+	if len(builder.address) == 0 {
 		return nil, errors.New("Network requires public server IP for peers to connect to")
 	}
 
-	if builder.port <= 0 || builder.port >= 65535 {
-		return nil, errors.New("port to listen for peers on must be within the range (0, 65535)")
+	// Initialize plugin list if not exist.
+	if builder.plugins == nil {
+		builder.plugins = network.NewPluginList()
+	} else {
+		builder.plugins.SortByPriority()
 	}
 
-	// Initialize map if not exist.
-	if builder.processors == nil {
-		builder.processors = &network.StringMessageProcessorSyncMap{}
-	}
-
-	unifiedHost, err := network.ToUnifiedHost(builder.host)
+	unifiedAddress, err := network.ToUnifiedAddress(builder.address)
 	if err != nil {
 		return nil, err
 	}
 
-	id := peer.CreateID(unifiedHost+":"+strconv.Itoa(int(builder.port)), builder.keys.PublicKey)
+	id := peer.CreateID(unifiedAddress, builder.keys.PublicKey)
 
 	net := &network.Network{
-		Keys: builder.keys,
-		Host: unifiedHost,
-		Port: builder.port,
-		ID:   id,
+		ID:      id,
+		Keys:    builder.keys,
+		Address: unifiedAddress,
 
-		Processors: builder.processors,
+		Plugins: builder.plugins,
 
-		Routes: dht.CreateRoutingTable(id),
-
-		Peers: &network.StringPeerClientSyncMap{},
+		Peers: new(network.StringPeerClientSyncMap),
 
 		Listening: make(chan struct{}),
 	}

@@ -3,13 +3,13 @@ package network
 import (
 	"fmt"
 	"math/rand"
-	"strconv"
+	"net"
+	"net/url"
 	"strings"
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
@@ -18,20 +18,15 @@ import (
 
 // Network represents the current networking state for this node.
 type Network struct {
-	// Routing table.
-	Routes *dht.RoutingTable
-
 	// Node's keypair.
 	Keys *crypto.KeyPair
 
-	// Node's Network information.
-	// The Address is `Host:Port`.
-	Host string
-	Port uint16
+	// Full address to listen on. `protocol://host:port`
+	Address string
 
-	// Map of incomingStream message processors for the Network.
-	// map[string]MessageProcessor
-	Processors *StringMessageProcessorSyncMap
+	// Map of plugins registered to the network.
+	// map[string]Plugin
+	Plugins *PluginList
 
 	// Node's cryptographic ID.
 	ID peer.ID
@@ -44,22 +39,54 @@ type Network struct {
 	Listening chan struct{}
 }
 
-// Address returns a formated host:port string
-func (n *Network) Address() string {
-	return n.Host + ":" + strconv.Itoa(int(n.Port))
+func (n *Network) GetPort() uint16 {
+	info, err := ExtractAddressInfo(n.Address)
+	if err != nil {
+		glog.Fatal(err)
+	}
+
+	return info.Port
 }
 
 // Listen starts listening for peers on a port.
 func (n *Network) Listen() {
-	listener, err := kcp.ListenWithOptions(":"+strconv.Itoa(int(n.Port)), nil, 10, 3)
+	// Handle 'network starts listening' callback for plugins.
+	n.Plugins.Each(func(plugin PluginInterface) {
+		plugin.Startup(n)
+	})
+
+	// Handle 'network stops listening' callback for plugins.
+	defer func() {
+		n.Plugins.Each(func(plugin PluginInterface) {
+			plugin.Cleanup(n)
+		})
+	}()
+
+	urlInfo, err := url.Parse(n.Address)
 	if err != nil {
 		glog.Fatal(err)
-		return
+	}
+
+	var listener net.Listener
+
+	if urlInfo.Scheme == "kcp" {
+		listener, err = kcp.ListenWithOptions(urlInfo.Host, nil, 10, 3)
+		if err != nil {
+			glog.Fatal(err)
+		}
+	} else if urlInfo.Scheme == "tcp" {
+		listener, err = net.Listen("tcp", urlInfo.Host)
+	} else {
+		err = errors.New("Invalid scheme: " + urlInfo.Scheme)
+	}
+
+	if err != nil {
+		glog.Fatal(err)
 	}
 
 	close(n.Listening)
 
-	glog.Infof("Listening for peers on port %d.", n.Port)
+	glog.Infof("Listening for peers on %s.", n.Address)
 
 	// Handle new clients.
 	for {
@@ -83,7 +110,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		return nil, err
 	}
 
-	if address == n.Address() {
+	if address == n.Address {
 		return nil, errors.New("peer should not dial itself")
 	}
 
@@ -106,7 +133,7 @@ func (n *Network) BlockUntilListening() {
 func (n *Network) Bootstrap(addresses ...string) {
 	n.BlockUntilListening()
 
-	addresses = FilterPeers(n.Host, n.Port, addresses)
+	addresses = FilterPeers(n.Address, addresses)
 
 	for _, address := range addresses {
 		client, err := n.Dial(address)
@@ -146,7 +173,7 @@ func (n *Network) Broadcast(message proto.Message) {
 		err := client.Tell(message)
 
 		if err != nil {
-			glog.Warningf("Failed to send message to peer %v [err=%s]", client.Id, err)
+			glog.Warningf("Failed to send message to peer %v [err=%s]", client.ID, err)
 		}
 
 		return true
@@ -156,34 +183,14 @@ func (n *Network) Broadcast(message proto.Message) {
 // BroadcastByAddresses broadcasts a message to a set of peer clients denoted by their addresses.
 func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
 	for _, address := range addresses {
-		if client, ok := n.Peers.Load(address); ok {
-			err := client.Tell(message)
-
-			if err != nil {
-				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
-			}
-
-			client.Close()
-		} else {
-			glog.Warningf("Failed to send message to peer %s; peer does not exist.", address)
-		}
+		n.Tell(address, message)
 	}
 }
 
-// BroadcastByIds broadcasts a message to a set of peer clients denoted by their peer IDs.
-func (n *Network) BroadcastByIds(message proto.Message, ids ...peer.ID) {
+// BroadcastByIDs broadcasts a message to a set of peer clients denoted by their peer IDs.
+func (n *Network) BroadcastByIDs(message proto.Message, ids ...peer.ID) {
 	for _, id := range ids {
-		if client, ok := n.Peers.Load(id.Address); ok {
-			err := client.Tell(message)
-
-			if err != nil {
-				glog.Warningf("Failed to send message to peer %s [err=%s]", client.Id.Address, err)
-			}
-
-			client.Close()
-		} else {
-			glog.Warningf("Failed to send message to peer %s; peer does not exist.", id)
-		}
+		n.Tell(id.Address, message)
 	}
 }
 
@@ -193,7 +200,7 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	var addresses []string
 
 	n.Peers.Range(func(key string, client *PeerClient) bool {
-		addresses = append(addresses, client.Id.Address)
+		addresses = append(addresses, client.ID.Address)
 
 		// Limit total amount of addresses in case we have a lot of peers.
 		if len(addresses) > K*3 {
@@ -213,4 +220,27 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	}
 
 	n.BroadcastByAddresses(message, addresses[:K]...)
+}
+
+// Tell asynchronously emit a message to a denoted target address.
+func (n *Network) Tell(targetAddress string, msg proto.Message) error {
+	if client, err := n.Client(targetAddress); err == nil {
+		err := client.Tell(msg)
+
+		if err != nil {
+			return fmt.Errorf("failed to send message to peer %s [err=%s]", targetAddress, err)
+		}
+	} else {
+		return fmt.Errorf("failed to send message to peer %s; peer does not exist. [err=%s]", targetAddress, err)
+	}
+
+	return nil
+}
+
+// Plugin returns a plugins proxy interface should it be registered with the
+// network. The second returning parameter is false otherwise.
+//
+// Example: network.Plugin((*Plugin)(nil))
+func (n *Network) Plugin(key interface{}) (PluginInterface, bool) {
+	return n.Plugins.Get(key)
 }

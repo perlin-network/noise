@@ -3,23 +3,31 @@ package basic
 import (
 	"flag"
 	"fmt"
+	"time"
+
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
-	"time"
 )
 
-// BasicMessageProcessor buffers all messages into a mailbox for this test.
-type BasicMessageProcessor struct {
+// BasicPlugin buffers all messages into a mailbox for this test.
+type BasicPlugin struct {
+	*network.Plugin
 	Mailbox chan *messages.BasicMessage
 }
 
-func (state *BasicMessageProcessor) Handle(ctx *network.MessageContext) error {
-	message := ctx.Message().(*messages.BasicMessage)
-	state.Mailbox <- message
+func (state *BasicPlugin) Startup(net *network.Network) {
+	// Create mailbox
+	state.Mailbox = make(chan *messages.BasicMessage, 1)
+}
 
+func (state *BasicPlugin) Receive(ctx *network.MessageContext) error {
+	switch msg := ctx.Message().(type) {
+	case *messages.BasicMessage:
+		state.Mailbox <- msg
+	}
 	return nil
 }
 
@@ -34,20 +42,19 @@ func ExampleBasic() {
 	startPort := 5000
 
 	var nodes []*network.Network
-	var processors []*BasicMessageProcessor
+	var plugins []*BasicPlugin
 
 	for i := 0; i < numNodes; i++ {
-		builder := &builders.NetworkBuilder{}
+		builder := builders.NewNetworkBuilder()
 		builder.SetKeys(crypto.RandomKeyPair())
-		builder.SetHost(host)
-		builder.SetPort(uint16(startPort + i))
+		builder.SetAddress(network.FormatAddress("kcp", host, uint16(startPort+i)))
 
-		discovery.BootstrapPeerDiscovery(builder)
+		builder.AddPlugin(new(discovery.Plugin))
 
-		processors = append(processors, &BasicMessageProcessor{Mailbox: make(chan *messages.BasicMessage, 1)})
-		builder.AddProcessor((*messages.BasicMessage)(nil), processors[i])
+		plugins = append(plugins, new(BasicPlugin))
+		builder.AddPlugin(plugins[i])
 
-		node, err := builder.BuildNetwork()
+		node, err := builder.Build()
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -56,7 +63,7 @@ func ExampleBasic() {
 
 		// Bootstrap to Node 0.
 		if i != 0 {
-			node.Bootstrap(nodes[0].Address())
+			node.Bootstrap(nodes[0].Address)
 		}
 
 		nodes = append(nodes, node)
@@ -74,7 +81,7 @@ func ExampleBasic() {
 	// Check if message was received by other nodes.
 	for i := 1; i < len(nodes); i++ {
 		select {
-		case received := <-processors[i].Mailbox:
+		case received := <-plugins[i].Mailbox:
 			if received.Message != expected {
 				fmt.Printf("Expected message %s to be received by node %d but got %v\n", expected, i, received.Message)
 			} else {

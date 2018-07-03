@@ -14,11 +14,14 @@ import (
 	"github.com/perlin-network/noise/network/discovery"
 )
 
-type ChatMessageProcessor struct{}
+type ChatPlugin struct{ *network.Plugin }
 
-func (c *ChatMessageProcessor) Handle(ctx *network.MessageContext) error {
-	message := ctx.Message().(*messages.ChatMessage)
-	glog.Infof("<%s> %s", ctx.Client().Id.Address, message.Message)
+func (state *ChatPlugin) Receive(ctx *network.MessageContext) error {
+	switch msg := ctx.Message().(type) {
+	case *messages.ChatMessage:
+		glog.Infof("<%s> %s", ctx.Client().ID.Address, msg.Message)
+	}
+
 	return nil
 }
 
@@ -29,11 +32,13 @@ func main() {
 	// process other flags
 	portFlag := flag.Int("port", 3000, "port to listen to")
 	hostFlag := flag.String("host", "localhost", "host to listen to")
+	protocolFlag := flag.String("protocol", "kcp", "protocol to use (kcp/tcp)")
 	peersFlag := flag.String("peers", "", "peers to connect to")
 	flag.Parse()
 
 	port := uint16(*portFlag)
 	host := *hostFlag
+	protocol := *protocolFlag
 	peers := strings.Split(*peersFlag, ",")
 
 	keys := crypto.RandomKeyPair()
@@ -41,17 +46,17 @@ func main() {
 	glog.Infof("Private Key: %s", keys.PrivateKeyHex())
 	glog.Infof("Public Key: %s", keys.PublicKeyHex())
 
-	builder := &builders.NetworkBuilder{}
+	builder := builders.NewNetworkBuilder()
 	builder.SetKeys(keys)
-	builder.SetHost(host)
-	builder.SetPort(port)
+	builder.SetAddress(network.FormatAddress(protocol, host, port))
 
-	// Register peer discovery RPC handlers.
-	discovery.BootstrapPeerDiscovery(builder)
+	// Register peer discovery plugin.
+	builder.AddPlugin(new(discovery.Plugin))
 
-	builder.AddProcessor((*messages.ChatMessage)(nil), new(ChatMessageProcessor))
+	// Add custom chat plugin.
+	builder.AddPlugin(new(ChatPlugin))
 
-	net, err := builder.BuildNetwork()
+	net, err := builder.Build()
 	if err != nil {
 		glog.Fatal(err)
 		return
@@ -72,7 +77,7 @@ func main() {
 			continue
 		}
 
-		glog.Infof("<%s> %s", net.Address(), input)
+		glog.Infof("<%s> %s", net.Address, input)
 
 		net.Broadcast(&messages.ChatMessage{Message: input})
 	}

@@ -1,12 +1,13 @@
 package network
 
 import (
+	"net"
+	"sync"
+
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/peer"
 	"github.com/xtaci/smux"
-	"net"
-	"reflect"
 )
 
 // Ingest handles peer registration and processes incoming message streams consisting of
@@ -21,6 +22,8 @@ func (n *Network) Ingest(conn net.Conn) {
 	defer session.Close()
 
 	var client *PeerClient
+	var clientInit sync.Once
+	var initError error
 
 	// Handle new streams and process their incoming messages.
 	for {
@@ -45,39 +48,40 @@ func (n *Network) Ingest(conn net.Conn) {
 				return
 			}
 
-			// Create a client if not exists.
-			if client == nil {
-				client, err = n.Client(msg.Sender.Address)
-
-				if err != nil {
-					glog.Warning(err)
-					return
-				}
-			}
-
-			// Derive, set the peer ID, connect to the peer, and additionally
-			// store the peer.
 			id := peer.ID(*msg.Sender)
 
-			if client.Id == nil {
-				client.Id = &id
-
-				err := client.establishConnection(id.Address)
-
-				// Could not connect to peer; disconnect.
+			clientInit.Do(func() {
+				var err error
+				if client != nil {
+					glog.Fatal("Invalid state (1)")
+				}
+				client, err = n.Client(msg.Sender.Address)
 				if err != nil {
-					glog.Errorf("Failed to connect to peer %s err=[%+v]\n", id.Address, err)
+					initError = err
 					return
 				}
-			} else if !client.Id.Equals(id) {
-				// Peer sent message with a completely different ID (???)
-				glog.Errorf("Message signed by peer %s but client is %s", client.Id.Address, id.Address)
+				client.ID = &id
+				err = client.establishConnection(id.Address)
+				if err != nil {
+					glog.Errorf("Failed to connect to peer %s err=[%+v]\n", id.Address, err)
+					initError = err
+					return
+				}
+			})
+
+			if initError != nil {
+				glog.Warning(initError)
 				return
 			}
 
-			// Update routing table w/ peer's ID.
-			if client.Network.Routes != nil {
-				client.Network.Routes.Update(id)
+			if client == nil {
+				glog.Fatal("Invalid state (2)")
+			}
+
+			if !client.ID.Equals(id) {
+				// Peer sent message with a completely different ID (???)
+				glog.Errorf("Message signed by peer %s but client is %s", client.ID.Address, id.Address)
+				return
 			}
 
 			// Unmarshal protobuf.
@@ -93,28 +97,21 @@ func (n *Network) Ingest(conn net.Conn) {
 				return
 			}
 
-			// Check if the received request has a message processor. If exists, execute it.
-			name := reflect.TypeOf(ptr.Message).String()
-			processor, exists := client.Network.Processors.Load(name)
+			// Create message execution context.
+			ctx := new(MessageContext)
+			ctx.client = client
+			ctx.stream = stream
+			ctx.message = ptr.Message
+			ctx.nonce = msg.Nonce
 
-			if exists {
-				processor := processor.(MessageProcessor)
+			// Execute 'on receive message' callback for all plugins.
+			n.Plugins.Each(func(plugin PluginInterface) {
+				err := plugin.Receive(ctx)
 
-				// Create message execution context.
-				ctx := new(MessageContext)
-				ctx.client = client
-				ctx.stream = stream
-				ctx.message = ptr.Message
-				ctx.nonce = msg.Nonce
-
-				// Process request.
-				err := processor.Handle(ctx)
 				if err != nil {
-					glog.Errorf("An error occurred handling %x: %x", name, err)
+					glog.Error(err)
 				}
-			} else {
-				glog.Warning("Unknown message type received:", name)
-			}
+			})
 		}(stream)
 	}
 }

@@ -8,9 +8,11 @@ Noise follows the DRY (don't-repeat-yourself) principle for its choices of techn
 
 ## Features
 
-- Real-time, bidirectional streaming between peers via. gRPC and Protobufs.
+- Real-time, bidirectional streaming between peers via. KCP/TCP and Protobufs.
 - NaCL/Ed25519 scheme for peer identities and signatures.
-- Kademlia-inspired peer discovery.
+- Kademlia DHT-inspired peer discovery.
+- Request/Response and Messaging RPC.
+- UPnP/NAT Port Forwarding.
 
 ## Usage
 
@@ -18,11 +20,16 @@ Noise follows the DRY (don't-repeat-yourself) principle for its choices of techn
 # install vgo tooling
 go get -u golang.org/x/vgo
 
-# download the dependencies to vendor folder and run main.go
+# download the dependencies to vendor folder
 vgo mod -vendor
+
+# generate necessary code files
+vgo generate ./...
+
+# run an example
 [terminal 1] vgo run main.go -port 3000
-[terminal 2] vgo run main.go -port 3001 peers localhost:3000
-[terminal 3] vgo run main.go -port 3002 peers localhost:3000
+[terminal 2] vgo run main.go -port 3001 peers kcp://localhost:3000
+[terminal 3] vgo run main.go -port 3002 peers kcp://localhost:3000
 
 # build and run the main.go noise binary
 vgo build
