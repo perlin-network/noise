@@ -24,17 +24,35 @@ type PeerClient struct {
 	Network *Network
 
 	ID *peer.ID
+	Address string
 
 	session *smux.Session
 	sessionInitMutex sync.Mutex
 
 	Requests     *Uint64MessageChannelSyncMap
 	RequestNonce uint64
+
+	stream StreamState
+}
+
+type StreamState struct {
+	sync.Mutex
+	buffer []byte
+	dataAvailable chan struct{}
+	closed bool
 }
 
 // createPeerClient creates a stub peer client.
 func createPeerClient(network *Network) *PeerClient {
-	return &PeerClient{Network: network, Requests: new(Uint64MessageChannelSyncMap), RequestNonce: 0}
+	return &PeerClient{
+		Network: network,
+		Requests: new(Uint64MessageChannelSyncMap),
+		RequestNonce: 0,
+		stream: StreamState {
+			buffer: make([]byte, 0),
+			dataAvailable: make(chan struct{}),
+		},
+	}
 }
 
 // nextNonce gets the next most available request nonce. TODO: Have nonce recycled over time.
@@ -83,20 +101,29 @@ func (c *PeerClient) establishConnection(address string) error {
 
 	// Cache the peer's client.
 	c.Network.Peers.Store(address, c)
+	c.Address = address
+
+	c.Network.Plugins.Each(func(plugin PluginInterface) {
+		plugin.PeerConnect(c)
+	})
 
 	return nil
 }
 
 // Close stops all sessions/streams and cleans up the nodes
 // routing table. Errors if session fails to close.
-func (c *PeerClient) Close() {
+func (c *PeerClient) Close() error {
+	c.stream.Lock()
+	c.stream.closed = true
+	c.stream.Unlock()
+
+	// Handle 'on peer disconnect' callback for plugins.
+	c.Network.Plugins.Each(func(plugin PluginInterface) {
+		plugin.PeerDisconnect(c)
+	})
+
 	// Disconnect the user.
 	if c.ID != nil {
-		// Handle 'on peer disconnect' callback for plugins.
-		c.Network.Plugins.Each(func(plugin PluginInterface) {
-			plugin.PeerDisconnect(c.ID)
-		})
-
 		// Delete peer from network.
 		c.Network.Peers.Delete(c.ID.Address)
 	}
@@ -107,6 +134,8 @@ func (c *PeerClient) Close() {
 			glog.Error(err)
 		}
 	}
+
+	return nil
 }
 
 // prepareMessage marshals a message into a proto.Tell and signs it with this
@@ -240,4 +269,87 @@ func (c *PeerClient) OpenStream() (*smux.Stream, error) {
 	}
 
 	return stream, nil
+}
+
+func (c *PeerClient) handleStreamPacket(pkt []byte) {
+	c.stream.Lock()
+	wasEmpty := len(c.stream.buffer) == 0
+	c.stream.buffer = append(c.stream.buffer, pkt...)
+	c.stream.Unlock()
+
+	if wasEmpty {
+		select {
+		case c.stream.dataAvailable <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// Implement net.Conn.
+func (c *PeerClient) Read(out []byte) (int, error) {
+	for {
+		c.stream.Lock()
+		closed := c.stream.closed
+		n := copy(out, c.stream.buffer)
+		c.stream.buffer = c.stream.buffer[n:]
+		c.stream.Unlock()
+
+		if closed {
+			return n, errors.New("closed")
+		}
+
+		if n == 0 {
+			select {
+			case <-c.stream.dataAvailable:
+			case <-time.After(1 * time.Second):
+			}
+		} else {
+			return n, nil
+		}
+	}
+}
+
+func (c *PeerClient) Write(data []byte) (int, error) {
+	err := c.Tell(&protobuf.StreamPacket {
+		Data: data,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return len(data), nil
+}
+
+type NoiseAddr struct {
+	Address string
+}
+
+func (a *NoiseAddr) Network() string {
+	return "noise"
+}
+
+func (a *NoiseAddr) String() string {
+	return a.Address
+}
+
+func (c *PeerClient) LocalAddr() net.Addr {
+	return &NoiseAddr { Address: "[local]" }
+}
+
+func (c *PeerClient) RemoteAddr() net.Addr {
+	return &NoiseAddr { Address: c.Address }
+}
+
+func (c *PeerClient) SetDeadline(t time.Time) error {
+	// TODO
+	return nil
+}
+
+func (c *PeerClient) SetReadDeadline(t time.Time) error {
+	// TODO
+	return nil
+}
+
+func (c *PeerClient) SetWriteDeadline(t time.Time) error {
+	// TODO
+	return nil
 }
