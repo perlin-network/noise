@@ -19,9 +19,9 @@
 - Real-time, bidirectional streaming between peers via. [KCP](https://github.com/xtaci/kcp-go)/TCP and [Protobufs](https://developers.google.com/protocol-buffers/).
 - [NaCL/Ed25519](https://tweetnacl.cr.yp.to/) scheme for peer identities and signatures.
 - Kademlia DHT-inspired peer discovery.  
-- Request/Response and Messaging RPC.  
-- Logging via. [glog](https://github.com/golang/glog) .
-- UPnP/NAT Port Forwarding.  
+- Request/Response and Messaging RPC.
+- UPnP/NAT Port Forwarding.
+- Logging via. [glog](https://github.com/golang/glog).
 - Plugin system.  
   
 ## Setup  
