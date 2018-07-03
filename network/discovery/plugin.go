@@ -12,18 +12,15 @@ import (
 
 type Plugin struct {
 	*network.Plugin
-	conf *Config
+
+	DisablePing   bool
+	DisablePong   bool
+	DisableLookup bool
 
 	Routes *dht.RoutingTable
 }
 
 var PluginID = (*Plugin)(nil)
-
-func NewPlugin(c *Config) *Plugin {
-	p := new(Plugin)
-	p.conf = c
-	return p
-}
 
 func (state *Plugin) Startup(net *network.Network) {
 	// Create routing table.
@@ -37,6 +34,10 @@ func (state *Plugin) Receive(ctx *network.MessageContext) error {
 	// Handle RPC.
 	switch msg := ctx.Message().(type) {
 	case *protobuf.Ping:
+		if state.DisablePing {
+			break
+		}
+
 		// Send pong to peer.
 		err := ctx.Reply(&protobuf.Pong{})
 
@@ -45,7 +46,7 @@ func (state *Plugin) Receive(ctx *network.MessageContext) error {
 			return err
 		}
 	case *protobuf.Pong:
-		if state.conf != nil && state.conf.DisablePong {
+		if state.DisablePong {
 			break
 		}
 
@@ -58,6 +59,10 @@ func (state *Plugin) Receive(ctx *network.MessageContext) error {
 
 		glog.Infof("bootstrapped w/ peer(s): %s.", strings.Join(state.Routes.GetPeerAddresses(), ", "))
 	case *protobuf.LookupNodeRequest:
+		if state.DisableLookup {
+			break
+		}
+
 		// Prepare response.
 		response := &protobuf.LookupNodeResponse{}
 

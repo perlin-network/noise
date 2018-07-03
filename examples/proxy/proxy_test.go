@@ -113,9 +113,9 @@ func ExampleProxy() {
 		builder.SetAddress(addr)
 
 		// DisablePong will preserve the line topology
-		builder.AddPlugin(discovery.NewPlugin(&discovery.Config{
+		builder.AddPlugin(&discovery.Plugin{
 			DisablePong: true,
-		}))
+		})
 
 		plugins = append(plugins, new(ProxyPlugin))
 		builder.AddPlugin(plugins[i])
