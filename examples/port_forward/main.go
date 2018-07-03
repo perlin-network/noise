@@ -12,7 +12,34 @@ import (
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
+	"github.com/xtaci/smux"
 )
+
+func muxConfig() *smux.Config {
+	config := smux.DefaultConfig()
+	config.KeepAliveTimeout = 30 * time.Second
+	config.KeepAliveInterval = 5 * time.Second
+
+	return config
+}
+
+func copyBothDirectionBlocking(a, b io.ReadWriter) {
+	ch1 := make(chan struct{})
+	ch2 := make(chan struct{})
+
+	go func() {
+		io.Copy(a, b)
+		close(ch1)
+	}()
+	go func() {
+		io.Copy(b, a)
+		close(ch2)
+	}()
+	select {
+	case <-ch1:
+	case <-ch2:
+	}
+}
 
 type PfServerPlugin struct {
 	network.Plugin
@@ -21,14 +48,32 @@ type PfServerPlugin struct {
 
 func (state *PfServerPlugin) PeerConnect(client *network.PeerClient) {
 	glog.Infof("New connection from %s", client.Address)
-	remote, err := net.Dial("tcp", state.remoteAddress)
-	if err != nil {
-		// TODO: smux
-		glog.Error(err)
-		return
-	}
-	go io.Copy(remote, client)
-	go io.Copy(client, remote)
+	go func() {
+		session, err := smux.Server(client, muxConfig())
+		if err != nil {
+			glog.Fatal(err)
+		}
+		for {
+			stream, err := session.AcceptStream()
+			if err != nil {
+				glog.Error(err)
+				break
+			}
+			glog.Infof("New incoming stream from %s", client.Address)
+			go func() {
+				defer stream.Close()
+
+				remote, err := net.Dial("tcp", state.remoteAddress)
+				if err != nil {
+					glog.Error(err)
+					return
+				}
+				defer remote.Close()
+
+				copyBothDirectionBlocking(stream, remote)
+			}()
+		}
+	}()
 }
 
 func (state *PfServerPlugin) PeerDisconnect(client *network.PeerClient) {
@@ -43,39 +88,35 @@ type PfClientPlugin struct {
 func (state *PfClientPlugin) PeerConnect(client *network.PeerClient) {
 	glog.Infof("Connected to %s", client.Address)
 	go func() {
-		for {
-			func() {
-				listener, err := net.Listen("tcp", state.listenAddress)
-				if err != nil {
-					glog.Error(err)
-					return
-				}
-				defer listener.Close()
+		session, err := smux.Client(client, muxConfig())
+		if err != nil {
+			glog.Fatal(err)
+		}
+		listener, err := net.Listen("tcp", state.listenAddress)
+		if err != nil {
+			glog.Fatal(err)
+		}
+		defer listener.Close()
 
-				conn, err := listener.Accept()
-				if err != nil {
-					glog.Error(err)
-					return
-				}
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				glog.Fatal(err)
+			}
+			glog.Info("New incoming TCP connection")
+
+			go func() {
 				defer conn.Close()
 
-				ch1 := make(chan struct{})
-				ch2 := make(chan struct{})
-
-				go func() {
-					io.Copy(conn, client)
-					close(ch1)
-				}()
-				go func() {
-					io.Copy(client, conn)
-					close(ch2)
-				}()
-				select {
-				case <-ch1:
-				case <-ch2:
+				remote, err := session.OpenStream()
+				if err != nil{
+					glog.Error(err)
+					return
 				}
+				defer remote.Close()
+
+				copyBothDirectionBlocking(conn, remote)
 			}()
-			time.Sleep(1 * time.Second)
 		}
 	}()
 }
