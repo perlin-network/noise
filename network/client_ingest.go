@@ -40,8 +40,7 @@ func (n *Network) handleHandshake(conn net.Conn) *peer.ID {
 		return nil
 	}
 
-	// Grab sender's address.
-	address := msg.Sender.Address
+	id := (*peer.ID)(msg.Sender)
 
 	switch ptr.Message.(type) {
 	case *protobuf.Ping:
@@ -49,7 +48,7 @@ func (n *Network) handleHandshake(conn net.Conn) *peer.ID {
 		// We must additionally setup an outgoing stream to fully create a new worker.
 
 		// Dial senders address.
-		if outgoing, err = dialAddress(address); err != nil {
+		if outgoing, err = dialAddress(id.Address); err != nil {
 			return nil
 		}
 
@@ -71,18 +70,18 @@ func (n *Network) handleHandshake(conn net.Conn) *peer.ID {
 
 		// Outgoing and incoming exists. Handshake is successful.
 		// Lets now create the worker.
-		worker := n.spawnWorker(address)
+		worker := n.spawnWorker(id.Address)
 
 		go worker.startSender(n, outgoing)
 		go worker.startReceiver(n, incoming)
-		go n.handleWorker(address, worker)
+		go n.handleWorker(id.Address, worker)
 
-		return (*peer.ID)(msg.Sender)
+		return id
 	case *protobuf.Pong:
 		// If pong received, we assign the incoming stream to a cached worker.
 		// If the worker doesn't exist, then the pong is pointless and we disconnect.
 
-		if worker, exists := n.loadWorker(address); exists {
+		if worker, exists := n.loadWorker(id.Address); exists {
 			go worker.startReceiver(n, incoming)
 
 			// Send normal ping now.
@@ -93,13 +92,13 @@ func (n *Network) handleHandshake(conn net.Conn) *peer.ID {
 				return nil
 			}
 
-			err = n.WriteMessage(address, ping)
+			err = n.WriteMessage(id.Address, ping)
 
 			if err != nil {
 				glog.Error(err)
 			}
 
-			return (*peer.ID)(msg.Sender)
+			return id
 		}
 	default:
 		// Shouldn't be receiving any other messages. Disconnect.
