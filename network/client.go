@@ -152,7 +152,7 @@ func (c *PeerClient) prepareMessage(message proto.Message) (*protobuf.Message, e
 
 	id := protobuf.ID(c.Network.ID)
 
-	signature, err := c.Network.Keys.Sign(raw.Value)
+	signature, err := c.Network.Keys.Sign(c.Network.CryptoProvider, raw.Value)
 	if err != nil {
 		return nil, err
 	}
