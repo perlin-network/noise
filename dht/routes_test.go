@@ -11,7 +11,6 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/peer"
 )
 
@@ -29,15 +28,15 @@ func RandByte() byte {
 }
 
 func TestBucketSize(t *testing.T) {
-	if dht.BucketSize != 20 {
-		t.Fatalf("bucket size is expected %d but found %d", 20, dht.BucketSize)
+	if BucketSize != 20 {
+		t.Fatalf("bucket size is expected %d but found %d", 20, BucketSize)
 	}
 }
 
 func TestSelf(t *testing.T) {
 	publicKey := MustReadRand(32)
 	id := peer.CreateID("0000", publicKey)
-	routes := dht.CreateRoutingTable(id)
+	routes := CreateRoutingTable(id)
 	if routes.Self().Address != "0000" {
 		t.Fatalf("wrong address: %s", routes.Self().Address)
 	}
@@ -50,7 +49,7 @@ func TestPeerExists(t *testing.T) {
 
 	id1 := peer.CreateID("0000", MustReadRand(32))
 	id2 := peer.CreateID("0001", MustReadRand(32))
-	routingTable := dht.CreateRoutingTable(id1)
+	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
 	if !routingTable.PeerExists(id1) {
 		t.Fatal("peerexists() targeting self failed")
@@ -64,7 +63,7 @@ func TestGetPeerAddresses(t *testing.T) {
 	id1 := peer.CreateID("0000", MustReadRand(32))
 	id2 := peer.CreateID("0001", MustReadRand(32))
 	id3 := peer.CreateID("0002", MustReadRand(32))
-	routingTable := dht.CreateRoutingTable(id1)
+	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
 	routingTable.Update(id3)
 	tester := routingTable.GetPeerAddresses()
@@ -81,7 +80,7 @@ func TestRemovePeer(t *testing.T) {
 	id1 := peer.CreateID("0000", MustReadRand(32))
 	id2 := peer.CreateID("0001", MustReadRand(32))
 	id3 := peer.CreateID("0002", MustReadRand(32))
-	routingTable := dht.CreateRoutingTable(id1)
+	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
 	routingTable.Update(id3)
 	routingTable.RemovePeer(id2)
@@ -104,7 +103,7 @@ func TestFindClosestPeers(t *testing.T) {
 	nodes = append(nodes, peer.CreateID("0003", []byte("12345678901234567890123456789013")))
 	nodes = append(nodes, peer.CreateID("0004", []byte("12345678901234567890123456789014")))
 	nodes = append(nodes, peer.CreateID("0005", []byte("00000000000000000000000000000000")))
-	routingTable := dht.CreateRoutingTable(nodes[0])
+	routingTable := CreateRoutingTable(nodes[0])
 	for i := 1; i <= 5; i++ {
 		routingTable.Update(nodes[i])
 	}
