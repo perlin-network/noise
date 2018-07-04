@@ -18,8 +18,8 @@ type Backoff struct {
 
 const defaultMaxAttempts = 5
 const defaultFactor = 2.0
-const defaultMinInterval = 100 * time.Millisecond
-const defaultMaxInterval = 10 * time.Second
+const defaultMinInterval = 1000 * time.Millisecond
+const defaultMaxInterval = 16 * time.Second
 const maxInt64 = float64(math.MaxInt64 - 512)
 
 // Creates a default configuration for Backoff.

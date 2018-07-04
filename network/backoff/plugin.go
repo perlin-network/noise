@@ -15,7 +15,11 @@ type Plugin struct {
 	backoffs map[string]*Backoff
 }
 
-var PluginID = (*Plugin)(nil)
+var (
+	PluginID        = (*Plugin)(nil)
+	initialDelay    = 5 * time.Second
+	limitIterations = 100
+)
 
 func (p *Plugin) Startup(net *network.Network) {
 	if p.backoffs == nil {
@@ -23,6 +27,7 @@ func (p *Plugin) Startup(net *network.Network) {
 	}
 }
 
+/*
 func (p *Plugin) Receive(ctx *network.MessageContext) error {
 	addr := ctx.Sender().Address
 	if _, exists := p.backoffs[addr]; exists {
@@ -31,54 +36,54 @@ func (p *Plugin) Receive(ctx *network.MessageContext) error {
 	}
 	return nil
 }
+*/
 
 func (p *Plugin) PeerDisconnect(client *network.PeerClient) {
 	addr := client.Address
 
 	if _, exists := p.backoffs[addr]; exists {
 		// don't activate if it already active
-		glog.Infof("backing off done already active\n")
+		glog.Infof("backoff skipped, already active\n")
 		return
 	}
 	go func() {
-		time.Sleep(5000 * time.Millisecond)
+		// this callback is called before the disconnect, so wait until disconnected
+		time.Sleep(initialDelay)
+
 		// reset the backoff counter
 		p.backoffs[addr] = DefaultBackoff()
-		for {
+		startTime := time.Now()
+		for i := 0; i < limitIterations; i++ {
 			b, active := p.backoffs[addr]
 			if !active {
-				glog.Infof("backing off done already ended\n")
 				break
 			}
-			glog.Infof("backing off: addr=%s b=%v\n", addr, b)
 			if b.TimeoutExceeded() {
-				glog.Infof("backing done timeout exceeded for add=%s\n", addr)
-				delete(p.backoffs, addr)
+				glog.Infof("backoff ended for addr %s, timed out after %s\n", addr, time.Now().Sub(startTime))
 				break
 			}
 			d := b.NextDuration()
-			glog.Infof("backing off reconnecting to %s in %s", addr, d)
+			glog.Infof("backoff reconnecting to %s in %s iteration %d", addr, d, i+1)
 			time.Sleep(d)
 			if _, err := client.Network.Dial(client.Address); err != nil {
-				glog.Infof("backing off dial error %s to addr %s\n", err, addr)
 				continue
 			}
 			peerConnected := false
-			var peers []string
+			// check if the peer is still disconnected
 			client.Network.Peers.Range(func(k string, pc *network.PeerClient) bool {
-				if k == addr {
-					peerConnected = pc.IsConnected()
+				// seems the peer is disconnected while pc.ID == nil
+				if k == addr && pc.ID != nil {
+					peerConnected = true
 				}
-				peers = append(peers, k)
 				return true
 			})
 			if !peerConnected {
-				glog.Infof("backing off still not connected to peer %s, all peers %v\n", addr, peers)
 				continue
 			}
-			glog.Infof("backing off done successfully reconnected to %s, all peers %v\n", addr, peers)
 			// success
-			delete(p.backoffs, addr)
+			break
 		}
+		// clean up this back off
+		delete(p.backoffs, addr)
 	}()
 }
