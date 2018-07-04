@@ -13,7 +13,7 @@ import (
 )
 
 // sendMessage marshals and sends a message over a stream.
-func (n *Network) sendMessage(stream net.Conn, message *protobuf.Message) error {
+func (n *Network) sendMessage(conn net.Conn, message *protobuf.Message) error {
 	bytes, err := proto.Marshal(message)
 	if err != nil {
 		return err
@@ -26,7 +26,7 @@ func (n *Network) sendMessage(stream net.Conn, message *protobuf.Message) error 
 	// Prefix message with its size.
 	bytes = append(buffer, bytes...)
 
-	writer := bufio.NewWriter(stream)
+	writer := bufio.NewWriter(conn)
 
 	// Send request bytes.
 	written, err := writer.Write(bytes)
@@ -48,8 +48,8 @@ func (n *Network) sendMessage(stream net.Conn, message *protobuf.Message) error 
 }
 
 // receiveMessage reads, unmarshals and verifies a message from a stream.
-func (n *Network) receiveMessage(stream net.Conn) (*protobuf.Message, error) {
-	reader := bufio.NewReader(stream)
+func (n *Network) receiveMessage(conn net.Conn) (*protobuf.Message, error) {
+	reader := bufio.NewReader(conn)
 
 	buffer := make([]byte, binary.MaxVarintLen64)
 
@@ -75,7 +75,7 @@ func (n *Network) receiveMessage(stream net.Conn) (*protobuf.Message, error) {
 	if err != nil {
 		// Potentially malicious or dead client; kill it.
 		if err == io.ErrUnexpectedEOF {
-			stream.Close()
+			conn.Close()
 		}
 		return nil, err
 	}

@@ -109,7 +109,7 @@ func (state *PfClientPlugin) PeerConnect(client *network.PeerClient) {
 				defer conn.Close()
 
 				remote, err := session.OpenStream()
-				if err != nil{
+				if err != nil {
 					glog.Error(err)
 					return
 				}
@@ -159,11 +159,11 @@ func main() {
 
 	// Add custom port forwarding plugin.
 	if mode == "server" {
-		builder.AddPlugin(&PfServerPlugin {
+		builder.AddPlugin(&PfServerPlugin{
 			remoteAddress: address,
 		})
 	} else if mode == "client" {
-		builder.AddPlugin(&PfClientPlugin {
+		builder.AddPlugin(&PfClientPlugin{
 			listenAddress: address,
 		})
 	}

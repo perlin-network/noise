@@ -19,7 +19,7 @@ import (
 type PeerClient struct {
 	Network *Network
 
-	ID *peer.ID
+	ID      *peer.ID
 	Address string
 
 	Requests     *Uint64MessageChannelSyncMap
@@ -30,26 +30,28 @@ type PeerClient struct {
 
 type StreamState struct {
 	sync.Mutex
-	buffer []byte
+	buffer        []byte
 	dataAvailable chan struct{}
-	closed bool
+	closed        bool
 }
 
 // createPeerClient creates a stub peer client.
 func createPeerClient(network *Network, address string) *PeerClient {
 	client := &PeerClient{
-		Network: network,
-		Address: address,
-		Requests: new(Uint64MessageChannelSyncMap),
+		Network:      network,
+		Address:      address,
+		Requests:     new(Uint64MessageChannelSyncMap),
 		RequestNonce: 0,
-		stream: StreamState {
-			buffer: make([]byte, 0),
+		stream: StreamState{
+			buffer:        make([]byte, 0),
 			dataAvailable: make(chan struct{}),
 		},
 	}
+
 	client.Network.Plugins.Each(func(plugin PluginInterface) {
 		plugin.PeerConnect(client)
 	})
+
 	return client
 }
 
@@ -81,7 +83,7 @@ func (c *PeerClient) Close() error {
 
 // prepareMessage marshals a message into a proto.Tell and signs it with this
 // nodes private key. Errors if the message is null.
-func (c *PeerClient) prepareMessage(message proto.Message) (*protobuf.Message, error) {
+func (n *Network) prepareMessage(message proto.Message) (*protobuf.Message, error) {
 	if message == nil {
 		return nil, errors.New("message is null")
 	}
@@ -91,9 +93,9 @@ func (c *PeerClient) prepareMessage(message proto.Message) (*protobuf.Message, e
 		return nil, err
 	}
 
-	id := protobuf.ID(c.Network.ID)
+	id := protobuf.ID(n.ID)
 
-	signature, err := c.Network.Keys.Sign(raw.Value)
+	signature, err := n.Keys.Sign(raw.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +118,7 @@ func (c *PeerClient) Tell(message proto.Message) error {
 // Request requests for a response for a request sent to a given peer.
 func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 	// Prepare message.
-	msg, err := c.prepareMessage(req.Message)
+	msg, err := c.Network.prepareMessage(req.Message)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +152,7 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
 
 	// Prepare message.
-	msg, err := c.prepareMessage(message)
+	msg, err := c.Network.prepareMessage(message)
 	if err != nil {
 		return err
 	}
@@ -204,7 +206,7 @@ func (c *PeerClient) Read(out []byte) (int, error) {
 }
 
 func (c *PeerClient) Write(data []byte) (int, error) {
-	err := c.Tell(&protobuf.StreamPacket {
+	err := c.Tell(&protobuf.StreamPacket{
 		Data: data,
 	})
 	if err != nil {
@@ -226,11 +228,11 @@ func (a *NoiseAddr) String() string {
 }
 
 func (c *PeerClient) LocalAddr() net.Addr {
-	return &NoiseAddr { Address: "[local]" }
+	return &NoiseAddr{Address: "[local]"}
 }
 
 func (c *PeerClient) RemoteAddr() net.Addr {
-	return &NoiseAddr { Address: c.Address }
+	return &NoiseAddr{Address: c.Address}
 }
 
 func (c *PeerClient) SetDeadline(t time.Time) error {

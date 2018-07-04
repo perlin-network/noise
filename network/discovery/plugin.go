@@ -93,7 +93,7 @@ func (state *Plugin) PeerDisconnect(client *network.PeerClient) {
 	if client.ID != nil {
 		if state.Routes.PeerExists(*client.ID) {
 			state.Routes.RemovePeer(*client.ID)
-	
+
 			glog.Infof("Peer %s has disconnected.", client.ID.Address)
 		}
 	}

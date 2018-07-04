@@ -32,169 +32,27 @@ type Network struct {
 	// Node's cryptographic ID.
 	ID peer.ID
 
-	// Map of connection addresses (string) <-> *Network.PeerClient
+	// Map of connection addresses (string) <-> *network.PeerClient
 	// so that the Network doesn't dial multiple times to the same ip
 	Peers *StringPeerClientSyncMap
 
-	Connections map[string]*ConnectionState
-	ConnectionsMutex sync.Mutex
+	// Map of peer addresses (string) <-> *network.Worker
+	Workers      map[string]*Worker
+	WorkersMutex sync.Mutex
 
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
 }
 
-type ConnectionState struct {
-	sendQueue chan *protobuf.Message
-	recvQueue chan *protobuf.Message
-	needClose chan struct{}
-	closed chan struct{}
-}
+func (n *Network) loadWorker(address string) (*Worker, bool) {
+	n.WorkersMutex.Lock()
+	defer n.WorkersMutex.Unlock()
 
-func dialAddress(address string) (net.Conn, error) {
-	urlInfo, err := url.Parse(address)
-	if err != nil {
-		return nil, err
-	}
-
-	var conn net.Conn
-
-	if urlInfo.Scheme == "kcp" {
-		conn, err = kcp.DialWithOptions(urlInfo.Host, nil, 10, 3)
-	} else if urlInfo.Scheme == "tcp" {
-		conn, err = net.Dial("tcp", urlInfo.Host)
-	} else {
-		err = errors.New("Invalid scheme: " + urlInfo.Scheme)
-	}
-
-	// Failed to connect.
-	if err != nil {
-		return nil, err
-	}
-
-	return conn, nil
-}
-
-func (s *ConnectionState) IsClosed() bool {
-	select {
-	case <-s.closed:
-		return true
-	default:
-		return false
-	}
-}
-
-func (s *ConnectionState) RequestClose() {
-	select {
-	case s.needClose <- struct{}{}:
-	default:
-	}
-}
-
-func (s *ConnectionState) startRecv(n *Network, c net.Conn) {
-	defer close(s.recvQueue)
-
-	for {
-		if s.IsClosed() {
-			return
-		}
-
-		message, err := n.receiveMessage(c)
-		if err != nil {
-			glog.Error(err)
-			s.RequestClose()
-			return
-		}
-
-		s.recvQueue <- message
-	}
-}
-
-func (s *ConnectionState) startSend(n *Network, c net.Conn) {
-	for {
-		if s.IsClosed() {
-			return
-		}
-
-		var message *protobuf.Message
-
-		select {
-		case message = <-s.sendQueue:
-		case <-s.closed:
-			return
-		}
-
-		err := n.sendMessage(c, message)
-		if err != nil {
-			glog.Error(err)
-			s.RequestClose()
-			return
-		}
-	}
-}
-
-func (n *Network) HandleState(address string, state *ConnectionState, conn net.Conn) {
-	defer func() {
-		if conn != nil {
-			conn.Close()
-		}
-
-		n.ConnectionsMutex.Lock()
-		delete(n.Connections, address)
-		n.ConnectionsMutex.Unlock()
-	}()
-
-	if conn == nil {
-		var err error
-		conn, err = dialAddress(address)
-		if err != nil {
-			glog.Error(err)
-			return
-		}
-	}
-
-	go state.startSend(n, conn)
-	go state.startRecv(n, conn)
-
-	<-state.needClose
-	close(state.closed)
-}
-
-func (n *Network) EnsureConnectionState(address string, conn net.Conn) *ConnectionState {
-	var state *ConnectionState
-
-	n.ConnectionsMutex.Lock()
-	if n.Connections == nil {
-		n.Connections = make(map[string]*ConnectionState)
-	}
-	if _, ok := n.Connections[address]; !ok {
-		n.Connections[address] = &ConnectionState {
-			sendQueue: make(chan *protobuf.Message, 4096),
-			recvQueue: make(chan *protobuf.Message, 4096),
-			needClose: make(chan struct{}),
-			closed: make(chan struct{}),
-		}
-		state = n.Connections[address]
-		go n.HandleState(address, state, conn)
-		if conn == nil {
-			glog.Infof("Ensure: New connection with %s", address)
-		}
-	} else {
-		state = n.Connections[address]
-	}
-	n.ConnectionsMutex.Unlock()
-
-	return state
-}
-
-func (n *Network) GetConnectionState(address string) (*ConnectionState, bool) {
-	n.ConnectionsMutex.Lock()
-	defer n.ConnectionsMutex.Unlock()
-
-	if n.Connections == nil {
+	if n.Workers == nil {
 		return nil, false
 	}
 
-	if state, ok := n.Connections[address]; ok {
+	if state, ok := n.Workers[address]; ok {
 		return state, true
 	} else {
 		return nil, false
@@ -202,20 +60,26 @@ func (n *Network) GetConnectionState(address string) (*ConnectionState, bool) {
 }
 
 func (n *Network) WriteMessage(address string, message *protobuf.Message) error {
-	state := n.EnsureConnectionState(address, nil)
-	state.sendQueue <- message
+	worker, available := n.loadWorker(address)
+	if !available {
+		return fmt.Errorf("worker not found for %s", address)
+	}
+
+	worker.sendQueue <- message
 	return nil
 }
 
 func (n *Network) ReadMessage(address string) (*protobuf.Message, error) {
-	state, ok := n.GetConnectionState(address)
-	if !ok {
-		return nil, fmt.Errorf("State not found for %s", address)
+	worker, available := n.loadWorker(address)
+	if !available {
+		return nil, fmt.Errorf("worker not found for %s", address)
 	}
-	message, ok := <-state.recvQueue
-	if !ok {
-		return nil, fmt.Errorf("State closed for %s", address)
+
+	message, available := <-worker.recvQueue
+	if !available {
+		return nil, fmt.Errorf("worker closed for %s", address)
 	}
+
 	return message, nil
 }
 
@@ -318,11 +182,10 @@ func (n *Network) Bootstrap(addresses ...string) {
 	for _, address := range addresses {
 		client, err := n.Dial(address)
 		if err != nil {
-			glog.Warning(err)
+			glog.Error(err)
 			continue
 		}
 
-		// Send a ping.
 		err = client.Tell(&protobuf.Ping{})
 		if err != nil {
 			glog.Error(err)
@@ -331,16 +194,67 @@ func (n *Network) Bootstrap(addresses ...string) {
 	}
 }
 
-// Dial establishes a connection to a peer and returns a PeerClient instance to it.
+func (n *Network) spawnWorker(address string) *Worker {
+	n.WorkersMutex.Lock()
+	defer n.WorkersMutex.Unlock()
+
+	if n.Workers == nil {
+		n.Workers = make(map[string]*Worker)
+	}
+
+	// Return worker if exists.
+	if worker, exists := n.Workers[address]; exists {
+		return worker
+	}
+
+	// Spawn and cache new worker otherwise.
+	n.Workers[address] = &Worker{
+		// TODO: Make queue size configurable.
+		sendQueue: make(chan *protobuf.Message, 4096),
+		recvQueue: make(chan *protobuf.Message, 4096),
+
+		needClose: make(chan struct{}),
+		closed:    make(chan struct{}),
+	}
+
+	return n.Workers[address]
+}
+
+// Dial establishes a bidirectional connection to an address, and additionally handshakes with said address.
+// Blocks until the worker responsible for bidirectional communication is gracefully stopped.
 func (n *Network) Dial(address string) (*PeerClient, error) {
 	client, err := n.Client(address)
 	if err != nil {
 		return nil, err
 	}
 
-	n.EnsureConnectionState(address, nil)
+	// Establish an outgoing connection.
+	outgoing, err := dialAddress(address)
+
+	// Failed to establish an outgoing connection.
+	if err != nil {
+		return nil, err
+	}
+
+	// The worker does not have an incoming connection yet; handled in Ingest().
+	// However, have the worker become available in sending messages.
+	worker := n.spawnWorker(address)
+	go worker.startSender(n, outgoing)
+	go n.handleWorker(address, worker)
 
 	return client, nil
+}
+
+func (n *Network) handleWorker(address string, worker *Worker) {
+	defer func() {
+		n.WorkersMutex.Lock()
+		delete(n.Workers, address)
+		n.WorkersMutex.Unlock()
+	}()
+
+	// Wait until worker is closed.
+	<-worker.needClose
+	close(worker.closed)
 }
 
 // Broadcast asynchronously broadcasts a message to all peer clients.
