@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/peer"
@@ -42,15 +43,6 @@ type Network struct {
 
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
-}
-
-func (n *Network) GetPort() uint16 {
-	info, err := ExtractAddressInfo(n.Address)
-	if err != nil {
-		glog.Fatal(err)
-	}
-
-	return info.Port
 }
 
 // Listen starts listening for peers on a port.
@@ -293,4 +285,32 @@ func (n *Network) Accept(conn net.Conn) {
 // Example: network.Plugin((*Plugin)(nil))
 func (n *Network) Plugin(key interface{}) (PluginInterface, bool) {
 	return n.Plugins.Get(key)
+}
+
+// prepareMessage marshals a message into a proto.Tell and signs it with this
+// nodes private key. Errors if the message is null.
+func (n *Network) prepareMessage(message proto.Message) (*protobuf.Message, error) {
+	if message == nil {
+		return nil, errors.New("message is null")
+	}
+
+	raw, err := ptypes.MarshalAny(message)
+	if err != nil {
+		return nil, err
+	}
+
+	id := protobuf.ID(n.ID)
+
+	signature, err := n.Keys.Sign(raw.Value)
+	if err != nil {
+		return nil, err
+	}
+
+	msg := &protobuf.Message{
+		Message:   raw,
+		Sender:    &id,
+		Signature: signature,
+	}
+
+	return msg, nil
 }

@@ -81,34 +81,6 @@ func (c *PeerClient) Close() error {
 	return nil
 }
 
-// prepareMessage marshals a message into a proto.Tell and signs it with this
-// nodes private key. Errors if the message is null.
-func (n *Network) prepareMessage(message proto.Message) (*protobuf.Message, error) {
-	if message == nil {
-		return nil, errors.New("message is null")
-	}
-
-	raw, err := ptypes.MarshalAny(message)
-	if err != nil {
-		return nil, err
-	}
-
-	id := protobuf.ID(n.ID)
-
-	signature, err := n.Keys.Sign(raw.Value)
-	if err != nil {
-		return nil, err
-	}
-
-	msg := &protobuf.Message{
-		Message:   raw,
-		Sender:    &id,
-		Signature: signature,
-	}
-
-	return msg, nil
-}
-
 // Tell asynchronously emit a message to a given peer.
 func (c *PeerClient) Tell(message proto.Message) error {
 	// A nonce of 0 indicates a message that is not a request/response.
@@ -249,3 +221,6 @@ func (c *PeerClient) SetWriteDeadline(t time.Time) error {
 	// TODO
 	return nil
 }
+
+// MessageChannel represents a channel for arbitrary protobuf messages.
+type MessageChannel chan proto.Message
