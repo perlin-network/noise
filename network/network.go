@@ -1,7 +1,6 @@
 package network
 
 import (
-	"fmt"
 	"math/rand"
 	"net"
 	"net/url"
@@ -102,7 +101,7 @@ func (n *Network) Listen() {
 func (n *Network) Client(address string) (*PeerClient, error) {
 	address = strings.TrimSpace(address)
 	if len(address) == 0 {
-		return nil, fmt.Errorf("cannot dial, address was empty")
+		return nil, errors.Errorf("cannot dial, address was empty")
 	}
 
 	address, err := ToUnifiedAddress(address)
@@ -228,10 +227,10 @@ func (n *Network) Tell(targetAddress string, msg proto.Message) error {
 		err := client.Tell(msg)
 
 		if err != nil {
-			return fmt.Errorf("failed to send message to peer %s [err=%s]", targetAddress, err)
+			return errors.Errorf("failed to send message to peer %s [err=%s]", targetAddress, err)
 		}
 	} else {
-		return fmt.Errorf("failed to send message to peer %s; peer does not exist. [err=%s]", targetAddress, err)
+		return errors.Errorf("failed to send message to peer %s; peer does not exist. [err=%s]", targetAddress, err)
 	}
 
 	return nil

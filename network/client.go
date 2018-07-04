@@ -1,7 +1,6 @@
 package network
 
 import (
-	"errors"
 	"net"
 	"net/url"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
 )
@@ -23,10 +23,10 @@ import (
 type PeerClient struct {
 	Network *Network
 
-	ID *peer.ID
+	ID      *peer.ID
 	Address string
 
-	session *smux.Session
+	session          *smux.Session
 	sessionInitMutex sync.Mutex
 
 	Requests     *Uint64MessageChannelSyncMap
@@ -37,19 +37,19 @@ type PeerClient struct {
 
 type StreamState struct {
 	sync.Mutex
-	buffer []byte
+	buffer        []byte
 	dataAvailable chan struct{}
-	closed bool
+	closed        bool
 }
 
 // createPeerClient creates a stub peer client.
 func createPeerClient(network *Network) *PeerClient {
 	return &PeerClient{
-		Network: network,
-		Requests: new(Uint64MessageChannelSyncMap),
+		Network:      network,
+		Requests:     new(Uint64MessageChannelSyncMap),
 		RequestNonce: 0,
-		stream: StreamState {
-			buffer: make([]byte, 0),
+		stream: StreamState{
+			buffer:        make([]byte, 0),
 			dataAvailable: make(chan struct{}),
 		},
 	}
@@ -310,7 +310,7 @@ func (c *PeerClient) Read(out []byte) (int, error) {
 }
 
 func (c *PeerClient) Write(data []byte) (int, error) {
-	err := c.Tell(&protobuf.StreamPacket {
+	err := c.Tell(&protobuf.StreamPacket{
 		Data: data,
 	})
 	if err != nil {
@@ -332,11 +332,11 @@ func (a *NoiseAddr) String() string {
 }
 
 func (c *PeerClient) LocalAddr() net.Addr {
-	return &NoiseAddr { Address: "[local]" }
+	return &NoiseAddr{Address: "[local]"}
 }
 
 func (c *PeerClient) RemoteAddr() net.Addr {
-	return &NoiseAddr { Address: c.Address }
+	return &NoiseAddr{Address: c.Address}
 }
 
 func (c *PeerClient) SetDeadline(t time.Time) error {

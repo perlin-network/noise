@@ -3,13 +3,13 @@ package network
 import (
 	"bufio"
 	"encoding/binary"
-	"errors"
-	"fmt"
+	"io"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/protobuf"
+	"github.com/pkg/errors"
 	"github.com/xtaci/smux"
-	"io"
 )
 
 // sendMessage marshals and sends a message over a stream.
@@ -45,7 +45,7 @@ func (n *Network) sendMessage(stream *smux.Stream, message proto.Message) error 
 	}
 
 	if written != len(bytes) {
-		return fmt.Errorf("only wrote %d / %d bytes to stream", written, len(bytes))
+		return errors.Errorf("only wrote %d / %d bytes to stream", written, len(bytes))
 	}
 
 	return nil
