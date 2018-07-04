@@ -5,7 +5,7 @@ import _ "net/http/pprof"
 import (
 	"flag"
 	"fmt"
-	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/examples/benchmark/messages"
 	"github.com/perlin-network/noise/network/builders"
 	"log"
@@ -50,7 +50,7 @@ func main() {
 
 	builder := builders.NewNetworkBuilder()
 	builder.SetAddress("kcp://localhost:" + strconv.Itoa(int(*port)))
-	builder.SetKeys(crypto.RandomKeyPair())
+	builder.SetKeys(ed25519.RandomKeyPair())
 
 	net, err := builder.Build()
 	if err != nil {

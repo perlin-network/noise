@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
@@ -145,7 +145,7 @@ func main() {
 	address := *addressFlag
 	peers := strings.Split(*peersFlag, ",")
 
-	keys := crypto.RandomKeyPair()
+	keys := ed25519.RandomKeyPair()
 
 	glog.Infof("Private Key: %s", keys.PrivateKeyHex())
 	glog.Infof("Public Key: %s", keys.PublicKeyHex())

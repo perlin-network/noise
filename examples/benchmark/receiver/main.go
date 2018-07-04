@@ -5,7 +5,7 @@ import _ "net/http/pprof"
 import (
 	"flag"
 	"fmt"
-	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/examples/benchmark/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
@@ -62,7 +62,7 @@ func main() {
 
 	builder := builders.NewNetworkBuilder()
 	builder.SetAddress("kcp://localhost:3001")
-	builder.SetKeys(crypto.RandomKeyPair())
+	builder.SetKeys(ed25519.RandomKeyPair())
 
 	state := new(BenchmarkPlugin)
 	builder.AddPlugin(state)
