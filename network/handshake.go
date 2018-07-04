@@ -66,7 +66,7 @@ func (n *Network) processHandshake(conn net.Conn) *peer.ID {
 
 		go worker.startSender(n, outgoing)
 		go worker.startReceiver(n, incoming)
-		go n.handleWorker(id.Address, worker)
+		go worker.process(n, id.Address)
 
 		return id
 	case "type.googleapis.com/protobuf.Pong":

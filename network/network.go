@@ -167,7 +167,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 	// However, have the worker become available in sending messages.
 	worker := n.spawnWorker(address)
 	go worker.startSender(n, outgoing)
-	go n.handleWorker(address, worker)
+	go worker.process(n, address)
 
 	return client, nil
 }

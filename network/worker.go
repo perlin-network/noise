@@ -75,6 +75,15 @@ func (s *Worker) startSender(n *Network, c net.Conn) {
 	}
 }
 
+func (s *Worker) process(net *Network, address string) {
+	<-s.needClose
+	close(s.closed)
+
+	net.WorkersMutex.Lock()
+	delete(net.Workers, address)
+	net.WorkersMutex.Unlock()
+}
+
 func (n *Network) loadWorker(address string) (*Worker, bool) {
 	n.WorkersMutex.Lock()
 	defer n.WorkersMutex.Unlock()
@@ -114,16 +123,4 @@ func (n *Network) spawnWorker(address string) *Worker {
 	}
 
 	return n.Workers[address]
-}
-
-func (n *Network) handleWorker(address string, worker *Worker) {
-	defer func() {
-		n.WorkersMutex.Lock()
-		delete(n.Workers, address)
-		n.WorkersMutex.Unlock()
-	}()
-
-	// Wait until worker is closed.
-	<-worker.needClose
-	close(worker.closed)
 }
