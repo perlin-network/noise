@@ -10,22 +10,20 @@ import (
 	"github.com/xtaci/smux"
 )
 
-// Ingest handles peer registration and processes incoming message streams consisting of
-// asynchronous messages or request/responses.
-func (n *Network) Ingest(conn net.Conn) {
+func (n *Network) handleHandshake(conn net.Conn) *peer.ID {
 	var incoming net.Conn
 	var outgoing net.Conn
 
 	// Wrap a session around the incoming connection.
 	session, err := smux.Server(conn, muxConfig())
 	if err != nil {
-		return
+		return nil
 	}
 
 	// Accept an incoming stream.
 	incoming, err = session.AcceptStream()
 	if err != nil {
-		return
+		return nil
 	}
 
 	var msg *protobuf.Message
@@ -34,15 +32,16 @@ func (n *Network) Ingest(conn net.Conn) {
 
 	// Attempt to receive message.
 	if msg, err = n.receiveMessage(incoming); err != nil {
-		return
+		return nil
 	}
 
 	var ptr ptypes.DynamicAny
 	if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
-		return
+		return nil
 	}
 
-	senderAddress := msg.Sender.Address
+	// Grab sender's address.
+	address := msg.Sender.Address
 
 	switch ptr.Message.(type) {
 	case *protobuf.Ping:
@@ -50,8 +49,8 @@ func (n *Network) Ingest(conn net.Conn) {
 		// We must additionally setup an outgoing stream to fully create a new worker.
 
 		// Dial senders address.
-		if outgoing, err = dialAddress(senderAddress); err != nil {
-			return
+		if outgoing, err = dialAddress(address); err != nil {
+			return nil
 		}
 
 		// Prepare a pong response.
@@ -59,7 +58,7 @@ func (n *Network) Ingest(conn net.Conn) {
 
 		if err != nil {
 			glog.Error(err)
-			return
+			return nil
 		}
 
 		// Respond with a pong.
@@ -67,21 +66,23 @@ func (n *Network) Ingest(conn net.Conn) {
 
 		if err != nil {
 			glog.Error(err)
-			return
+			return nil
 		}
 
 		// Outgoing and incoming exists. Handshake is successful.
 		// Lets now create the worker.
-		worker := n.spawnWorker(senderAddress)
+		worker := n.spawnWorker(address)
 
 		go worker.startSender(n, outgoing)
 		go worker.startReceiver(n, incoming)
-		go n.handleWorker(senderAddress, worker)
+		go n.handleWorker(address, worker)
+
+		return (*peer.ID)(msg.Sender)
 	case *protobuf.Pong:
 		// If pong received, we assign the incoming stream to a cached worker.
 		// If the worker doesn't exist, then the pong is pointless and we disconnect.
 
-		if worker, exists := n.loadWorker(senderAddress); exists {
+		if worker, exists := n.loadWorker(address); exists {
 			go worker.startReceiver(n, incoming)
 
 			// Send normal ping now.
@@ -89,33 +90,47 @@ func (n *Network) Ingest(conn net.Conn) {
 
 			if err != nil {
 				glog.Error(err)
-				return
+				return nil
 			}
 
-			n.WriteMessage(senderAddress, ping)
-		} else {
-			return
+			err = n.WriteMessage(address, ping)
+
+			if err != nil {
+				glog.Error(err)
+			}
+
+			return (*peer.ID)(msg.Sender)
 		}
 	default:
 		// Shouldn't be receiving any other messages. Disconnect.
 		glog.Error("Got message: ", ptr.Message)
+	}
+
+	return nil
+}
+
+// Ingest handles peer registration and processes incoming message streams consisting of
+// asynchronous messages or request/responses.
+func (n *Network) Ingest(conn net.Conn) {
+	id := n.handleHandshake(conn)
+
+	// Handshake failed.
+	if id == nil {
 		return
 	}
 
-	/** END COMMENCE HANDSHAKE **/
-
 	// Lets now setup our peer client.
-	client, err := n.Client(senderAddress)
+	client, err := n.Client(id.Address)
 	if err != nil {
 		glog.Error(err)
 		return
 	}
-	client.ID = (*peer.ID)(msg.Sender)
+	client.ID = id
 
 	defer client.Close()
 
 	for {
-		msg, err = n.ReadMessage(senderAddress)
+		msg, err := n.ReadMessage(id.Address)
 
 		// Disconnections will occur here.
 		if err != nil {
@@ -147,8 +162,6 @@ func (n *Network) Ingest(conn net.Conn) {
 		case *protobuf.StreamPacket: // Handle stream packet message.
 			pkt := ptr.Message.(*protobuf.StreamPacket)
 			client.handleStreamPacket(pkt.Data)
-			return
-
 		default: // Handle other messages.
 			ctx := new(MessageContext)
 			ctx.client = client
