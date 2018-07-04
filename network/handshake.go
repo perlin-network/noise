@@ -4,13 +4,12 @@ import (
 	"net"
 
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/xtaci/smux"
 )
 
-func (n *Network) handleHandshake(conn net.Conn) *peer.ID {
+func (n *Network) processHandshake(conn net.Conn) *peer.ID {
 	var incoming net.Conn
 	var outgoing net.Conn
 
@@ -41,7 +40,7 @@ func (n *Network) handleHandshake(conn net.Conn) *peer.ID {
 		// We must additionally setup an outgoing stream to fully create a new worker.
 
 		// Dial senders address.
-		if outgoing, err = dialAddress(id.Address); err != nil {
+		if outgoing, err = n.dial(id.Address); err != nil {
 			return nil
 		}
 
@@ -104,75 +103,4 @@ func (n *Network) handleHandshake(conn net.Conn) *peer.ID {
 	}
 
 	return nil
-}
-
-// Ingest handles peer registration and processes incoming message streams consisting of
-// asynchronous messages or request/responses.
-func (n *Network) Ingest(conn net.Conn) {
-	id := n.handleHandshake(conn)
-
-	// Handshake failed.
-	if id == nil {
-		return
-	}
-
-	// Lets now setup our peer client.
-	client, err := n.Client(id.Address)
-	if err != nil {
-		glog.Error(err)
-		return
-	}
-	client.ID = id
-
-	defer client.Close()
-
-	for {
-		msg, err := n.ReadMessage(id.Address)
-
-		// Disconnections will occur here.
-		if err != nil {
-			return
-		}
-
-		id := (peer.ID)(*msg.Sender)
-
-		// Peer sent message with a completely different ID. Destroy.
-		if !client.ID.Equals(id) {
-			glog.Errorf("Message signed by peer %s but client is %s", client.ID.Address, id.Address)
-			return
-		}
-
-		// Unmarshal message.
-		var ptr ptypes.DynamicAny
-		if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
-			glog.Error(err)
-			return
-		}
-
-		// Check if the incoming message is a response.
-		if channel, exists := client.Requests.Load(msg.Nonce); exists && msg.Nonce > 0 {
-			channel <- ptr.Message
-			return
-		}
-
-		switch ptr.Message.(type) {
-		case *protobuf.StreamPacket: // Handle stream packet message.
-			pkt := ptr.Message.(*protobuf.StreamPacket)
-			client.handleStreamPacket(pkt.Data)
-		default: // Handle other messages.
-			ctx := new(MessageContext)
-			ctx.client = client
-			ctx.message = ptr.Message
-			ctx.nonce = msg.Nonce
-
-			// Execute 'on receive message' callback for all plugins.
-			n.Plugins.Each(func(plugin PluginInterface) {
-				err := plugin.Receive(ctx)
-
-				if err != nil {
-					glog.Error(err)
-				}
-			})
-		}
-	}
 }

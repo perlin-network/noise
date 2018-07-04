@@ -2,19 +2,19 @@ package network
 
 import (
 	"fmt"
-	"math/rand"
 	"net"
 	"net/url"
 	"strings"
 	"sync"
 
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
+	"github.com/xtaci/smux"
 )
 
 // Network represents the current networking state for this node.
@@ -42,45 +42,6 @@ type Network struct {
 
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
-}
-
-func (n *Network) loadWorker(address string) (*Worker, bool) {
-	n.WorkersMutex.Lock()
-	defer n.WorkersMutex.Unlock()
-
-	if n.Workers == nil {
-		return nil, false
-	}
-
-	if state, ok := n.Workers[address]; ok {
-		return state, true
-	} else {
-		return nil, false
-	}
-}
-
-func (n *Network) WriteMessage(address string, message *protobuf.Message) error {
-	worker, available := n.loadWorker(address)
-	if !available {
-		return fmt.Errorf("worker not found for %s", address)
-	}
-
-	worker.sendQueue <- message
-	return nil
-}
-
-func (n *Network) ReadMessage(address string) (*protobuf.Message, error) {
-	worker, available := n.loadWorker(address)
-	if !available {
-		return nil, fmt.Errorf("worker not found for %s", address)
-	}
-
-	message, available := <-worker.recvQueue
-	if !available {
-		return nil, fmt.Errorf("worker closed for %s", address)
-	}
-
-	return message, nil
 }
 
 func (n *Network) GetPort() uint16 {
@@ -135,7 +96,7 @@ func (n *Network) Listen() {
 	// Handle new clients.
 	for {
 		if conn, err := listener.Accept(); err == nil {
-			go n.Ingest(conn)
+			go n.Accept(conn)
 		} else {
 			glog.Error(err)
 		}
@@ -194,32 +155,6 @@ func (n *Network) Bootstrap(addresses ...string) {
 	}
 }
 
-func (n *Network) spawnWorker(address string) *Worker {
-	n.WorkersMutex.Lock()
-	defer n.WorkersMutex.Unlock()
-
-	if n.Workers == nil {
-		n.Workers = make(map[string]*Worker)
-	}
-
-	// Return worker if exists.
-	if worker, exists := n.Workers[address]; exists {
-		return worker
-	}
-
-	// Spawn and cache new worker otherwise.
-	n.Workers[address] = &Worker{
-		// TODO: Make queue size configurable.
-		sendQueue: make(chan *protobuf.Message, 4096),
-		recvQueue: make(chan *protobuf.Message, 4096),
-
-		needClose: make(chan struct{}),
-		closed:    make(chan struct{}),
-	}
-
-	return n.Workers[address]
-}
-
 // Dial establishes a bidirectional connection to an address, and additionally handshakes with said address.
 // Blocks until the worker responsible for bidirectional communication is gracefully stopped.
 func (n *Network) Dial(address string) (*PeerClient, error) {
@@ -229,14 +164,14 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 	}
 
 	// Establish an outgoing connection.
-	outgoing, err := dialAddress(address)
+	outgoing, err := n.dial(address)
 
 	// Failed to establish an outgoing connection.
 	if err != nil {
 		return nil, err
 	}
 
-	// The worker does not have an incoming connection yet; handled in Ingest().
+	// The worker does not have an incoming connection yet; handled in Accept().
 	// However, have the worker become available in sending messages.
 	worker := n.spawnWorker(address)
 	go worker.startSender(n, outgoing)
@@ -245,86 +180,111 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 	return client, nil
 }
 
-func (n *Network) handleWorker(address string, worker *Worker) {
-	defer func() {
-		n.WorkersMutex.Lock()
-		delete(n.Workers, address)
-		n.WorkersMutex.Unlock()
-	}()
-
-	// Wait until worker is closed.
-	<-worker.needClose
-	close(worker.closed)
-}
-
-// Broadcast asynchronously broadcasts a message to all peer clients.
-func (n *Network) Broadcast(message proto.Message) {
-	n.Peers.Range(func(key string, client *PeerClient) bool {
-		err := client.Tell(message)
-
-		if err != nil {
-			glog.Warningf("Failed to send message to peer %v [err=%s]", client.ID, err)
-		}
-
-		return true
-	})
-}
-
-// BroadcastByAddresses broadcasts a message to a set of peer clients denoted by their addresses.
-func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
-	for _, address := range addresses {
-		n.Tell(address, message)
-	}
-}
-
-// BroadcastByIDs broadcasts a message to a set of peer clients denoted by their peer IDs.
-func (n *Network) BroadcastByIDs(message proto.Message, ids ...peer.ID) {
-	for _, id := range ids {
-		n.Tell(id.Address, message)
-	}
-}
-
-// BroadcastRandomly asynchronously broadcast message to random selected K peers.
-// Does not guarantee broadcasting to exactly K peers.
-func (n *Network) BroadcastRandomly(message proto.Message, K int) {
-	var addresses []string
-
-	n.Peers.Range(func(key string, client *PeerClient) bool {
-		addresses = append(addresses, client.ID.Address)
-
-		// Limit total amount of addresses in case we have a lot of peers.
-		if len(addresses) > K*3 {
-			return false
-		}
-
-		return true
-	})
-
-	// Flip a coin and shuffle :).
-	rand.Shuffle(len(addresses), func(i, j int) {
-		addresses[i], addresses[j] = addresses[j], addresses[i]
-	})
-
-	if len(addresses) < K {
-		K = len(addresses)
+func (n *Network) dial(address string) (net.Conn, error) {
+	urlInfo, err := url.Parse(address)
+	if err != nil {
+		return nil, err
 	}
 
-	n.BroadcastByAddresses(message, addresses[:K]...)
-}
+	var conn net.Conn
 
-// Tell asynchronously emit a message to a denoted target address.
-func (n *Network) Tell(targetAddress string, msg proto.Message) error {
-	if client, err := n.Client(targetAddress); err == nil {
-		err := client.Tell(msg)
-
-		if err != nil {
-			return fmt.Errorf("failed to send message to peer %s [err=%s]", targetAddress, err)
-		}
+	// Choose scheme.
+	if urlInfo.Scheme == "kcp" {
+		conn, err = kcp.DialWithOptions(urlInfo.Host, nil, 10, 3)
+	} else if urlInfo.Scheme == "tcp" {
+		conn, err = net.Dial("tcp", urlInfo.Host)
 	} else {
-		return fmt.Errorf("failed to send message to peer %s; peer does not exist. [err=%s]", targetAddress, err)
+		err = errors.New("Invalid scheme: " + urlInfo.Scheme)
 	}
 
-	return nil
+	// Failed to connect.
+	if err != nil {
+		return nil, err
+	}
+
+	// Wrap a session around the outgoing connection.
+	session, err := smux.Client(conn, muxConfig())
+	if err != nil {
+		return nil, err
+	}
+
+	// Open an outgoing stream.
+	stream, err := session.OpenStream()
+	if err != nil {
+		return nil, err
+	}
+
+	return stream, nil
+}
+
+// Accept handles peer registration and processes incoming message streams.
+func (n *Network) Accept(conn net.Conn) {
+	id := n.processHandshake(conn)
+
+	// Handshake failed.
+	if id == nil {
+		return
+	}
+
+	// Lets now setup our peer client.
+	client, err := n.Client(id.Address)
+	if err != nil {
+		glog.Error(err)
+		return
+	}
+	client.ID = id
+
+	defer client.Close()
+
+	for {
+		msg, err := n.ReadMessage(id.Address)
+
+		// Disconnections will occur here.
+		if err != nil {
+			return
+		}
+
+		id := (peer.ID)(*msg.Sender)
+
+		// Peer sent message with a completely different ID. Destroy.
+		if !client.ID.Equals(id) {
+			glog.Errorf("Message signed by peer %s but client is %s", client.ID.Address, id.Address)
+			return
+		}
+
+		// Unmarshal message.
+		var ptr ptypes.DynamicAny
+		if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
+			glog.Error(err)
+			return
+		}
+
+		// Check if the incoming message is a response.
+		if channel, exists := client.Requests.Load(msg.Nonce); exists && msg.Nonce > 0 {
+			channel <- ptr.Message
+			return
+		}
+
+		switch ptr.Message.(type) {
+		case *protobuf.StreamPacket: // Handle stream packet message.
+			pkt := ptr.Message.(*protobuf.StreamPacket)
+			client.handleStreamPacket(pkt.Data)
+		default: // Handle other messages.
+			ctx := new(MessageContext)
+			ctx.client = client
+			ctx.message = ptr.Message
+			ctx.nonce = msg.Nonce
+
+			// Execute 'on receive message' callback for all plugins.
+			n.Plugins.Each(func(plugin PluginInterface) {
+				err := plugin.Receive(ctx)
+
+				if err != nil {
+					glog.Error(err)
+				}
+			})
+		}
+	}
 }
 
 // Plugin returns a plugins proxy interface should it be registered with the

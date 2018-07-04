@@ -100,3 +100,44 @@ func (n *Network) receiveMessage(conn net.Conn) (*protobuf.Message, error) {
 
 	return msg, err
 }
+
+// ReadMessage queues a message to a worker responsible for a provided host address.
+func (n *Network) WriteMessage(address string, message *protobuf.Message) error {
+	worker, available := n.loadWorker(address)
+	if !available {
+		return fmt.Errorf("worker not found for %s", address)
+	}
+
+	worker.sendQueue <- message
+	return nil
+}
+
+// ReadMessage reads a message from the worker responsible for a provided host address.
+func (n *Network) ReadMessage(address string) (*protobuf.Message, error) {
+	worker, available := n.loadWorker(address)
+	if !available {
+		return nil, fmt.Errorf("worker not found for %s", address)
+	}
+
+	message, available := <-worker.recvQueue
+	if !available {
+		return nil, fmt.Errorf("worker closed for %s", address)
+	}
+
+	return message, nil
+}
+
+// Tell asynchronously emit a message to a denoted target address.
+func (n *Network) Tell(targetAddress string, msg proto.Message) error {
+	if client, err := n.Client(targetAddress); err == nil {
+		err := client.Tell(msg)
+
+		if err != nil {
+			return fmt.Errorf("failed to send message to peer %s [err=%s]", targetAddress, err)
+		}
+	} else {
+		return fmt.Errorf("failed to send message to peer %s; peer does not exist. [err=%s]", targetAddress, err)
+	}
+
+	return nil
+}

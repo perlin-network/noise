@@ -1,12 +1,8 @@
 package network
 
 import (
-	"errors"
 	"github.com/perlin-network/noise/protobuf"
-	"github.com/xtaci/kcp-go"
-	"github.com/xtaci/smux"
 	"net"
-	"net/url"
 )
 
 // Worker dispatches/queues up incoming/outgoing messages for a connection.
@@ -16,43 +12,6 @@ type Worker struct {
 
 	needClose chan struct{}
 	closed    chan struct{}
-}
-
-func dialAddress(address string) (net.Conn, error) {
-	urlInfo, err := url.Parse(address)
-	if err != nil {
-		return nil, err
-	}
-
-	var conn net.Conn
-
-	// Choose scheme.
-	if urlInfo.Scheme == "kcp" {
-		conn, err = kcp.DialWithOptions(urlInfo.Host, nil, 10, 3)
-	} else if urlInfo.Scheme == "tcp" {
-		conn, err = net.Dial("tcp", urlInfo.Host)
-	} else {
-		err = errors.New("Invalid scheme: " + urlInfo.Scheme)
-	}
-
-	// Failed to connect.
-	if err != nil {
-		return nil, err
-	}
-
-	// Wrap a session around the outgoing connection.
-	session, err := smux.Client(conn, muxConfig())
-	if err != nil {
-		return nil, err
-	}
-
-	// Open an outgoing stream.
-	stream, err := session.OpenStream()
-	if err != nil {
-		return nil, err
-	}
-
-	return stream, nil
 }
 
 func (s *Worker) IsClosed() bool {
@@ -114,4 +73,57 @@ func (s *Worker) startSender(n *Network, c net.Conn) {
 			return
 		}
 	}
+}
+
+func (n *Network) loadWorker(address string) (*Worker, bool) {
+	n.WorkersMutex.Lock()
+	defer n.WorkersMutex.Unlock()
+
+	if n.Workers == nil {
+		return nil, false
+	}
+
+	if state, ok := n.Workers[address]; ok {
+		return state, true
+	} else {
+		return nil, false
+	}
+}
+
+func (n *Network) spawnWorker(address string) *Worker {
+	n.WorkersMutex.Lock()
+	defer n.WorkersMutex.Unlock()
+
+	if n.Workers == nil {
+		n.Workers = make(map[string]*Worker)
+	}
+
+	// Return worker if exists.
+	if worker, exists := n.Workers[address]; exists {
+		return worker
+	}
+
+	// Spawn and cache new worker otherwise.
+	n.Workers[address] = &Worker{
+		// TODO: Make queue size configurable.
+		sendQueue: make(chan *protobuf.Message, 4096),
+		recvQueue: make(chan *protobuf.Message, 4096),
+
+		needClose: make(chan struct{}),
+		closed:    make(chan struct{}),
+	}
+
+	return n.Workers[address]
+}
+
+func (n *Network) handleWorker(address string, worker *Worker) {
+	defer func() {
+		n.WorkersMutex.Lock()
+		delete(n.Workers, address)
+		n.WorkersMutex.Unlock()
+	}()
+
+	// Wait until worker is closed.
+	<-worker.needClose
+	close(worker.closed)
 }
