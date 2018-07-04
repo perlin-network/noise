@@ -67,16 +67,16 @@ func (p *Plugin) PeerDisconnect(client *network.PeerClient) {
 			var peers []string
 			client.Network.Peers.Range(func(k string, pc *network.PeerClient) bool {
 				if k == addr {
-					peerConnected = true
+					peerConnected = pc.IsConnected()
 				}
 				peers = append(peers, k)
 				return true
 			})
 			if !peerConnected {
-				glog.Infof("backing off still not connected to peer %s\n", addr)
+				glog.Infof("backing off still not connected to peer %s, all peers %v\n", addr, peers)
 				continue
 			}
-			glog.Infof("backing off done successfully reconnected to %s\n", addr)
+			glog.Infof("backing off done successfully reconnected to %s, all peers %v\n", addr, peers)
 			// success
 			delete(p.backoffs, addr)
 		}
