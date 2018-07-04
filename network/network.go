@@ -38,7 +38,8 @@ type Network struct {
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
 
-	CryptoProvider crypto.Provider
+	SignaturePolicy crypto.SignaturePolicy
+	HashPolicy crypto.HashPolicy
 }
 
 func (n *Network) GetPort() uint16 {

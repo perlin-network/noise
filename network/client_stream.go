@@ -98,7 +98,13 @@ func (n *Network) receiveMessage(stream *smux.Stream) (*protobuf.Message, error)
 	}
 
 	// Verify signature of message.
-	if !crypto.Verify(n.CryptoProvider, msg.Sender.PublicKey, msg.Message.Value, msg.Signature) {
+	if !crypto.Verify(
+		n.SignaturePolicy,
+		n.HashPolicy,
+		msg.Sender.PublicKey,
+		msg.Message.Value,
+		msg.Signature,
+	) {
 		return nil, errors.New("received message had an malformed signature")
 	}
 

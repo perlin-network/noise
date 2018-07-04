@@ -6,6 +6,8 @@ import (
 	"reflect"
 
 	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/signing/ed25519"
+	"github.com/perlin-network/noise/crypto/hashing/blake2b"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
 )
@@ -17,13 +19,16 @@ type NetworkBuilder struct {
 
 	plugins     *network.PluginList
 	pluginCount int
-	cryptoProvider crypto.Provider
+
+	signaturePolicy crypto.SignaturePolicy
+	hashPolicy crypto.HashPolicy
 }
 
 // NewNetworkBuilder lets you configure a network to build
 func NewNetworkBuilder() *NetworkBuilder {
 	return &NetworkBuilder{
-		cryptoProvider: crypto.NewEd25519(),
+		signaturePolicy: ed25519.New(),
+		hashPolicy: blake2b.New(),
 	}
 }
 
@@ -37,9 +42,14 @@ func (builder *NetworkBuilder) SetAddress(address string) {
 	builder.address = address
 }
 
-// SetCryptoProvider sets the crypto provider for the network.
-func (builder *NetworkBuilder) SetCryptoProvider(provider crypto.Provider) {
-	builder.cryptoProvider = provider
+// SetSignaturePolicy sets the signature policy for the network.
+func (builder *NetworkBuilder) SetSignaturePolicy(policy crypto.SignaturePolicy) {
+	builder.signaturePolicy = policy
+}
+
+// SetHashPolicy sets the hash policy for the network.
+func (builder *NetworkBuilder) SetHashPolicy(policy crypto.HashPolicy) {
+	builder.hashPolicy = policy
 }
 
 // AddPluginWithPriority register a new plugin onto the network with a set priority.
@@ -101,7 +111,8 @@ func (builder *NetworkBuilder) Build() (*network.Network, error) {
 
 		Listening: make(chan struct{}),
 
-		CryptoProvider: builder.cryptoProvider,
+		SignaturePolicy: builder.signaturePolicy,
+		HashPolicy: builder.hashPolicy,
 	}
 
 	return net, nil
