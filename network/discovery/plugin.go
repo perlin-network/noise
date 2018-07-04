@@ -42,7 +42,6 @@ func (state *Plugin) Receive(ctx *network.MessageContext) error {
 		err := ctx.Reply(&protobuf.Pong{})
 
 		if err != nil {
-			glog.Error(err)
 			return err
 		}
 	case *protobuf.Pong:
@@ -74,7 +73,6 @@ func (state *Plugin) Receive(ctx *network.MessageContext) error {
 
 		err := ctx.Reply(response)
 		if err != nil {
-			glog.Error(err)
 			return err
 		}
 
@@ -93,7 +91,7 @@ func (state *Plugin) PeerDisconnect(client *network.PeerClient) {
 	if client.ID != nil {
 		if state.Routes.PeerExists(*client.ID) {
 			state.Routes.RemovePeer(*client.ID)
-	
+
 			glog.Infof("Peer %s has disconnected.", client.ID.Address)
 		}
 	}

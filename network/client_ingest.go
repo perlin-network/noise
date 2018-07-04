@@ -117,7 +117,7 @@ func (n *Network) Ingest(conn net.Conn) {
 				err := plugin.Receive(ctx)
 
 				if err != nil {
-					glog.Error(err)
+					glog.Errorf("%+v", err)
 				}
 			})
 		}(stream)
