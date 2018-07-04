@@ -3,20 +3,16 @@ package network
 import (
 	"errors"
 	"net"
-	"net/url"
 	"time"
 
 	"sync"
 	"sync/atomic"
 
-	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
-	"github.com/xtaci/kcp-go"
-	"github.com/xtaci/smux"
 )
 
 // PeerClient represents a single incoming peers client.
@@ -25,9 +21,6 @@ type PeerClient struct {
 
 	ID *peer.ID
 	Address string
-
-	session *smux.Session
-	sessionInitMutex sync.Mutex
 
 	Requests     *Uint64MessageChannelSyncMap
 	RequestNonce uint64
@@ -43,9 +36,10 @@ type StreamState struct {
 }
 
 // createPeerClient creates a stub peer client.
-func createPeerClient(network *Network) *PeerClient {
-	return &PeerClient{
+func createPeerClient(network *Network, address string) *PeerClient {
+	client := &PeerClient{
 		Network: network,
+		Address: address,
 		Requests: new(Uint64MessageChannelSyncMap),
 		RequestNonce: 0,
 		stream: StreamState {
@@ -53,61 +47,15 @@ func createPeerClient(network *Network) *PeerClient {
 			dataAvailable: make(chan struct{}),
 		},
 	}
+	client.Network.Plugins.Each(func(plugin PluginInterface) {
+		plugin.PeerConnect(client)
+	})
+	return client
 }
 
 // nextNonce gets the next most available request nonce. TODO: Have nonce recycled over time.
 func (c *PeerClient) nextNonce() uint64 {
 	return atomic.AddUint64(&c.RequestNonce, 1)
-}
-
-// establishConnection establishes a session by dialing a peers address. Errors if
-// peer is not dial-able, or if the peer client already is connected.
-func (c *PeerClient) establishConnection(address string) error {
-	c.sessionInitMutex.Lock()
-	defer c.sessionInitMutex.Unlock()
-
-	if c.session != nil {
-		return nil
-	}
-
-	urlInfo, err := url.Parse(address)
-	if err != nil {
-		return err
-	}
-
-	var conn net.Conn
-
-	if urlInfo.Scheme == "kcp" {
-		conn, err = kcp.DialWithOptions(urlInfo.Host, nil, 10, 3)
-	} else if urlInfo.Scheme == "tcp" {
-		conn, err = net.Dial("tcp", urlInfo.Host)
-	} else {
-		err = errors.New("Invalid scheme: " + urlInfo.Scheme)
-	}
-
-	// Failed to connect.
-	if err != nil {
-		glog.Error(err)
-		return err
-	}
-
-	c.session, err = smux.Client(conn, muxConfig())
-
-	// Failed to open session.
-	if err != nil {
-		glog.Error(err)
-		return err
-	}
-
-	// Cache the peer's client.
-	c.Network.Peers.Store(address, c)
-	c.Address = address
-
-	c.Network.Plugins.Each(func(plugin PluginInterface) {
-		plugin.PeerConnect(c)
-	})
-
-	return nil
 }
 
 // Close stops all sessions/streams and cleans up the nodes
@@ -126,13 +74,6 @@ func (c *PeerClient) Close() error {
 	if c.ID != nil {
 		// Delete peer from network.
 		c.Network.Peers.Delete(c.ID.Address)
-	}
-
-	if c.session != nil && !c.session.IsClosed() {
-		err := c.session.Close()
-		if err != nil {
-			glog.Error(err)
-		}
 	}
 
 	return nil
@@ -174,19 +115,6 @@ func (c *PeerClient) Tell(message proto.Message) error {
 
 // Request requests for a response for a request sent to a given peer.
 func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
-	if c.session == nil {
-		return nil, errors.New("client session nil")
-	}
-
-	// Open a new stream.
-	stream, err := c.OpenStream()
-	if err != nil {
-		return nil, err
-	}
-	defer stream.Close()
-
-	stream.SetDeadline(time.Now().Add(req.Timeout))
-
 	// Prepare message.
 	msg, err := c.prepareMessage(req.Message)
 	if err != nil {
@@ -195,8 +123,7 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 
 	msg.Nonce = c.nextNonce()
 
-	// Send request bytes.
-	err = c.Network.sendMessage(stream, msg)
+	err = c.Network.WriteMessage(c.Address, msg)
 	if err != nil {
 		return nil, err
 	}
@@ -221,16 +148,6 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 
 // Reply is equivalent to Tell() with an appended nonce to signal a reply.
 func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
-	if c.session == nil {
-		return errors.New("client session nil")
-	}
-
-	// Open a new stream.
-	stream, err := c.OpenStream()
-	if err != nil {
-		return err
-	}
-	defer stream.Close()
 
 	// Prepare message.
 	msg, err := c.prepareMessage(message)
@@ -240,35 +157,12 @@ func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
 
 	msg.Nonce = nonce
 
-	// Send message bytes.
-	err = c.Network.sendMessage(stream, msg)
+	err = c.Network.WriteMessage(c.Address, msg)
 	if err != nil {
 		return err
 	}
 
 	return nil
-}
-
-// Opens a new stream with preconfigured settings through the clients
-// assigned session.
-func (c *PeerClient) OpenStream() (*smux.Stream, error) {
-	// Open new stream.
-	stream, err := c.session.OpenStream()
-	if err != nil {
-		return nil, err
-	}
-
-	// Configure deadlines. TODO: Make configurable.
-	err = stream.SetReadDeadline(time.Now().Add(5 * time.Second))
-	if err != nil {
-		return nil, err
-	}
-	err = stream.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err != nil {
-		return nil, err
-	}
-
-	return stream, nil
 }
 
 func (c *PeerClient) handleStreamPacket(pkt []byte) {
