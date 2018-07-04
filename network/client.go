@@ -23,10 +23,10 @@ import (
 type PeerClient struct {
 	Network *Network
 
-	ID      *peer.ID
+	ID *peer.ID
 	Address string
 
-	session          *smux.Session
+	session *smux.Session
 	sessionInitMutex sync.Mutex
 
 	Requests     *Uint64MessageChannelSyncMap
@@ -37,19 +37,19 @@ type PeerClient struct {
 
 type StreamState struct {
 	sync.Mutex
-	buffer        []byte
+	buffer []byte
 	dataAvailable chan struct{}
-	closed        bool
+	closed bool
 }
 
 // createPeerClient creates a stub peer client.
 func createPeerClient(network *Network) *PeerClient {
 	return &PeerClient{
-		Network:      network,
-		Requests:     new(Uint64MessageChannelSyncMap),
+		Network: network,
+		Requests: new(Uint64MessageChannelSyncMap),
 		RequestNonce: 0,
-		stream: StreamState{
-			buffer:        make([]byte, 0),
+		stream: StreamState {
+			buffer: make([]byte, 0),
 			dataAvailable: make(chan struct{}),
 		},
 	}
@@ -66,7 +66,7 @@ func (c *PeerClient) establishConnection(address string) error {
 	c.sessionInitMutex.Lock()
 	defer c.sessionInitMutex.Unlock()
 
-	if c.IsConnected() {
+	if c.session != nil {
 		return nil
 	}
 
@@ -174,8 +174,8 @@ func (c *PeerClient) Tell(message proto.Message) error {
 
 // Request requests for a response for a request sent to a given peer.
 func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
-	if !c.IsConnected() {
-		return nil, errors.New("client is not connected")
+	if c.session == nil {
+		return nil, errors.New("client session nil")
 	}
 
 	// Open a new stream.
@@ -221,8 +221,8 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 
 // Reply is equivalent to Tell() with an appended nonce to signal a reply.
 func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
-	if !c.IsConnected() {
-		return errors.New("client is not connected")
+	if c.session == nil {
+		return errors.New("client session nil")
 	}
 
 	// Open a new stream.
@@ -247,10 +247,6 @@ func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
 	}
 
 	return nil
-}
-
-func (c *PeerClient) IsConnected() bool {
-	return c.session != nil
 }
 
 // Opens a new stream with preconfigured settings through the clients
@@ -314,7 +310,7 @@ func (c *PeerClient) Read(out []byte) (int, error) {
 }
 
 func (c *PeerClient) Write(data []byte) (int, error) {
-	err := c.Tell(&protobuf.StreamPacket{
+	err := c.Tell(&protobuf.StreamPacket {
 		Data: data,
 	})
 	if err != nil {
@@ -336,11 +332,11 @@ func (a *NoiseAddr) String() string {
 }
 
 func (c *PeerClient) LocalAddr() net.Addr {
-	return &NoiseAddr{Address: "[local]"}
+	return &NoiseAddr { Address: "[local]" }
 }
 
 func (c *PeerClient) RemoteAddr() net.Addr {
-	return &NoiseAddr{Address: c.Address}
+	return &NoiseAddr { Address: c.Address }
 }
 
 func (c *PeerClient) SetDeadline(t time.Time) error {

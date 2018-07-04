@@ -27,6 +27,3 @@ func (*Plugin) Receive(ctx *MessageContext) error { return nil }
 func (*Plugin) Cleanup(net *Network)              {}
 func (*Plugin) PeerConnect(client *PeerClient)    {}
 func (*Plugin) PeerDisconnect(client *PeerClient) {}
-
-// makes sure the Plugin implements the interface at compile time
-var _ PluginInterface = (*Plugin)(nil)
