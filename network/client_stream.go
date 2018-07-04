@@ -8,12 +8,12 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/protobuf"
-	"github.com/xtaci/smux"
 	"io"
+	"net"
 )
 
 // sendMessage marshals and sends a message over a stream.
-func (n *Network) sendMessage(stream *smux.Stream, message proto.Message) error {
+func (n *Network) sendMessage(stream net.Conn, message *protobuf.Message) error {
 	bytes, err := proto.Marshal(message)
 	if err != nil {
 		return err
@@ -31,10 +31,6 @@ func (n *Network) sendMessage(stream *smux.Stream, message proto.Message) error 
 	// Send request bytes.
 	written, err := writer.Write(bytes)
 	if err != nil {
-		// Potentially malicious or dead peer; kill it.
-		if err == io.ErrUnexpectedEOF {
-			stream.Close()
-		}
 		return err
 	}
 
@@ -52,7 +48,7 @@ func (n *Network) sendMessage(stream *smux.Stream, message proto.Message) error 
 }
 
 // receiveMessage reads, unmarshals and verifies a message from a stream.
-func (n *Network) receiveMessage(stream *smux.Stream) (*protobuf.Message, error) {
+func (n *Network) receiveMessage(stream net.Conn) (*protobuf.Message, error) {
 	reader := bufio.NewReader(stream)
 
 	buffer := make([]byte, binary.MaxVarintLen64)
