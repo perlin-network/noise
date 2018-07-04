@@ -13,8 +13,6 @@ import (
 )
 
 func main() {
-	cryptoProvider := crypto.NewEd25519()
-
 	// glog defaults to logging to a file, override this flag to log to console for testing
 	flag.Set("logtostderr", "true")
 
@@ -32,7 +30,7 @@ func main() {
 	upnpEnabled := *upnpFlag
 	peers := strings.Split(*peersFlag, ",")
 
-	keys := crypto.RandomKeyPair(cryptoProvider)
+	keys := crypto.RandomKeyPair()
 
 	glog.Infof("Private Key: %s", keys.PrivateKeyHex())
 	glog.Infof("Public Key: %s", keys.PublicKeyHex())
@@ -40,7 +38,6 @@ func main() {
 	builder := builders.NewNetworkBuilder()
 	builder.SetKeys(keys)
 	builder.SetAddress(network.FormatAddress(protocol, host, port))
-	builder.SetCryptoProvider(cryptoProvider)
 
 	// Register UPnP plugin.
 	if upnpEnabled {

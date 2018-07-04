@@ -34,8 +34,6 @@ func (state *BasicPlugin) Receive(ctx *network.MessageContext) error {
 // ExampleBasic demonstrates how to broadcast a message to a set of peers that discover
 // each other through peer discovery.
 func ExampleBasic() {
-	cryptoProvider := crypto.NewEd25519()
-
 	flag.Parse()
 
 	numNodes := 3
@@ -48,10 +46,9 @@ func ExampleBasic() {
 
 	for i := 0; i < numNodes; i++ {
 		builder := builders.NewNetworkBuilder()
-		builder.SetKeys(crypto.RandomKeyPair(cryptoProvider))
+		builder.SetKeys(crypto.RandomKeyPair())
 		builder.SetAddress(network.FormatAddress("kcp", host, uint16(startPort+i)))
-		builder.SetCryptoProvider(cryptoProvider)
-	
+
 		builder.AddPlugin(new(discovery.Plugin))
 
 		plugins = append(plugins, new(BasicPlugin))

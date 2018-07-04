@@ -97,8 +97,6 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 // Messages are proxied to closer nodes using the Kademlia routing table.
 // TODO: Test broken.
 func ExampleProxy() {
-	cryptoProvider := crypto.NewEd25519()
-
 	numNodes := 5
 	sender := 0
 	target := numNodes - 1
@@ -111,9 +109,8 @@ func ExampleProxy() {
 		ids[addr] = i
 
 		builder := builders.NewNetworkBuilder()
-		builder.SetKeys(crypto.RandomKeyPair(cryptoProvider))
+		builder.SetKeys(crypto.RandomKeyPair())
 		builder.SetAddress(addr)
-		builder.SetCryptoProvider(cryptoProvider)
 
 		// DisablePong will preserve the line topology
 		builder.AddPlugin(&discovery.Plugin{
