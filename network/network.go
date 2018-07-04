@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
@@ -35,8 +36,187 @@ type Network struct {
 	// so that the Network doesn't dial multiple times to the same ip
 	Peers *StringPeerClientSyncMap
 
+	Connections map[string]*ConnectionState
+	ConnectionsMutex sync.Mutex
+
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
+}
+
+type ConnectionState struct {
+	sendQueue chan *protobuf.Message
+	recvQueue chan *protobuf.Message
+	needClose chan struct{}
+	closed chan struct{}
+}
+
+func dialAddress(address string) (net.Conn, error) {
+	urlInfo, err := url.Parse(address)
+	if err != nil {
+		return nil, err
+	}
+
+	var conn net.Conn
+
+	if urlInfo.Scheme == "kcp" {
+		conn, err = kcp.DialWithOptions(urlInfo.Host, nil, 10, 3)
+	} else if urlInfo.Scheme == "tcp" {
+		conn, err = net.Dial("tcp", urlInfo.Host)
+	} else {
+		err = errors.New("Invalid scheme: " + urlInfo.Scheme)
+	}
+
+	// Failed to connect.
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
+}
+
+func (s *ConnectionState) IsClosed() bool {
+	select {
+	case <-s.closed:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *ConnectionState) RequestClose() {
+	select {
+	case s.needClose <- struct{}{}:
+	default:
+	}
+}
+
+func (s *ConnectionState) startRecv(n *Network, c net.Conn) {
+	defer close(s.recvQueue)
+
+	for {
+		if s.IsClosed() {
+			return
+		}
+
+		message, err := n.receiveMessage(c)
+		if err != nil {
+			glog.Error(err)
+			s.RequestClose()
+			return
+		}
+
+		s.recvQueue <- message
+	}
+}
+
+func (s *ConnectionState) startSend(n *Network, c net.Conn) {
+	for {
+		if s.IsClosed() {
+			return
+		}
+
+		var message *protobuf.Message
+
+		select {
+		case message = <-s.sendQueue:
+		case <-s.closed:
+			return
+		}
+
+		err := n.sendMessage(c, message)
+		if err != nil {
+			glog.Error(err)
+			s.RequestClose()
+			return
+		}
+	}
+}
+
+func (n *Network) HandleState(address string, state *ConnectionState, conn net.Conn) {
+	defer func() {
+		if conn != nil {
+			conn.Close()
+		}
+
+		n.ConnectionsMutex.Lock()
+		delete(n.Connections, address)
+		n.ConnectionsMutex.Unlock()
+	}()
+
+	if conn == nil {
+		var err error
+		conn, err = dialAddress(address)
+		if err != nil {
+			glog.Error(err)
+			return
+		}
+	}
+
+	go state.startSend(n, conn)
+	go state.startRecv(n, conn)
+
+	<-state.needClose
+	close(state.closed)
+}
+
+func (n *Network) EnsureConnectionState(address string, conn net.Conn) *ConnectionState {
+	var state *ConnectionState
+
+	n.ConnectionsMutex.Lock()
+	if n.Connections == nil {
+		n.Connections = make(map[string]*ConnectionState)
+	}
+	if _, ok := n.Connections[address]; !ok {
+		n.Connections[address] = &ConnectionState {
+			sendQueue: make(chan *protobuf.Message, 4096),
+			recvQueue: make(chan *protobuf.Message, 4096),
+			needClose: make(chan struct{}),
+			closed: make(chan struct{}),
+		}
+		state = n.Connections[address]
+		go n.HandleState(address, state, conn)
+		if conn == nil {
+			glog.Infof("Ensure: New connection with %s", address)
+		}
+	} else {
+		state = n.Connections[address]
+	}
+	n.ConnectionsMutex.Unlock()
+
+	return state
+}
+
+func (n *Network) GetConnectionState(address string) (*ConnectionState, bool) {
+	n.ConnectionsMutex.Lock()
+	defer n.ConnectionsMutex.Unlock()
+
+	if n.Connections == nil {
+		return nil, false
+	}
+
+	if state, ok := n.Connections[address]; ok {
+		return state, true
+	} else {
+		return nil, false
+	}
+}
+
+func (n *Network) WriteMessage(address string, message *protobuf.Message) error {
+	state := n.EnsureConnectionState(address, nil)
+	state.sendQueue <- message
+	return nil
+}
+
+func (n *Network) ReadMessage(address string) (*protobuf.Message, error) {
+	state, ok := n.GetConnectionState(address)
+	if !ok {
+		return nil, fmt.Errorf("State not found for %s", address)
+	}
+	message, ok := <-state.recvQueue
+	if !ok {
+		return nil, fmt.Errorf("State closed for %s", address)
+	}
+	return message, nil
 }
 
 func (n *Network) GetPort() uint16 {
@@ -118,7 +298,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		return client, nil
 	}
 
-	client := createPeerClient(n)
+	client := createPeerClient(n, address)
 	n.Peers.Store(address, client)
 
 	return client, nil
@@ -158,11 +338,7 @@ func (n *Network) Dial(address string) (*PeerClient, error) {
 		return nil, err
 	}
 
-	err = client.establishConnection(address)
-	if err != nil {
-		glog.Warningf("Failed to connect to peer %s err=[%+v]\n", address, err)
-		return nil, err
-	}
+	n.EnsureConnectionState(address, nil)
 
 	return client, nil
 }
