@@ -3,14 +3,12 @@ package network
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/peer"
-	"github.com/xtaci/smux"
 )
 
 // MessageContext provides parameters and helper functions to a MessageProcessor
 // for interacting with/analyzing incoming messages from a select peer.
 type MessageContext struct {
 	client  *PeerClient
-	stream  *smux.Stream
 	message proto.Message
 	nonce   uint64
 }
