@@ -27,17 +27,6 @@ func (p *Plugin) Startup(net *network.Network) {
 	}
 }
 
-/*
-func (p *Plugin) Receive(ctx *network.MessageContext) error {
-	addr := ctx.Sender().Address
-	if _, exists := p.backoffs[addr]; exists {
-		// if there is an active backoff, clear it
-		delete(p.backoffs, addr)
-	}
-	return nil
-}
-*/
-
 func (p *Plugin) PeerDisconnect(client *network.PeerClient) {
 	addr := client.Address
 
@@ -65,19 +54,16 @@ func (p *Plugin) PeerDisconnect(client *network.PeerClient) {
 			d := b.NextDuration()
 			glog.Infof("backoff reconnecting to %s in %s iteration %d", addr, d, i+1)
 			time.Sleep(d)
+			if p.checkConnected(client, addr) {
+				// check that the connection is still empty before dialing
+				break
+			}
 			if _, err := client.Network.Dial(client.Address); err != nil {
+				client.Close()
 				continue
 			}
-			peerConnected := false
-			// check if the peer is still disconnected
-			client.Network.Peers.Range(func(k string, pc *network.PeerClient) bool {
-				// seems the peer is disconnected while pc.ID == nil
-				if k == addr && pc.ID != nil {
-					peerConnected = true
-				}
-				return true
-			})
-			if !peerConnected {
+			if !p.checkConnected(client, addr) {
+				// check if successfully connected
 				continue
 			}
 			// success
@@ -86,4 +72,17 @@ func (p *Plugin) PeerDisconnect(client *network.PeerClient) {
 		// clean up this back off
 		delete(p.backoffs, addr)
 	}()
+}
+
+func (p *Plugin) checkConnected(client *network.PeerClient, addr string) bool {
+	connected := false
+	// check if the peer is still disconnected
+	client.Network.Peers.Range(func(k string, pc *network.PeerClient) bool {
+		// seems the peer is disconnected while pc.ID == nil
+		if k == addr && pc.ID != nil {
+			connected = true
+		}
+		return true
+	})
+	return connected
 }

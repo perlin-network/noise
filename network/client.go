@@ -81,13 +81,13 @@ func (c *PeerClient) establishConnection(address string) error {
 		conn, err = kcp.DialWithOptions(urlInfo.Host, nil, 10, 3)
 	} else if urlInfo.Scheme == "tcp" {
 		conn, err = net.Dial("tcp", urlInfo.Host)
+		err = errors.WithStack(err)
 	} else {
 		err = errors.New("Invalid scheme: " + urlInfo.Scheme)
 	}
 
 	// Failed to connect.
 	if err != nil {
-		glog.Error(err)
 		return err
 	}
 
@@ -95,7 +95,6 @@ func (c *PeerClient) establishConnection(address string) error {
 
 	// Failed to open session.
 	if err != nil {
-		glog.Error(err)
 		return err
 	}
 
@@ -133,6 +132,7 @@ func (c *PeerClient) Close() error {
 		if err != nil {
 			glog.Error(err)
 		}
+		c.session = nil
 	}
 
 	return nil
