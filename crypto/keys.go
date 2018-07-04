@@ -12,18 +12,18 @@ type KeyPair struct {
 	PublicKey  []byte
 }
 
-func newErrPrivKeySize(p Provider) error {
+func newErrPrivKeySize(p SignaturePolicy) error {
 	return errors.New("private key !=" + strconv.Itoa(p.PrivateKeySize()) + " bytes")
 }
 
-func (k *KeyPair) Sign(p Provider, message []byte) ([]byte, error) {
-	if len(k.PrivateKey) != p.PrivateKeySize() {
-		return nil, newErrPrivKeySize(p)
+func (k *KeyPair) Sign(sp SignaturePolicy, hp HashPolicy, message []byte) ([]byte, error) {
+	if len(k.PrivateKey) != sp.PrivateKeySize() {
+		return nil, newErrPrivKeySize(sp)
 	}
 
-	message = HashBytes(message)
+	message = hp.HashBytes(message)
 
-	signature := p.Sign(k.PrivateKey, message)
+	signature := sp.Sign(k.PrivateKey, message)
 	return signature, nil
 }
 
@@ -39,15 +39,7 @@ func (k *KeyPair) String() string {
 	return fmt.Sprintf("Private Key: %s\nPublic Key: %s", k.PrivateKeyHex(), k.PublicKeyHex())
 }
 
-func RandomKeyPair(p Provider) *KeyPair {
-	k, err := p.GenerateKeyPair()
-	if err != nil {
-		panic(err)
-	}
-	return &k
-}
-
-func FromPrivateKey(p Provider, privateKey string) (*KeyPair, error) {
+func FromPrivateKey(p SignaturePolicy, privateKey string) (*KeyPair, error) {
 	rawPrivateKey, err := hex.DecodeString(privateKey)
 	if err != nil {
 		return nil, err
@@ -56,7 +48,7 @@ func FromPrivateKey(p Provider, privateKey string) (*KeyPair, error) {
 	return FromPrivateKeyBytes(p, rawPrivateKey)
 }
 
-func FromPrivateKeyBytes(p Provider, rawPrivateKey []byte) (*KeyPair, error) {
+func FromPrivateKeyBytes(p SignaturePolicy, rawPrivateKey []byte) (*KeyPair, error) {
 	if len(rawPrivateKey) != p.PrivateKeySize() {
 		return nil, newErrPrivKeySize(p)
 	}
@@ -74,12 +66,12 @@ func FromPrivateKeyBytes(p Provider, rawPrivateKey []byte) (*KeyPair, error) {
 	return keyPair, nil
 }
 
-func Verify(p Provider, publicKey []byte, message []byte, signature []byte) bool {
+func Verify(sp SignaturePolicy, hp HashPolicy, publicKey []byte, message []byte, signature []byte) bool {
 	// Public key must be a set size.
-	if len(publicKey) != p.PublicKeySize() {
+	if len(publicKey) != sp.PublicKeySize() {
 		return false
 	}
 
-	message = HashBytes(message)
-	return p.Verify(publicKey, message, signature)
+	message = hp.HashBytes(message)
+	return sp.Verify(publicKey, message, signature)
 }
