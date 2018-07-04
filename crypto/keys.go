@@ -1,16 +1,10 @@
 package crypto
 
 import (
-	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"golang.org/x/crypto/ed25519"
 	"strconv"
-)
-
-var (
-	ErrPrivKeySize = errors.New("private key !=" + strconv.Itoa(ed25519.PrivateKeySize) + " bytes")
 )
 
 type KeyPair struct {
@@ -18,14 +12,18 @@ type KeyPair struct {
 	PublicKey  []byte
 }
 
-func (k *KeyPair) Sign(message []byte) ([]byte, error) {
-	if len(k.PrivateKey) != ed25519.PrivateKeySize {
-		return nil, ErrPrivKeySize
+func newErrPrivKeySize(p Provider) error {
+	return errors.New("private key !=" + strconv.Itoa(p.PrivateKeySize()) + " bytes")
+}
+
+func (k *KeyPair) Sign(p Provider, message []byte) ([]byte, error) {
+	if len(k.PrivateKey) != p.PrivateKeySize() {
+		return nil, newErrPrivKeySize(p)
 	}
 
 	message = HashBytes(message)
 
-	signature := ed25519.Sign(ed25519.PrivateKey(k.PrivateKey), message)
+	signature := p.Sign(k.PrivateKey, message)
 	return signature, nil
 }
 
@@ -41,30 +39,32 @@ func (k *KeyPair) String() string {
 	return fmt.Sprintf("Private Key: %s\nPublic Key: %s", k.PrivateKeyHex(), k.PublicKeyHex())
 }
 
-func RandomKeyPair() *KeyPair {
-	publicKey, privateKey, _ := ed25519.GenerateKey(rand.Reader)
-
-	return &KeyPair{
-		PublicKey:  publicKey,
-		PrivateKey: privateKey,
+func RandomKeyPair(p Provider) *KeyPair {
+	k, err := p.GenerateKeyPair()
+	if err != nil {
+		panic(err)
 	}
+	return &k
 }
 
-func FromPrivateKey(privateKey string) (*KeyPair, error) {
+func FromPrivateKey(p Provider, privateKey string) (*KeyPair, error) {
 	rawPrivateKey, err := hex.DecodeString(privateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	return FromPrivateKeyBytes(rawPrivateKey)
+	return FromPrivateKeyBytes(p, rawPrivateKey)
 }
 
-func FromPrivateKeyBytes(rawPrivateKey []byte) (*KeyPair, error) {
-	if len(rawPrivateKey) != ed25519.PrivateKeySize {
-		return nil, ErrPrivKeySize
+func FromPrivateKeyBytes(p Provider, rawPrivateKey []byte) (*KeyPair, error) {
+	if len(rawPrivateKey) != p.PrivateKeySize() {
+		return nil, newErrPrivKeySize(p)
 	}
 
-	rawPublicKey := ed25519.PrivateKey(rawPrivateKey).Public().(ed25519.PublicKey)
+	rawPublicKey, err := p.PrivateToPublic(rawPrivateKey)
+	if err != nil {
+		return nil, err
+	}
 
 	keyPair := &KeyPair{
 		PrivateKey: rawPrivateKey,
@@ -74,12 +74,12 @@ func FromPrivateKeyBytes(rawPrivateKey []byte) (*KeyPair, error) {
 	return keyPair, nil
 }
 
-func Verify(publicKey []byte, message []byte, signature []byte) bool {
+func Verify(p Provider, publicKey []byte, message []byte, signature []byte) bool {
 	// Public key must be a set size.
-	if len(publicKey) != ed25519.PublicKeySize {
+	if len(publicKey) != p.PublicKeySize() {
 		return false
 	}
 
 	message = HashBytes(message)
-	return ed25519.Verify(ed25519.PublicKey(publicKey), message, signature)
+	return p.Verify(publicKey, message, signature)
 }
