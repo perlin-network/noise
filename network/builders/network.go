@@ -17,11 +17,14 @@ type NetworkBuilder struct {
 
 	plugins     *network.PluginList
 	pluginCount int
+	cryptoProvider crypto.Provider
 }
 
 // NewNetworkBuilder lets you configure a network to build
 func NewNetworkBuilder() *NetworkBuilder {
-	return &NetworkBuilder{}
+	return &NetworkBuilder{
+		cryptoProvider: crypto.NewEd25519(),
+	}
 }
 
 // SetKeys pair created from crypto.KeyPair
@@ -32,6 +35,11 @@ func (builder *NetworkBuilder) SetKeys(pair *crypto.KeyPair) {
 // SetAddress sets the host address for the network.
 func (builder *NetworkBuilder) SetAddress(address string) {
 	builder.address = address
+}
+
+// SetCryptoProvider sets the crypto provider for the network.
+func (builder *NetworkBuilder) SetCryptoProvider(provider crypto.Provider) {
+	builder.cryptoProvider = provider
 }
 
 // AddPluginWithPriority register a new plugin onto the network with a set priority.
@@ -92,6 +100,8 @@ func (builder *NetworkBuilder) Build() (*network.Network, error) {
 		Peers: new(network.StringPeerClientSyncMap),
 
 		Listening: make(chan struct{}),
+
+		CryptoProvider: builder.cryptoProvider,
 	}
 
 	return net, nil
