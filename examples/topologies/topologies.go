@@ -180,13 +180,16 @@ func setupTreeNodes(startPort int) ([]int, map[string]map[string]struct{}) {
 
 // setupNodes sets up the networks and processors.
 func setupNodes(ports []int) ([]*network.Network, []*MockPlugin, error) {
+	cryptoProvider := crypto.NewEd25519()
+
 	var nodes []*network.Network
 	var plugins []*MockPlugin
 
 	for i, port := range ports {
 		builder := &builders.NetworkBuilder{}
-		builder.SetKeys(crypto.RandomKeyPair())
+		builder.SetKeys(crypto.RandomKeyPair(cryptoProvider))
 		builder.SetAddress(fmt.Sprintf("kcp://%s:%d", host, port))
+		builder.SetCryptoProvider(cryptoProvider)
 
 		// Attach mock plugin.
 		plugins = append(plugins, new(MockPlugin))

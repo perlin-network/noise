@@ -23,6 +23,8 @@ var port = flag.Uint("port", 0, "port to listen on")
 var receiver = "kcp://localhost:3001"
 
 func main() {
+	cryptoProvider := crypto.NewEd25519()
+
 	go func() {
 		log.Println(http.ListenAndServe("localhost:7070", nil))
 	}()
@@ -50,7 +52,8 @@ func main() {
 
 	builder := builders.NewNetworkBuilder()
 	builder.SetAddress("kcp://localhost:" + strconv.Itoa(int(*port)))
-	builder.SetKeys(crypto.RandomKeyPair())
+	builder.SetKeys(crypto.RandomKeyPair(cryptoProvider))
+	builder.SetCryptoProvider(cryptoProvider)
 
 	net, err := builder.Build()
 	if err != nil {

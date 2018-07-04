@@ -26,6 +26,8 @@ func (state *ChatPlugin) Receive(ctx *network.MessageContext) error {
 }
 
 func main() {
+	cryptoProvider := crypto.NewEd25519()
+
 	// glog defaults to logging to a file, override this flag to log to console for testing
 	flag.Set("logtostderr", "true")
 
@@ -41,7 +43,7 @@ func main() {
 	protocol := *protocolFlag
 	peers := strings.Split(*peersFlag, ",")
 
-	keys := crypto.RandomKeyPair()
+	keys := crypto.RandomKeyPair(cryptoProvider)
 
 	glog.Infof("Private Key: %s", keys.PrivateKeyHex())
 	glog.Infof("Public Key: %s", keys.PublicKeyHex())
@@ -49,6 +51,7 @@ func main() {
 	builder := builders.NewNetworkBuilder()
 	builder.SetKeys(keys)
 	builder.SetAddress(network.FormatAddress(protocol, host, port))
+	builder.SetCryptoProvider(cryptoProvider)
 
 	// Register peer discovery plugin.
 	builder.AddPlugin(new(discovery.Plugin))
