@@ -37,17 +37,17 @@ func (p *Plugin) PeerDisconnect(client *network.PeerClient) {
 
 	if _, exists := p.backoffs[addr]; exists {
 		// don't activate if it already active
-		glog.Infof("backing done already active\n")
+		glog.Infof("backing off done already active\n")
 		return
 	}
 	go func() {
-		time.Sleep(1000 * time.Millisecond)
+		time.Sleep(5000 * time.Millisecond)
 		// reset the backoff counter
 		p.backoffs[addr] = DefaultBackoff()
 		for {
 			b, active := p.backoffs[addr]
 			if !active {
-				glog.Infof("backing done already ended\n")
+				glog.Infof("backing off done already ended\n")
 				break
 			}
 			glog.Infof("backing off: addr=%s b=%v\n", addr, b)
@@ -56,18 +56,27 @@ func (p *Plugin) PeerDisconnect(client *network.PeerClient) {
 				delete(p.backoffs, addr)
 				break
 			}
-			peer, err := client.Network.Dial(client.Address)
-			if err != nil {
-				d := b.NextDuration()
-				glog.Infof("%s, reconnecting to %s in %s", err, addr, d)
-				time.Sleep(d)
+			d := b.NextDuration()
+			glog.Infof("backing off reconnecting to %s in %s", addr, d)
+			time.Sleep(d)
+			if _, err := client.Network.Dial(client.Address); err != nil {
+				glog.Infof("backing off dial error %s to addr %s\n", err, addr)
 				continue
 			}
-			if peer == nil {
-				glog.Infof("backing error, peer was nil for addr=%s\n", addr)
+			peerConnected := false
+			var peers []string
+			client.Network.Peers.Range(func(k string, pc *network.PeerClient) bool {
+				if k == addr {
+					peerConnected = true
+				}
+				peers = append(peers, k)
+				return true
+			})
+			if !peerConnected {
+				glog.Infof("backing off still not connected to peer %s\n", addr)
 				continue
 			}
-			glog.Infof("backing done successfully reconnected to %s\n", addr)
+			glog.Infof("backing off done successfully reconnected to %s\n", addr)
 			// success
 			delete(p.backoffs, addr)
 		}
