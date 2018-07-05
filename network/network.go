@@ -91,10 +91,6 @@ func (n *Network) Init() {
 							continue
 						}
 
-						client.IDInit.Do(func() {
-							client.ID = (*peer.ID)(packet.Payload.Sender)
-						})
-
 						if channel, exists := client.Requests.Load(packet.Payload.Nonce); exists && packet.Payload.Nonce > 0 {
 							channel <- ptr.Message
 							packet.Result <- struct{}{}
@@ -277,18 +273,16 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 func (n *Network) Accept(conn net.Conn) {
 	var incoming *smux.Session
 	var outgoing *smux.Session
-	var id *peer.ID
+	var client *PeerClient
 
 	var err error
 
 	// Cleanup connections when we are done with them.
 	defer func() {
-		if id != nil {
-			n.Connections.Delete(id.Address)
+		if client != nil {
+			n.Connections.Delete(client.Address)
 
-			if client, err := n.Client(id.Address); err == nil {
-				client.Close()
-			}
+			client.Close()
 		}
 	}()
 
@@ -306,13 +300,18 @@ func (n *Network) Accept(conn net.Conn) {
 		return
 	}
 
-	id = (*peer.ID)(msg.Sender)
+	client, err = n.Client(msg.Sender.Address)
+	if err != nil {
+		return
+	}
+
+	client.ID = (*peer.ID)(msg.Sender)
 
 	// Load an outgoing connection, or dial to the incoming peer.
-	if session, established := n.Connections.Load(id.Address); established {
+	if session, established := n.Connections.Load(client.ID.Address); established {
 		outgoing = session.(*smux.Session)
 	} else {
-		outgoing, err = n.Dial(id.Address)
+		outgoing, err = n.Dial(client.ID.Address)
 		if err != nil {
 			return
 		}
@@ -345,8 +344,6 @@ func (n *Network) Accept(conn net.Conn) {
 		return
 	}
 
-	glog.Infof("Handshake completed for peer %s.", id.Address)
-
 	for {
 		msg, err := n.receiveMessage(incoming, time.Time{})
 
@@ -356,12 +353,12 @@ func (n *Network) Accept(conn net.Conn) {
 		}
 
 		// Peer sent message with a completely different ID. Disconnect.
-		if !id.Equals(peer.ID(*msg.Sender)) {
-			glog.Errorf("Message signed by peer %s but client is %s", peer.ID(*msg.Sender), id.Address)
+		if !client.ID.Equals(peer.ID(*msg.Sender)) {
+			glog.Errorf("Message signed by peer %s but client is %s", peer.ID(*msg.Sender), client.ID.Address)
 			return
 		}
 
-		n.RecvQueue <- &Packet{RemoteAddress: id.Address, Payload: msg, Result: make(chan interface{}, 1)}
+		n.RecvQueue <- &Packet{RemoteAddress: client.ID.Address, Payload: msg, Result: make(chan interface{}, 1)}
 	}
 }
 
