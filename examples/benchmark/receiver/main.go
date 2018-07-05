@@ -35,6 +35,8 @@ func (state *BenchmarkPlugin) Receive(ctx *network.MessageContext) error {
 var profile = flag.String("profile", "", "write cpu profile to file")
 
 func main() {
+	flag.Set("logtostderr", "true")
+
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
@@ -61,7 +63,7 @@ func main() {
 	}
 
 	builder := builders.NewNetworkBuilder()
-	builder.SetAddress("kcp://localhost:3001")
+	builder.SetAddress("tcp://localhost:3001")
 	builder.SetKeys(crypto.RandomKeyPair())
 
 	state := new(BenchmarkPlugin)

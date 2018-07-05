@@ -19,10 +19,12 @@ import (
 )
 
 var profile = flag.String("profile", "", "write cpu profile to file")
-var port = flag.Uint("port", 0, "port to listen on")
-var receiver = "kcp://localhost:3001"
+var port = flag.Uint("port", 3002, "port to listen on")
+var receiver = "tcp://localhost:3001"
 
 func main() {
+	flag.Set("logtostderr", "true")
+
 	go func() {
 		log.Println(http.ListenAndServe("localhost:7070", nil))
 	}()
@@ -49,7 +51,7 @@ func main() {
 	}
 
 	builder := builders.NewNetworkBuilder()
-	builder.SetAddress("kcp://localhost:" + strconv.Itoa(int(*port)))
+	builder.SetAddress("tcp://localhost:" + strconv.Itoa(int(*port)))
 	builder.SetKeys(crypto.RandomKeyPair())
 
 	net, err := builder.Build()
@@ -62,11 +64,15 @@ func main() {
 
 	time.Sleep(500 * time.Millisecond)
 
-	fmt.Println("Spamming messages...")
+	fmt.Printf("Spamming messages to %s...\n", receiver)
 
-	msg := &messages.BasicMessage{}
+	client, err := net.Client(receiver)
+	if err != nil {
+		panic(err)
+	}
+
 	for {
-		err := net.Tell(receiver, msg)
+		err = client.Tell(&messages.BasicMessage{})
 		if err != nil {
 			panic(err)
 		}

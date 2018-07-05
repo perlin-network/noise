@@ -16,7 +16,12 @@ type plugin struct {
 func (state *plugin) Startup(net *network.Network) {
 	glog.Info("Setting up UPnP...")
 
-	mapping, err := ForwardPort(net.GetPort())
+	info, err := network.ExtractAddressInfo(net.Address)
+	if err != nil {
+		return
+	}
+
+	mapping, err := ForwardPort(info.Port)
 	if err == nil {
 		defer mapping.Close()
 

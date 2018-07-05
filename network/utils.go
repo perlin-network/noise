@@ -1,11 +1,12 @@
 package network
 
 import (
-	"errors"
 	"github.com/perlin-network/noise/types/lru"
+	"github.com/pkg/errors"
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 var domainLookupCache = lru.NewCache(1000)
@@ -69,6 +70,11 @@ func ToUnifiedHost(host string) (string, error) {
 
 // ToUnifiedAddress resolves and normalizes a network address.
 func ToUnifiedAddress(address string) (string, error) {
+	address = strings.TrimSpace(address)
+	if len(address) == 0 {
+		return "", errors.Errorf("cannot dial, address was empty")
+	}
+
 	info, err := ExtractAddressInfo(address)
 	if err != nil {
 		return "", err

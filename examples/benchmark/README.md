@@ -3,7 +3,7 @@
 Receiver:
 
 ```
-go run receiver\main.go
+go run receiver/main.go
 
 
 # pprof
@@ -14,7 +14,7 @@ go tool pprof local http://localhost:6060/debug/pprof/profile
 Sender:
 
 ```
-go run sender\main.go
+go run sender/main.go
 
 # pprof
 go tool pprof local http://localhost:7070/debug/pprof/profile

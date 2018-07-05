@@ -3,20 +3,20 @@ package network
 import (
 	"bufio"
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/protobuf"
-	"github.com/xtaci/smux"
+	"github.com/pkg/errors"
 	"io"
+	"net"
+	"time"
 )
 
-// sendMessage marshals and sends a message over a stream.
-func (n *Network) sendMessage(stream *smux.Stream, message proto.Message) error {
+// sendMessage marshals, signs and sends a message over a stream.
+func sendMessage(stream net.Conn, message *protobuf.Message) error {
 	bytes, err := proto.Marshal(message)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to marshal message")
 	}
 
 	// Serialize size.
@@ -26,40 +26,38 @@ func (n *Network) sendMessage(stream *smux.Stream, message proto.Message) error 
 	// Prefix message with its size.
 	bytes = append(buffer, bytes...)
 
+	stream.SetDeadline(time.Now().Add(3 * time.Second))
+
 	writer := bufio.NewWriter(stream)
 
 	// Send request bytes.
 	written, err := writer.Write(bytes)
 	if err != nil {
-		// Potentially malicious or dead peer; kill it.
-		if err == io.ErrUnexpectedEOF {
-			stream.Close()
-		}
-		return err
+		return errors.Wrap(err, "failed to send request bytes")
 	}
 
 	// Flush writer.
 	err = writer.Flush()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to flush writer")
 	}
 
 	if written != len(bytes) {
-		return fmt.Errorf("only wrote %d / %d bytes to stream", written, len(bytes))
+		return errors.Errorf("only wrote %d / %d bytes to stream", written, len(bytes))
 	}
 
 	return nil
 }
 
 // receiveMessage reads, unmarshals and verifies a message from a stream.
-func (n *Network) receiveMessage(stream *smux.Stream) (*protobuf.Message, error) {
+func receiveMessage(stream net.Conn) (*protobuf.Message, error) {
 	reader := bufio.NewReader(stream)
 
 	buffer := make([]byte, binary.MaxVarintLen64)
 
 	_, err := reader.Read(buffer)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to recv message size")
 	}
 
 	// Decode unsigned varint representing message size.
@@ -81,7 +79,7 @@ func (n *Network) receiveMessage(stream *smux.Stream) (*protobuf.Message, error)
 		if err == io.ErrUnexpectedEOF {
 			stream.Close()
 		}
-		return nil, err
+		return nil, errors.Wrap(err, "failed to recv serialized message")
 	}
 
 	// Deserialize message.
@@ -89,7 +87,7 @@ func (n *Network) receiveMessage(stream *smux.Stream) (*protobuf.Message, error)
 
 	err = proto.Unmarshal(buffer, msg)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to unmarshal message")
 	}
 
 	// Check if any of the message headers are invalid or null.
@@ -102,5 +100,5 @@ func (n *Network) receiveMessage(stream *smux.Stream) (*protobuf.Message, error)
 		return nil, errors.New("received message had an malformed signature")
 	}
 
-	return msg, err
+	return msg, nil
 }
