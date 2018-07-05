@@ -36,6 +36,9 @@ type Network struct {
 
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
+
+	// holds the socket to listen for messages
+	listener net.Listener
 }
 
 func (n *Network) GetPort() uint16 {
@@ -66,15 +69,13 @@ func (n *Network) Listen() {
 		glog.Fatal(err)
 	}
 
-	var listener net.Listener
-
 	if urlInfo.Scheme == "kcp" {
-		listener, err = kcp.ListenWithOptions(urlInfo.Host, nil, 10, 3)
+		n.listener, err = kcp.ListenWithOptions(urlInfo.Host, nil, 10, 3)
 		if err != nil {
 			glog.Fatal(err)
 		}
 	} else if urlInfo.Scheme == "tcp" {
-		listener, err = net.Listen("tcp", urlInfo.Host)
+		n.listener, err = net.Listen("tcp", urlInfo.Host)
 	} else {
 		err = errors.New("Invalid scheme: " + urlInfo.Scheme)
 	}
@@ -89,7 +90,10 @@ func (n *Network) Listen() {
 
 	// Handle new clients.
 	for {
-		if conn, err := listener.Accept(); err == nil {
+		if n.listener == nil {
+			break
+		}
+		if conn, err := n.listener.Accept(); err == nil {
 			go n.Ingest(conn)
 		} else {
 			glog.Error(err)
@@ -242,4 +246,29 @@ func (n *Network) Tell(targetAddress string, msg proto.Message) error {
 // Example: network.Plugin((*Plugin)(nil))
 func (n *Network) Plugin(key interface{}) (PluginInterface, bool) {
 	return n.Plugins.Get(key)
+}
+
+func (n *Network) HardDisconnect() {
+
+	// disconnect the listener port
+	n.listener.Close()
+	n.listener = nil
+
+	n.Peers.Range(func(key string, c *PeerClient) bool {
+
+		// close all the existings connections
+		c.stream.Lock()
+		c.stream.closed = true
+		c.stream.Unlock()
+
+		// Delete peer from network.
+		c.Network.Peers.Delete(key)
+
+		if c.session != nil && !c.session.IsClosed() {
+			c.session.Close()
+			c.session = nil
+		}
+
+		return true
+	})
 }
