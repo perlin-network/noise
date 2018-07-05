@@ -274,6 +274,7 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 func (n *Network) Accept(conn net.Conn) {
 	var incoming *smux.Session
 	var outgoing *smux.Session
+
 	var client *PeerClient
 	var clientInit sync.Once
 
@@ -282,8 +283,6 @@ func (n *Network) Accept(conn net.Conn) {
 	// Cleanup connections when we are done with them.
 	defer func() {
 		if client != nil {
-			n.Connections.Delete(client.Address)
-
 			client.Close()
 		}
 
@@ -304,7 +303,6 @@ func (n *Network) Accept(conn net.Conn) {
 	}
 
 	for {
-		// Open a new stream.
 		stream, err := incoming.AcceptStream()
 		if err != nil {
 			break
@@ -313,6 +311,7 @@ func (n *Network) Accept(conn net.Conn) {
 		go func() {
 			defer stream.Close()
 
+			// Receive a message from the stream.
 			msg, err := receiveMessage(stream)
 
 			// Will trigger 'broken pipe' on peer disconnection.
