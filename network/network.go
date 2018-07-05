@@ -90,13 +90,13 @@ func (n *Network) Listen() {
 
 	// Handle new clients.
 	for {
-		if n.listener == nil {
-			break
-		}
 		if conn, err := n.listener.Accept(); err == nil {
 			go n.Ingest(conn)
 		} else {
 			glog.Error(err)
+		}
+		if n.listener == nil {
+			break
 		}
 	}
 }

@@ -40,64 +40,6 @@ func (state *BasicPlugin) Receive(ctx *network.MessageContext) error {
 	return nil
 }
 
-// TestPlugin demonstrates how to broadcast a message to a set of peers that discover
-// each other through peer discovery.
-func TestPlugin(t *testing.T) {
-	flag.Parse()
-
-	var nodes []*network.Network
-	var plugins []*BasicPlugin
-
-	for i := 0; i < numNodes; i++ {
-		node, plugin, err := newNode(i)
-		if err != nil {
-			t.Error(err)
-		}
-		plugins = append(plugins, plugin)
-		nodes = append(nodes, node)
-	}
-
-	// Wait for all nodes to finish discovering other peers.
-	time.Sleep(1 * time.Second)
-
-	if err := broadcastAndCheck(nodes, plugins); err != nil {
-		t.Fatal(err)
-	}
-
-	// disconnect node 2
-	nodes[1].HardDisconnect()
-
-	time.Sleep(1 * time.Second)
-
-	if err := broadcastAndCheck(nodes, plugins); err != nil {
-		// this is fine
-	} else {
-		t.Fatalf("On disconnect, expected the broadcast to fail")
-	}
-
-	time.Sleep(2 * time.Second)
-
-	if err := broadcastAndCheck(nodes, plugins); err != nil {
-		// this is fine
-	} else {
-		t.Fatalf("On disconnect, expected the broadcast to fail")
-	}
-
-	node, plugin, err := newNode(1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	nodes[1] = node
-	plugins[1] = plugin
-
-	time.Sleep(2 * time.Second)
-
-	// reconnect occured should pass
-	if err := broadcastAndCheck(nodes, plugins); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func broadcastAndCheck(nodes []*network.Network, plugins []*BasicPlugin) error {
 	// Broadcast out a message from Node 0.
 	expected := "This is a broadcasted message from Node 0."
@@ -148,4 +90,52 @@ func newNode(i int) (*network.Network, *BasicPlugin, error) {
 	}
 
 	return node, plugin, nil
+}
+
+// TestPlugin tests the functionality of the exponential backoff as a plugin.
+func TestPlugin(t *testing.T) {
+	flag.Parse()
+
+	var nodes []*network.Network
+	var plugins []*BasicPlugin
+
+	for i := 0; i < numNodes; i++ {
+		node, plugin, err := newNode(i)
+		if err != nil {
+			t.Error(err)
+		}
+		plugins = append(plugins, plugin)
+		nodes = append(nodes, node)
+	}
+
+	// Wait for all nodes to finish discovering other peers.
+	time.Sleep(1 * time.Second)
+
+	// chack that broadcasts are working
+	if err := broadcastAndCheck(nodes, plugins); err != nil {
+		t.Fatal(err)
+	}
+
+	// disconnect node 2
+	nodes[1].HardDisconnect()
+	time.Sleep(1 * time.Second)
+
+	// tests that broadcasting fails
+	if err := broadcastAndCheck(nodes, plugins); err == nil {
+		t.Fatalf("On disconnect, expected the broadcast to fail")
+	}
+
+	// recreate the second node to the cluster
+	node, plugin, err := newNode(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodes[1] = node
+	plugins[1] = plugin
+	time.Sleep(2 * time.Second)
+
+	// broad cast should be working again
+	if err := broadcastAndCheck(nodes, plugins); err != nil {
+		t.Fatal(err)
+	}
 }
