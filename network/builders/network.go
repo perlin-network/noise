@@ -9,6 +9,7 @@ import (
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
 	"sync"
+	"github.com/perlin-network/noise/protobuf"
 )
 
 // NetworkBuilder is a Address->processors struct
@@ -94,7 +95,7 @@ func (builder *NetworkBuilder) Build() (*network.Network, error) {
 
 		Connections: new(sync.Map),
 		SendQueue:   make(chan *network.Packet),
-		RecvQueue:   make(chan *network.Packet),
+		RecvQueue:   make(chan *protobuf.Message),
 
 		Listening: make(chan struct{}),
 	}

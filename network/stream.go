@@ -8,28 +8,14 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/protobuf"
-	"github.com/xtaci/smux"
 	"io"
 	"time"
+	"net"
+	"github.com/golang/glog"
 )
 
 // sendMessage marshals, signs and sends a message over a stream.
-func (n *Network) sendMessage(session *smux.Session, message *protobuf.Message) error {
-	stream, err := session.OpenStream()
-	if err != nil {
-		return err
-	}
-	defer stream.Close()
-
-	err = stream.SetDeadline(time.Now().Add(3 * time.Second))
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		stream.SetDeadline(time.Time{})
-	}()
-
+func (n *Network) sendMessage(stream net.Conn, message *protobuf.Message) error {
 	bytes, err := proto.Marshal(message)
 	if err != nil {
 		return err
@@ -41,6 +27,8 @@ func (n *Network) sendMessage(session *smux.Session, message *protobuf.Message) 
 
 	// Prefix message with its size.
 	bytes = append(buffer, bytes...)
+
+	stream.SetDeadline(time.Now().Add(3 * time.Second))
 
 	writer := bufio.NewWriter(stream)
 
@@ -64,29 +52,18 @@ func (n *Network) sendMessage(session *smux.Session, message *protobuf.Message) 
 }
 
 // receiveMessage reads, unmarshals and verifies a message from a stream.
-func (n *Network) receiveMessage(session *smux.Session, timeout time.Time) (*protobuf.Message, error) {
-	stream, err := session.AcceptStream()
-	if err != nil {
-		return nil, err
-	}
-	defer stream.Close()
-
-	err = stream.SetDeadline(timeout)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		stream.SetDeadline(time.Time{})
-	}()
-
+func (n *Network) receiveMessage(stream net.Conn) (*protobuf.Message, error) {
 	reader := bufio.NewReader(stream)
 
 	buffer := make([]byte, binary.MaxVarintLen64)
 
-	_, err = reader.Read(buffer)
+	nn, err := reader.Read(buffer)
 	if err != nil {
 		return nil, err
+	}
+
+	if nn != binary.MaxVarintLen64 {
+		return nil, errors.New("failed to read message size")
 	}
 
 	// Decode unsigned varint representing message size.
@@ -134,19 +111,20 @@ func (n *Network) receiveMessage(session *smux.Session, timeout time.Time) (*pro
 
 // Write asynchronously emit a message to a denoted target address.
 func (n *Network) Write(address string, message *protobuf.Message) error {
-	packet := &Packet{RemoteAddress: address, Payload: message, Result: make(chan interface{}, 1)}
+	packet := &Packet{Target: address, Payload: message, Result: make(chan interface{}, 1)}
 
 	n.SendQueue <- packet
 
 	select {
 	case raw := <-packet.Result:
-		switch result := raw.(type) {
+		switch err := raw.(type) {
 		case error:
-			return result
+			glog.Error(err)
+			return err
 		default:
 			return nil
 		}
 	}
 
-	return errors.New("timed out writing message")
+	return nil
 }

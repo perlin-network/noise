@@ -73,6 +73,7 @@ func (c *PeerClient) Close() error {
 
 	if c.ID != nil {
 		c.Network.Peers.Delete(c.ID.Address)
+		c.Network.Connections.Delete(c.ID.Address)
 	}
 
 	return nil

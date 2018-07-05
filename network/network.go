@@ -13,15 +13,13 @@ import (
 	"github.com/xtaci/smux"
 	"net"
 	"net/url"
-	"runtime"
 	"sync"
-	"time"
 )
 
 type Packet struct {
-	RemoteAddress string
-	Payload       *protobuf.Message
-	Result        chan interface{}
+	Target string
+	Payload *protobuf.Message
+	Result  chan interface{}
 }
 
 // Network represents the current networking state for this node.
@@ -44,7 +42,7 @@ type Network struct {
 	Peers *StringPeerClientSyncMap
 
 	SendQueue chan *Packet
-	RecvQueue chan *Packet
+	RecvQueue chan *protobuf.Message
 
 	// Map of connection addresses (string) <-> net.Conn
 	Connections *sync.Map
@@ -54,27 +52,24 @@ type Network struct {
 }
 
 func (n *Network) Init() {
-	workerCount := runtime.NumCPU()
+	workerCount := 1
 
 	for i := 0; i < workerCount; i++ {
 		// Spawn worker routines for sending queued messages to the networking layer.
 		go func() {
 			for {
+				var err error
+
 				select {
 				case packet := <-n.SendQueue:
-					if stream, exists := n.Connections.Load(packet.RemoteAddress); exists {
-						err := n.sendMessage(stream.(*smux.Session), packet.Payload)
-
-						if err != nil {
-							// Error sending message
-							packet.Result <- err
-						} else {
-							// Sending message is successful.
-							packet.Result <- struct{}{}
-						}
+					if stream, exists := n.Connections.Load(packet.Target); exists {
+						err = n.sendMessage(stream.(net.Conn), packet.Payload)
 					} else {
-						packet.Result <- fmt.Errorf("cannot send message; not connected to peer %s", packet.RemoteAddress)
+						err = fmt.Errorf("cannot send message; not connected to peer %s", packet.Target)
 					}
+
+					packet.Result <- err
+					close(packet.Result)
 				}
 			}
 		}()
@@ -84,28 +79,26 @@ func (n *Network) Init() {
 			for {
 				select {
 				case packet := <-n.RecvQueue:
-					if client, exists := n.Peers.Load(packet.RemoteAddress); exists {
+					if client, exists := n.Peers.Load(packet.Sender.Address); exists {
 						var ptr ptypes.DynamicAny
-						if err := ptypes.UnmarshalAny(packet.Payload.Message, &ptr); err != nil {
-							packet.Result <- err
+						if err := ptypes.UnmarshalAny(packet.Message, &ptr); err != nil {
 							continue
 						}
 
-						if channel, exists := client.Requests.Load(packet.Payload.Nonce); exists && packet.Payload.Nonce > 0 {
+						if channel, exists := client.Requests.Load(packet.Nonce); exists && packet.Nonce > 0 {
 							channel <- ptr.Message
-							packet.Result <- struct{}{}
 							continue
 						}
 
 						switch ptr.Message.(type) {
-						case *protobuf.StreamPacket: // Handle stream packet message.
-							pkt := ptr.Message.(*protobuf.StreamPacket)
-							client.handleStreamPacket(pkt.Data)
-						default: // Handle other messages.
+
+						case *protobuf.StreamPacket:
+							client.handleStreamPacket(ptr.Message.(*protobuf.StreamPacket).Data)
+						default:
 							ctx := new(MessageContext)
 							ctx.client = client
 							ctx.message = ptr.Message
-							ctx.nonce = packet.Payload.Nonce
+							ctx.nonce = packet.Nonce
 
 							// Execute 'on receive message' callback for all plugins.
 							n.Plugins.Each(func(plugin PluginInterface) {
@@ -116,8 +109,6 @@ func (n *Network) Init() {
 								}
 							})
 						}
-
-						packet.Result <- struct{}{}
 					}
 				}
 			}
@@ -232,7 +223,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 }
 
 // Dial establishes a bidirectional connection to an address, and additionally handshakes with said address.
-func (n *Network) Dial(address string) (*smux.Session, error) {
+func (n *Network) Dial(address string) (net.Conn, error) {
 	urlInfo, err := url.Parse(address)
 	if err != nil {
 		return nil, err
@@ -260,13 +251,18 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 		return nil, err
 	}
 
-	return session, nil
+	stream, err := session.OpenStream()
+	if err != nil {
+		return nil, err
+	}
+
+	return stream, nil
 }
 
 // Accept handles peer registration and processes incoming message streams.
 func (n *Network) Accept(conn net.Conn) {
-	var incoming *smux.Session
-	var outgoing *smux.Session
+	var incoming net.Conn
+	var outgoing net.Conn
 	var client *PeerClient
 
 	var err error
@@ -274,8 +270,6 @@ func (n *Network) Accept(conn net.Conn) {
 	// Cleanup connections when we are done with them.
 	defer func() {
 		if client != nil {
-			n.Connections.Delete(client.Address)
-
 			client.Close()
 		}
 
@@ -289,17 +283,24 @@ func (n *Network) Accept(conn net.Conn) {
 	}()
 
 	// Wrap a session around the incoming connection.
-	incoming, err = smux.Server(conn, muxConfig())
+	session, err := smux.Server(conn, muxConfig())
+	if err != nil {
+		glog.Error(err)
+		return
+	}
+
+	incoming, err = session.AcceptStream()
 	if err != nil {
 		glog.Error(err)
 		return
 	}
 
 	for {
-		msg, err := n.receiveMessage(incoming, time.Time{})
+		msg, err := n.receiveMessage(incoming)
 
 		// Will trigger 'broken pipe' on peer disconnection.
 		if err != nil {
+			glog.Error(err)
 			return
 		}
 
@@ -315,7 +316,7 @@ func (n *Network) Accept(conn net.Conn) {
 
 			// Load an outgoing connection.
 			if session, established := n.Connections.Load(client.ID.Address); established {
-				outgoing = session.(*smux.Session)
+				outgoing = session.(net.Conn)
 			} else {
 				return
 			}
@@ -327,7 +328,7 @@ func (n *Network) Accept(conn net.Conn) {
 			return
 		}
 
-		n.RecvQueue <- &Packet{RemoteAddress: client.ID.Address, Payload: msg, Result: make(chan interface{}, 1)}
+		n.RecvQueue <- msg
 	}
 }
 

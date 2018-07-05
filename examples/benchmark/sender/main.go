@@ -16,6 +16,7 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"time"
+	"runtime/trace"
 )
 
 var profile = flag.String("profile", "", "write cpu profile to file")
@@ -36,9 +37,20 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 
+	f, err := os.Create("trace.out")
+	if err != nil {
+		panic(err)
+	}
+
+	err = trace.Start(f)
+	if err != nil {
+		panic(err)
+	}
+
 	go func() {
 		<-c
 		pprof.StopCPUProfile()
+		trace.Stop()
 		os.Exit(0)
 	}()
 
@@ -64,7 +76,7 @@ func main() {
 
 	time.Sleep(500 * time.Millisecond)
 
-	fmt.Println("Spamming messages...")
+	fmt.Printf("Spamming messages to %s...\n", receiver)
 
 	client, err := net.Client(receiver)
 	if err != nil {
