@@ -19,6 +19,7 @@ import (
 )
 
 type Packet struct {
+	RemoteAddress string
 	Payload *protobuf.Message
 	Result  chan interface{}
 }
@@ -61,16 +62,16 @@ func (n *Network) Init() {
 			for {
 				select {
 				case packet := <-n.SendQueue:
-					if stream, exists := n.Connections.Load(packet.Payload.Sender.Address); exists {
+					if stream, exists := n.Connections.Load(packet.RemoteAddress); exists {
 						err := n.sendMessage(stream.(*smux.Session), packet.Payload)
 
 						if err != nil {
 							// Error sending message
 							packet.Result <- err
+						} else {
+							// Sending message is successful.
+							packet.Result <- struct{}{}
 						}
-
-						// Sending message is successful.
-						packet.Result <- struct{}{}
 					} else {
 						packet.Result <- fmt.Errorf("cannot send message; not connected to peer %s", packet.Payload.Sender.Address)
 					}
@@ -83,7 +84,7 @@ func (n *Network) Init() {
 			for {
 				select {
 				case packet := <-n.RecvQueue:
-					if client, exists := n.Peers.Load(packet.Payload.Sender.Address); exists {
+					if client, exists := n.Peers.Load(packet.RemoteAddress); exists {
 						ctx := new(MessageContext)
 						ctx.client = client
 						ctx.nonce = packet.Payload.Nonce
@@ -329,7 +330,7 @@ func (n *Network) Accept(conn net.Conn) {
 			return
 		}
 
-		n.RecvQueue <- &Packet{Payload: msg, Result: make(chan interface{}, 1)}
+		n.RecvQueue <- &Packet{RemoteAddress: id.Address, Payload: msg, Result: make(chan interface{}, 1)}
 
 		//// Check if the incoming message is a response.
 		//if channel, exists := client.Requests.Load(msg.Nonce); exists && msg.Nonce > 0 {
