@@ -47,7 +47,7 @@ func ExampleBasic() {
 	for i := 0; i < numNodes; i++ {
 		builder := builders.NewNetworkBuilder()
 		builder.SetKeys(crypto.RandomKeyPair())
-		builder.SetAddress(network.FormatAddress("kcp", host, uint16(startPort+i)))
+		builder.SetAddress(network.FormatAddress("tcp", host, uint16(startPort+i)))
 
 		builder.AddPlugin(new(discovery.Plugin))
 

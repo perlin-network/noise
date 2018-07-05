@@ -20,7 +20,7 @@ import (
 
 var profile = flag.String("profile", "", "write cpu profile to file")
 var port = flag.Uint("port", 3002, "port to listen on")
-var receiver = "kcp://localhost:3001"
+var receiver = "tcp://localhost:3001"
 
 func main() {
 	flag.Set("logtostderr", "true")
@@ -51,7 +51,7 @@ func main() {
 	}
 
 	builder := builders.NewNetworkBuilder()
-	builder.SetAddress("kcp://localhost:" + strconv.Itoa(int(*port)))
+	builder.SetAddress("tcp://localhost:" + strconv.Itoa(int(*port)))
 	builder.SetKeys(crypto.RandomKeyPair())
 
 	net, err := builder.Build()
