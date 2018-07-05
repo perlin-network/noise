@@ -67,11 +67,12 @@ func main() {
 	fmt.Println("Spamming messages...")
 
 	msg := &messages.BasicMessage{}
+	prepared, err := net.PrepareMessage(msg)
+	if err != nil {
+		panic(err)
+	}
+
 	for {
-		prepared, err := net.PrepareMessage(msg)
-		if err != nil {
-			panic(err)
-		}
 		err = net.Tell(receiver, prepared)
 		if err != nil {
 			panic(err)

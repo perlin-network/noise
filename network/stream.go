@@ -151,7 +151,7 @@ func (n *Network) Tell(address string, message *protobuf.Message) error {
 		default:
 			return nil
 		}
-	case <-time.After(1 * time.Second):
+	case <-time.After(3 * time.Second):
 	}
 
 	return errors.New("timed out writing message")
