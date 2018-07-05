@@ -8,20 +8,26 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/protobuf"
+	"github.com/xtaci/smux"
 	"io"
-	"net"
 	"time"
 )
 
 // sendMessage marshals, signs and sends a message over a stream.
-func (n *Network) sendMessage(conn net.Conn, message *protobuf.Message) error {
-	err := conn.SetDeadline(time.Now().Add(1 * time.Second))
+func (n *Network) sendMessage(session *smux.Session, message *protobuf.Message) error {
+	stream, err := session.OpenStream()
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+
+	err = stream.SetDeadline(time.Now().Add(1 * time.Second))
 	if err != nil {
 		return err
 	}
 
 	defer func() {
-		conn.SetDeadline(time.Time{})
+		stream.SetDeadline(time.Time{})
 	}()
 
 	bytes, err := proto.Marshal(message)
@@ -36,7 +42,7 @@ func (n *Network) sendMessage(conn net.Conn, message *protobuf.Message) error {
 	// Prefix message with its size.
 	bytes = append(buffer, bytes...)
 
-	writer := bufio.NewWriter(conn)
+	writer := bufio.NewWriter(stream)
 
 	// Send request bytes.
 	written, err := writer.Write(bytes)
@@ -58,17 +64,23 @@ func (n *Network) sendMessage(conn net.Conn, message *protobuf.Message) error {
 }
 
 // receiveMessage reads, unmarshals and verifies a message from a stream.
-func (n *Network) receiveMessage(conn net.Conn, timeout time.Time) (*protobuf.Message, error) {
-	err := conn.SetDeadline(timeout)
+func (n *Network) receiveMessage(session *smux.Session, timeout time.Time) (*protobuf.Message, error) {
+	stream, err := session.AcceptStream()
+	if err != nil {
+		return nil, err
+	}
+	defer stream.Close()
+
+	err = stream.SetDeadline(timeout)
 	if err != nil {
 		return nil, err
 	}
 
 	defer func() {
-		conn.SetDeadline(time.Time{})
+		stream.SetDeadline(time.Time{})
 	}()
 
-	reader := bufio.NewReader(conn)
+	reader := bufio.NewReader(stream)
 
 	buffer := make([]byte, binary.MaxVarintLen64)
 
@@ -94,7 +106,7 @@ func (n *Network) receiveMessage(conn net.Conn, timeout time.Time) (*protobuf.Me
 	if err != nil {
 		// Potentially malicious or dead client; kill it.
 		if err == io.ErrUnexpectedEOF {
-			conn.Close()
+			stream.Close()
 		}
 		return nil, err
 	}

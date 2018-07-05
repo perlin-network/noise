@@ -2,12 +2,12 @@ package network
 
 import (
 	"errors"
+	"fmt"
 	"github.com/perlin-network/noise/types/lru"
 	"net"
 	"net/url"
 	"strconv"
 	"strings"
-	"fmt"
 )
 
 var domainLookupCache = lru.NewCache(1000)

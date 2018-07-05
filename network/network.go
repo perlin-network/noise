@@ -1,8 +1,7 @@
 package network
 
 import (
-	"net"
-	"net/url"
+	"fmt"
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
@@ -12,10 +11,11 @@ import (
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
+	"net"
+	"net/url"
 	"runtime"
 	"sync"
 	"time"
-	"fmt"
 )
 
 type Packet struct {
@@ -62,7 +62,7 @@ func (n *Network) Init() {
 				select {
 				case packet := <-n.SendQueue:
 					if stream, exists := n.Connections.Load(packet.Payload.Sender.Address); exists {
-						err := n.sendMessage(stream.(net.Conn), packet.Payload)
+						err := n.sendMessage(stream.(*smux.Session), packet.Payload)
 
 						if err != nil {
 							// Error sending message
@@ -198,7 +198,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 	addresses = FilterPeers(n.Address, addresses)
 
 	for _, address := range addresses {
-		conn, err := n.Dial(address)
+		session, err := n.Dial(address)
 		if err != nil {
 			glog.Error(err)
 			continue
@@ -210,7 +210,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 			continue
 		}
 
-		err = n.sendMessage(conn, ping)
+		err = n.sendMessage(session, ping)
 		if err != nil {
 			glog.Error(err)
 			continue
@@ -219,7 +219,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 }
 
 // Dial establishes a bidirectional connection to an address, and additionally handshakes with said address.
-func (n *Network) Dial(address string) (net.Conn, error) {
+func (n *Network) Dial(address string) (*smux.Session, error) {
 	urlInfo, err := url.Parse(address)
 	if err != nil {
 		return nil, err
@@ -247,62 +247,45 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 		return nil, err
 	}
 
-	// Open an outgoing stream.
-	stream, err := session.OpenStream()
-	if err != nil {
-		return nil, err
-	}
+	n.Connections.Store(address, session)
 
-	n.Connections.Store(address, stream)
-
-	return stream, nil
+	return session, nil
 }
 
 // Accept handles peer registration and processes incoming message streams.
 func (n *Network) Accept(conn net.Conn) {
-	var incoming net.Conn
-	var outgoing net.Conn
+	var incoming *smux.Session
+	var outgoing *smux.Session
 	var id *peer.ID
+
+	var err error
 
 	// Cleanup connections when we are done with them.
 	defer func() {
-		if incoming != nil {
-			incoming.Close()
-		}
-
-		if outgoing != nil {
-			outgoing.Close()
-		}
-
 		if id != nil {
 			n.Connections.Delete(id.Address)
 		}
 	}()
 
 	// Wrap a session around the incoming connection.
-	session, err := smux.Server(conn, muxConfig())
+	incoming, err = smux.Server(conn, muxConfig())
 	if err != nil {
 		return
 	}
-
-	// Accept an incoming stream.
-	incoming, err = session.AcceptStream()
-	if err != nil {
-		return
-	}
+	defer incoming.Close()
 
 	var msg *protobuf.Message
 
 	// Attempt to receive ping/pong.
-	if msg, err = n.receiveMessage(incoming, time.Now().Add(1 * time.Second)); err != nil {
+	if msg, err = n.receiveMessage(incoming, time.Now().Add(1*time.Second)); err != nil {
 		return
 	}
 
 	id = (*peer.ID)(msg.Sender)
 
 	// Load an outgoing connection, or dial to the incoming peer.
-	if conn, established := n.Connections.Load(id.Address); established {
-		outgoing = conn.(net.Conn)
+	if session, established := n.Connections.Load(id.Address); established {
+		outgoing = session.(*smux.Session)
 	} else {
 		outgoing, err = n.Dial(id.Address)
 		if err != nil {
@@ -335,6 +318,7 @@ func (n *Network) Accept(conn net.Conn) {
 	for {
 		msg, err := n.receiveMessage(incoming, time.Time{})
 
+		// Will trigger 'broken pipe' on peer disconnection.
 		if err != nil {
 			return
 		}
