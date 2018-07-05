@@ -66,14 +66,13 @@ func main() {
 
 	fmt.Println("Spamming messages...")
 
-	msg := &messages.BasicMessage{}
-	prepared, err := net.PrepareMessage(msg)
+	client, err := net.Client(receiver)
 	if err != nil {
 		panic(err)
 	}
 
 	for {
-		err = net.Write(receiver, prepared)
+		err = client.Tell(&messages.BasicMessage{})
 		if err != nil {
 			panic(err)
 		}

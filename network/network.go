@@ -20,8 +20,8 @@ import (
 
 type Packet struct {
 	RemoteAddress string
-	Payload *protobuf.Message
-	Result  chan interface{}
+	Payload       *protobuf.Message
+	Result        chan interface{}
 }
 
 // Network represents the current networking state for this node.
@@ -96,7 +96,7 @@ func (n *Network) Init() {
 							packet.Result <- struct{}{}
 							continue
 						}
-						
+
 						switch ptr.Message.(type) {
 						case *protobuf.StreamPacket: // Handle stream packet message.
 							pkt := ptr.Message.(*protobuf.StreamPacket)
@@ -187,18 +187,21 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		return nil, errors.New("peer should not dial itself")
 	}
 
-	if client, exists := n.Peers.Load(address); exists {
-		return client, nil
-	}
-
-	if _, err := n.Dial(address); err == nil {
-		client := createPeerClient(n, address)
-		client.runInitHooks()
-
-		n.Peers.Store(address, client)
+	if client, existed := n.Peers.Load(address); existed {
 		return client, nil
 	} else {
-		return nil, err
+		session, err := n.Dial(address)
+
+		if err != nil {
+			return nil, err
+		}
+
+		n.Connections.Store(address, session)
+
+		client := createPeerClient(n, address)
+		n.Peers.Store(address, client)
+
+		return client, nil
 	}
 }
 
@@ -215,6 +218,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 
 	for _, address := range addresses {
 		client, err := n.Client(address)
+
 		if err != nil {
 			glog.Error(err)
 			continue
@@ -222,7 +226,6 @@ func (n *Network) Bootstrap(addresses ...string) {
 
 		err = client.Tell(&protobuf.Ping{})
 		if err != nil {
-			glog.Error(err)
 			continue
 		}
 	}
@@ -257,15 +260,11 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 		return nil, err
 	}
 
-	n.Connections.Store(address, session)
-
 	return session, nil
 }
 
 // Accept handles peer registration and processes incoming message streams.
 func (n *Network) Accept(conn net.Conn) {
-	glog.Info("socket has been opened.")
-
 	var incoming *smux.Session
 	var outgoing *smux.Session
 	var client *PeerClient
@@ -279,63 +278,20 @@ func (n *Network) Accept(conn net.Conn) {
 
 			client.Close()
 		}
+
+		if incoming != nil {
+			incoming.Close()
+		}
+
+		if outgoing != nil {
+			outgoing.Close()
+		}
 	}()
 
 	// Wrap a session around the incoming connection.
 	incoming, err = smux.Server(conn, muxConfig())
 	if err != nil {
-		return
-	}
-	defer incoming.Close()
-
-	var msg *protobuf.Message
-
-	// Attempt to receive ping/pong.
-	if msg, err = n.receiveMessage(incoming, time.Now().Add(1*time.Second)); err != nil {
-		return
-	}
-
-	client, err = n.Client(msg.Sender.Address)
-	if err != nil {
-		return
-	}
-
-	client.ID = (*peer.ID)(msg.Sender)
-
-	// Load an outgoing connection, or dial to the incoming peer.
-	if session, established := n.Connections.Load(client.ID.Address); established {
-		outgoing = session.(*smux.Session)
-	} else {
-		outgoing, err = n.Dial(client.ID.Address)
-		if err != nil {
-			return
-		}
-	}
-
-	// First message in a handshake must be ping/pong. Else reject.
-
-	switch msg.Message.TypeUrl {
-	case "type.googleapis.com/protobuf.Ping":
-		pong, err := n.prepareMessage(&protobuf.Pong{})
-		if err != nil {
-			return
-		}
-
-		err = n.sendMessage(outgoing, pong)
-		if err != nil {
-			return
-		}
-	case "type.googleapis.com/protobuf.Pong":
-		ping, err := n.prepareMessage(&protobuf.Ping{})
-		if err != nil {
-			return
-		}
-
-		err = n.sendMessage(outgoing, ping)
-		if err != nil {
-			return
-		}
-	default:
+		glog.Error(err)
 		return
 	}
 
@@ -345,6 +301,24 @@ func (n *Network) Accept(conn net.Conn) {
 		// Will trigger 'broken pipe' on peer disconnection.
 		if err != nil {
 			return
+		}
+
+		// Initialize client if not exists.
+		if client == nil {
+			client, err = n.Client(msg.Sender.Address)
+			if err != nil {
+				glog.Error(err)
+				return
+			}
+
+			client.ID = (*peer.ID)(msg.Sender)
+
+			// Load an outgoing connection.
+			if session, established := n.Connections.Load(client.ID.Address); established {
+				outgoing = session.(*smux.Session)
+			} else {
+				return
+			}
 		}
 
 		// Peer sent message with a completely different ID. Disconnect.
@@ -365,12 +339,12 @@ func (n *Network) Plugin(key interface{}) (PluginInterface, bool) {
 	return n.Plugins.Get(key)
 }
 
+// PrepareMessage marshals a message into a *protobuf.Message and signs it with this
+// nodes private key. Errors if the message is null.
 func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, error) {
 	return n.prepareMessage(message)
 }
 
-// prepareMessage marshals a message into a *protobuf.Message and signs it with this
-// nodes private key. Errors if the message is null.
 func (n *Network) prepareMessage(message proto.Message) (*protobuf.Message, error) {
 	if message == nil {
 		return nil, errors.New("message is null")

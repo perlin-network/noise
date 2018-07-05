@@ -21,7 +21,7 @@ func (n *Network) sendMessage(session *smux.Session, message *protobuf.Message) 
 	}
 	defer stream.Close()
 
-	err = stream.SetDeadline(time.Now().Add(1 * time.Second))
+	err = stream.SetDeadline(time.Now().Add(3 * time.Second))
 	if err != nil {
 		return err
 	}
@@ -146,7 +146,6 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 		default:
 			return nil
 		}
-	case <-time.After(3 * time.Second):
 	}
 
 	return errors.New("timed out writing message")

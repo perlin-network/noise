@@ -47,13 +47,11 @@ func createPeerClient(network *Network, address string) *PeerClient {
 		},
 	}
 
-	return client
-}
-
-func (c *PeerClient) runInitHooks() {
-	c.Network.Plugins.Each(func(plugin PluginInterface) {
-		plugin.PeerConnect(c)
+	client.Network.Plugins.Each(func(plugin PluginInterface) {
+		plugin.PeerConnect(client)
 	})
+
+	return client
 }
 
 // nextNonce gets the next most available request nonce. TODO: Have nonce recycled over time.
