@@ -19,10 +19,12 @@ import (
 )
 
 var profile = flag.String("profile", "", "write cpu profile to file")
-var port = flag.Uint("port", 0, "port to listen on")
+var port = flag.Uint("port", 3002, "port to listen on")
 var receiver = "kcp://localhost:3001"
 
 func main() {
+	flag.Set("logtostderr", "true")
+
 	go func() {
 		log.Println(http.ListenAndServe("localhost:7070", nil))
 	}()
@@ -66,7 +68,11 @@ func main() {
 
 	msg := &messages.BasicMessage{}
 	for {
-		err := net.Tell(receiver, msg)
+		prepared, err := net.PrepareMessage(msg)
+		if err != nil {
+			panic(err)
+		}
+		err = net.Tell(receiver, prepared)
 		if err != nil {
 			panic(err)
 		}
