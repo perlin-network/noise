@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"runtime"
 	"sync"
+	"time"
 )
 
 type Packet struct {
@@ -168,7 +169,7 @@ func (n *Network) Listen() {
 	} else if urlInfo.Scheme == "tcp" {
 		listener, err = net.Listen("tcp", urlInfo.Host)
 	} else {
-		err = errors.New("Invalid scheme: " + urlInfo.Scheme)
+		err = errors.New("invalid scheme: " + urlInfo.Scheme)
 	}
 
 	if err != nil {
@@ -259,7 +260,7 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 	} else if urlInfo.Scheme == "tcp" {
 		conn, err = net.Dial("tcp", urlInfo.Host)
 	} else {
-		err = errors.New("Invalid scheme: " + urlInfo.Scheme)
+		err = errors.New("invalid scheme: " + urlInfo.Scheme)
 	}
 
 	// Failed to connect.
@@ -401,10 +402,12 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 	case raw := <-packet.Result:
 		switch err := raw.(type) {
 		case error:
-			return err
+			return errors.Wrapf(err, "failed to send message to %s", address)
 		default:
 			return nil
 		}
+	case <-time.After(3 * time.Second):
+		return errors.Errorf("worker must be too busy; failed to send message to %s", address)
 	}
 
 	return nil

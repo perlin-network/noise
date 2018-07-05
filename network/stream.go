@@ -16,7 +16,7 @@ import (
 func sendMessage(stream net.Conn, message *protobuf.Message) error {
 	bytes, err := proto.Marshal(message)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to marshal message")
 	}
 
 	// Serialize size.
@@ -33,13 +33,13 @@ func sendMessage(stream net.Conn, message *protobuf.Message) error {
 	// Send request bytes.
 	written, err := writer.Write(bytes)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to send request bytes")
 	}
 
 	// Flush writer.
 	err = writer.Flush()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to flush writer")
 	}
 
 	if written != len(bytes) {
@@ -57,7 +57,7 @@ func receiveMessage(stream net.Conn) (*protobuf.Message, error) {
 
 	_, err := reader.Read(buffer)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to recv message size")
 	}
 
 	// Decode unsigned varint representing message size.
@@ -79,7 +79,7 @@ func receiveMessage(stream net.Conn) (*protobuf.Message, error) {
 		if err == io.ErrUnexpectedEOF {
 			stream.Close()
 		}
-		return nil, err
+		return nil, errors.Wrap(err, "failed to recv serialized message")
 	}
 
 	// Deserialize message.
@@ -87,7 +87,7 @@ func receiveMessage(stream net.Conn) (*protobuf.Message, error) {
 
 	err = proto.Unmarshal(buffer, msg)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to unmarshal message")
 	}
 
 	// Check if any of the message headers are invalid or null.

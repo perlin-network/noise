@@ -1,15 +1,15 @@
 package network
 
 import (
-	"errors"
 	"net"
 	"time"
 
-	"sync"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+	"github.com/pkg/errors"
+	"sync"
 	"sync/atomic"
 )
 
@@ -78,12 +78,12 @@ func (c *PeerClient) Close() error {
 func (c *PeerClient) Tell(message proto.Message) error {
 	signed, err := c.Network.PrepareMessage(message)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to sign message")
 	}
 
 	err = c.Network.Write(c.Address, signed)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed to send message to %s", c.Address)
 	}
 
 	return nil
@@ -115,7 +115,6 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 	case res := <-channel:
 		return res, nil
 	case <-time.After(req.Timeout):
-		return nil, errors.New("request timed out")
 	}
 
 	return nil, errors.New("request timed out")
