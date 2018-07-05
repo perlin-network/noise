@@ -191,13 +191,13 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		return nil, errors.New("peer should not dial itself")
 	}
 
-	if client, loaded := n.Peers.LoadOrStore(
-		address,
-		createPeerClient(n, address),
-	); loaded {
+	if client, exists := n.Peers.Load(address); exists {
 		return client, nil
 	} else {
+		client := createPeerClient(n, address)
 		client.runInitHooks()
+
+		n.Peers.Store(address, client)
 		return client, nil
 	}
 }
@@ -285,6 +285,10 @@ func (n *Network) Accept(conn net.Conn) {
 	defer func() {
 		if id != nil {
 			n.Connections.Delete(id.Address)
+
+			if client, err := n.Client(id.Address); err == nil {
+				client.Close()
+			}
 		}
 	}()
 
@@ -328,6 +332,15 @@ func (n *Network) Accept(conn net.Conn) {
 			return
 		}
 	case "type.googleapis.com/protobuf.Pong":
+		ping, err := n.prepareMessage(&protobuf.Ping{})
+		if err != nil {
+			return
+		}
+
+		err = n.sendMessage(outgoing, ping)
+		if err != nil {
+			return
+		}
 	default:
 		return
 	}
