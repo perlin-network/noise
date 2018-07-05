@@ -11,8 +11,8 @@ import (
 type Plugin struct {
 	*network.Plugin
 
-	bMutex   sync.Mutex
-	backoffs map[string]*Backoff
+	// map[string]*Backoff
+	backoffs sync.Map
 }
 
 var (
@@ -21,18 +21,10 @@ var (
 	limitIterations = 100
 )
 
-func (p *Plugin) Startup(net *network.Network) {
-	if p.backoffs == nil {
-		p.backoffs = map[string]*Backoff{}
-	}
-}
-
 func (p *Plugin) PeerDisconnect(client *network.PeerClient) {
 	addr := client.Address
 
-	p.bMutex.Lock()
-	defer p.bMutex.Unlock()
-	if _, exists := p.backoffs[addr]; exists {
+	if _, exists := p.backoffs.Load(addr); exists {
 		// don't activate if it already active
 		glog.Infof("backoff skipped, already active\n")
 		return
@@ -47,13 +39,14 @@ func (p *Plugin) startBackoff(addr string, client *network.PeerClient) {
 	time.Sleep(initialDelay)
 
 	// reset the backoff counter
-	p.backoffs[addr] = DefaultBackoff()
+	p.backoffs.Store(addr, DefaultBackoff())
 	startTime := time.Now()
 	for i := 0; i < limitIterations; i++ {
-		b, active := p.backoffs[addr]
+		s, active := p.backoffs.Load(addr)
 		if !active {
 			break
 		}
+		b := s.(*Backoff)
 		if b.TimeoutExceeded() {
 			glog.Infof("backoff ended for addr %s, timed out after %s\n", addr, time.Now().Sub(startTime))
 			break
@@ -77,7 +70,7 @@ func (p *Plugin) startBackoff(addr string, client *network.PeerClient) {
 		break
 	}
 	// clean up this back off
-	delete(p.backoffs, addr)
+	p.backoffs.Delete(addr)
 }
 
 func (p *Plugin) checkConnected(client *network.PeerClient, addr string) bool {
