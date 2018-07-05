@@ -4,15 +4,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/perlin-network/noise/network/discovery"
-
-	"errors"
-
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/examples/proxy/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
+	"github.com/perlin-network/noise/network/discovery"
 	"github.com/perlin-network/noise/peer"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -68,7 +66,8 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 
 	// If the target is in our routing table, directly proxy the message to them.
 	if routes.PeerExists(targetID) {
-		return node.Write(targetID.Address, msg)
+		node.BroadcastByAddresses(msg, targetID.Address)
+		return nil
 	}
 
 	// Find the 2 closest peers from a nodes point of view (might include us).
@@ -84,11 +83,12 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 
 	// Seems we have ran out of peers to attempt to propagate to.
 	if len(closestPeers) == 0 {
-		return fmt.Errorf("could not found route from node %d to node %d", ids[node.Address], ids[targetID.Address])
+		return errors.Errorf("could not found route from node %d to node %d", ids[node.Address], ids[targetID.Address])
 	}
 
 	// Propagate message to the closest peer.
-	return node.Write(closestPeers[0].Address, msg)
+	node.BroadcastByAddresses(msg, closestPeers[0].Address)
+	return nil
 }
 
 // ExampleProxy demonstrates how to send a message to nodes which do not directly have connections
