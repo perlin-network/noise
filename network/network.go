@@ -11,11 +11,11 @@ import (
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
+	"math/rand"
 	"net"
 	"net/url"
 	"runtime"
 	"sync"
-	"math/rand"
 )
 
 type Packet struct {
@@ -59,76 +59,82 @@ func (n *Network) Init() {
 
 	for i := 0; i < workerCount; i++ {
 		// Spawn worker routines for sending queued messages to the networking layer.
-		go func() {
-			for {
-				select {
-				case packet := <-n.SendQueue:
-					if session, exists := n.Connections.Load(packet.Target); exists {
-						stream, err := session.(*smux.Session).OpenStream()
-						if err != nil {
-							packet.Result <- err
-							continue
-						}
-
-						err = sendMessage(stream, packet.Payload)
-						if err != nil {
-							packet.Result <- err
-							continue
-						}
-
-						err = stream.Close()
-						if err != nil {
-							packet.Result <- err
-							continue
-						}
-
-						packet.Result <- struct{}{}
-					} else {
-						packet.Result <- fmt.Errorf("cannot send message; not connected to peer %s", packet.Target)
-					}
-				}
-			}
-		}()
+		go n.handleSendQueue()
 
 		// Spawn worker routines for receiving and handling messages in the application layer.
-		go func() {
-			for {
-				select {
-				case packet := <-n.RecvQueue:
-					if client, exists := n.Peers.Load(packet.Sender.Address); exists {
-						var ptr ptypes.DynamicAny
-						if err := ptypes.UnmarshalAny(packet.Message, &ptr); err != nil {
-							continue
+		go n.handleRecvQueue()
+	}
+}
+
+// Send queue worker.
+func (n *Network) handleSendQueue() {
+	for {
+		select {
+		case packet := <-n.SendQueue:
+			if session, exists := n.Connections.Load(packet.Target); exists {
+				stream, err := session.(*smux.Session).OpenStream()
+				if err != nil {
+					packet.Result <- err
+					continue
+				}
+
+				err = sendMessage(stream, packet.Payload)
+				if err != nil {
+					packet.Result <- err
+					continue
+				}
+
+				err = stream.Close()
+				if err != nil {
+					packet.Result <- err
+					continue
+				}
+
+				packet.Result <- struct{}{}
+			} else {
+				packet.Result <- fmt.Errorf("cannot send message; not connected to peer %s", packet.Target)
+			}
+		}
+	}
+}
+
+// Receive queue worker.
+func (n *Network) handleRecvQueue() {
+	for {
+		select {
+		case packet := <-n.RecvQueue:
+			if client, exists := n.Peers.Load(packet.Sender.Address); exists {
+				var ptr ptypes.DynamicAny
+				if err := ptypes.UnmarshalAny(packet.Message, &ptr); err != nil {
+					continue
+				}
+
+				if channel, exists := client.Requests.Load(packet.Nonce); exists && packet.Nonce > 0 {
+					channel <- ptr.Message
+					continue
+				}
+
+				switch ptr.Message.(type) {
+
+				case *protobuf.StreamPacket:
+					client.handleStreamPacket(ptr.Message.(*protobuf.StreamPacket).Data)
+				default:
+					ctx := new(MessageContext)
+					ctx.client = client
+					ctx.message = ptr.Message
+					ctx.nonce = packet.Nonce
+
+					// Execute 'on receive message' callback for all plugins.
+					n.Plugins.Each(func(plugin PluginInterface) {
+						err := plugin.Receive(ctx)
+
+						if err != nil {
+							glog.Error(err)
 						}
-
-						if channel, exists := client.Requests.Load(packet.Nonce); exists && packet.Nonce > 0 {
-							channel <- ptr.Message
-							continue
-						}
-
-						switch ptr.Message.(type) {
-
-						case *protobuf.StreamPacket:
-							client.handleStreamPacket(ptr.Message.(*protobuf.StreamPacket).Data)
-						default:
-							ctx := new(MessageContext)
-							ctx.client = client
-							ctx.message = ptr.Message
-							ctx.nonce = packet.Nonce
-
-							// Execute 'on receive message' callback for all plugins.
-							n.Plugins.Each(func(plugin PluginInterface) {
-								err := plugin.Receive(ctx)
-
-								if err != nil {
-									glog.Error(err)
-								}
-							})
-						}
-					}
+					})
 				}
 			}
-		}()
+		}
 	}
 }
 
