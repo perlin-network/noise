@@ -1,9 +1,8 @@
 package network
 
 import (
-	"errors"
-	"fmt"
 	"github.com/perlin-network/noise/types/lru"
+	"github.com/pkg/errors"
 	"net"
 	"net/url"
 	"strconv"
@@ -73,7 +72,7 @@ func ToUnifiedHost(host string) (string, error) {
 func ToUnifiedAddress(address string) (string, error) {
 	address = strings.TrimSpace(address)
 	if len(address) == 0 {
-		return "", fmt.Errorf("cannot dial, address was empty")
+		return "", errors.Errorf("cannot dial, address was empty")
 	}
 
 	info, err := ExtractAddressInfo(address)

@@ -19,7 +19,7 @@ func main() {
 	// process other flags
 	portFlag := flag.Int("port", 3000, "port to listen to")
 	hostFlag := flag.String("host", "localhost", "host to listen to")
-	protocolFlag := flag.String("protocol", "kcp", "protocol to use (kcp/tcp)")
+	protocolFlag := flag.String("protocol", "tcp", "protocol to use (kcp/tcp)")
 	peersFlag := flag.String("peers", "", "peers to connect to")
 	upnpFlag := flag.Bool("upnp", false, "enable upnp")
 	flag.Parse()

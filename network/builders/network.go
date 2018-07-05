@@ -1,14 +1,13 @@
 package builders
 
 import (
-	"errors"
-	"fmt"
 	"reflect"
 
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+	"github.com/pkg/errors"
 	"sync"
 )
 
@@ -44,7 +43,7 @@ func (builder *NetworkBuilder) AddPluginWithPriority(priority int, plugin networ
 	}
 
 	if !builder.plugins.Put(priority, plugin) {
-		return fmt.Errorf("plugin %s is already registered", reflect.TypeOf(plugin).String())
+		return errors.Errorf("plugin %s is already registered", reflect.TypeOf(plugin).String())
 	}
 
 	return nil
@@ -91,7 +90,7 @@ func (builder *NetworkBuilder) Build() (*network.Network, error) {
 
 		Plugins: builder.plugins,
 
-		Peers: new(network.StringPeerClientSyncMap),
+		Peers: new(sync.Map),
 
 		Connections: new(sync.Map),
 		SendQueue:   make(chan *network.Packet),

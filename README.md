@@ -38,8 +38,8 @@ vgo generate ./...
   
 # run an example  
 [terminal 1] vgo run examples/chat/main.go -port 3000  
-[terminal 2] vgo run examples/chat/main.go -port 3001 peers kcp://localhost:3000  
-[terminal 3] vgo run examples/chat/main.go -port 3002 peers kcp://localhost:3000  
+[terminal 2] vgo run examples/chat/main.go -port 3001 peers tcp://localhost:3000
+[terminal 3] vgo run examples/chat/main.go -port 3002 peers tcp://localhost:3000
   
 # run test cases  
 vgo test -v -count=1 -race ./...  
@@ -93,10 +93,10 @@ Now that you have your keys, we can start listening and handling messages from i
 builder := builders.NewNetworkBuilder()  
   
 // Set the address in which peers will use to connect to you.  
-builder.SetAddress("kcp://localhost:3000")  
+builder.SetAddress("tcp://localhost:3000")
   
 // Alternatively...  
-builder.SetAddress(network.FormatAddress("kcp", "localhost", 3000))  
+builder.SetAddress(network.FormatAddress("tcp", "localhost", 3000))
   
 // Set the cryptographic keys used for your network.  
 builder.SetKeys(keys)  
@@ -113,10 +113,10 @@ if err != nil {
 go net.Listen()  
   
 // Connect to some peers and form a peer cluster automatically with built-in peer discovery.  
-net.Bootstrap("kcp://localhost:3000", "kcp://localhost:3001")  
+net.Bootstrap("tcp://localhost:3000", "tcp://localhost:3001")
   
 // Alternatively..  
-net.Bootstrap([]string{"kcp://localhost:3000", "kcp://localhost:3001"}...)  
+net.Bootstrap([]string{"tcp://localhost:3000", "tcp://localhost:3001"}...)
 ```  
   
 If you have any code you want to execute which should only be executed once the node is ready to listen for peers, just run:  

@@ -21,7 +21,7 @@ type PeerClient struct {
 	ID      *peer.ID
 	Address string
 
-	Requests     *Uint64MessageChannelSyncMap
+	Requests     *sync.Map
 	RequestNonce uint64
 
 	stream StreamState
@@ -39,7 +39,7 @@ func createPeerClient(network *Network, address string) *PeerClient {
 	client := &PeerClient{
 		Network:      network,
 		Address:      address,
-		Requests:     new(Uint64MessageChannelSyncMap),
+		Requests:     new(sync.Map),
 		RequestNonce: 0,
 		stream: StreamState{
 			buffer:        make([]byte, 0),
@@ -109,7 +109,7 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 	}
 
 	// Start tracking the request.
-	channel := make(MessageChannel, 1)
+	channel := make(chan proto.Message, 1)
 	c.Requests.Store(signed.Nonce, channel)
 
 	// Stop tracking the request.
@@ -224,6 +224,3 @@ func (c *PeerClient) SetWriteDeadline(t time.Time) error {
 	// TODO
 	return nil
 }
-
-// MessageChannel represents a channel for arbitrary protobuf messages.
-type MessageChannel chan proto.Message

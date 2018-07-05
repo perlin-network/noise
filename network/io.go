@@ -3,11 +3,10 @@ package network
 import (
 	"bufio"
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/protobuf"
+	"github.com/pkg/errors"
 	"io"
 	"net"
 	"time"
@@ -44,7 +43,7 @@ func sendMessage(stream net.Conn, message *protobuf.Message) error {
 	}
 
 	if written != len(bytes) {
-		return fmt.Errorf("only wrote %d / %d bytes to stream", written, len(bytes))
+		return errors.Errorf("only wrote %d / %d bytes to stream", written, len(bytes))
 	}
 
 	return nil

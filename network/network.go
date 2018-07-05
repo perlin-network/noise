@@ -1,7 +1,6 @@
 package network
 
 import (
-	"fmt"
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
@@ -41,7 +40,7 @@ type Network struct {
 
 	// Map of connection addresses (string) <-> *network.PeerClient
 	// so that the Network doesn't dial multiple times to the same ip
-	Peers *StringPeerClientSyncMap
+	Peers *sync.Map
 
 	SendQueue chan *Packet
 	RecvQueue chan *protobuf.Message
@@ -92,7 +91,7 @@ func (n *Network) handleSendQueue() {
 
 				packet.Result <- struct{}{}
 			} else {
-				packet.Result <- fmt.Errorf("cannot send message; not connected to peer %s", packet.Target)
+				packet.Result <- errors.Errorf("cannot send message; not connected to peer %s", packet.Target)
 			}
 		}
 	}
@@ -104,18 +103,19 @@ func (n *Network) handleRecvQueue() {
 		select {
 		case packet := <-n.RecvQueue:
 			if client, exists := n.Peers.Load(packet.Sender.Address); exists {
+				client := client.(*PeerClient)
+
 				var ptr ptypes.DynamicAny
 				if err := ptypes.UnmarshalAny(packet.Message, &ptr); err != nil {
 					continue
 				}
 
 				if channel, exists := client.Requests.Load(packet.Nonce); exists && packet.Nonce > 0 {
-					channel <- ptr.Message
+					channel.(chan proto.Message) <- ptr.Message
 					continue
 				}
 
 				switch ptr.Message.(type) {
-
 				case *protobuf.StreamPacket:
 					client.handleStreamPacket(ptr.Message.(*protobuf.StreamPacket).Data)
 				default:
@@ -201,7 +201,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 	}
 
 	if client, existed := n.Peers.Load(address); existed {
-		return client, nil
+		return client.(*PeerClient), nil
 	} else {
 		session, err := n.Dial(address)
 
@@ -412,7 +412,8 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 
 // Broadcast asynchronously broadcasts a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
-	n.Peers.Range(func(key string, client *PeerClient) bool {
+	n.Peers.Range(func(key, value interface{}) bool {
+		client := value.(*PeerClient)
 		err := client.Tell(message)
 
 		if err != nil {
@@ -452,7 +453,9 @@ func (n *Network) BroadcastByIDs(message proto.Message, ids ...peer.ID) {
 func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	var addresses []string
 
-	n.Peers.Range(func(key string, client *PeerClient) bool {
+	n.Peers.Range(func(key, value interface{}) bool {
+		client := value.(*PeerClient)
+
 		addresses = append(addresses, client.ID.Address)
 
 		// Limit total amount of addresses in case we have a lot of peers.
