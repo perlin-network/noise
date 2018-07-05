@@ -85,27 +85,41 @@ func (n *Network) Init() {
 				select {
 				case packet := <-n.RecvQueue:
 					if client, exists := n.Peers.Load(packet.RemoteAddress); exists {
-						ctx := new(MessageContext)
-						ctx.client = client
-						ctx.nonce = packet.Payload.Nonce
-
-						// Unmarshal message.
 						var ptr ptypes.DynamicAny
 						if err := ptypes.UnmarshalAny(packet.Payload.Message, &ptr); err != nil {
 							packet.Result <- err
 							continue
 						}
 
-						ctx.message = ptr.Message
-
-						// Execute 'on receive message' callback for all plugins.
-						n.Plugins.Each(func(plugin PluginInterface) {
-							err := plugin.Receive(ctx)
-
-							if err != nil {
-								glog.Error(err)
-							}
+						client.IDInit.Do(func() {
+							client.ID = (*peer.ID)(packet.Payload.Sender)
 						})
+
+						if channel, exists := client.Requests.Load(packet.Payload.Nonce); exists && packet.Payload.Nonce > 0 {
+							channel <- ptr.Message
+							packet.Result <- struct{}{}
+							continue
+						}
+						
+						switch ptr.Message.(type) {
+						case *protobuf.StreamPacket: // Handle stream packet message.
+							pkt := ptr.Message.(*protobuf.StreamPacket)
+							client.handleStreamPacket(pkt.Data)
+						default: // Handle other messages.
+							ctx := new(MessageContext)
+							ctx.client = client
+							ctx.message = ptr.Message
+							ctx.nonce = packet.Payload.Nonce
+
+							// Execute 'on receive message' callback for all plugins.
+							n.Plugins.Each(func(plugin PluginInterface) {
+								err := plugin.Receive(ctx)
+
+								if err != nil {
+									glog.Error(err)
+								}
+							})
+						}
 
 						packet.Result <- struct{}{}
 					}
@@ -177,14 +191,15 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		return nil, errors.New("peer should not dial itself")
 	}
 
-	if client, exists := n.Peers.Load(address); exists {
+	if client, loaded := n.Peers.LoadOrStore(
+		address,
+		createPeerClient(n, address),
+	); loaded {
+		return client, nil
+	} else {
+		client.runInitHooks()
 		return client, nil
 	}
-
-	client := createPeerClient(n, address)
-	n.Peers.Store(address, client)
-
-	return client, nil
 }
 
 // BlockUntilListening blocks until this node is listening for new peers.
@@ -250,6 +265,11 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 
 	n.Connections.Store(address, session)
 
+	_, err = n.Client(address)
+	if err != nil {
+		panic(err) // TODO: should never fail?
+	}
+
 	return session, nil
 }
 
@@ -292,8 +312,6 @@ func (n *Network) Accept(conn net.Conn) {
 		if err != nil {
 			return
 		}
-
-		n.Connections.Store(id.Address, outgoing)
 	}
 
 	// First message in a handshake must be ping/pong. Else reject.
@@ -331,32 +349,6 @@ func (n *Network) Accept(conn net.Conn) {
 		}
 
 		n.RecvQueue <- &Packet{RemoteAddress: id.Address, Payload: msg, Result: make(chan interface{}, 1)}
-
-		//// Check if the incoming message is a response.
-		//if channel, exists := client.Requests.Load(msg.Nonce); exists && msg.Nonce > 0 {
-		//	channel <- ptr.Message
-		//	return
-		//}
-		//
-		//switch ptr.Message.(type) {
-		//case *protobuf.StreamPacket: // Handle stream packet message.
-		//	pkt := ptr.Message.(*protobuf.StreamPacket)
-		//	client.handleStreamPacket(pkt.Data)
-		//default: // Handle other messages.
-		//	ctx := new(MessageContext)
-		//	ctx.client = client
-		//	ctx.message = ptr.Message
-		//	ctx.nonce = msg.Nonce
-		//
-		//	// Execute 'on receive message' callback for all plugins.
-		//	n.Plugins.Each(func(plugin PluginInterface) {
-		//		err := plugin.Receive(ctx)
-		//
-		//		if err != nil {
-		//			glog.Error(err)
-		//		}
-		//	})
-		//}
 	}
 }
 
