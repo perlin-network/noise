@@ -138,7 +138,7 @@ func TestPlugin(t *testing.T) {
 	plugins[1] = plugin
 
 	// wait for reconnection
-	time.Sleep(5 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	// broad cast should be working again
 	if err := broadcastAndCheck(nodes, plugins); err != nil {
