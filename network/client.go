@@ -6,12 +6,11 @@ import (
 	"time"
 
 	"sync"
-	"sync/atomic"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+	"sync/atomic"
 )
 
 // PeerClient represents a single incoming peers client.
@@ -52,11 +51,6 @@ func createPeerClient(network *Network, address string) *PeerClient {
 	})
 
 	return client
-}
-
-// nextNonce gets the next most available request nonce. TODO: Have nonce recycled over time.
-func (c *PeerClient) nextNonce() uint64 {
-	return atomic.AddUint64(&c.RequestNonce, 1)
 }
 
 // Close stops all sessions/streams and cleans up the nodes
@@ -101,7 +95,7 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 		return nil, err
 	}
 
-	signed.Nonce = c.nextNonce()
+	signed.Nonce = atomic.AddUint64(&c.RequestNonce, 1)
 
 	err = c.Network.Write(c.Address, signed)
 	if err != nil {
