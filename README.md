@@ -33,7 +33,8 @@ go get -u golang.org/x/vgo
 # download the dependencies to vendor folder  
 vgo mod -vendor  
   
-# generate necessary code files  
+# (optional) generate necessary code files
+go get github.com/cheekybits/genny
 vgo generate ./...  
   
 # run an example  
