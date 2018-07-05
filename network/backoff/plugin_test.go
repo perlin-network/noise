@@ -89,6 +89,11 @@ func newNode(i int) (*network.Network, *BasicPlugin, error) {
 
 // TestPlugin tests the functionality of the exponential backoff as a plugin.
 func TestPlugin(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("skipping backoff plugin test in short mode")
+	}
+
 	flag.Parse()
 
 	var nodes []*network.Network
@@ -113,7 +118,9 @@ func TestPlugin(t *testing.T) {
 
 	// disconnect node 2
 	nodes[1].HardDisconnect()
-	time.Sleep(1 * time.Second)
+
+	// wait until about the middle of the backoff period
+	time.Sleep(initialDelay + (defaultMinInterval * (defaultMaxAttempts / 2)))
 
 	// tests that broadcasting fails
 	if err := broadcastAndCheck(nodes, plugins); err == nil {
@@ -127,7 +134,7 @@ func TestPlugin(t *testing.T) {
 	}
 	nodes[1] = node
 	plugins[1] = plugin
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	// broad cast should be working again
 	if err := broadcastAndCheck(nodes, plugins); err != nil {

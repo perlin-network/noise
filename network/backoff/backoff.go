@@ -16,13 +16,15 @@ type Backoff struct {
 	MinInterval, MaxInterval time.Duration
 }
 
-const defaultMaxAttempts = 5
-const defaultFactor = 2.0
-const defaultMinInterval = 1000 * time.Millisecond
-const defaultMaxInterval = 16 * time.Second
-const maxInt64 = float64(math.MaxInt64 - 512)
+const (
+	defaultMaxAttempts = 5
+	defaultFactor      = 2.0
+	defaultMinInterval = 1000 * time.Millisecond
+	defaultMaxInterval = 16 * time.Second
+	maxInt64           = float64(math.MaxInt64 - 512)
+)
 
-// Creates a default configuration for Backoff.
+// DefaultBackoff creates a default configuration for Backoff.
 func DefaultBackoff() *Backoff {
 	return &Backoff{
 		attempt:     0,
