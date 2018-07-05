@@ -14,7 +14,7 @@ import (
 )
 
 // sendMessage marshals, signs and sends a message over a stream.
-func (n *Network) sendMessage(stream net.Conn, message *protobuf.Message) error {
+func sendMessage(stream net.Conn, message *protobuf.Message) error {
 	bytes, err := proto.Marshal(message)
 	if err != nil {
 		return err
@@ -51,7 +51,7 @@ func (n *Network) sendMessage(stream net.Conn, message *protobuf.Message) error 
 }
 
 // receiveMessage reads, unmarshals and verifies a message from a stream.
-func (n *Network) receiveMessage(stream net.Conn) (*protobuf.Message, error) {
+func receiveMessage(stream net.Conn) (*protobuf.Message, error) {
 	reader := bufio.NewReader(stream)
 
 	buffer := make([]byte, binary.MaxVarintLen64)
@@ -102,23 +102,4 @@ func (n *Network) receiveMessage(stream net.Conn) (*protobuf.Message, error) {
 	}
 
 	return msg, nil
-}
-
-// Write asynchronously sends a message to a denoted target address.
-func (n *Network) Write(address string, message *protobuf.Message) error {
-	packet := &Packet{Target: address, Payload: message, Result: make(chan interface{}, 1)}
-
-	n.SendQueue <- packet
-
-	select {
-	case raw := <-packet.Result:
-		switch err := raw.(type) {
-		case error:
-			return err
-		default:
-			return nil
-		}
-	}
-
-	return nil
 }

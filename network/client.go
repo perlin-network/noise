@@ -81,7 +81,7 @@ func (c *PeerClient) Close() error {
 
 // Write asynchronously emit a message to a given peer.
 func (c *PeerClient) Tell(message proto.Message) error {
-	signed, err := c.Network.prepareMessage(message)
+	signed, err := c.Network.PrepareMessage(message)
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func (c *PeerClient) Tell(message proto.Message) error {
 
 // Request requests for a response for a request sent to a given peer.
 func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
-	signed, err := c.Network.prepareMessage(req.Message)
+	signed, err := c.Network.PrepareMessage(req.Message)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 
 // Reply is equivalent to Write() with an appended nonce to signal a reply.
 func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
-	signed, err := c.Network.prepareMessage(message)
+	signed, err := c.Network.PrepareMessage(message)
 	if err != nil {
 		return err
 	}
@@ -183,9 +183,7 @@ func (c *PeerClient) Read(out []byte) (int, error) {
 }
 
 func (c *PeerClient) Write(data []byte) (int, error) {
-	err := c.Tell(&protobuf.StreamPacket{
-		Data: data,
-	})
+	err := c.Tell(&protobuf.StreamPacket{Data: data})
 	if err != nil {
 		return 0, err
 	}

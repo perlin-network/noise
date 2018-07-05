@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"runtime"
 	"sync"
+	"math/rand"
 )
 
 type Packet struct {
@@ -52,6 +53,7 @@ type Network struct {
 	Listening chan struct{}
 }
 
+// Init starts all network I/O workers.
 func (n *Network) Init() {
 	workerCount := runtime.NumCPU()
 
@@ -68,7 +70,7 @@ func (n *Network) Init() {
 							continue
 						}
 
-						err = n.sendMessage(stream, packet.Payload)
+						err = sendMessage(stream, packet.Payload)
 						if err != nil {
 							packet.Result <- err
 							continue
@@ -310,7 +312,7 @@ func (n *Network) Accept(conn net.Conn) {
 		go func() {
 			defer stream.Close()
 
-			msg, err := n.receiveMessage(stream)
+			msg, err := receiveMessage(stream)
 
 			// Will trigger 'broken pipe' on peer disconnection.
 			if err != nil {
@@ -358,10 +360,6 @@ func (n *Network) Plugin(key interface{}) (PluginInterface, bool) {
 // PrepareMessage marshals a message into a *protobuf.Message and signs it with this
 // nodes private key. Errors if the message is null.
 func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, error) {
-	return n.prepareMessage(message)
-}
-
-func (n *Network) prepareMessage(message proto.Message) (*protobuf.Message, error) {
 	if message == nil {
 		return nil, errors.New("message is null")
 	}
@@ -385,4 +383,88 @@ func (n *Network) prepareMessage(message proto.Message) (*protobuf.Message, erro
 	}
 
 	return msg, nil
+}
+
+// Write asynchronously sends a message to a denoted target address.
+func (n *Network) Write(address string, message *protobuf.Message) error {
+	packet := &Packet{Target: address, Payload: message, Result: make(chan interface{}, 1)}
+
+	n.SendQueue <- packet
+
+	select {
+	case raw := <-packet.Result:
+		switch err := raw.(type) {
+		case error:
+			return err
+		default:
+			return nil
+		}
+	}
+
+	return nil
+}
+
+// Broadcast asynchronously broadcasts a message to all peer clients.
+func (n *Network) Broadcast(message proto.Message) {
+	n.Peers.Range(func(key string, client *PeerClient) bool {
+		err := client.Tell(message)
+
+		if err != nil {
+			glog.Warningf("Failed to send message to peer %v [err=%s]", client.ID, err)
+		}
+
+		return true
+	})
+}
+
+// BroadcastByAddresses broadcasts a message to a set of peer clients denoted by their addresses.
+func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
+	signed, err := n.PrepareMessage(message)
+	if err != nil {
+		return
+	}
+
+	for _, address := range addresses {
+		n.Write(address, signed)
+	}
+}
+
+// BroadcastByIDs broadcasts a message to a set of peer clients denoted by their peer IDs.
+func (n *Network) BroadcastByIDs(message proto.Message, ids ...peer.ID) {
+	signed, err := n.PrepareMessage(message)
+	if err != nil {
+		return
+	}
+
+	for _, id := range ids {
+		n.Write(id.Address, signed)
+	}
+}
+
+// BroadcastRandomly asynchronously broadcast message to random selected K peers.
+// Does not guarantee broadcasting to exactly K peers.
+func (n *Network) BroadcastRandomly(message proto.Message, K int) {
+	var addresses []string
+
+	n.Peers.Range(func(key string, client *PeerClient) bool {
+		addresses = append(addresses, client.ID.Address)
+
+		// Limit total amount of addresses in case we have a lot of peers.
+		if len(addresses) > K*3 {
+			return false
+		}
+
+		return true
+	})
+
+	// Flip a coin and shuffle :).
+	rand.Shuffle(len(addresses), func(i, j int) {
+		addresses[i], addresses[j] = addresses[j], addresses[i]
+	})
+
+	if len(addresses) < K {
+		K = len(addresses)
+	}
+
+	n.BroadcastByAddresses(message, addresses[:K]...)
 }
