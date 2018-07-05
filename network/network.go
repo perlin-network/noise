@@ -275,6 +275,7 @@ func (n *Network) Accept(conn net.Conn) {
 	var incoming *smux.Session
 	var outgoing *smux.Session
 	var client *PeerClient
+	var clientInit sync.Once
 
 	var err error
 
@@ -320,7 +321,7 @@ func (n *Network) Accept(conn net.Conn) {
 			}
 
 			// Initialize client if not exists.
-			if client == nil {
+			clientInit.Do(func() {
 				client, err = n.Client(msg.Sender.Address)
 				if err != nil {
 					glog.Error(err)
@@ -335,7 +336,7 @@ func (n *Network) Accept(conn net.Conn) {
 				} else {
 					return
 				}
-			}
+			})
 
 			// Peer sent message with a completely different ID. Disconnect.
 			if !client.ID.Equals(peer.ID(*msg.Sender)) {
