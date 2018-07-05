@@ -73,7 +73,7 @@ func main() {
 	}
 
 	for {
-		err = net.Tell(receiver, prepared)
+		err = net.Write(receiver, prepared)
 		if err != nil {
 			panic(err)
 		}

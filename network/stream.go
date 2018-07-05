@@ -132,13 +132,8 @@ func (n *Network) receiveMessage(session *smux.Session, timeout time.Time) (*pro
 	return msg, nil
 }
 
-// Tell asynchronously emit a message to a denoted target address.
-func (n *Network) Tell(address string, message *protobuf.Message) error {
-	address, err := ToUnifiedAddress(address)
-	if err != nil {
-		return err
-	}
-
+// Write asynchronously emit a message to a denoted target address.
+func (n *Network) Write(address string, message *protobuf.Message) error {
 	packet := &Packet{RemoteAddress: address, Payload: message, Result: make(chan interface{}, 1)}
 
 	n.SendQueue <- packet

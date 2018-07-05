@@ -80,14 +80,14 @@ func (c *PeerClient) Close() error {
 	return nil
 }
 
-// Tell asynchronously emit a message to a given peer.
+// Write asynchronously emit a message to a given peer.
 func (c *PeerClient) Tell(message proto.Message) error {
 	signed, err := c.Network.prepareMessage(message)
 	if err != nil {
 		return err
 	}
 
-	err = c.Network.Tell(c.Address, signed)
+	err = c.Network.Write(c.Address, signed)
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 
 	signed.Nonce = c.nextNonce()
 
-	err = c.Network.Tell(c.Address, signed)
+	err = c.Network.Write(c.Address, signed)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 	return nil, errors.New("request timed out")
 }
 
-// Reply is equivalent to Tell() with an appended nonce to signal a reply.
+// Reply is equivalent to Write() with an appended nonce to signal a reply.
 func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
 	signed, err := c.Network.prepareMessage(message)
 	if err != nil {
@@ -137,7 +137,7 @@ func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
 	// Set the nonce.
 	signed.Nonce = nonce
 
-	err = c.Network.Tell(c.Address, signed)
+	err = c.Network.Write(c.Address, signed)
 	if err != nil {
 		return err
 	}

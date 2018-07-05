@@ -28,7 +28,7 @@ func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...strin
 	}
 
 	for _, address := range addresses {
-		n.Tell(address, signed)
+		n.Write(address, signed)
 	}
 }
 
@@ -40,7 +40,7 @@ func (n *Network) BroadcastByIDs(message proto.Message, ids ...peer.ID) {
 	}
 
 	for _, id := range ids {
-		n.Tell(id.Address, signed)
+		n.Write(id.Address, signed)
 	}
 }
 

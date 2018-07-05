@@ -93,8 +93,8 @@ func (builder *NetworkBuilder) Build() (*network.Network, error) {
 		Peers: new(network.StringPeerClientSyncMap),
 
 		Connections: new(sync.Map),
-		SendQueue:   make(chan *network.Packet),
-		RecvQueue:   make(chan *network.Packet),
+		SendQueue:   make(chan *network.Packet, 1024),
+		RecvQueue:   make(chan *network.Packet, 1024),
 
 		Listening: make(chan struct{}),
 	}

@@ -189,12 +189,16 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 
 	if client, exists := n.Peers.Load(address); exists {
 		return client, nil
-	} else {
+	}
+
+	if _, err := n.Dial(address); err == nil {
 		client := createPeerClient(n, address)
 		client.runInitHooks()
 
 		n.Peers.Store(address, client)
 		return client, nil
+	} else {
+		return nil, err
 	}
 }
 
@@ -210,19 +214,13 @@ func (n *Network) Bootstrap(addresses ...string) {
 	addresses = FilterPeers(n.Address, addresses)
 
 	for _, address := range addresses {
-		session, err := n.Dial(address)
+		client, err := n.Client(address)
 		if err != nil {
 			glog.Error(err)
 			continue
 		}
 
-		ping, err := n.prepareMessage(&protobuf.Ping{})
-		if err != nil {
-			glog.Error(err)
-			continue
-		}
-
-		err = n.sendMessage(session, ping)
+		err = client.Tell(&protobuf.Ping{})
 		if err != nil {
 			glog.Error(err)
 			continue
@@ -261,16 +259,13 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 
 	n.Connections.Store(address, session)
 
-	_, err = n.Client(address)
-	if err != nil {
-		panic(err) // TODO: should never fail?
-	}
-
 	return session, nil
 }
 
 // Accept handles peer registration and processes incoming message streams.
 func (n *Network) Accept(conn net.Conn) {
+	glog.Info("socket has been opened.")
+
 	var incoming *smux.Session
 	var outgoing *smux.Session
 	var client *PeerClient

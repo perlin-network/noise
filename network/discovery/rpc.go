@@ -9,11 +9,13 @@ import (
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"sort"
+	"github.com/golang/glog"
 )
 
 func queryPeerByID(net *network.Network, peerID peer.ID, targetID peer.ID, responses chan []*protobuf.ID) {
 	client, err := net.Client(peerID.Address)
 	if err != nil {
+		glog.Error(err)
 		responses <- []*protobuf.ID{}
 		return
 	}
