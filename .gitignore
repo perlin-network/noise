@@ -6,3 +6,5 @@ noise
 chat
 debug
 vendor
+
+*.test

@@ -11,7 +11,6 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/peer"
 )
 
@@ -29,15 +28,15 @@ func RandByte() byte {
 }
 
 func TestBucketSize(t *testing.T) {
-	if dht.BucketSize != 20 {
-		t.Fatalf("bucket size is expected %d but found %d", 20, dht.BucketSize)
+	if BucketSize != 20 {
+		t.Fatalf("bucket size is expected %d but found %d", 20, BucketSize)
 	}
 }
 
 func TestSelf(t *testing.T) {
 	publicKey := MustReadRand(32)
 	id := peer.CreateID("0000", publicKey)
-	routes := dht.CreateRoutingTable(id)
+	routes := CreateRoutingTable(id)
 	if routes.Self().Address != "0000" {
 		t.Fatalf("wrong address: %s", routes.Self().Address)
 	}
@@ -50,7 +49,7 @@ func TestPeerExists(t *testing.T) {
 
 	id1 := peer.CreateID("0000", MustReadRand(32))
 	id2 := peer.CreateID("0001", MustReadRand(32))
-	routingTable := dht.CreateRoutingTable(id1)
+	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
 	if !routingTable.PeerExists(id1) {
 		t.Fatal("peerexists() targeting self failed")
@@ -64,7 +63,7 @@ func TestGetPeerAddresses(t *testing.T) {
 	id1 := peer.CreateID("0000", MustReadRand(32))
 	id2 := peer.CreateID("0001", MustReadRand(32))
 	id3 := peer.CreateID("0002", MustReadRand(32))
-	routingTable := dht.CreateRoutingTable(id1)
+	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
 	routingTable.Update(id3)
 	tester := routingTable.GetPeerAddresses()
@@ -81,7 +80,7 @@ func TestRemovePeer(t *testing.T) {
 	id1 := peer.CreateID("0000", MustReadRand(32))
 	id2 := peer.CreateID("0001", MustReadRand(32))
 	id3 := peer.CreateID("0002", MustReadRand(32))
-	routingTable := dht.CreateRoutingTable(id1)
+	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
 	routingTable.Update(id3)
 	routingTable.RemovePeer(id2)
@@ -104,7 +103,7 @@ func TestFindClosestPeers(t *testing.T) {
 	nodes = append(nodes, peer.CreateID("0003", []byte("12345678901234567890123456789013")))
 	nodes = append(nodes, peer.CreateID("0004", []byte("12345678901234567890123456789014")))
 	nodes = append(nodes, peer.CreateID("0005", []byte("00000000000000000000000000000000")))
-	routingTable := dht.CreateRoutingTable(nodes[0])
+	routingTable := CreateRoutingTable(nodes[0])
 	for i := 1; i <= 5; i++ {
 		routingTable.Update(nodes[i])
 	}
@@ -128,7 +127,7 @@ func TestFindClosestPeers(t *testing.T) {
 		testee = append(testee, peer)
 	}
 	if len(testee) != 2 {
-		t.Fatalf("findclosestpeers() error, size of return should be 3, but found %d", len(testee))
+		t.Fatalf("findclosestpeers() error, size of return should be 2, but found %d", len(testee))
 	}
 	answerKeys = []int{4, 2}
 	for i := 0; i <= 1; i++ {
@@ -141,18 +140,18 @@ func TestFindClosestPeers(t *testing.T) {
 }
 
 func TestRoutingTable(t *testing.T) {
-	const ID_POOL_SIZE = 16
-	const CONCURRENT_COUNT = 16
+	const IDPoolSize = 16
+	const concurrentCount = 16
 
 	pk0 := MustReadRand(32)
-	ids := make([]unsafe.Pointer, ID_POOL_SIZE) // Element type: *peer.ID
+	ids := make([]unsafe.Pointer, IDPoolSize) // Element type: *peer.ID
 
 	table := CreateRoutingTable(peer.CreateID("000", pk0))
 
 	wg := &sync.WaitGroup{}
-	wg.Add(CONCURRENT_COUNT)
+	wg.Add(concurrentCount)
 
-	for i := 0; i < CONCURRENT_COUNT; i++ {
+	for i := 0; i < concurrentCount; i++ {
 		go func() {
 			defer func() {
 				wg.Done()
@@ -170,25 +169,25 @@ func TestRoutingTable(t *testing.T) {
 						id := peer.CreateID(addr, pk)
 						table.Update(id)
 
-						atomic.StorePointer(&ids[int(RandByte())%ID_POOL_SIZE], unsafe.Pointer(&id))
+						atomic.StorePointer(&ids[int(RandByte())%IDPoolSize], unsafe.Pointer(&id))
 					}
 				case 1:
 					{
-						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte())%ID_POOL_SIZE]))
+						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte())%IDPoolSize]))
 						if id != nil {
 							table.RemovePeer(*id)
 						}
 					}
 				case 2:
 					{
-						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte())%ID_POOL_SIZE]))
+						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte())%IDPoolSize]))
 						if id != nil {
 							table.PeerExists(*id)
 						}
 					}
 				case 3:
 					{
-						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte())%ID_POOL_SIZE]))
+						id := (*peer.ID)(atomic.LoadPointer(&ids[int(RandByte())%IDPoolSize]))
 						if id != nil {
 							table.FindClosestPeers(*id, 5)
 						}
