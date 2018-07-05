@@ -105,7 +105,7 @@ func ExampleProxy() {
 	var plugins []*ProxyPlugin
 
 	for i := 0; i < numNodes; i++ {
-		addr := fmt.Sprintf("kcp://%s:%d", host, startPort+i)
+		addr := fmt.Sprintf("tcp://%s:%d", host, startPort+i)
 		ids[addr] = i
 
 		builder := builders.NewNetworkBuilder()

@@ -63,7 +63,7 @@ func main() {
 	}
 
 	builder := builders.NewNetworkBuilder()
-	builder.SetAddress("kcp://localhost:3001")
+	builder.SetAddress("tcp://localhost:3001")
 	builder.SetKeys(crypto.RandomKeyPair())
 
 	state := new(BenchmarkPlugin)
