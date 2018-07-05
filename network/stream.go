@@ -124,6 +124,8 @@ func (n *Network) receiveMessage(conn net.Conn, timeout time.Time) (*protobuf.Me
 func (n *Network) Tell(address string, message *protobuf.Message) error {
 	packet := &Packet{Payload: message, Result: make(chan interface{}, 1)}
 
+	n.SendQueue <- packet
+
 	select {
 	case raw := <-packet.Result:
 		switch result := raw.(type) {
