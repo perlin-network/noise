@@ -59,12 +59,14 @@ func broadcastAndCheck(nodes []*network.Network, plugins []*BasicPlugin) error {
 	return nil
 }
 
-func newNode(i int) (*network.Network, *BasicPlugin, error) {
+func newNode(i int, reconnecting bool) (*network.Network, *BasicPlugin, error) {
 	builder := builders.NewNetworkBuilder()
 	builder.SetKeys(crypto.RandomKeyPair())
 	builder.SetAddress(network.FormatAddress(protocol, host, uint16(startPort+i)))
 
-	builder.AddPlugin(new(discovery.Plugin))
+	if !reconnecting {
+		builder.AddPlugin(new(discovery.Plugin))
+	}
 	builder.AddPlugin(new(Plugin))
 
 	plugin := new(BasicPlugin)
@@ -80,7 +82,7 @@ func newNode(i int) (*network.Network, *BasicPlugin, error) {
 	node.BlockUntilListening()
 
 	// Bootstrap to Node 0.
-	if i != 0 {
+	if !reconnecting && i != 0 {
 		node.Bootstrap(network.FormatAddress(protocol, host, uint16(startPort)))
 	}
 
@@ -100,7 +102,7 @@ func TestPlugin(t *testing.T) {
 	var plugins []*BasicPlugin
 
 	for i := 0; i < numNodes; i++ {
-		node, plugin, err := newNode(i)
+		node, plugin, err := newNode(i, false)
 		if err != nil {
 			t.Error(err)
 		}
@@ -128,13 +130,15 @@ func TestPlugin(t *testing.T) {
 	}
 
 	// recreate the second node to the cluster
-	node, plugin, err := newNode(1)
+	node, plugin, err := newNode(1, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	nodes[1] = node
 	plugins[1] = plugin
-	time.Sleep(1 * time.Second)
+
+	// wait for reconnection
+	time.Sleep(5 * time.Second)
 
 	// broad cast should be working again
 	if err := broadcastAndCheck(nodes, plugins); err != nil {
