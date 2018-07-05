@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"sync"
 	"time"
+	"fmt"
 )
 
 type Packet struct {
@@ -70,6 +71,8 @@ func (n *Network) Init() {
 
 						// Sending message is successful.
 						packet.Result <- struct{}{}
+					} else {
+						packet.Result <- fmt.Errorf("cannot send message; not connected to peer %s", packet.Payload.Sender.Address)
 					}
 				}
 			}
