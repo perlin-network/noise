@@ -2,7 +2,6 @@ package backoff
 
 import (
 	"flag"
-	"fmt"
 	"testing"
 	"time"
 
@@ -45,16 +44,12 @@ func broadcastAndCheck(nodes []*network.Network, plugins []*BasicPlugin) error {
 	expected := "This is a broadcasted message from Node 0."
 	nodes[0].Broadcast(&messages.BasicMessage{Message: expected})
 
-	fmt.Println("Node 0 sent out a message.")
-
 	// Check if message was received by other nodes.
 	for i := 1; i < len(nodes); i++ {
 		select {
 		case received := <-plugins[i].Mailbox:
 			if received.Message != expected {
 				return errors.Errorf("Expected message %s to be received by node %d but got %v\n", expected, i, received.Message)
-			} else {
-				fmt.Printf("Node %d received a message from Node 0.\n", i)
 			}
 		case <-time.After(2 * time.Second):
 			return errors.Errorf("Timed out attempting to receive message from Node 0.\n")
