@@ -28,9 +28,9 @@ type PeerClient struct {
 
 type StreamState struct {
 	sync.Mutex
-	buffer        []byte
-	dataAvailable chan struct{}
-	closed        bool
+	buffer   []byte
+	buffered chan struct{}
+	closed   bool
 }
 
 // createPeerClient creates a stub peer client.
@@ -41,8 +41,8 @@ func createPeerClient(network *Network, address string) *PeerClient {
 		Requests:     new(sync.Map),
 		RequestNonce: 0,
 		stream: StreamState{
-			buffer:        make([]byte, 0),
-			dataAvailable: make(chan struct{}),
+			buffer:   make([]byte, 0),
+			buffered: make(chan struct{}),
 		},
 	}
 
@@ -65,6 +65,7 @@ func (c *PeerClient) Close() error {
 		plugin.PeerDisconnect(c)
 	})
 
+	// Remove entries from node's network.
 	if c.ID != nil {
 		c.Network.Peers.Delete(c.ID.Address)
 		c.Network.Connections.Delete(c.ID.Address)
@@ -140,13 +141,13 @@ func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
 
 func (c *PeerClient) handleStreamPacket(pkt []byte) {
 	c.stream.Lock()
-	wasEmpty := len(c.stream.buffer) == 0
+	empty := len(c.stream.buffer) == 0
 	c.stream.buffer = append(c.stream.buffer, pkt...)
 	c.stream.Unlock()
 
-	if wasEmpty {
+	if empty {
 		select {
-		case c.stream.dataAvailable <- struct{}{}:
+		case c.stream.buffered <- struct{}{}:
 		default:
 		}
 	}
@@ -167,7 +168,7 @@ func (c *PeerClient) Read(out []byte) (int, error) {
 
 		if n == 0 {
 			select {
-			case <-c.stream.dataAvailable:
+			case <-c.stream.buffered:
 			case <-time.After(1 * time.Second):
 			}
 		} else {
@@ -176,6 +177,7 @@ func (c *PeerClient) Read(out []byte) (int, error) {
 	}
 }
 
+// Write implements net.Conn and sends packets of bytes over a stream.
 func (c *PeerClient) Write(data []byte) (int, error) {
 	err := c.Tell(&protobuf.StreamPacket{Data: data})
 	if err != nil {
