@@ -73,7 +73,7 @@ func (n *Network) Init() {
 							packet.Result <- struct{}{}
 						}
 					} else {
-						packet.Result <- fmt.Errorf("cannot send message; not connected to peer %s", packet.Payload.Sender.Address)
+						packet.Result <- fmt.Errorf("cannot send message; not connected to peer %s", packet.RemoteAddress)
 					}
 				}
 			}
@@ -358,6 +358,10 @@ func (n *Network) Accept(conn net.Conn) {
 // Example: network.Plugin((*Plugin)(nil))
 func (n *Network) Plugin(key interface{}) (PluginInterface, bool) {
 	return n.Plugins.Get(key)
+}
+
+func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, error) {
+	return n.prepareMessage(message)
 }
 
 // prepareMessage marshals a message into a *protobuf.Message and signs it with this
