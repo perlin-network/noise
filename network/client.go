@@ -153,7 +153,7 @@ func (c *PeerClient) handleStreamPacket(pkt []byte) {
 	}
 }
 
-// Implement net.Conn.
+// Read implement net.Conn by reading packets of bytes over a stream.
 func (c *PeerClient) Read(out []byte) (int, error) {
 	for {
 		c.stream.Lock()
@@ -198,24 +198,29 @@ func (a *NoiseAddr) String() string {
 	return a.Address
 }
 
+// LocalAddr implements net.Conn.
 func (c *PeerClient) LocalAddr() net.Addr {
 	return &NoiseAddr{Address: "[local]"}
 }
 
+// RemoteAddr implements net.Conn.
 func (c *PeerClient) RemoteAddr() net.Addr {
 	return &NoiseAddr{Address: c.Address}
 }
 
+// SetDeadline implements net.Conn.
 func (c *PeerClient) SetDeadline(t time.Time) error {
 	// TODO
 	return nil
 }
 
+// SetReadDeadline implements net.Conn.
 func (c *PeerClient) SetReadDeadline(t time.Time) error {
 	// TODO
 	return nil
 }
 
+// SetWriteDeadline implements net.Conn.
 func (c *PeerClient) SetWriteDeadline(t time.Time) error {
 	// TODO
 	return nil
