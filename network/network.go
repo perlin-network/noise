@@ -51,6 +51,9 @@ type Network struct {
 
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
+
+	SignaturePolicy crypto.SignaturePolicy
+	HashPolicy crypto.HashPolicy
 }
 
 // Init starts all network I/O workers.
@@ -78,7 +81,7 @@ func (n *Network) handleSendQueue() {
 					continue
 				}
 
-				err = sendMessage(stream, packet.Payload)
+				err = n.sendMessage(stream, packet.Payload)
 				if err != nil {
 					packet.Result <- err
 					continue
@@ -319,7 +322,7 @@ func (n *Network) Accept(conn net.Conn) {
 			defer stream.Close()
 
 			// Receive a message from the stream.
-			msg, err := receiveMessage(stream)
+			msg, err := n.receiveMessage(stream)
 
 			// Will trigger 'broken pipe' on peer disconnection.
 			if err != nil {
@@ -378,7 +381,11 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 
 	id := protobuf.ID(n.ID)
 
-	signature, err := n.Keys.Sign(raw.Value)
+	signature, err := n.Keys.Sign(
+		n.SignaturePolicy,
+		n.HashPolicy,
+		raw.Value,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/examples/topologies/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
@@ -185,7 +185,7 @@ func setupNodes(ports []int) ([]*network.Network, []*MockPlugin, error) {
 
 	for i, port := range ports {
 		builder := &builders.NetworkBuilder{}
-		builder.SetKeys(crypto.RandomKeyPair())
+		builder.SetKeys(ed25519.RandomKeyPair())
 		builder.SetAddress(fmt.Sprintf("tcp://%s:%d", host, port))
 
 		// Attach mock plugin.

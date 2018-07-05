@@ -1,13 +1,18 @@
-package crypto
+package tests
 
 import (
 	"crypto/rand"
-	"reflect"
 	"testing"
+	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/signing/ed25519"
+	"github.com/perlin-network/noise/crypto/hashing/blake2b"
 )
 
 func TestSignVerify(t *testing.T) {
-	kp := RandomKeyPair()
+	sp := ed25519.New()
+	hp := blake2b.New()
+
+	kp := ed25519.RandomKeyPair()
 	message := make([]byte, 120)
 
 	_, err := rand.Read(message)
@@ -15,37 +20,25 @@ func TestSignVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sig, err := kp.Sign(message)
+	sig, err := kp.Sign(sp, hp, message)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Test if signature works.
-	ok := Verify(kp.PublicKey, message, sig)
+	ok := crypto.Verify(sp, hp, kp.PublicKey, message, sig)
 	if !ok {
 		t.Fatal("signature verification failed with correct info")
 	}
 
-	ok = Verify(message, message, sig)
+	ok = crypto.Verify(sp, hp, message, message, sig)
 	if ok {
 		t.Fatal("signature verification failed with wrong public key size/contents")
 	}
 
 	sig[0] = ^sig[0]
-	ok = Verify(kp.PublicKey, message, sig)
+	ok = crypto.Verify(sp, hp, kp.PublicKey, message, sig)
 	if ok {
 		t.Fatal("invalid signature passed verification unexpectedly")
-	}
-}
-
-func TestFromPrivateKey(t *testing.T) {
-	kp1 := RandomKeyPair()
-	kp2, err := FromPrivateKey(kp1.PrivateKeyHex())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !reflect.DeepEqual(kp1, kp2) {
-		t.Fatal("kp1 and kp2 are not deep-equal.")
 	}
 }

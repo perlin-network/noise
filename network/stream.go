@@ -13,7 +13,7 @@ import (
 )
 
 // sendMessage marshals, signs and sends a message over a stream.
-func sendMessage(stream net.Conn, message *protobuf.Message) error {
+func (n *Network) sendMessage(stream net.Conn, message *protobuf.Message) error {
 	bytes, err := proto.Marshal(message)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal message")
@@ -50,7 +50,7 @@ func sendMessage(stream net.Conn, message *protobuf.Message) error {
 }
 
 // receiveMessage reads, unmarshals and verifies a message from a stream.
-func receiveMessage(stream net.Conn) (*protobuf.Message, error) {
+func (n *Network) receiveMessage(stream net.Conn) (*protobuf.Message, error) {
 	reader := bufio.NewReader(stream)
 
 	buffer := make([]byte, binary.MaxVarintLen64)
@@ -96,7 +96,13 @@ func receiveMessage(stream net.Conn) (*protobuf.Message, error) {
 	}
 
 	// Verify signature of message.
-	if !crypto.Verify(msg.Sender.PublicKey, msg.Message.Value, msg.Signature) {
+	if !crypto.Verify(
+		n.SignaturePolicy,
+		n.HashPolicy,
+		msg.Sender.PublicKey,
+		msg.Message.Value,
+		msg.Signature,
+	) {
 		return nil, errors.New("received message had an malformed signature")
 	}
 
