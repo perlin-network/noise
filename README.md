@@ -54,14 +54,14 @@ vgo test -v -count=1 -race -short ./...
 A peer's cryptographic public/private keys are randomly generated/loaded with 1 LoC in mind.  
   
 ```go  
-// Randomly generate a keypair.  
-keys := crypto.RandomKeyPair()  
+// Randomly generate a Ed25519 keypair.  
+keys := ed25519.RandomKeyPair()  
   
 // Load a private key through a hex-encoded string.  
-keys := crypto.FromPrivateKey("4d5333a68e3a96d0ad935cb6546b97bbb0c0771acf76c868a897f65dad0b7933e1442970cce57b7a35e1803e0e8acceb04dc6abf8a73df52e808ab5d966113ac")  
+keys := crypto.FromPrivateKey(ed25519.New(), "4d5333a68e3a96d0ad935cb6546b97bbb0c0771acf76c868a897f65dad0b7933e1442970cce57b7a35e1803e0e8acceb04dc6abf8a73df52e808ab5d966113ac")  
   
 // Load a private key through a provided 64-length byte array (for Ed25519 keypair).  
-keys := crypto.FromPrivateKeyBytes([64]byte{ ...}...)  
+keys := crypto.FromPrivateKeyBytes(ed25519.New(), [64]byte{ ...}...)  
   
 // Print out loaded public/private keys.  
 glog.Info("Private Key: ", keys.PrivateKeyHex())  
@@ -74,7 +74,7 @@ You may use the loaded keys to sign/verify messages that are loaded as byte arra
 msg := []byte{ ... }  
   
 // Sign a message.  
-signature, err := keys.Sign(msg)  
+signature, err := keys.Sign(ed25519.New(), blake2b.New(), msg)  
 if err != nil {  
     panic(err)
 }
@@ -82,7 +82,7 @@ if err != nil {
 glog.Info("Signature: ", hex.EncodeToString(signature))  
   
 // Verify a signature.  
-verified := crypto.Verify(keys.PublicKey, msg, signature)  
+verified := crypto.Verify(ed25519.New(), blake2b.New(), keys.PublicKey, msg, signature)  
   
 glog.Info("Is the signature valid? ", verified)  
 ```  
