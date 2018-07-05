@@ -38,8 +38,8 @@ vgo generate ./...
   
 # run an example  
 [terminal 1] vgo run examples/chat/main.go -port 3000  
-[terminal 2] vgo run examples/chat/main.go -port 3001 peers tcp://localhost:3000
-[terminal 3] vgo run examples/chat/main.go -port 3002 peers tcp://localhost:3000
+[terminal 2] vgo run examples/chat/main.go -port 3001 -peers tcp://localhost:3000
+[terminal 3] vgo run examples/chat/main.go -port 3002 -peers tcp://localhost:3000
   
 # run test cases  
 vgo test -v -count=1 -race ./...  
