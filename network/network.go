@@ -13,11 +13,12 @@ import (
 	"github.com/xtaci/smux"
 	"net"
 	"net/url"
+	"runtime"
 	"sync"
 )
 
 type Packet struct {
-	Target string
+	Target  string
 	Payload *protobuf.Message
 	Result  chan interface{}
 }
@@ -52,24 +53,37 @@ type Network struct {
 }
 
 func (n *Network) Init() {
-	workerCount := 1
+	workerCount := runtime.NumCPU()
 
 	for i := 0; i < workerCount; i++ {
 		// Spawn worker routines for sending queued messages to the networking layer.
 		go func() {
 			for {
-				var err error
-
 				select {
 				case packet := <-n.SendQueue:
-					if stream, exists := n.Connections.Load(packet.Target); exists {
-						err = n.sendMessage(stream.(net.Conn), packet.Payload)
-					} else {
-						err = fmt.Errorf("cannot send message; not connected to peer %s", packet.Target)
-					}
+					if session, exists := n.Connections.Load(packet.Target); exists {
+						stream, err := session.(*smux.Session).OpenStream()
+						if err != nil {
+							packet.Result <- err
+							continue
+						}
 
-					packet.Result <- err
-					close(packet.Result)
+						err = n.sendMessage(stream, packet.Payload)
+						if err != nil {
+							packet.Result <- err
+							continue
+						}
+
+						err = stream.Close()
+						if err != nil {
+							packet.Result <- err
+							continue
+						}
+
+						packet.Result <- struct{}{}
+					} else {
+						packet.Result <- fmt.Errorf("cannot send message; not connected to peer %s", packet.Target)
+					}
 				}
 			}
 		}()
@@ -223,7 +237,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 }
 
 // Dial establishes a bidirectional connection to an address, and additionally handshakes with said address.
-func (n *Network) Dial(address string) (net.Conn, error) {
+func (n *Network) Dial(address string) (*smux.Session, error) {
 	urlInfo, err := url.Parse(address)
 	if err != nil {
 		return nil, err
@@ -251,18 +265,13 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 		return nil, err
 	}
 
-	stream, err := session.OpenStream()
-	if err != nil {
-		return nil, err
-	}
-
-	return stream, nil
+	return session, nil
 }
 
 // Accept handles peer registration and processes incoming message streams.
 func (n *Network) Accept(conn net.Conn) {
-	var incoming net.Conn
-	var outgoing net.Conn
+	var incoming *smux.Session
+	var outgoing *smux.Session
 	var client *PeerClient
 
 	var err error
@@ -270,6 +279,8 @@ func (n *Network) Accept(conn net.Conn) {
 	// Cleanup connections when we are done with them.
 	defer func() {
 		if client != nil {
+			n.Connections.Delete(client.Address)
+
 			client.Close()
 		}
 
@@ -283,52 +294,56 @@ func (n *Network) Accept(conn net.Conn) {
 	}()
 
 	// Wrap a session around the incoming connection.
-	session, err := smux.Server(conn, muxConfig())
-	if err != nil {
-		glog.Error(err)
-		return
-	}
-
-	incoming, err = session.AcceptStream()
+	incoming, err = smux.Server(conn, muxConfig())
 	if err != nil {
 		glog.Error(err)
 		return
 	}
 
 	for {
-		msg, err := n.receiveMessage(incoming)
-
-		// Will trigger 'broken pipe' on peer disconnection.
+		// Open a new stream.
+		stream, err := incoming.AcceptStream()
 		if err != nil {
-			glog.Error(err)
-			return
+			break
 		}
 
-		// Initialize client if not exists.
-		if client == nil {
-			client, err = n.Client(msg.Sender.Address)
+		go func() {
+			defer stream.Close()
+
+			msg, err := n.receiveMessage(stream)
+
+			// Will trigger 'broken pipe' on peer disconnection.
 			if err != nil {
-				glog.Error(err)
 				return
 			}
 
-			client.ID = (*peer.ID)(msg.Sender)
+			// Initialize client if not exists.
+			if client == nil {
+				client, err = n.Client(msg.Sender.Address)
+				if err != nil {
+					glog.Error(err)
+					return
+				}
 
-			// Load an outgoing connection.
-			if session, established := n.Connections.Load(client.ID.Address); established {
-				outgoing = session.(net.Conn)
-			} else {
+				client.ID = (*peer.ID)(msg.Sender)
+
+				// Load an outgoing connection.
+				if session, established := n.Connections.Load(client.ID.Address); established {
+					outgoing = session.(*smux.Session)
+				} else {
+					return
+				}
+			}
+
+			// Peer sent message with a completely different ID. Disconnect.
+			if !client.ID.Equals(peer.ID(*msg.Sender)) {
+				glog.Errorf("Message signed by peer %s but client is %s", peer.ID(*msg.Sender), client.ID.Address)
 				return
 			}
-		}
 
-		// Peer sent message with a completely different ID. Disconnect.
-		if !client.ID.Equals(peer.ID(*msg.Sender)) {
-			glog.Errorf("Message signed by peer %s but client is %s", peer.ID(*msg.Sender), client.ID.Address)
-			return
-		}
+			n.RecvQueue <- msg
+		}()
 
-		n.RecvQueue <- msg
 	}
 }
 

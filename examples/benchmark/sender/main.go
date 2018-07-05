@@ -16,7 +16,6 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"time"
-	"runtime/trace"
 )
 
 var profile = flag.String("profile", "", "write cpu profile to file")
@@ -37,20 +36,9 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 
-	f, err := os.Create("trace.out")
-	if err != nil {
-		panic(err)
-	}
-
-	err = trace.Start(f)
-	if err != nil {
-		panic(err)
-	}
-
 	go func() {
 		<-c
 		pprof.StopCPUProfile()
-		trace.Stop()
 		os.Exit(0)
 	}()
 

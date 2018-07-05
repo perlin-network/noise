@@ -9,9 +9,8 @@ import (
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/protobuf"
 	"io"
-	"time"
 	"net"
-	"github.com/golang/glog"
+	"time"
 )
 
 // sendMessage marshals, signs and sends a message over a stream.
@@ -57,13 +56,9 @@ func (n *Network) receiveMessage(stream net.Conn) (*protobuf.Message, error) {
 
 	buffer := make([]byte, binary.MaxVarintLen64)
 
-	nn, err := reader.Read(buffer)
+	_, err := reader.Read(buffer)
 	if err != nil {
 		return nil, err
-	}
-
-	if nn != binary.MaxVarintLen64 {
-		return nil, errors.New("failed to read message size")
 	}
 
 	// Decode unsigned varint representing message size.
@@ -109,7 +104,7 @@ func (n *Network) receiveMessage(stream net.Conn) (*protobuf.Message, error) {
 	return msg, nil
 }
 
-// Write asynchronously emit a message to a denoted target address.
+// Write asynchronously sends a message to a denoted target address.
 func (n *Network) Write(address string, message *protobuf.Message) error {
 	packet := &Packet{Target: address, Payload: message, Result: make(chan interface{}, 1)}
 
@@ -119,7 +114,6 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 	case raw := <-packet.Result:
 		switch err := raw.(type) {
 		case error:
-			glog.Error(err)
 			return err
 		default:
 			return nil
