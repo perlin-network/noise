@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
@@ -19,6 +20,7 @@ type PeerClient struct {
 	Network *Network
 
 	ID      *peer.ID
+	IDInit sync.Once
 	Address string
 
 	Requests     *Uint64MessageChannelSyncMap
@@ -47,16 +49,25 @@ func createPeerClient(network *Network, address string) *PeerClient {
 		},
 	}
 
-	client.Network.Plugins.Each(func(plugin PluginInterface) {
-		plugin.PeerConnect(client)
-	})
-
 	return client
+}
+
+func (c *PeerClient) runInitHooks() {
+	c.Network.Plugins.Each(func(plugin PluginInterface) {
+		plugin.PeerConnect(c)
+	})
 }
 
 // nextNonce gets the next most available request nonce. TODO: Have nonce recycled over time.
 func (c *PeerClient) nextNonce() uint64 {
 	return atomic.AddUint64(&c.RequestNonce, 1)
+}
+
+func (c *PeerClient) GetID() *peer.ID {
+	c.IDInit.Do(func() {
+		glog.Fatal("ID accessed before initialization")
+	})
+	return c.ID
 }
 
 // Close stops all sessions/streams and cleans up the nodes
