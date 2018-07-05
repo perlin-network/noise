@@ -38,3 +38,12 @@ func (m *KeyValueSyncMap) Range(cb func(Key, Value) bool) {
 func (m *KeyValueSyncMap) Delete(key Key) {
 	m.inner.Delete(key)
 }
+
+func (m *KeyValueSyncMap) LoadOrStore(k Key, v Value) (Value, bool) {
+	actual, loaded := m.inner.LoadOrStore(k, v)
+	if actual != nil {
+		return actual.(Value), loaded
+	} else {
+		return nil, loaded
+	}
+}

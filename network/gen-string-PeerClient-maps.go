@@ -32,3 +32,12 @@ func (m *StringPeerClientSyncMap) Range(cb func(string, *PeerClient) bool) {
 func (m *StringPeerClientSyncMap) Delete(key string) {
 	m.inner.Delete(key)
 }
+
+func (m *StringPeerClientSyncMap) LoadOrStore(k string, v *PeerClient) (*PeerClient, bool) {
+	actual, loaded := m.inner.LoadOrStore(k, v)
+	if actual != nil {
+		return actual.(*PeerClient), loaded
+	} else {
+		return nil, loaded
+	}
+}

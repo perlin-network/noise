@@ -32,3 +32,12 @@ func (m *Uint64MessageChannelSyncMap) Range(cb func(uint64, MessageChannel) bool
 func (m *Uint64MessageChannelSyncMap) Delete(key uint64) {
 	m.inner.Delete(key)
 }
+
+func (m *Uint64MessageChannelSyncMap) LoadOrStore(k uint64, v MessageChannel) (MessageChannel, bool) {
+	actual, loaded := m.inner.LoadOrStore(k, v)
+	if actual != nil {
+		return actual.(MessageChannel), loaded
+	} else {
+		return nil, loaded
+	}
+}

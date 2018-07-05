@@ -32,3 +32,12 @@ func (m *StringPluginInterfaceSyncMap) Range(cb func(string, PluginInterface) bo
 func (m *StringPluginInterfaceSyncMap) Delete(key string) {
 	m.inner.Delete(key)
 }
+
+func (m *StringPluginInterfaceSyncMap) LoadOrStore(k string, v PluginInterface) (PluginInterface, bool) {
+	actual, loaded := m.inner.LoadOrStore(k, v)
+	if actual != nil {
+		return actual.(PluginInterface), loaded
+	} else {
+		return nil, loaded
+	}
+}
