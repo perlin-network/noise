@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
+	"fmt"
 )
 
 var domainLookupCache = lru.NewCache(1000)
@@ -69,6 +71,11 @@ func ToUnifiedHost(host string) (string, error) {
 
 // ToUnifiedAddress resolves and normalizes a network address.
 func ToUnifiedAddress(address string) (string, error) {
+	address = strings.TrimSpace(address)
+	if len(address) == 0 {
+		return "", fmt.Errorf("cannot dial, address was empty")
+	}
+
 	info, err := ExtractAddressInfo(address)
 	if err != nil {
 		return "", err

@@ -71,9 +71,7 @@ func (c *PeerClient) Close() error {
 		plugin.PeerDisconnect(c)
 	})
 
-	// Disconnect the user.
 	if c.ID != nil {
-		// Delete peer from network.
 		c.Network.Peers.Delete(c.ID.Address)
 	}
 
@@ -82,32 +80,40 @@ func (c *PeerClient) Close() error {
 
 // Tell asynchronously emit a message to a given peer.
 func (c *PeerClient) Tell(message proto.Message) error {
-	// A nonce of 0 indicates a message that is not a request/response.
-	return c.Reply(0, message)
+	signed, err := c.Network.prepareMessage(message)
+	if err != nil {
+		return err
+	}
+
+	err = c.Network.Tell(c.Address, signed)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Request requests for a response for a request sent to a given peer.
 func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
-	// Prepare message.
-	msg, err := c.Network.prepareMessage(req.Message)
+	signed, err := c.Network.prepareMessage(req.Message)
 	if err != nil {
 		return nil, err
 	}
 
-	msg.Nonce = c.nextNonce()
+	signed.Nonce = c.nextNonce()
 
-	err = c.Network.WriteMessage(c.Address, msg)
+	err = c.Network.Tell(c.Address, signed)
 	if err != nil {
 		return nil, err
 	}
 
 	// Start tracking the request.
 	channel := make(MessageChannel, 1)
-	c.Requests.Store(msg.Nonce, channel)
+	c.Requests.Store(signed.Nonce, channel)
 
 	// Stop tracking the request.
 	defer close(channel)
-	defer c.Requests.Delete(msg.Nonce)
+	defer c.Requests.Delete(signed.Nonce)
 
 	select {
 	case res := <-channel:
@@ -121,16 +127,15 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 
 // Reply is equivalent to Tell() with an appended nonce to signal a reply.
 func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
-
-	// Prepare message.
-	msg, err := c.Network.prepareMessage(message)
+	signed, err := c.Network.prepareMessage(message)
 	if err != nil {
 		return err
 	}
 
-	msg.Nonce = nonce
+	// Set the nonce.
+	signed.Nonce = nonce
 
-	err = c.Network.WriteMessage(c.Address, msg)
+	err = c.Network.Tell(c.Address, signed)
 	if err != nil {
 		return err
 	}

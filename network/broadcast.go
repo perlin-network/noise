@@ -22,15 +22,25 @@ func (n *Network) Broadcast(message proto.Message) {
 
 // BroadcastByAddresses broadcasts a message to a set of peer clients denoted by their addresses.
 func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
+	signed, err := n.prepareMessage(message)
+	if err != nil {
+		return
+	}
+
 	for _, address := range addresses {
-		n.Tell(address, message)
+		n.Tell(address, signed)
 	}
 }
 
 // BroadcastByIDs broadcasts a message to a set of peer clients denoted by their peer IDs.
 func (n *Network) BroadcastByIDs(message proto.Message, ids ...peer.ID) {
+	signed, err := n.prepareMessage(message)
+	if err != nil {
+		return
+	}
+
 	for _, id := range ids {
-		n.Tell(id.Address, message)
+		n.Tell(id.Address, signed)
 	}
 }
 

@@ -10,10 +10,20 @@ import (
 	"github.com/perlin-network/noise/protobuf"
 	"io"
 	"net"
+	"time"
 )
 
-// sendMessage marshals and sends a message over a stream.
+// sendMessage marshals, signs and sends a message over a stream.
 func (n *Network) sendMessage(conn net.Conn, message *protobuf.Message) error {
+	err := conn.SetDeadline(time.Now().Add(1 * time.Second))
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		conn.SetDeadline(time.Time{})
+	}()
+
 	bytes, err := proto.Marshal(message)
 	if err != nil {
 		return err
@@ -48,12 +58,21 @@ func (n *Network) sendMessage(conn net.Conn, message *protobuf.Message) error {
 }
 
 // receiveMessage reads, unmarshals and verifies a message from a stream.
-func (n *Network) receiveMessage(conn net.Conn) (*protobuf.Message, error) {
+func (n *Network) receiveMessage(conn net.Conn, timeout time.Time) (*protobuf.Message, error) {
+	err := conn.SetDeadline(timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		conn.SetDeadline(time.Time{})
+	}()
+
 	reader := bufio.NewReader(conn)
 
 	buffer := make([]byte, binary.MaxVarintLen64)
 
-	_, err := reader.Read(buffer)
+	_, err = reader.Read(buffer)
 	if err != nil {
 		return nil, err
 	}
@@ -98,46 +117,23 @@ func (n *Network) receiveMessage(conn net.Conn) (*protobuf.Message, error) {
 		return nil, errors.New("received message had an malformed signature")
 	}
 
-	return msg, err
-}
-
-// ReadMessage queues a message to a worker responsible for a provided host address.
-func (n *Network) WriteMessage(address string, message *protobuf.Message) error {
-	worker, available := n.loadWorker(address)
-	if !available {
-		return fmt.Errorf("worker not found for %s", address)
-	}
-
-	worker.sendQueue <- message
-	return nil
-}
-
-// ReadMessage reads a message from the worker responsible for a provided host address.
-func (n *Network) ReadMessage(address string) (*protobuf.Message, error) {
-	worker, available := n.loadWorker(address)
-	if !available {
-		return nil, fmt.Errorf("worker not found for %s", address)
-	}
-
-	message, available := <-worker.recvQueue
-	if !available {
-		return nil, fmt.Errorf("worker closed for %s", address)
-	}
-
-	return message, nil
+	return msg, nil
 }
 
 // Tell asynchronously emit a message to a denoted target address.
-func (n *Network) Tell(targetAddress string, msg proto.Message) error {
-	if client, err := n.Client(targetAddress); err == nil {
-		err := client.Tell(msg)
+func (n *Network) Tell(address string, message *protobuf.Message) error {
+	packet := &Packet{Payload: message, Result: make(chan interface{}, 1)}
 
-		if err != nil {
-			return fmt.Errorf("failed to send message to peer %s [err=%s]", targetAddress, err)
+	select {
+	case raw := <-packet.Result:
+		switch result := raw.(type) {
+		case error:
+			return result
+		default:
+			return nil
 		}
-	} else {
-		return fmt.Errorf("failed to send message to peer %s; peer does not exist. [err=%s]", targetAddress, err)
+	case <-time.After(1 * time.Second):
 	}
 
-	return nil
+	return errors.New("timed out writing message")
 }

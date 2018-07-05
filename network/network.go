@@ -1,12 +1,8 @@
 package network
 
 import (
-	"fmt"
 	"net"
 	"net/url"
-	"strings"
-	"sync"
-
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
@@ -16,7 +12,15 @@ import (
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
+	"runtime"
+	"sync"
+	"time"
 )
+
+type Packet struct {
+	Payload *protobuf.Message
+	Result  chan interface{}
+}
 
 // Network represents the current networking state for this node.
 type Network struct {
@@ -37,16 +41,79 @@ type Network struct {
 	// so that the Network doesn't dial multiple times to the same ip
 	Peers *StringPeerClientSyncMap
 
-	// Map of peer addresses (string) <-> *network.Worker
-	Workers      map[string]*Worker
-	WorkersMutex sync.Mutex
+	SendQueue chan *Packet
+	RecvQueue chan *Packet
+
+	// Map of connection addresses (string) <-> net.Conn
+	Connections *sync.Map
 
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
 }
 
+func (n *Network) Init() {
+	workerCount := runtime.NumCPU()
+
+	for i := 0; i < workerCount; i++ {
+		// Spawn worker routines for sending queued messages to the networking layer.
+		go func() {
+			for {
+				select {
+				case packet := <-n.SendQueue:
+					if stream, exists := n.Connections.Load(packet.Payload.Sender.Address); exists {
+						err := n.sendMessage(stream.(net.Conn), packet.Payload)
+
+						if err != nil {
+							// Error sending message
+							packet.Result <- err
+						}
+
+						// Sending message is successful.
+						packet.Result <- struct{}{}
+					}
+				}
+			}
+		}()
+
+		// Spawn worker routines for receiving and handling messages in the application layer.
+		go func() {
+			for {
+				select {
+				case packet := <-n.RecvQueue:
+					if client, exists := n.Peers.Load(packet.Payload.Sender.Address); exists {
+						ctx := new(MessageContext)
+						ctx.client = client
+						ctx.nonce = packet.Payload.Nonce
+
+						// Unmarshal message.
+						var ptr ptypes.DynamicAny
+						if err := ptypes.UnmarshalAny(packet.Payload.Message, &ptr); err != nil {
+							packet.Result <- err
+							continue
+						}
+
+						ctx.message = ptr.Message
+
+						// Execute 'on receive message' callback for all plugins.
+						n.Plugins.Each(func(plugin PluginInterface) {
+							err := plugin.Receive(ctx)
+
+							if err != nil {
+								glog.Error(err)
+							}
+						})
+
+						packet.Result <- struct{}{}
+					}
+				}
+			}
+		}()
+	}
+}
+
 // Listen starts listening for peers on a port.
 func (n *Network) Listen() {
+
 	// Handle 'network starts listening' callback for plugins.
 	n.Plugins.Each(func(plugin PluginInterface) {
 		plugin.Startup(n)
@@ -97,11 +164,6 @@ func (n *Network) Listen() {
 
 // Client either creates or returns a cached peer client given its host address.
 func (n *Network) Client(address string) (*PeerClient, error) {
-	address = strings.TrimSpace(address)
-	if len(address) == 0 {
-		return nil, fmt.Errorf("cannot dial, address was empty")
-	}
-
 	address, err := ToUnifiedAddress(address)
 	if err != nil {
 		return nil, err
@@ -133,13 +195,19 @@ func (n *Network) Bootstrap(addresses ...string) {
 	addresses = FilterPeers(n.Address, addresses)
 
 	for _, address := range addresses {
-		client, err := n.Dial(address)
+		conn, err := n.Dial(address)
 		if err != nil {
 			glog.Error(err)
 			continue
 		}
 
-		err = client.Tell(&protobuf.Ping{})
+		ping, err := n.prepareMessage(&protobuf.Ping{})
+		if err != nil {
+			glog.Error(err)
+			continue
+		}
+
+		err = n.sendMessage(conn, ping)
 		if err != nil {
 			glog.Error(err)
 			continue
@@ -148,31 +216,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 }
 
 // Dial establishes a bidirectional connection to an address, and additionally handshakes with said address.
-// Blocks until the worker responsible for bidirectional communication is gracefully stopped.
-func (n *Network) Dial(address string) (*PeerClient, error) {
-	client, err := n.Client(address)
-	if err != nil {
-		return nil, err
-	}
-
-	// Establish an outgoing connection.
-	outgoing, err := n.dial(address)
-
-	// Failed to establish an outgoing connection.
-	if err != nil {
-		return nil, err
-	}
-
-	// The worker does not have an incoming connection yet; handled in Accept().
-	// However, have the worker become available in sending messages.
-	worker := n.spawnWorker(address)
-	go worker.startSender(n, outgoing)
-	go worker.process(n, address)
-
-	return client, nil
-}
-
-func (n *Network) dial(address string) (net.Conn, error) {
+func (n *Network) Dial(address string) (net.Conn, error) {
 	urlInfo, err := url.Parse(address)
 	if err != nil {
 		return nil, err
@@ -206,76 +250,125 @@ func (n *Network) dial(address string) (net.Conn, error) {
 		return nil, err
 	}
 
+	n.Connections.Store(address, stream)
+
 	return stream, nil
 }
 
 // Accept handles peer registration and processes incoming message streams.
 func (n *Network) Accept(conn net.Conn) {
-	id := n.processHandshake(conn)
+	var incoming net.Conn
+	var outgoing net.Conn
+	var id *peer.ID
 
-	// Handshake failed.
-	if id == nil {
-		return
-	}
+	// Cleanup connections when we are done with them.
+	defer func() {
+		if incoming != nil {
+			incoming.Close()
+		}
 
-	// Lets now setup our peer client.
-	client, err := n.Client(id.Address)
+		if outgoing != nil {
+			outgoing.Close()
+		}
+
+		if id != nil {
+			n.Connections.Delete(id.Address)
+		}
+	}()
+
+	// Wrap a session around the incoming connection.
+	session, err := smux.Server(conn, muxConfig())
 	if err != nil {
-		glog.Error(err)
 		return
 	}
-	client.ID = id
 
-	defer client.Close()
+	// Accept an incoming stream.
+	incoming, err = session.AcceptStream()
+	if err != nil {
+		return
+	}
 
-	for {
-		msg, err := n.ReadMessage(id.Address)
+	var msg *protobuf.Message
 
-		// Disconnections will occur here.
+	// Attempt to receive ping/pong.
+	if msg, err = n.receiveMessage(incoming, time.Now().Add(1 * time.Second)); err != nil {
+		return
+	}
+
+	id = (*peer.ID)(msg.Sender)
+
+	// Load an outgoing connection, or dial to the incoming peer.
+	if conn, established := n.Connections.Load(id.Address); established {
+		outgoing = conn.(net.Conn)
+	} else {
+		outgoing, err = n.Dial(id.Address)
 		if err != nil {
 			return
 		}
 
-		id := (peer.ID)(*msg.Sender)
+		n.Connections.Store(id.Address, outgoing)
+	}
 
-		// Peer sent message with a completely different ID. Destroy.
-		if !client.ID.Equals(id) {
-			glog.Errorf("Message signed by peer %s but client is %s", client.ID.Address, id.Address)
+	// First message in a handshake must be ping/pong. Else reject.
+
+	switch msg.Message.TypeUrl {
+	case "type.googleapis.com/protobuf.Ping":
+		pong, err := n.prepareMessage(&protobuf.Pong{})
+		if err != nil {
 			return
 		}
 
-		// Unmarshal message.
-		var ptr ptypes.DynamicAny
-		if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
-			glog.Error(err)
+		err = n.sendMessage(outgoing, pong)
+		if err != nil {
+			return
+		}
+	case "type.googleapis.com/protobuf.Pong":
+	default:
+		return
+	}
+
+	glog.Infof("Handshake completed for peer %s.", id.Address)
+
+	for {
+		msg, err := n.receiveMessage(incoming, time.Time{})
+
+		if err != nil {
 			return
 		}
 
-		// Check if the incoming message is a response.
-		if channel, exists := client.Requests.Load(msg.Nonce); exists && msg.Nonce > 0 {
-			channel <- ptr.Message
+		// Peer sent message with a completely different ID. Disconnect.
+		if !id.Equals(peer.ID(*msg.Sender)) {
+			glog.Errorf("Message signed by peer %s but client is %s", peer.ID(*msg.Sender), id.Address)
 			return
 		}
 
-		switch ptr.Message.(type) {
-		case *protobuf.StreamPacket: // Handle stream packet message.
-			pkt := ptr.Message.(*protobuf.StreamPacket)
-			client.handleStreamPacket(pkt.Data)
-		default: // Handle other messages.
-			ctx := new(MessageContext)
-			ctx.client = client
-			ctx.message = ptr.Message
-			ctx.nonce = msg.Nonce
+		n.RecvQueue <- &Packet{Payload: msg, Result: make(chan interface{}, 1)}
 
-			// Execute 'on receive message' callback for all plugins.
-			n.Plugins.Each(func(plugin PluginInterface) {
-				err := plugin.Receive(ctx)
-
-				if err != nil {
-					glog.Error(err)
-				}
-			})
-		}
+		//// Check if the incoming message is a response.
+		//if channel, exists := client.Requests.Load(msg.Nonce); exists && msg.Nonce > 0 {
+		//	channel <- ptr.Message
+		//	return
+		//}
+		//
+		//switch ptr.Message.(type) {
+		//case *protobuf.StreamPacket: // Handle stream packet message.
+		//	pkt := ptr.Message.(*protobuf.StreamPacket)
+		//	client.handleStreamPacket(pkt.Data)
+		//default: // Handle other messages.
+		//	ctx := new(MessageContext)
+		//	ctx.client = client
+		//	ctx.message = ptr.Message
+		//	ctx.nonce = msg.Nonce
+		//
+		//	// Execute 'on receive message' callback for all plugins.
+		//	n.Plugins.Each(func(plugin PluginInterface) {
+		//		err := plugin.Receive(ctx)
+		//
+		//		if err != nil {
+		//			glog.Error(err)
+		//		}
+		//	})
+		//}
 	}
 }
 
@@ -287,7 +380,7 @@ func (n *Network) Plugin(key interface{}) (PluginInterface, bool) {
 	return n.Plugins.Get(key)
 }
 
-// prepareMessage marshals a message into a proto.Tell and signs it with this
+// prepareMessage marshals a message into a *protobuf.Message and signs it with this
 // nodes private key. Errors if the message is null.
 func (n *Network) prepareMessage(message proto.Message) (*protobuf.Message, error) {
 	if message == nil {
