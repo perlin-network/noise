@@ -158,7 +158,7 @@ builder := builders.NewNetworkBuilder()
 builder.AddPlugin(new(Plugin))  
 ```  
   
-A couple of plugins which **noise** comes with is: `discovery.Plugin` and `nat.Plugin`.
+**noise** comes with two plugins: `discovery.Plugin` and `nat.Plugin`.
 
 ```go
 // Enables peer discovery through the network. Check documentation for more info.
@@ -174,7 +174,7 @@ Make sure to register `discovery.Plugin` if you want to make use of automatic pe
 
 All messages that pass through **noise** are serialized/deserialized as [protobufs](https://developers.google.com/protocol-buffers/).
   
-Once you have modeled your messages as protobufs, you may process them being received over the network by creating a plugin and overriding the `Receive(ctx *MessageContext)` method to process specific incoming message types.
+Once you have modeled your messages as protobufs, you may process and receive them over the network by creating a plugin and overriding the `Receive(ctx *MessageContext)` method to process specific incoming message types.
 
 Here's a simple example:
   
@@ -194,7 +194,7 @@ func (state *ChatPlugin) Receive(ctx *network.MessageContext) error {
 builder.AddPlugin(new(ChatPlugin))
 ```  
   
-Through a `ctx *network.MessageContext`, you get access to a large number of methods to gain complete flexibility in how you handle/interact with your peer network. All messages are signed and verified with one's cryptographic keys.
+Through a `ctx *network.MessageContext`, you can access flexible methods to customize how you handle/interact with your peer network. All messages are signed and verified with one's cryptographic keys.
   
 ```go  
 // Reply with a message should the incoming message be a request.  
@@ -220,12 +220,12 @@ Check out our documentation and look into the `examples/` directory to find out 
   
 ## Contributions  
   
-In Perlin, we love reaching out to the open-source community and are open to accepting issues and pull-requests.  
+We at Perlin love reaching out to the open-source community and are open to accepting issues and pull-requests.  
   
 For all code contributions, please ensure they adhere as close as possible to the following guidelines:  
   
 1. **Strictly** follows the formatting and styling rules denoted [here](https://github.com/golang/go/wiki/CodeReviewComments).
-2. Commit messages are in format `module_name: Change typed down as a sentence.` This allows our maintainers and everyone else to know what specific code changes you wish to address.
+2. Commit messages are in the format `module_name: Change typed down as a sentence.` This allows our maintainers and everyone else to know what specific code changes you wish to address.
     - `network: Added in message broadcasting methods.`
     - `builders/network: Added in new option to address PoW in generating peer IDs.`
 3. Consider backwards compatibility. New methods are perfectly fine, though changing the `builders.NetworkBuilder` pattern radically for example should only be done should there be a good reason.
