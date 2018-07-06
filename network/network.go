@@ -493,7 +493,7 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	n.Peers.Range(func(key, value interface{}) bool {
 		client := value.(*PeerClient)
 
-		addresses = append(addresses, client.ID.Address)
+		addresses = append(addresses, client.Address)
 
 		// Limit total amount of addresses in case we have a lot of peers.
 		if len(addresses) > K*3 {
