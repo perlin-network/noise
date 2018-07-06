@@ -120,8 +120,8 @@ func (n *Network) handleRecvQueue() {
 				}
 
 				switch ptr.Message.(type) {
-				case *protobuf.StreamPacket:
-					client.handleStreamPacket(ptr.Message.(*protobuf.StreamPacket).Data)
+				case *protobuf.Bytes:
+					client.handleBytes(ptr.Message.(*protobuf.Bytes).Data)
 				default:
 					ctx := new(MessageContext)
 					ctx.client = client

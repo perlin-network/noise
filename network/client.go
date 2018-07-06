@@ -138,7 +138,7 @@ func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
 	return nil
 }
 
-func (c *PeerClient) handleStreamPacket(pkt []byte) {
+func (c *PeerClient) handleBytes(pkt []byte) {
 	c.stream.Lock()
 	empty := len(c.stream.buffer) == 0
 	c.stream.buffer = append(c.stream.buffer, pkt...)
@@ -178,7 +178,7 @@ func (c *PeerClient) Read(out []byte) (int, error) {
 
 // Write implements net.Conn and sends packets of bytes over a stream.
 func (c *PeerClient) Write(data []byte) (int, error) {
-	err := c.Tell(&protobuf.StreamPacket{Data: data})
+	err := c.Tell(&protobuf.Bytes{Data: data})
 	if err != nil {
 		return 0, err
 	}
