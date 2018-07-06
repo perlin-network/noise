@@ -187,17 +187,20 @@ func (n *Network) Listen() {
 
 	glog.Infof("Listening for peers on %s.", n.Address)
 
+	// handle server shutdowns
+	go func() {
+		select {
+		case <-n.Shutdown:
+			listener.Close()
+			n.shutdown()
+		}
+	}()
+
 	// Handle new clients.
 	for {
 		if conn, err := listener.Accept(); err == nil {
 			go n.Accept(conn)
 
-			select {
-			case <-n.Shutdown:
-				listener.Close()
-				n.shutdown()
-				return
-			}
 		} else {
 			glog.Error(err)
 		}

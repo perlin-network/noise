@@ -11,6 +11,7 @@ import (
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
+	"github.com/xtaci/smux"
 )
 
 // PeerClient represents a single incoming peers client.
@@ -28,10 +29,10 @@ type PeerClient struct {
 
 type StreamState struct {
 	sync.Mutex
-	buffer   []byte
-	buffered chan struct{}
-	closed   bool
-	readDeadline time.Time
+	buffer        []byte
+	buffered      chan struct{}
+	closed        bool
+	readDeadline  time.Time
 	writeDeadline time.Time
 }
 
@@ -74,6 +75,12 @@ func (c *PeerClient) Close() error {
 
 	// Remove entries from node's network.
 	if c.ID != nil {
+		if val, exists := c.Network.Connections.Load(c.ID.Address); exists {
+			sess := val.(*smux.Session)
+			if sess != nil {
+				sess.Close()
+			}
+		}
 		c.Network.Peers.Delete(c.ID.Address)
 		c.Network.Connections.Delete(c.ID.Address)
 	}
