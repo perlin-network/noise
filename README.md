@@ -164,7 +164,7 @@ builder.AddPlugin(new(Plugin))
 // Enables peer discovery through the network. Check documentation for more info.
 builder.AddPlugin(new(discovery.Plugin))
 
-// Enables automated UPnP port forwarding for your node. Check docuemntation for more info.
+// Enables automated UPnP port forwarding for your node. Check documentation for more info.
 builder.AddPlugin(new(nat.Plugin))
 ```
 
