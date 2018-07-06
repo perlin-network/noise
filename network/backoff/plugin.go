@@ -58,7 +58,7 @@ func (p *Plugin) startBackoff(addr string, client *network.PeerClient) {
 			// check that the connection is still empty before dialing
 			break
 		}
-		if _, err := client.Network.Dial(client.Address); err != nil {
+		if _, err := client.Network.Client(client.Address); err != nil {
 			client.Close()
 			continue
 		}

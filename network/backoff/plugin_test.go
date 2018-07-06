@@ -2,9 +2,12 @@ package backoff
 
 import (
 	"flag"
+	"fmt"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/examples/basic/messages"
@@ -35,6 +38,7 @@ func (state *BasicPlugin) Startup(net *network.Network) {
 }
 
 func (state *BasicPlugin) Receive(ctx *network.MessageContext) error {
+	fmt.Fprintf(os.Stderr, "Received message from %s to %s\n", ctx.Sender().Address, ctx.Self().Address)
 	switch msg := ctx.Message().(type) {
 	case *messages.BasicMessage:
 		state.Mailbox <- msg
@@ -62,7 +66,7 @@ func broadcastAndCheck(nodes []*network.Network, plugins []*BasicPlugin) error {
 	return nil
 }
 
-func newNode(i int, reconnecting bool) (*network.Network, *BasicPlugin, error) {
+func newNode(i int, d bool, r bool) (*network.Network, *BasicPlugin, error) {
 	addr := network.FormatAddress(protocol, host, uint16(startPort+i))
 	if _, ok := keys[addr]; !ok {
 		keys[addr] = ed25519.RandomKeyPair()
@@ -72,10 +76,12 @@ func newNode(i int, reconnecting bool) (*network.Network, *BasicPlugin, error) {
 	builder.SetKeys(keys[addr])
 	builder.SetAddress(addr)
 
-	if !reconnecting {
+	if d {
 		builder.AddPlugin(new(discovery.Plugin))
 	}
-	builder.AddPlugin(new(Plugin))
+	if r {
+		builder.AddPlugin(new(Plugin))
+	}
 
 	plugin := new(BasicPlugin)
 	builder.AddPlugin(plugin)
@@ -90,7 +96,7 @@ func newNode(i int, reconnecting bool) (*network.Network, *BasicPlugin, error) {
 	node.BlockUntilListening()
 
 	// Bootstrap to Node 0.
-	if !reconnecting && i != 0 {
+	if d && i != 0 {
 		node.Bootstrap(network.FormatAddress(protocol, host, uint16(startPort)))
 	}
 
@@ -104,13 +110,14 @@ func TestPlugin(t *testing.T) {
 		t.Skip("skipping backoff plugin test in short mode")
 	}
 
+	flag.Set("logtostderr", "true")
 	flag.Parse()
 
 	var nodes []*network.Network
 	var plugins []*BasicPlugin
 
 	for i := 0; i < numNodes; i++ {
-		node, plugin, err := newNode(i, false)
+		node, plugin, err := newNode(i, true, i == 0)
 		if err != nil {
 			t.Error(err)
 		}
@@ -127,10 +134,12 @@ func TestPlugin(t *testing.T) {
 	}
 
 	// disconnect node 2
-	nodes[1].Shutdown(true)
+	close(nodes[1].Shutdown)
+
+	glog.Infof("[Debug] waiting %s to check\n", initialDelay+defaultMinInterval*4)
 
 	// wait until about the middle of the backoff period
-	time.Sleep(initialDelay + (defaultMinInterval * (defaultMaxAttempts / 2)))
+	time.Sleep(initialDelay + defaultMinInterval*4)
 
 	// tests that broadcasting fails
 	if err := broadcastAndCheck(nodes, plugins); err == nil {
@@ -138,15 +147,17 @@ func TestPlugin(t *testing.T) {
 	}
 
 	// recreate the second node to the cluster
-	node, plugin, err := newNode(1, true)
+	node, plugin, err := newNode(1, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	nodes[1] = node
 	plugins[1] = plugin
 
+	glog.Infof("[Debug] waiting %s to check\n", 5*time.Second)
+
 	// wait for reconnection
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	// broad cast should be working again
 	if err := broadcastAndCheck(nodes, plugins); err != nil {

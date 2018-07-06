@@ -3,14 +3,15 @@ package builders
 import (
 	"reflect"
 
+	"sync"
+
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/crypto/hashing/blake2b"
+	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
-	"sync"
 )
 
 // NetworkBuilder is a Address->processors struct
@@ -22,14 +23,14 @@ type NetworkBuilder struct {
 	pluginCount int
 
 	signaturePolicy crypto.SignaturePolicy
-	hashPolicy crypto.HashPolicy
+	hashPolicy      crypto.HashPolicy
 }
 
 // NewNetworkBuilder lets you configure a network to build
 func NewNetworkBuilder() *NetworkBuilder {
 	return &NetworkBuilder{
 		signaturePolicy: ed25519.New(),
-		hashPolicy: blake2b.New(),
+		hashPolicy:      blake2b.New(),
 	}
 }
 
@@ -117,7 +118,9 @@ func (builder *NetworkBuilder) Build() (*network.Network, error) {
 		Listening: make(chan struct{}),
 
 		SignaturePolicy: builder.signaturePolicy,
-		HashPolicy: builder.hashPolicy,
+		HashPolicy:      builder.hashPolicy,
+
+		Shutdown: make(chan struct{}),
 	}
 
 	net.Init()
