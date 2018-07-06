@@ -23,18 +23,18 @@ const (
 
 var keys = make(map[string]*crypto.KeyPair)
 
-// BasicPlugin buffers all messages into a mailbox for this test.
-type BasicPlugin struct {
+// mockPlugin buffers all messages into a mailbox for this test.
+type mockPlugin struct {
 	*network.Plugin
 	Mailbox chan *messages.BasicMessage
 }
 
-func (state *BasicPlugin) Startup(net *network.Network) {
+func (state *mockPlugin) Startup(net *network.Network) {
 	// Create mailbox
 	state.Mailbox = make(chan *messages.BasicMessage, 1)
 }
 
-func (state *BasicPlugin) Receive(ctx *network.MessageContext) error {
+func (state *mockPlugin) Receive(ctx *network.MessageContext) error {
 	switch msg := ctx.Message().(type) {
 	case *messages.BasicMessage:
 		state.Mailbox <- msg
@@ -42,7 +42,7 @@ func (state *BasicPlugin) Receive(ctx *network.MessageContext) error {
 	return nil
 }
 
-func broadcastAndCheck(nodes []*network.Network, plugins []*BasicPlugin) error {
+func broadcastAndCheck(nodes []*network.Network, plugins []*mockPlugin) error {
 	// Broadcast out a message from Node 0.
 	expected := "This is a broadcasted message from Node 0."
 	nodes[0].Broadcast(&messages.BasicMessage{Message: expected})
@@ -62,7 +62,7 @@ func broadcastAndCheck(nodes []*network.Network, plugins []*BasicPlugin) error {
 	return nil
 }
 
-func newNode(i int, d bool, r bool) (*network.Network, *BasicPlugin, error) {
+func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Network, *mockPlugin, error) {
 	addr := network.FormatAddress(protocol, host, uint16(startPort+i))
 	if _, ok := keys[addr]; !ok {
 		keys[addr] = ed25519.RandomKeyPair()
@@ -72,14 +72,14 @@ func newNode(i int, d bool, r bool) (*network.Network, *BasicPlugin, error) {
 	builder.SetKeys(keys[addr])
 	builder.SetAddress(addr)
 
-	if d {
+	if addDiscoveryPlugin {
 		builder.AddPlugin(new(discovery.Plugin))
 	}
-	if r {
+	if addBackoffPlugin {
 		builder.AddPlugin(new(Plugin))
 	}
 
-	plugin := new(BasicPlugin)
+	plugin := new(mockPlugin)
 	builder.AddPlugin(plugin)
 
 	node, err := builder.Build()
@@ -92,7 +92,7 @@ func newNode(i int, d bool, r bool) (*network.Network, *BasicPlugin, error) {
 	node.BlockUntilListening()
 
 	// Bootstrap to Node 0.
-	if d && i != 0 {
+	if addDiscoveryPlugin && i != 0 {
 		node.Bootstrap(network.FormatAddress(protocol, host, uint16(startPort)))
 	}
 
@@ -109,7 +109,7 @@ func TestPlugin(t *testing.T) {
 	flag.Parse()
 
 	var nodes []*network.Network
-	var plugins []*BasicPlugin
+	var plugins []*mockPlugin
 
 	for i := 0; i < numNodes; i++ {
 		node, plugin, err := newNode(i, true, i == 0)
@@ -139,7 +139,7 @@ func TestPlugin(t *testing.T) {
 		t.Fatalf("On disconnect, expected the broadcast to fail")
 	}
 
-	// recreate the second node to the cluster
+	// recreate the second node and add back to the cluster
 	node, plugin, err := newNode(1, false, false)
 	if err != nil {
 		t.Fatal(err)
