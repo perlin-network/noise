@@ -15,7 +15,7 @@ import (
 	"github.com/xtaci/smux"
 )
 
-func muxConfig() *smux.Config {
+func muxStreamConfig() *smux.Config {
 	config := smux.DefaultConfig()
 	config.KeepAliveTimeout = 30 * time.Second
 	config.KeepAliveInterval = 5 * time.Second
@@ -23,7 +23,7 @@ func muxConfig() *smux.Config {
 	return config
 }
 
-func copyBothDirectionBlocking(a, b io.ReadWriter) {
+func proxy(a, b io.ReadWriter) {
 	ch1 := make(chan struct{})
 	ch2 := make(chan struct{})
 
@@ -41,95 +41,105 @@ func copyBothDirectionBlocking(a, b io.ReadWriter) {
 	}
 }
 
-type PfServerPlugin struct {
+type ExampleServerPlugin struct {
 	network.Plugin
 	remoteAddress string
 }
 
-func (state *PfServerPlugin) PeerConnect(client *network.PeerClient) {
-	glog.Infof("New connection from %s", client.Address)
-	go func() {
-		session, err := smux.Server(client, muxConfig())
+func (state *ExampleServerPlugin) PeerConnect(client *network.PeerClient) {
+	glog.Infof("New connection from %s.", client.Address)
+
+	go state.handleClient(client)
+}
+
+func (state *ExampleServerPlugin) handleClient(client *network.PeerClient) {
+	session, err := smux.Server(client, muxStreamConfig())
+	if err != nil {
+		glog.Fatal(err)
+	}
+	for {
+		stream, err := session.AcceptStream()
 		if err != nil {
-			glog.Fatal(err)
+			glog.Error(err)
+			break
 		}
-		for {
-			stream, err := session.AcceptStream()
+
+		glog.Infof("New incoming stream from %s.", client.Address)
+
+		go func() {
+			defer stream.Close()
+
+			remote, err := net.Dial("tcp", state.remoteAddress)
 			if err != nil {
 				glog.Error(err)
-				break
+				return
 			}
-			glog.Infof("New incoming stream from %s", client.Address)
-			go func() {
-				defer stream.Close()
+			defer remote.Close()
 
-				remote, err := net.Dial("tcp", state.remoteAddress)
-				if err != nil {
-					glog.Error(err)
-					return
-				}
-				defer remote.Close()
-
-				copyBothDirectionBlocking(stream, remote)
-			}()
-		}
-	}()
+			proxy(stream, remote)
+		}()
+	}
 }
 
-func (state *PfServerPlugin) PeerDisconnect(client *network.PeerClient) {
-	glog.Infof("Client %s disconnected", client.Address)
+func (state *ExampleServerPlugin) PeerDisconnect(client *network.PeerClient) {
+	glog.Infof("Lost connection with %s.", client.Address)
 }
 
-type PfClientPlugin struct {
+type ProxyPlugin struct {
 	network.Plugin
 	listenAddress string
 }
 
-func (state *PfClientPlugin) PeerConnect(client *network.PeerClient) {
-	glog.Infof("Connected to %s", client.Address)
-	go func() {
-		session, err := smux.Client(client, muxConfig())
-		if err != nil {
-			glog.Fatal(err)
-		}
-		listener, err := net.Listen("tcp", state.listenAddress)
-		if err != nil {
-			glog.Fatal(err)
-		}
-		defer listener.Close()
+func (state *ProxyPlugin) PeerConnect(client *network.PeerClient) {
+	glog.Infof("Connected to proxy destination %s.", client.Address)
 
-		for {
-			conn, err := listener.Accept()
+	go state.startProxying(client)
+}
+
+func (state *ProxyPlugin) startProxying(client *network.PeerClient) {
+	session, err := smux.Client(client, muxStreamConfig())
+	if err != nil {
+		glog.Fatal(err)
+	}
+
+	// Open proxy server.
+	listener, err := net.Listen("tcp", state.listenAddress)
+	if err != nil {
+		glog.Fatal(err)
+	}
+	defer listener.Close()
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			glog.Fatal(err)
+		}
+
+		glog.Infof("Proxying data from %s to %s.", conn.RemoteAddr().String(), client.Address)
+
+		go func() {
+			defer conn.Close()
+
+			remote, err := session.OpenStream()
 			if err != nil {
-				glog.Fatal(err)
+				glog.Error(err)
+				return
 			}
-			glog.Info("New incoming TCP connection")
+			defer remote.Close()
 
-			go func() {
-				defer conn.Close()
-
-				remote, err := session.OpenStream()
-				if err != nil {
-					glog.Error(err)
-					return
-				}
-				defer remote.Close()
-
-				copyBothDirectionBlocking(conn, remote)
-			}()
-		}
-	}()
+			proxy(conn, remote)
+		}()
+	}
 }
 
-func (state *PfClientPlugin) PeerDisconnect(client *network.PeerClient) {
-	glog.Infof("Lost connection with %s", client.Address)
+func (state *ProxyPlugin) PeerDisconnect(client *network.PeerClient) {
+	glog.Infof("Lost connection with proxy destination %s.", client.Address)
 }
 
+// An example showcasing how to use streams in Noise by creating a sample proxying server.
 func main() {
-	// glog defaults to logging to a file, override this flag to log to console for testing
 	flag.Set("logtostderr", "true")
 
-	// process other flags
 	portFlag := flag.Int("port", 3000, "port to listen to")
 	hostFlag := flag.String("host", "localhost", "host to listen to")
 	protocolFlag := flag.String("protocol", "tcp", "protocol to use (kcp/tcp)")
@@ -159,13 +169,9 @@ func main() {
 
 	// Add custom port forwarding plugin.
 	if mode == "server" {
-		builder.AddPlugin(&PfServerPlugin{
-			remoteAddress: address,
-		})
+		builder.AddPlugin(&ExampleServerPlugin{remoteAddress: address,})
 	} else if mode == "client" {
-		builder.AddPlugin(&PfClientPlugin{
-			listenAddress: address,
-		})
+		builder.AddPlugin(&ProxyPlugin{listenAddress: address,})
 	}
 
 	net, err := builder.Build()
