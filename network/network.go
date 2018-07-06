@@ -452,7 +452,11 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 // Broadcast asynchronously broadcasts a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
 	n.Peers.Range(func(key, value interface{}) bool {
-		client := value.(*PeerClient)
+		client, ok := value.(*PeerClient)
+		if !ok {
+			return false
+		}
+
 		err := client.Tell(message)
 
 		if err != nil {
@@ -493,7 +497,10 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	var addresses []string
 
 	n.Peers.Range(func(key, value interface{}) bool {
-		client := value.(*PeerClient)
+		client, ok := value.(*PeerClient)
+		if !ok {
+			return false
+		}
 
 		addresses = append(addresses, client.Address)
 
