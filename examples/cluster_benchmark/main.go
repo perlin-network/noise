@@ -33,7 +33,17 @@ func (state *BenchPlugin) PeerDisconnect(client *network.PeerClient) {
 
 func (state *BenchPlugin) Receive(ctx *network.MessageContext) error {
 	atomic.AddUint64(&numMessages, 1)
+	sendBroadcast(ctx.Network())
 	return nil
+}
+
+func sendBroadcast(n *network.Network) {
+	if atomic.LoadUint64(&numMessages) > MESSAGE_THRESHOLD {
+		return
+	}
+
+	targetNumPeers := atomic.LoadInt64(&numPeers) / 2 + 1
+	n.BroadcastRandomly(&messages.Empty{}, int(targetNumPeers))
 }
 
 func main() {
@@ -86,12 +96,7 @@ func main() {
 		}
 	}()
 
-	for range time.Tick(2 * time.Millisecond) {
-		if atomic.LoadUint64(&numMessages) > MESSAGE_THRESHOLD {
-			continue
-		}
-
-		targetNumPeers := atomic.LoadInt64(&numPeers) / 2 + 1
-		net.BroadcastRandomly(&messages.Empty{}, int(targetNumPeers))
+	for range time.Tick(300 * time.Millisecond) {
+		sendBroadcast(net)
 	}
 }
