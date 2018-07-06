@@ -56,7 +56,7 @@ type Network struct {
 	SignaturePolicy crypto.SignaturePolicy
 	HashPolicy      crypto.HashPolicy
 
-	// <-Shutdown will shutdown the listening port
+	// <-Shutdown will begin the server shutdown process
 	Shutdown chan struct{}
 }
 
@@ -185,7 +185,7 @@ func (n *Network) Listen() {
 
 	close(n.Listening)
 
-	glog.Infof("Listening for peers on %s.", n.Address)
+	glog.Infof("Listening for peers on %s.\n", n.Address)
 
 	// handle server shutdowns
 	go func() {
@@ -193,7 +193,8 @@ func (n *Network) Listen() {
 		case <-n.Shutdown:
 			// cause listener.Accept() to stop blocking so it can continue the loop
 			listener.Close()
-			n.shutdown()
+			n.closePeers()
+			glog.Infof("Server listening on port %s was shutdown\n.", n.Address)
 		}
 	}()
 
@@ -203,8 +204,6 @@ func (n *Network) Listen() {
 			go n.Accept(conn)
 
 		} else {
-			glog.Error(err)
-
 			// if the Shutdown flag is set, no need to continue with the for loop
 			select {
 			case <-n.Shutdown:
@@ -212,6 +211,8 @@ func (n *Network) Listen() {
 			default:
 				// without the default case the select will block.
 			}
+
+			glog.Error(err)
 		}
 	}
 }
@@ -514,7 +515,7 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	n.BroadcastByAddresses(message, addresses[:K]...)
 }
 
-func (n *Network) shutdown() {
+func (n *Network) closePeers() {
 	// clean up any connected peers
 	n.Peers.Range(func(key, value interface{}) bool {
 		c := value.(*PeerClient)
