@@ -74,7 +74,9 @@ func (c *PeerClient) Close() error {
 
 	// Remove entries from node's network.
 	if c.ID != nil {
-		c.Network.Peers.Delete(c.ID.Address)
+		c.Network.PeersMutex.Lock()
+		delete(c.Network.Peers, c.ID.Address)
+		c.Network.PeersMutex.Unlock()
 		c.Network.Connections.Delete(c.ID.Address)
 	}
 
