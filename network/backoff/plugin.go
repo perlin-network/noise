@@ -24,11 +24,6 @@ var (
 func (p *Plugin) PeerDisconnect(client *network.PeerClient) {
 	addr := client.Address
 
-	if _, exists := p.backoffs.Load(addr); exists {
-		// don't activate if it already active
-		glog.Infof("backoff skipped, already active\n")
-		return
-	}
 	go func() {
 		p.startBackoff(addr, client)
 	}()
@@ -38,6 +33,11 @@ func (p *Plugin) startBackoff(addr string, client *network.PeerClient) {
 	// this callback is called before the disconnect, so wait until disconnected
 	time.Sleep(initialDelay)
 
+	if _, exists := p.backoffs.Load(addr); exists {
+		// don't activate if it already active
+		glog.Infof("backoff skipped for addr %s, already active\n", addr)
+		return
+	}
 	// reset the backoff counter
 	p.backoffs.Store(addr, DefaultBackoff())
 	startTime := time.Now()
@@ -59,7 +59,6 @@ func (p *Plugin) startBackoff(addr string, client *network.PeerClient) {
 			break
 		}
 		if _, err := client.Network.Client(client.Address); err != nil {
-			client.Close()
 			continue
 		}
 		if !p.checkConnected(client, addr) {

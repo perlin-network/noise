@@ -191,7 +191,7 @@ func (n *Network) Listen() {
 	go func() {
 		select {
 		case <-n.Shutdown:
-			// cause the listener.Accept() to stop blocking so it can exit the for loop
+			// cause listener.Accept() to stop blocking so it can continue the loop
 			listener.Close()
 			n.shutdown()
 		}
@@ -515,7 +515,7 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 }
 
 func (n *Network) shutdown() {
-	glog.Infof("[Debug] server shutting down: %s\n", n.ID.Address)
+	// clean up any connected peers
 	n.Peers.Range(func(key, value interface{}) bool {
 		c := value.(*PeerClient)
 		if c != nil {

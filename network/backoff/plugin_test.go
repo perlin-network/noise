@@ -2,12 +2,9 @@ package backoff
 
 import (
 	"flag"
-	"fmt"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/examples/basic/messages"
@@ -38,7 +35,6 @@ func (state *BasicPlugin) Startup(net *network.Network) {
 }
 
 func (state *BasicPlugin) Receive(ctx *network.MessageContext) error {
-	fmt.Fprintf(os.Stderr, "Received message from %s to %s\n", ctx.Sender().Address, ctx.Self().Address)
 	switch msg := ctx.Message().(type) {
 	case *messages.BasicMessage:
 		state.Mailbox <- msg
@@ -110,7 +106,6 @@ func TestPlugin(t *testing.T) {
 		t.Skip("skipping backoff plugin test in short mode")
 	}
 
-	flag.Set("logtostderr", "true")
 	flag.Parse()
 
 	var nodes []*network.Network
@@ -133,13 +128,11 @@ func TestPlugin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// disconnect node 2
+	// disconnect the second node
 	close(nodes[1].Shutdown)
 
-	glog.Infof("[Debug] waiting %s to check\n", initialDelay+defaultMinInterval*4)
-
 	// wait until about the middle of the backoff period
-	time.Sleep(initialDelay + defaultMinInterval*4)
+	time.Sleep(initialDelay + defaultMinInterval*2)
 
 	// tests that broadcasting fails
 	if err := broadcastAndCheck(nodes, plugins); err == nil {
@@ -153,8 +146,6 @@ func TestPlugin(t *testing.T) {
 	}
 	nodes[1] = node
 	plugins[1] = plugin
-
-	glog.Infof("[Debug] waiting %s to check\n", 5*time.Second)
 
 	// wait for reconnection
 	time.Sleep(5 * time.Second)
