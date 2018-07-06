@@ -31,6 +31,8 @@ type StreamState struct {
 	buffer   []byte
 	buffered chan struct{}
 	closed   bool
+	readDeadline time.Time
+	writeDeadline time.Time
 }
 
 // createPeerClient creates a stub peer client.
@@ -164,10 +166,15 @@ func (c *PeerClient) Read(out []byte) (int, error) {
 		closed := c.stream.closed
 		n := copy(out, c.stream.buffer)
 		c.stream.buffer = c.stream.buffer[n:]
+		readDeadline := c.stream.readDeadline
 		c.stream.Unlock()
 
 		if closed {
 			return n, errors.New("closed")
+		}
+
+		if !readDeadline.IsZero() && time.Now().After(readDeadline) {
+			return n, errors.New("read deadline exceeded")
 		}
 
 		if n == 0 {
@@ -183,6 +190,14 @@ func (c *PeerClient) Read(out []byte) (int, error) {
 
 // Write implements net.Conn and sends packets of bytes over a stream.
 func (c *PeerClient) Write(data []byte) (int, error) {
+	c.stream.Lock()
+	writeDeadline := c.stream.writeDeadline
+	c.stream.Unlock()
+
+	if !writeDeadline.IsZero() && time.Now().After(writeDeadline) {
+		return 0, errors.New("write deadline exceeded")
+	}
+
 	err := c.Tell(&protobuf.Bytes{Data: data})
 	if err != nil {
 		return 0, err
@@ -210,18 +225,25 @@ func (c *PeerClient) RemoteAddr() net.Addr {
 
 // SetDeadline implements net.Conn.
 func (c *PeerClient) SetDeadline(t time.Time) error {
-	// TODO
+	c.stream.Lock()
+	c.stream.readDeadline = t
+	c.stream.writeDeadline = t
+	c.stream.Unlock()
 	return nil
 }
 
 // SetReadDeadline implements net.Conn.
 func (c *PeerClient) SetReadDeadline(t time.Time) error {
-	// TODO
+	c.stream.Lock()
+	c.stream.readDeadline = t
+	c.stream.Unlock()
 	return nil
 }
 
 // SetWriteDeadline implements net.Conn.
 func (c *PeerClient) SetWriteDeadline(t time.Time) error {
-	// TODO
+	c.stream.Lock()
+	c.stream.writeDeadline = t
+	c.stream.Unlock()
 	return nil
 }
