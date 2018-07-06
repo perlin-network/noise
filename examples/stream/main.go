@@ -85,18 +85,18 @@ func (state *ExampleServerPlugin) PeerDisconnect(client *network.PeerClient) {
 	glog.Infof("Lost connection with %s.", client.Address)
 }
 
-type ProxyPlugin struct {
+type ProxyServerPlugin struct {
 	network.Plugin
 	listenAddress string
 }
 
-func (state *ProxyPlugin) PeerConnect(client *network.PeerClient) {
+func (state *ProxyServerPlugin) PeerConnect(client *network.PeerClient) {
 	glog.Infof("Connected to proxy destination %s.", client.Address)
 
 	go state.startProxying(client)
 }
 
-func (state *ProxyPlugin) startProxying(client *network.PeerClient) {
+func (state *ProxyServerPlugin) startProxying(client *network.PeerClient) {
 	session, err := smux.Client(client, muxStreamConfig())
 	if err != nil {
 		glog.Fatal(err)
@@ -132,7 +132,7 @@ func (state *ProxyPlugin) startProxying(client *network.PeerClient) {
 	}
 }
 
-func (state *ProxyPlugin) PeerDisconnect(client *network.PeerClient) {
+func (state *ProxyServerPlugin) PeerDisconnect(client *network.PeerClient) {
 	glog.Infof("Lost connection with proxy destination %s.", client.Address)
 }
 
@@ -169,9 +169,9 @@ func main() {
 
 	// Add custom port forwarding plugin.
 	if mode == "server" {
-		builder.AddPlugin(&ExampleServerPlugin{remoteAddress: address,})
+		builder.AddPlugin(&ExampleServerPlugin{remoteAddress: address})
 	} else if mode == "client" {
-		builder.AddPlugin(&ProxyPlugin{listenAddress: address,})
+		builder.AddPlugin(&ProxyServerPlugin{listenAddress: address})
 	}
 
 	net, err := builder.Build()
