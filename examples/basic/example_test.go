@@ -61,12 +61,19 @@ func ExampleBasic() {
 
 		go node.Listen()
 
-		// Bootstrap to Node 0.
+		nodes = append(nodes, node)
+	}
+
+	// Make sure all nodes are listening for incoming peers.
+	for _, node := range nodes {
+		node.BlockUntilListening()
+	}
+
+	// Bootstrap to Node 0.
+	for i, node := range nodes {
 		if i != 0 {
 			node.Bootstrap(nodes[0].Address)
 		}
-
-		nodes = append(nodes, node)
 	}
 
 	// Wait for all nodes to finish discovering other peers.
