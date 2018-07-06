@@ -74,14 +74,6 @@ func (p *Plugin) startBackoff(addr string, client *network.PeerClient) {
 }
 
 func (p *Plugin) checkConnected(client *network.PeerClient, addr string) bool {
-	connected := false
-	// check if the peer is still disconnected
-	client.Network.Peers.Range(func(k string, pc *network.PeerClient) bool {
-		// seems the peer is disconnected while pc.ID == nil
-		if k == addr && pc.ID != nil {
-			connected = true
-		}
-		return true
-	})
+	_, connected := client.Network.Connections.Load(addr)
 	return connected
 }

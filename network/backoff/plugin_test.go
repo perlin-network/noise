@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
@@ -19,6 +20,8 @@ const (
 	host      = "127.0.0.1"
 	startPort = 21200
 )
+
+var keys = make(map[string]*crypto.KeyPair)
 
 // BasicPlugin buffers all messages into a mailbox for this test.
 type BasicPlugin struct {
@@ -60,9 +63,14 @@ func broadcastAndCheck(nodes []*network.Network, plugins []*BasicPlugin) error {
 }
 
 func newNode(i int, reconnecting bool) (*network.Network, *BasicPlugin, error) {
+	addr := network.FormatAddress(protocol, host, uint16(startPort+i))
+	if _, ok := keys[addr]; !ok {
+		keys[addr] = ed25519.RandomKeyPair()
+	}
+
 	builder := builders.NewNetworkBuilder()
-	builder.SetKeys(crypto.RandomKeyPair())
-	builder.SetAddress(network.FormatAddress(protocol, host, uint16(startPort+i)))
+	builder.SetKeys(keys[addr])
+	builder.SetAddress(addr)
 
 	if !reconnecting {
 		builder.AddPlugin(new(discovery.Plugin))
@@ -119,7 +127,7 @@ func TestPlugin(t *testing.T) {
 	}
 
 	// disconnect node 2
-	nodes[1].HardDisconnect()
+	nodes[1].Shutdown(true)
 
 	// wait until about the middle of the backoff period
 	time.Sleep(initialDelay + (defaultMinInterval * (defaultMaxAttempts / 2)))

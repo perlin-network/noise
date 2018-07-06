@@ -1,6 +1,13 @@
 package network
 
 import (
+	"math/rand"
+	"net"
+	"net/url"
+	"runtime"
+	"sync"
+	"time"
+
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
@@ -10,12 +17,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
-	"math/rand"
-	"net"
-	"net/url"
-	"runtime"
-	"sync"
-	"time"
 )
 
 type Packet struct {
@@ -53,7 +54,9 @@ type Network struct {
 	Listening chan struct{}
 
 	SignaturePolicy crypto.SignaturePolicy
-	HashPolicy crypto.HashPolicy
+	HashPolicy      crypto.HashPolicy
+
+	listener net.Listener
 }
 
 // Init starts all network I/O workers.
@@ -162,15 +165,13 @@ func (n *Network) Listen() {
 		glog.Fatal(err)
 	}
 
-	var listener net.Listener
-
 	if urlInfo.Scheme == "kcp" {
-		listener, err = kcp.ListenWithOptions(urlInfo.Host, nil, 10, 3)
+		n.listener, err = kcp.ListenWithOptions(urlInfo.Host, nil, 10, 3)
 		if err != nil {
 			glog.Fatal(err)
 		}
 	} else if urlInfo.Scheme == "tcp" {
-		listener, err = net.Listen("tcp", urlInfo.Host)
+		n.listener, err = net.Listen("tcp", urlInfo.Host)
 	} else {
 		err = errors.New("invalid scheme: " + urlInfo.Scheme)
 	}
@@ -185,7 +186,10 @@ func (n *Network) Listen() {
 
 	// Handle new clients.
 	for {
-		if conn, err := listener.Accept(); err == nil {
+		if n.listener == nil {
+			break
+		}
+		if conn, err := n.listener.Accept(); err == nil {
 			go n.Accept(conn)
 		} else {
 			glog.Error(err)
@@ -486,4 +490,33 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	}
 
 	n.BroadcastByAddresses(message, addresses[:K]...)
+}
+
+func (n *Network) Shutdown(force bool) {
+
+	// disconnect the listener port
+	n.listener.Close()
+	n.listener = nil
+
+	n.Peers.Range(func(key, value interface{}) bool {
+		c := value.(*PeerClient)
+		if c == nil {
+			return false
+		}
+
+		if force {
+			c.stream.Lock()
+			c.stream.closed = true
+			c.stream.Unlock()
+
+			// Delete peer from network.
+			c.Network.Peers.Delete(key)
+			c.Network.Connections.Delete(key)
+		} else {
+			// close all the existings connections
+			c.Close()
+		}
+
+		return true
+	})
 }
