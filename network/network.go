@@ -18,6 +18,8 @@ import (
 	"time"
 )
 
+type InitAwaiter chan struct{}
+
 type Packet struct {
 	Target  string
 	Payload *protobuf.Message
@@ -107,6 +109,14 @@ func (n *Network) handleRecvQueue() {
 		select {
 		case packet := <-n.RecvQueue:
 			if client, exists := n.Peers.Load(packet.Sender.Address); exists {
+				if awaiter, ok := client.(InitAwaiter); ok {
+					<-awaiter
+					client, exists = n.Peers.Load(packet.Sender.Address)
+					if !exists {
+						continue
+					}
+				}
+
 				client := client.(*PeerClient)
 
 				var ptr ptypes.DynamicAny
@@ -204,12 +214,27 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		return nil, errors.New("peer should not dial itself")
 	}
 
-	if client, existed := n.Peers.Load(address); existed {
+	thisAwaiter := make(InitAwaiter)
+
+	if client, loaded := n.Peers.LoadOrStore(address, thisAwaiter); loaded {
+		if awaiter, ok := client.(InitAwaiter); ok {
+			<-awaiter
+			var exists bool
+			client, exists = n.Peers.Load(address)
+			if !exists {
+				return nil, errors.New("initialization failed")
+			}
+		}
 		return client.(*PeerClient), nil
 	} else {
+		defer func() {
+			close(thisAwaiter)
+		}()
+
 		session, err := n.Dial(address)
 
 		if err != nil {
+			n.Peers.Delete(address)
 			return nil, err
 		}
 
@@ -217,6 +242,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 
 		client, err := createPeerClient(n, address)
 		if err != nil {
+			n.Peers.Delete(address)
 			return nil, err
 		}
 		n.Peers.Store(address, client)
@@ -426,7 +452,11 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 // Broadcast asynchronously broadcasts a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
 	n.Peers.Range(func(key, value interface{}) bool {
-		client := value.(*PeerClient)
+		client, ok := value.(*PeerClient)
+		if !ok {
+			return false
+		}
+
 		err := client.Tell(message)
 
 		if err != nil {
@@ -467,7 +497,10 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	var addresses []string
 
 	n.Peers.Range(func(key, value interface{}) bool {
-		client := value.(*PeerClient)
+		client, ok := value.(*PeerClient)
+		if !ok {
+			return false
+		}
 
 		addresses = append(addresses, client.Address)
 
