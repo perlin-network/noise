@@ -64,8 +64,10 @@ func ExampleBasic() {
 		nodes = append(nodes, node)
 	}
 
-	// Wait for all nodes to start listening.
-	time.Sleep(500 * time.Millisecond)
+	// Make sure all nodes are listening for incoming peers.
+	for _, node := range nodes {
+		node.BlockUntilListening()
+	}
 
 	// Bootstrap to Node 0.
 	for i, node := range nodes {
