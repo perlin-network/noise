@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/network/discovery"
+
+	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/examples/proxy/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/builders"
-	"github.com/perlin-network/noise/network/discovery"
 	"github.com/perlin-network/noise/peer"
 	"github.com/pkg/errors"
 )
@@ -66,7 +67,8 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 
 	// If the target is in our routing table, directly proxy the message to them.
 	if routes.PeerExists(targetID) {
-		return node.Tell(targetID.Address, msg)
+		node.BroadcastByAddresses(msg, targetID.Address)
+		return nil
 	}
 
 	// Find the 2 closest peers from a nodes point of view (might include us).
@@ -86,7 +88,8 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 	}
 
 	// Propagate message to the closest peer.
-	return node.Tell(closestPeers[0].Address, msg)
+	node.BroadcastByAddresses(msg, closestPeers[0].Address)
+	return nil
 }
 
 // ExampleProxy demonstrates how to send a message to nodes which do not directly have connections
@@ -103,11 +106,11 @@ func ExampleProxy() {
 	var plugins []*ProxyPlugin
 
 	for i := 0; i < numNodes; i++ {
-		addr := fmt.Sprintf("kcp://%s:%d", host, startPort+i)
+		addr := fmt.Sprintf("tcp://%s:%d", host, startPort+i)
 		ids[addr] = i
 
 		builder := builders.NewNetworkBuilder()
-		builder.SetKeys(crypto.RandomKeyPair())
+		builder.SetKeys(ed25519.RandomKeyPair())
 		builder.SetAddress(addr)
 
 		// DisablePong will preserve the line topology
