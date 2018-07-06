@@ -24,12 +24,19 @@
 - Logging via. [glog](https://github.com/golang/glog).
 - Plugin system.  
   
-## Setup  
+## Setup
+
+### Dependencies
+
+ - [Protobuf compiler](https://github.com/google/protobuf/releases) (protoc)
   
 ```bash
 # install vgo tooling  
-go get -u golang.org/x/vgo  
-  
+go get -u golang.org/x/vgo
+
+# install protoc-gen-go
+go get -u github.com/golang/protobuf/protoc-gen-go
+
 # download the dependencies to vendor folder  
 vgo mod -vendor  
   
