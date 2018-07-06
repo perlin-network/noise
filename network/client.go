@@ -34,7 +34,12 @@ type StreamState struct {
 }
 
 // createPeerClient creates a stub peer client.
-func createPeerClient(network *Network, address string) *PeerClient {
+func createPeerClient(network *Network, address string) (*PeerClient, error) {
+	// Ensure the address is valid.
+	if _, err := ParseAddress(address); err != nil {
+		return nil, err
+	}
+
 	client := &PeerClient{
 		Network:      network,
 		Address:      address,
@@ -50,7 +55,7 @@ func createPeerClient(network *Network, address string) *PeerClient {
 		plugin.PeerConnect(client)
 	})
 
-	return client
+	return client, nil
 }
 
 // Close stops all sessions/streams and cleans up the nodes
@@ -185,26 +190,22 @@ func (c *PeerClient) Write(data []byte) (int, error) {
 	return len(data), nil
 }
 
-type NoiseAddr struct {
-	Address string
-}
-
-func (a *NoiseAddr) Network() string {
-	return "noise"
-}
-
-func (a *NoiseAddr) String() string {
-	return a.Address
-}
-
 // LocalAddr implements net.Conn.
 func (c *PeerClient) LocalAddr() net.Addr {
-	return &NoiseAddr{Address: "[local]"}
+	addr, err := ParseAddress(c.Network.Address)
+	if err != nil {
+		panic(err) // should never happen
+	}
+	return addr
 }
 
 // RemoteAddr implements net.Conn.
 func (c *PeerClient) RemoteAddr() net.Addr {
-	return &NoiseAddr{Address: c.Address}
+	addr, err := ParseAddress(c.Address)
+	if err != nil {
+		panic(err) // should never happen
+	}
+	return addr
 }
 
 // SetDeadline implements net.Conn.

@@ -215,7 +215,10 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 
 		n.Connections.Store(address, session)
 
-		client := createPeerClient(n, address)
+		client, err := createPeerClient(n, address)
+		if err != nil {
+			return nil, err
+		}
 		n.Peers.Store(address, client)
 
 		return client, nil

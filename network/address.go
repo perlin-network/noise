@@ -27,6 +27,10 @@ func NewAddressInfo(protocol, host string, port uint16) *AddressInfo {
 	}
 }
 
+func (info *AddressInfo) Network() string {
+	return "noise"
+}
+
 // String prints out either the URL representation of the address info, or
 // solely just a joined host and port should a network scheme not be defined.
 func (info *AddressInfo) String() string {
