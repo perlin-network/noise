@@ -2,6 +2,8 @@ package network
 
 import (
 	"net"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -9,8 +11,6 @@ import (
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
-	"sync"
-	"sync/atomic"
 )
 
 // PeerClient represents a single incoming peers client.
