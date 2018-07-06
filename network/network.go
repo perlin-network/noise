@@ -120,8 +120,8 @@ func (n *Network) handleRecvQueue() {
 				}
 
 				switch ptr.Message.(type) {
-				case *protobuf.StreamPacket:
-					client.handleStreamPacket(ptr.Message.(*protobuf.StreamPacket).Data)
+				case *protobuf.Bytes:
+					client.handleBytes(ptr.Message.(*protobuf.Bytes).Data)
 				default:
 					ctx := new(MessageContext)
 					ctx.client = client
@@ -215,7 +215,10 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 
 		n.Connections.Store(address, session)
 
-		client := createPeerClient(n, address)
+		client, err := createPeerClient(n, address)
+		if err != nil {
+			return nil, err
+		}
 		n.Peers.Store(address, client)
 
 		return client, nil

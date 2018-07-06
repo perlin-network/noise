@@ -31,10 +31,17 @@ type StreamState struct {
 	buffer   []byte
 	buffered chan struct{}
 	closed   bool
+	readDeadline time.Time
+	writeDeadline time.Time
 }
 
 // createPeerClient creates a stub peer client.
-func createPeerClient(network *Network, address string) *PeerClient {
+func createPeerClient(network *Network, address string) (*PeerClient, error) {
+	// Ensure the address is valid.
+	if _, err := ParseAddress(address); err != nil {
+		return nil, err
+	}
+
 	client := &PeerClient{
 		Network:      network,
 		Address:      address,
@@ -50,7 +57,7 @@ func createPeerClient(network *Network, address string) *PeerClient {
 		plugin.PeerConnect(client)
 	})
 
-	return client
+	return client, nil
 }
 
 // Close stops all sessions/streams and cleans up the nodes
@@ -138,7 +145,7 @@ func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
 	return nil
 }
 
-func (c *PeerClient) handleStreamPacket(pkt []byte) {
+func (c *PeerClient) handleBytes(pkt []byte) {
 	c.stream.Lock()
 	empty := len(c.stream.buffer) == 0
 	c.stream.buffer = append(c.stream.buffer, pkt...)
@@ -159,10 +166,15 @@ func (c *PeerClient) Read(out []byte) (int, error) {
 		closed := c.stream.closed
 		n := copy(out, c.stream.buffer)
 		c.stream.buffer = c.stream.buffer[n:]
+		readDeadline := c.stream.readDeadline
 		c.stream.Unlock()
 
 		if closed {
 			return n, errors.New("closed")
+		}
+
+		if !readDeadline.IsZero() && time.Now().After(readDeadline) {
+			return n, errors.New("read deadline exceeded")
 		}
 
 		if n == 0 {
@@ -178,49 +190,60 @@ func (c *PeerClient) Read(out []byte) (int, error) {
 
 // Write implements net.Conn and sends packets of bytes over a stream.
 func (c *PeerClient) Write(data []byte) (int, error) {
-	err := c.Tell(&protobuf.StreamPacket{Data: data})
+	c.stream.Lock()
+	writeDeadline := c.stream.writeDeadline
+	c.stream.Unlock()
+
+	if !writeDeadline.IsZero() && time.Now().After(writeDeadline) {
+		return 0, errors.New("write deadline exceeded")
+	}
+
+	err := c.Tell(&protobuf.Bytes{Data: data})
 	if err != nil {
 		return 0, err
 	}
 	return len(data), nil
 }
 
-type NoiseAddr struct {
-	Address string
-}
-
-func (a *NoiseAddr) Network() string {
-	return "noise"
-}
-
-func (a *NoiseAddr) String() string {
-	return a.Address
-}
-
 // LocalAddr implements net.Conn.
 func (c *PeerClient) LocalAddr() net.Addr {
-	return &NoiseAddr{Address: "[local]"}
+	addr, err := ParseAddress(c.Network.Address)
+	if err != nil {
+		panic(err) // should never happen
+	}
+	return addr
 }
 
 // RemoteAddr implements net.Conn.
 func (c *PeerClient) RemoteAddr() net.Addr {
-	return &NoiseAddr{Address: c.Address}
+	addr, err := ParseAddress(c.Address)
+	if err != nil {
+		panic(err) // should never happen
+	}
+	return addr
 }
 
 // SetDeadline implements net.Conn.
 func (c *PeerClient) SetDeadline(t time.Time) error {
-	// TODO
+	c.stream.Lock()
+	c.stream.readDeadline = t
+	c.stream.writeDeadline = t
+	c.stream.Unlock()
 	return nil
 }
 
 // SetReadDeadline implements net.Conn.
 func (c *PeerClient) SetReadDeadline(t time.Time) error {
-	// TODO
+	c.stream.Lock()
+	c.stream.readDeadline = t
+	c.stream.Unlock()
 	return nil
 }
 
 // SetWriteDeadline implements net.Conn.
 func (c *PeerClient) SetWriteDeadline(t time.Time) error {
-	// TODO
+	c.stream.Lock()
+	c.stream.writeDeadline = t
+	c.stream.Unlock()
 	return nil
 }
