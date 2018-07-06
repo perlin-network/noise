@@ -37,6 +37,6 @@ message LookupNodeResponse {
     repeated ID peers = 1;
 }
 
-message StreamPacket {
+message Bytes {
     bytes data = 1;
 }
