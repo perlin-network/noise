@@ -4,6 +4,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"net/http"
+	"net/http/pprof"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -21,7 +24,7 @@ const MESSAGE_THRESHOLD uint64 = 2000
 var numPeers int64
 var numMessages uint64
 
-type BenchPlugin struct { network.Plugin }
+type BenchPlugin struct{ network.Plugin }
 
 func (state *BenchPlugin) PeerConnect(client *network.PeerClient) {
 	atomic.AddInt64(&numPeers, 1)
@@ -42,8 +45,31 @@ func sendBroadcast(n *network.Network) {
 		return
 	}
 
-	targetNumPeers := atomic.LoadInt64(&numPeers) / 2 + 1
+	targetNumPeers := atomic.LoadInt64(&numPeers)/2 + 1
 	n.BroadcastRandomly(&messages.Empty{}, int(targetNumPeers))
+}
+
+func setupPPROF(port int) {
+	// Usage:
+	// terminal_1$ vgo build && ./cluster_benchmark -port 3000
+	// terminal_2$ ./cluster_benchmark -port 3001 -peers tcp://localhost:3000
+	// terminal_3:
+	//  go tool pprof cluster_benchmark http://127.0.0.1:3500/debug/pprof/profile
+	//  go tool pprof cluster_benchmark http://127.0.0.1:3500/debug/pprof/heap
+	//  go tool pprof cluster_benchmark http://127.0.0.1:3500/debug/pprof/goroutine
+	//  go tool pprof cluster_benchmark http://127.0.0.1:3500/debug/pprof/block
+
+	r := http.NewServeMux()
+
+	// Register pprof handlers
+	r.HandleFunc("/debug/pprof/", pprof.Index)
+	r.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	r.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	r.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	r.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	glog.Infof("Pprof listening on port %d.\n", port+500)
+	http.ListenAndServe(fmt.Sprintf(":%d", port+500), r)
 }
 
 func main() {
@@ -63,6 +89,8 @@ func main() {
 	peers := strings.Split(*peersFlag, ",")
 
 	keys := ed25519.RandomKeyPair()
+
+	go setupPPROF(*portFlag)
 
 	glog.Infof("Private Key: %s", keys.PrivateKeyHex())
 	glog.Infof("Public Key: %s", keys.PublicKeyHex())
@@ -84,6 +112,8 @@ func main() {
 	}
 
 	go net.Listen()
+
+	net.BlockUntilListening()
 
 	if len(peers) > 0 {
 		net.Bootstrap(peers...)
