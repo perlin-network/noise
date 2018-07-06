@@ -191,6 +191,7 @@ func (n *Network) Listen() {
 	go func() {
 		select {
 		case <-n.Shutdown:
+			// cause the listener.Accept() to stop blocking so it can exit the for loop
 			listener.Close()
 			n.shutdown()
 		}
@@ -203,6 +204,14 @@ func (n *Network) Listen() {
 
 		} else {
 			glog.Error(err)
+
+			// if the Shutdown flag is set, no need to continue with the for loop
+			select {
+			case <-n.Shutdown:
+				return
+			default:
+				// without the default case the select will block.
+			}
 		}
 	}
 }
