@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
 	"github.com/perlin-network/noise/protobuf"
 )
 
 var (
-	keys     = crypto.RandomKeyPair()
+	keys     = ed25519.RandomKeyPair()
 	host     = "localhost"
-	protocol = "kcp"
+	protocol = "tcp"
 	port     = uint16(12345)
 )
 
@@ -62,8 +62,8 @@ func TestSetters(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if net.Address != fmt.Sprintf("kcp://127.0.0.1:%d", port) { // Unified address.
-		t.Fatalf("address is wrong: expected %s but got %s", fmt.Sprintf("kcp://127.0.0.1:%d", port), net.Address)
+	if net.Address != fmt.Sprintf("tcp://127.0.0.1:%d", port) { // Unified address.
+		t.Fatalf("address is wrong: expected %s but got %s", fmt.Sprintf("tcp://127.0.0.1:%d", port), net.Address)
 	}
 
 	if !bytes.Equal(net.Keys.PrivateKey, keys.PrivateKey) {
@@ -78,7 +78,7 @@ func TestSetters(t *testing.T) {
 
 func TestPeers(t *testing.T) {
 	var nodes []*network.Network
-	addresses := []string{"kcp://127.0.0.1:12345", "kcp://127.0.0.1:12346", "kcp://127.0.0.1:12347"}
+	addresses := []string{"tcp://127.0.0.1:12345", "tcp://127.0.0.1:12346", "tcp://127.0.0.1:12347"}
 	peers := [][2]int{{1, 2}, {0, 2}, {0, 1}}
 
 	for i := 0; i < 3; i++ {

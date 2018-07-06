@@ -12,7 +12,7 @@ import (
 )
 
 func queryPeerByID(net *network.Network, peerID peer.ID, targetID peer.ID, responses chan []*protobuf.ID) {
-	client, err := net.Dial(peerID.Address)
+	client, err := net.Client(peerID.Address)
 	if err != nil {
 		responses <- []*protobuf.ID{}
 		return

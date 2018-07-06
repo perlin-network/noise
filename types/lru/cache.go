@@ -7,7 +7,7 @@ import (
 
 type cacheItem struct {
 	key     string
-	value interface{}
+	value   interface{}
 	element *list.Element
 }
 

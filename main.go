@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
-	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/backoff"
 	"github.com/perlin-network/noise/network/builders"
@@ -20,7 +20,7 @@ func main() {
 	// process other flags
 	portFlag := flag.Int("port", 3000, "port to listen to")
 	hostFlag := flag.String("host", "localhost", "host to listen to")
-	protocolFlag := flag.String("protocol", "kcp", "protocol to use (kcp/tcp)")
+	protocolFlag := flag.String("protocol", "tcp", "protocol to use (kcp/tcp)")
 	peersFlag := flag.String("peers", "", "peers to connect to")
 	upnpFlag := flag.Bool("upnp", false, "enable upnp")
 	reconnectFlag := flag.Bool("reconnect", false, "enable reconnections")
@@ -33,7 +33,7 @@ func main() {
 	reconnectEnabled := *reconnectFlag
 	peers := strings.Split(*peersFlag, ",")
 
-	keys := crypto.RandomKeyPair()
+	keys := ed25519.RandomKeyPair()
 
 	glog.Infof("Private Key: %s", keys.PrivateKeyHex())
 	glog.Infof("Public Key: %s", keys.PublicKeyHex())
