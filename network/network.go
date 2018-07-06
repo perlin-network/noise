@@ -194,7 +194,7 @@ func (n *Network) Listen() {
 			// cause listener.Accept() to stop blocking so it can continue the loop
 			listener.Close()
 			n.closePeers()
-			glog.Infof("Server listening on port %s was shutdown\n.", n.Address)
+			glog.Infof("Shutting down server on %s.\n.", n.Address)
 		}
 	}()
 

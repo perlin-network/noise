@@ -34,7 +34,7 @@ func (p *Plugin) startBackoff(addr string, client *network.PeerClient) {
 	time.Sleep(initialDelay)
 
 	if _, exists := p.backoffs.Load(addr); exists {
-		// don't activate if it already active
+		// don't activate if backoff is already active
 		glog.Infof("backoff skipped for addr %s, already active\n", addr)
 		return
 	}
@@ -68,7 +68,7 @@ func (p *Plugin) startBackoff(addr string, client *network.PeerClient) {
 		// success
 		break
 	}
-	// clean up this back off
+	// clean up this backoff
 	p.backoffs.Delete(addr)
 }
 
