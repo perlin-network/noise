@@ -454,7 +454,7 @@ func (n *Network) Broadcast(message proto.Message) {
 	n.Peers.Range(func(key, value interface{}) bool {
 		client, ok := value.(*PeerClient)
 		if !ok {
-			return false
+			return true
 		}
 
 		err := client.Tell(message)
@@ -499,7 +499,7 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	n.Peers.Range(func(key, value interface{}) bool {
 		client, ok := value.(*PeerClient)
 		if !ok {
-			return false
+			return true
 		}
 
 		addresses = append(addresses, client.Address)
