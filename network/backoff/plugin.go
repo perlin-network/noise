@@ -6,11 +6,13 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/network"
+	"github.com/perlin-network/noise/protobuf"
 )
 
 type Plugin struct {
 	*network.Plugin
 
+	net *network.Network
 	// map[string]*Backoff
 	backoffs sync.Map
 }
@@ -21,18 +23,23 @@ var (
 	limitIterations = 100
 )
 
+func (p *Plugin) Startup(net *network.Network) {
+	p.net = net
+}
+
 func (p *Plugin) PeerDisconnect(client *network.PeerClient) {
 	addr := client.Address
 
 	go func() {
-		p.startBackoff(addr, client)
+		p.startBackoff(addr)
 	}()
 }
 
-func (p *Plugin) startBackoff(addr string, client *network.PeerClient) {
+func (p *Plugin) startBackoff(addr string) {
 	// this callback is called before the disconnect, so wait until disconnected
 	time.Sleep(initialDelay)
 
+	glog.Infof("backoff starting process for addr %s\n", addr)
 	if _, exists := p.backoffs.Load(addr); exists {
 		// don't activate if backoff is already active
 		glog.Infof("backoff skipped for addr %s, already active\n", addr)
@@ -54,15 +61,19 @@ func (p *Plugin) startBackoff(addr string, client *network.PeerClient) {
 		d := b.NextDuration()
 		glog.Infof("backoff reconnecting to %s in %s iteration %d", addr, d, i+1)
 		time.Sleep(d)
-		if p.checkConnected(client, addr) {
+		if p.checkConnected(addr) {
 			// check that the connection is still empty before dialing
 			break
 		}
-		if _, err := client.Network.Client(client.Address); err != nil {
+		c, err := p.net.Client(addr)
+		if err != nil {
 			continue
 		}
-		if !p.checkConnected(client, addr) {
+		if !p.checkConnected(addr) {
 			// check if successfully connected
+			continue
+		}
+		if err := c.Tell(&protobuf.Ping{}); err != nil {
 			continue
 		}
 		// success
@@ -72,7 +83,7 @@ func (p *Plugin) startBackoff(addr string, client *network.PeerClient) {
 	p.backoffs.Delete(addr)
 }
 
-func (p *Plugin) checkConnected(client *network.PeerClient, addr string) bool {
-	_, connected := client.Network.Connections.Load(addr)
+func (p *Plugin) checkConnected(addr string) bool {
+	_, connected := p.net.Connections.Load(addr)
 	return connected
 }
