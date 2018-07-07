@@ -19,6 +19,18 @@ import (
 	"github.com/xtaci/smux"
 )
 
+var packetPool = sync.Pool{
+	New: func() interface{} {
+		return new(Packet)
+	},
+}
+
+var contextPool = sync.Pool{
+	New: func() interface{} {
+		return new(PluginContext)
+	},
+}
+
 type Packet struct {
 	Target  string
 	Payload *protobuf.Message
@@ -132,7 +144,7 @@ func (n *Network) handleRecvQueue() {
 				case *protobuf.Bytes:
 					client.handleBytes(ptr.Message.(*protobuf.Bytes).Data)
 				default:
-					ctx := new(MessageContext)
+					ctx := contextPool.Get().(*PluginContext)
 					ctx.client = client
 					ctx.message = ptr.Message
 					ctx.nonce = msg.Nonce
@@ -145,6 +157,8 @@ func (n *Network) handleRecvQueue() {
 							glog.Error(err)
 						}
 					})
+
+					contextPool.Put(ctx)
 				}
 			}
 		}
@@ -451,18 +465,22 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 		return nil, err
 	}
 
-	msg := &protobuf.Message{
-		Message:   raw,
-		Sender:    &id,
-		Signature: signature,
-	}
+	msg := &protobuf.Message{}
+	msg.Message = raw
+	msg.Sender = &id
+	msg.Signature = signature
 
 	return msg, nil
 }
 
 // Write asynchronously sends a message to a denoted target address.
 func (n *Network) Write(address string, message *protobuf.Message) error {
-	packet := &Packet{Target: address, Payload: message, Result: make(chan interface{}, 1)}
+	packet := packetPool.Get().(*Packet)
+	defer packetPool.Put(packet)
+
+	packet.Target = address
+	packet.Payload = message
+	packet.Result = make(chan interface{}, 1)
 
 	select {
 	case n.SendQueue <- packet:

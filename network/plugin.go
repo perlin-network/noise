@@ -7,7 +7,7 @@ type PluginInterface interface {
 
 	// Callback for when an incoming message is received. Return true
 	// if the plugin will intercept messages to be processed.
-	Receive(ctx *MessageContext) error
+	Receive(ctx *PluginContext) error
 
 	// Callback for when the network stops listening for peers.
 	Cleanup(net *Network)
@@ -23,7 +23,7 @@ type PluginInterface interface {
 type Plugin struct{}
 
 func (*Plugin) Startup(net *Network)              {}
-func (*Plugin) Receive(ctx *MessageContext) error { return nil }
+func (*Plugin) Receive(ctx *PluginContext) error  { return nil }
 func (*Plugin) Cleanup(net *Network)              {}
 func (*Plugin) PeerConnect(client *PeerClient)    {}
 func (*Plugin) PeerDisconnect(client *PeerClient) {}

@@ -36,7 +36,7 @@ func (state *mockPlugin) Startup(net *network.Network) {
 }
 
 // Receive implements the network interface callback
-func (state *mockPlugin) Receive(ctx *network.MessageContext) error {
+func (state *mockPlugin) Receive(ctx *network.PluginContext) error {
 	switch msg := ctx.Message().(type) {
 	case *messages.BasicMessage:
 		state.Mailbox <- msg
