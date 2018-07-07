@@ -120,7 +120,7 @@ func (builder *NetworkBuilder) Build() (*network.Network, error) {
 		SignaturePolicy: builder.signaturePolicy,
 		HashPolicy:      builder.hashPolicy,
 
-		Shutdown: make(chan struct{}),
+		Kill: make(chan struct{}),
 	}
 
 	net.Init()

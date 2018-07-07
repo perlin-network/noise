@@ -57,8 +57,8 @@ type Network struct {
 	SignaturePolicy crypto.SignaturePolicy
 	HashPolicy      crypto.HashPolicy
 
-	// <-Shutdown will begin the server shutdown process
-	Shutdown chan struct{}
+	// <-Kill will begin the server shutdown process
+	Kill chan struct{}
 }
 
 // Init starts all network I/O workers.
@@ -193,7 +193,7 @@ func (n *Network) Listen() {
 	// handle server shutdowns
 	go func() {
 		select {
-		case <-n.Shutdown:
+		case <-n.Kill:
 			// cause listener.Accept() to stop blocking so it can continue the loop
 			listener.Close()
 		}
@@ -207,7 +207,7 @@ func (n *Network) Listen() {
 		} else {
 			// if the Shutdown flag is set, no need to continue with the for loop
 			select {
-			case <-n.Shutdown:
+			case <-n.Kill:
 				glog.Infof("Shutting down server on %s.\n", n.Address)
 				return
 			default:

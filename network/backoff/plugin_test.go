@@ -106,7 +106,7 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 
 // disconnectNode disconnects a node from the cluster
 func disconnectNode(n *network.Network) {
-	close(n.Shutdown)
+	close(n.Kill)
 	for _, client := range n.Peers {
 		client.Close()
 	}
