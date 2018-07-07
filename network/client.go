@@ -26,7 +26,7 @@ type PeerClient struct {
 
 	stream StreamState
 
-	ready  chan struct{}
+	ready chan struct{}
 }
 
 type StreamState struct {

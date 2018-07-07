@@ -42,7 +42,7 @@ type Network struct {
 
 	// Map of connection addresses (string) <-> *network.PeerClient
 	// so that the Network doesn't dial multiple times to the same ip
-	Peers      *sync.Map
+	Peers *sync.Map
 
 	SendQueue chan *Packet
 	RecvQueue chan *protobuf.Message
@@ -117,7 +117,6 @@ func (n *Network) handleRecvQueue() {
 				if !client.IsReady() {
 					continue
 				}
-
 
 				var ptr ptypes.DynamicAny
 				if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
@@ -232,7 +231,6 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 	if address == n.Address {
 		return nil, errors.New("peer should not dial itself")
 	}
-
 
 	if client, exists := n.Peers.Load(address); exists {
 		return client.(*PeerClient), nil
