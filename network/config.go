@@ -7,8 +7,8 @@ import (
 
 func muxConfig() *smux.Config {
 	config := smux.DefaultConfig()
-	config.KeepAliveTimeout = 5 * time.Second
-	config.KeepAliveInterval = 1 * time.Millisecond
+	config.KeepAliveTimeout = 10 * time.Second
+	config.KeepAliveInterval = 2 * time.Second
 
 	return config
 }
