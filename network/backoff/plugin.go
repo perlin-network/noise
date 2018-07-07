@@ -30,9 +30,7 @@ func (p *Plugin) Startup(net *network.Network) {
 func (p *Plugin) PeerDisconnect(client *network.PeerClient) {
 	addr := client.Address
 
-	go func() {
-		p.startBackoff(addr)
-	}()
+	go p.startBackoff(addr)
 }
 
 func (p *Plugin) startBackoff(addr string) {
@@ -74,6 +72,7 @@ func (p *Plugin) startBackoff(addr string) {
 			continue
 		}
 		if err := c.Tell(&protobuf.Ping{}); err != nil {
+			// ping failed, not really connected
 			continue
 		}
 		// success

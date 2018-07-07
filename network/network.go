@@ -196,7 +196,6 @@ func (n *Network) Listen() {
 		case <-n.Shutdown:
 			// cause listener.Accept() to stop blocking so it can continue the loop
 			listener.Close()
-			glog.Infof("Shutting down server on %s.\n.", n.Address)
 		}
 	}()
 
@@ -209,6 +208,7 @@ func (n *Network) Listen() {
 			// if the Shutdown flag is set, no need to continue with the for loop
 			select {
 			case <-n.Shutdown:
+				glog.Infof("Shutting down server on %s.\n", n.Address)
 				return
 			default:
 				// without the default case the select will block.

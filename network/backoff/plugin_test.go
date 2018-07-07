@@ -100,14 +100,8 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 }
 
 func closePeers(n *network.Network) {
-	var addrs []string
-	for addr := range n.Peers {
-		addrs = append(addrs, addr)
-	}
-	for _, addr := range addrs {
-		if client, ok := n.Peers[addr]; ok {
-			client.Close()
-		}
+	for _, client := range n.Peers {
+		client.Close()
 	}
 }
 
