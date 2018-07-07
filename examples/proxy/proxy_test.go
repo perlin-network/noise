@@ -95,7 +95,6 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 // to their desired messaging target.
 //
 // Messages are proxied to closer nodes using the Kademlia routing table.
-// TODO: Test broken.
 func ExampleProxy() {
 	numNodes := 5
 	sender := 0
