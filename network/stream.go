@@ -3,13 +3,14 @@ package network
 import (
 	"bufio"
 	"encoding/binary"
+	"io"
+	"net"
+	"time"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
-	"io"
-	"net"
-	"time"
 )
 
 // sendMessage marshals, signs and sends a message over a stream.

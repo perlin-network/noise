@@ -2,6 +2,8 @@ package network
 
 import (
 	"net"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -9,8 +11,7 @@ import (
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
-	"sync"
-	"sync/atomic"
+	"github.com/xtaci/smux"
 )
 
 // PeerClient represents a single incoming peers client.
@@ -28,10 +29,10 @@ type PeerClient struct {
 
 type StreamState struct {
 	sync.Mutex
-	buffer   []byte
-	buffered chan struct{}
-	closed   bool
-	readDeadline time.Time
+	buffer        []byte
+	buffered      chan struct{}
+	closed        bool
+	readDeadline  time.Time
 	writeDeadline time.Time
 }
 
@@ -74,6 +75,12 @@ func (c *PeerClient) Close() error {
 
 	// Remove entries from node's network.
 	if c.ID != nil {
+		// close out connections
+		if conn, ok := c.Network.Connections.Load(c.ID.Address); ok {
+			if sess, ok := conn.(*smux.Session); ok && sess != nil {
+				sess.Close()
+			}
+		}
 		c.Network.PeersMutex.Lock()
 		delete(c.Network.Peers, c.ID.Address)
 		c.Network.PeersMutex.Unlock()

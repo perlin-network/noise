@@ -7,6 +7,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/network"
+	"github.com/perlin-network/noise/network/backoff"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
 	"github.com/perlin-network/noise/network/nat"
@@ -22,12 +23,14 @@ func main() {
 	protocolFlag := flag.String("protocol", "tcp", "protocol to use (kcp/tcp)")
 	peersFlag := flag.String("peers", "", "peers to connect to")
 	upnpFlag := flag.Bool("upnp", false, "enable upnp")
+	reconnectFlag := flag.Bool("reconnect", false, "enable reconnections")
 	flag.Parse()
 
 	port := uint16(*portFlag)
 	host := *hostFlag
 	protocol := *protocolFlag
 	upnpEnabled := *upnpFlag
+	reconnectEnabled := *reconnectFlag
 	peers := strings.Split(*peersFlag, ",")
 
 	keys := ed25519.RandomKeyPair()
@@ -42,6 +45,11 @@ func main() {
 	// Register UPnP plugin.
 	if upnpEnabled {
 		nat.RegisterPlugin(builder)
+	}
+
+	// Register the reconnection plugin
+	if reconnectEnabled {
+		builder.AddPlugin(new(backoff.Plugin))
 	}
 
 	// Register peer discovery plugin.

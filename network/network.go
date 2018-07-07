@@ -1,6 +1,13 @@
 package network
 
 import (
+	"math/rand"
+	"net"
+	"net/url"
+	"runtime"
+	"sync"
+	"time"
+
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
@@ -10,12 +17,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
-	"math/rand"
-	"net"
-	"net/url"
-	"runtime"
-	"sync"
-	"time"
 )
 
 type Packet struct {
@@ -41,7 +42,7 @@ type Network struct {
 
 	// Map of connection addresses (string) <-> *network.PeerClient
 	// so that the Network doesn't dial multiple times to the same ip
-	Peers map[string]*PeerClient
+	Peers      map[string]*PeerClient
 	PeersMutex sync.RWMutex
 
 	SendQueue chan *Packet
@@ -54,7 +55,10 @@ type Network struct {
 	Listening chan struct{}
 
 	SignaturePolicy crypto.SignaturePolicy
-	HashPolicy crypto.HashPolicy
+	HashPolicy      crypto.HashPolicy
+
+	// <-Shutdown will begin the server shutdown process
+	Shutdown chan struct{}
 }
 
 // Init starts all network I/O workers.
@@ -184,13 +188,32 @@ func (n *Network) Listen() {
 
 	close(n.Listening)
 
-	glog.Infof("Listening for peers on %s.", n.Address)
+	glog.Infof("Listening for peers on %s.\n", n.Address)
+
+	// handle server shutdowns
+	go func() {
+		select {
+		case <-n.Shutdown:
+			// cause listener.Accept() to stop blocking so it can continue the loop
+			listener.Close()
+		}
+	}()
 
 	// Handle new clients.
 	for {
 		if conn, err := listener.Accept(); err == nil {
 			go n.Accept(conn)
+
 		} else {
+			// if the Shutdown flag is set, no need to continue with the for loop
+			select {
+			case <-n.Shutdown:
+				glog.Infof("Shutting down server on %s.\n", n.Address)
+				return
+			default:
+				// without the default case the select will block.
+			}
+
 			glog.Error(err)
 		}
 	}
