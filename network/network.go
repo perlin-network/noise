@@ -119,7 +119,7 @@ func (n *Network) handleRecvQueue() {
 				// Check if the client is ready.
 				select {
 				case <-client.ready:
-				case <-time.After(3):
+				case <-time.After(3 * time.Second):
 					continue
 				}
 
