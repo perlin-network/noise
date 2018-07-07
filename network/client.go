@@ -77,7 +77,7 @@ func (c *PeerClient) Close() error {
 	if c.ID != nil {
 		// close out connections
 		if conn, ok := c.Network.Connections.Load(c.ID.Address); ok {
-			if sess := conn.(*smux.Session); sess != nil {
+			if sess, ok := conn.(*smux.Session); ok && sess != nil {
 				sess.Close()
 			}
 		}
