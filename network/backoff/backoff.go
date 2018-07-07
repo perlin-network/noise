@@ -35,16 +35,19 @@ func DefaultBackoff() *Backoff {
 	}
 }
 
+// NextDuration returns the duration and increases the number of attempts
 func (b *Backoff) NextDuration() time.Duration {
 	dur := b.ForAttempt(b.attempt)
 	b.attempt++
 	return dur
 }
 
+// TimeoutExceeded returns true if the backoff total duration has been exceeded
 func (b *Backoff) TimeoutExceeded() bool {
 	return b.attempt >= math.Max(0, b.MaxAttempts)
 }
 
+// ForAttempt calculates the approprate exponential duration given an attempt count
 func (b *Backoff) ForAttempt(attempt float64) time.Duration {
 	min := b.MinInterval
 	max := b.MaxInterval

@@ -29,11 +29,13 @@ type mockPlugin struct {
 	Mailbox chan *messages.BasicMessage
 }
 
+// Startup implements the network interface callback
 func (state *mockPlugin) Startup(net *network.Network) {
 	// Create mailbox
 	state.Mailbox = make(chan *messages.BasicMessage, 1)
 }
 
+// Receive implements the network interface callback
 func (state *mockPlugin) Receive(ctx *network.MessageContext) error {
 	switch msg := ctx.Message().(type) {
 	case *messages.BasicMessage:
@@ -42,6 +44,7 @@ func (state *mockPlugin) Receive(ctx *network.MessageContext) error {
 	return nil
 }
 
+// broadcastAndCheck will send a message from node 0 to other nodes and check if it's received
 func broadcastAndCheck(nodes []*network.Network, plugins []*mockPlugin) error {
 	// Broadcast out a message from Node 0.
 	expected := "This is a broadcasted message from Node 0."
@@ -62,7 +65,9 @@ func broadcastAndCheck(nodes []*network.Network, plugins []*mockPlugin) error {
 	return nil
 }
 
+// newNode creates a new node and and adds it to the cluster, allows adding certain plugins if needed
 func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Network, *mockPlugin, error) {
+	// restore the key if it was created in the past
 	addr := network.FormatAddress(protocol, host, uint16(startPort+i))
 	if _, ok := keys[addr]; !ok {
 		keys[addr] = ed25519.RandomKeyPair()
@@ -91,7 +96,7 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 
 	node.BlockUntilListening()
 
-	// Bootstrap to Node 0.
+	// Bootstrap to Node 0
 	if addDiscoveryPlugin && i != 0 {
 		node.Bootstrap(network.FormatAddress(protocol, host, uint16(startPort)))
 	}
@@ -99,7 +104,9 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 	return node, plugin, nil
 }
 
-func closePeers(n *network.Network) {
+// disconnectNode disconnects a node from the cluster
+func disconnectNode(n *network.Network) {
+	close(n.Shutdown)
 	for _, client := range n.Peers {
 		client.Close()
 	}
@@ -134,9 +141,7 @@ func TestPlugin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// disconnect the second node
-	close(nodes[1].Shutdown)
-	closePeers(nodes[1])
+	disconnectNode(nodes[1])
 
 	// wait until about the middle of the backoff period
 	time.Sleep(initialDelay + defaultMinInterval*2)
