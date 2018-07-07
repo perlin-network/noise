@@ -59,7 +59,7 @@ type Network struct {
 
 // Init starts all network I/O workers.
 func (n *Network) Init() {
-	workerCount := runtime.NumCPU()
+	workerCount := runtime.NumCPU() + 1
 
 	for i := 0; i < workerCount; i++ {
 		// Spawn worker routines for sending queued messages to the networking layer.
@@ -361,7 +361,11 @@ func (n *Network) Accept(conn net.Conn) {
 				return
 			}
 
-			n.RecvQueue <- msg
+			select {
+			case n.RecvQueue <- msg:
+			default:
+				//glog.Errorf("recv queue full, dropping messages")
+			}
 		}()
 
 	}
@@ -411,7 +415,11 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 func (n *Network) Write(address string, message *protobuf.Message) error {
 	packet := &Packet{Target: address, Payload: message, Result: make(chan interface{}, 1)}
 
-	n.SendQueue <- packet
+	select {
+	case n.SendQueue <- packet:
+	default:
+		return errors.New("send queue full")
+	}
 
 	select {
 	case raw := <-packet.Result:
