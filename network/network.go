@@ -114,7 +114,7 @@ func (n *Network) handleRecvQueue() {
 				client := client.(*PeerClient)
 
 				// Check if the client is ready.
-				if !client.IsReady() {
+				if !client.IncomingReady() {
 					continue
 				}
 
@@ -232,23 +232,40 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		return nil, errors.New("peer should not dial itself")
 	}
 
-	if client, exists := n.Peers.Load(address); exists {
-		return client.(*PeerClient), nil
+	client, err := createPeerClient(n, address)
+	if err != nil {
+		return nil, err
+	}
+
+	if client, exists := n.Peers.LoadOrStore(address, client); exists {
+		client := client.(*PeerClient)
+
+		if !client.OutgoingReady() {
+			return nil, errors.New("peer failed to connect")
+		}
+
+		return client, nil
 	} else {
+		client := client.(*PeerClient)
+
+		defer func() {
+			close(client.outgoingReady)
+		}()
+
 		session, err := n.Dial(address)
 
 		if err != nil {
+			n.Peers.Delete(address)
 			return nil, err
 		}
 
 		n.Connections.Store(address, session)
 
-		client, err := createPeerClient(n, address)
-		if err != nil {
-			return nil, err
-		}
+		// Execute 'peer connect' callback for all registered plugins.
+		n.Plugins.Each(func(plugin PluginInterface) {
+			plugin.PeerConnect(client)
+		})
 
-		n.Peers.Store(address, client)
 		return client, nil
 	}
 }
@@ -380,7 +397,7 @@ func (n *Network) Accept(conn net.Conn) {
 				}
 
 				// Signal that the client is ready.
-				close(client.ready)
+				close(client.incomingReady)
 			})
 
 			if err != nil {

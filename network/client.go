@@ -26,7 +26,8 @@ type PeerClient struct {
 
 	stream StreamState
 
-	ready chan struct{}
+	outgoingReady chan struct{}
+	incomingReady chan struct{}
 }
 
 type StreamState struct {
@@ -51,16 +52,14 @@ func createPeerClient(network *Network, address string) (*PeerClient, error) {
 		Requests:     new(sync.Map),
 		RequestNonce: 0,
 
-		ready: make(chan struct{}),
+		incomingReady: make(chan struct{}),
+		outgoingReady: make(chan struct{}),
+
 		stream: StreamState{
 			buffer:   make([]byte, 0),
 			buffered: make(chan struct{}),
 		},
 	}
-
-	client.Network.Plugins.Each(func(plugin PluginInterface) {
-		plugin.PeerConnect(client)
-	})
 
 	return client, nil
 }
@@ -260,12 +259,24 @@ func (c *PeerClient) SetWriteDeadline(t time.Time) error {
 	return nil
 }
 
-// IsReady returns true should the client have both incoming and outgoing sockets established.
-func (c *PeerClient) IsReady() bool {
+// IncomingReady returns true should the client have both incoming and outgoing sockets established.
+func (c *PeerClient) IncomingReady() bool {
 	select {
-	case <-c.ready:
-		return true
-	case <-time.After(3 * time.Second):
+	case <-c.incomingReady:
+	case <-time.After(1 * time.Second):
 		return false
 	}
+
+	return true
+}
+
+// OutgoingReady returns true should the client have an outgoing socket established..
+func (c *PeerClient) OutgoingReady() bool {
+	select {
+	case <-c.outgoingReady:
+	case <-time.After(1 * time.Second):
+		return false
+	}
+
+	return true
 }
