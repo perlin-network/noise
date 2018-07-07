@@ -532,3 +532,14 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 
 	n.BroadcastByAddresses(message, addresses[:K]...)
 }
+
+// Close disconnects this node from the cluster
+func (n *Network) Close() {
+	// interrupt the server's listening port
+	close(n.Kill)
+
+	// clean out client connections
+	for _, client := range n.Peers {
+		client.Close()
+	}
+}
