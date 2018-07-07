@@ -144,7 +144,7 @@ func (n *Network) handleRecvQueue() {
 				case *protobuf.Bytes:
 					client.handleBytes(ptr.Message.(*protobuf.Bytes).Data)
 				default:
-					ctx := contextPool.New().(*PluginContext)
+					ctx := contextPool.Get().(*PluginContext)
 					ctx.client = client
 					ctx.message = ptr.Message
 					ctx.nonce = msg.Nonce
@@ -475,7 +475,7 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 
 // Write asynchronously sends a message to a denoted target address.
 func (n *Network) Write(address string, message *protobuf.Message) error {
-	packet := packetPool.New().(*Packet)
+	packet := packetPool.Get().(*Packet)
 	defer packetPool.Put(packet)
 
 	packet.Target = address
