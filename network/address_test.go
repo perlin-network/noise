@@ -30,3 +30,12 @@ func TestToUnifiedAddress(t *testing.T) {
 		t.Fatal("port mismatch")
 	}
 }
+
+func BenchmarkParseAddress(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, err := ParseAddress("tcp://127.0.0.1:3000")
+		if err != nil {
+			panic(err)
+		}
+	}
+}
