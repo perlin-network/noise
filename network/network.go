@@ -63,7 +63,7 @@ type Network struct {
 
 // Init starts all network I/O workers.
 func (n *Network) Init() {
-	workerCount := runtime.NumCPU()
+	workerCount := runtime.NumCPU() + 1
 
 	for i := 0; i < workerCount; i++ {
 		// Spawn worker routines for sending queued messages to the networking layer.
@@ -352,6 +352,8 @@ func (n *Network) Accept(conn net.Conn) {
 		go func() {
 			defer stream.Close()
 
+			var err error
+
 			// Receive a message from the stream.
 			msg, err := n.receiveMessage(stream)
 
@@ -374,9 +376,13 @@ func (n *Network) Accept(conn net.Conn) {
 				if session, established := n.Connections.Load(client.ID.Address); established {
 					outgoing = session.(*smux.Session)
 				} else {
-					return
+					err = errors.New("failed to load session")
 				}
 			})
+
+			if err != nil {
+				return
+			}
 
 			// Peer sent message with a completely different ID. Disconnect.
 			if !client.ID.Equals(peer.ID(*msg.Sender)) {
@@ -384,7 +390,11 @@ func (n *Network) Accept(conn net.Conn) {
 				return
 			}
 
-			n.RecvQueue <- msg
+			select {
+			case n.RecvQueue <- msg:
+			default:
+				//glog.Errorf("recv queue full, dropping messages")
+			}
 		}()
 
 	}
@@ -434,7 +444,11 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 func (n *Network) Write(address string, message *protobuf.Message) error {
 	packet := &Packet{Target: address, Payload: message, Result: make(chan interface{}, 1)}
 
-	n.SendQueue <- packet
+	select {
+	case n.SendQueue <- packet:
+	default:
+		return errors.New("send queue full")
+	}
 
 	select {
 	case raw := <-packet.Result:

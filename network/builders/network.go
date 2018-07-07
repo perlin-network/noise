@@ -112,8 +112,8 @@ func (builder *NetworkBuilder) Build() (*network.Network, error) {
 		Peers: make(map[string]*network.PeerClient),
 
 		Connections: new(sync.Map),
-		SendQueue:   make(chan *network.Packet),
-		RecvQueue:   make(chan *protobuf.Message),
+		SendQueue:   make(chan *network.Packet, 2048),
+		RecvQueue:   make(chan *protobuf.Message, 2048),
 
 		Listening: make(chan struct{}),
 

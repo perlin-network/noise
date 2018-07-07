@@ -126,7 +126,7 @@ func main() {
 	go func() {
 		for range time.Tick(1 * time.Second) {
 			currentNumMessages := atomic.SwapUint64(&numMessages, 0)
-			glog.Infof("Got %d messages", currentNumMessages)
+			glog.Infof("Got %d messages, %d peers", currentNumMessages, atomic.LoadInt64(&numPeers))
 		}
 	}()
 
