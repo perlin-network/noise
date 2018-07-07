@@ -329,6 +329,8 @@ func (n *Network) Accept(conn net.Conn) {
 		go func() {
 			defer stream.Close()
 
+			var err error
+
 			// Receive a message from the stream.
 			msg, err := n.receiveMessage(stream)
 
@@ -351,9 +353,13 @@ func (n *Network) Accept(conn net.Conn) {
 				if session, established := n.Connections.Load(client.ID.Address); established {
 					outgoing = session.(*smux.Session)
 				} else {
-					return
+					err = errors.New("failed to load session")
 				}
 			})
+
+			if err != nil {
+				return
+			}
 
 			// Peer sent message with a completely different ID. Disconnect.
 			if !client.ID.Equals(peer.ID(*msg.Sender)) {
