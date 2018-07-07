@@ -99,6 +99,18 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 	return node, plugin, nil
 }
 
+func closePeers(n *network.Network) {
+	var addrs []string
+	for addr := range n.Peers {
+		addrs = append(addrs, addr)
+	}
+	for _, addr := range addrs {
+		if client, ok := n.Peers[addr]; ok {
+			client.Close()
+		}
+	}
+}
+
 // TestPlugin tests the functionality of the exponential backoff as a plugin.
 func TestPlugin(t *testing.T) {
 	t.Parallel()
@@ -130,6 +142,7 @@ func TestPlugin(t *testing.T) {
 
 	// disconnect the second node
 	close(nodes[1].Shutdown)
+	closePeers(nodes[1])
 
 	// wait until about the middle of the backoff period
 	time.Sleep(initialDelay + defaultMinInterval*2)

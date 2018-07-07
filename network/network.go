@@ -19,8 +19,6 @@ import (
 	"github.com/xtaci/smux"
 )
 
-type InitAwaiter chan struct{}
-
 type Packet struct {
 	Target  string
 	Payload *protobuf.Message
@@ -44,7 +42,8 @@ type Network struct {
 
 	// Map of connection addresses (string) <-> *network.PeerClient
 	// so that the Network doesn't dial multiple times to the same ip
-	Peers *sync.Map
+	Peers      map[string]*PeerClient
+	PeersMutex sync.RWMutex
 
 	SendQueue chan *Packet
 	RecvQueue chan *protobuf.Message
@@ -112,17 +111,11 @@ func (n *Network) handleRecvQueue() {
 	for {
 		select {
 		case packet := <-n.RecvQueue:
-			if client, exists := n.Peers.Load(packet.Sender.Address); exists {
-				if awaiter, ok := client.(InitAwaiter); ok {
-					<-awaiter
-					client, exists = n.Peers.Load(packet.Sender.Address)
-					if !exists {
-						continue
-					}
-				}
+			n.PeersMutex.RLock()
+			client, exists := n.Peers[packet.Sender.Address]
+			n.PeersMutex.RUnlock()
 
-				client := client.(*PeerClient)
-
+			if exists {
 				var ptr ptypes.DynamicAny
 				if err := ptypes.UnmarshalAny(packet.Message, &ptr); err != nil {
 					continue
@@ -203,7 +196,6 @@ func (n *Network) Listen() {
 		case <-n.Shutdown:
 			// cause listener.Accept() to stop blocking so it can continue the loop
 			listener.Close()
-			n.closePeers()
 			glog.Infof("Shutting down server on %s.\n.", n.Address)
 		}
 	}()
@@ -238,27 +230,15 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		return nil, errors.New("peer should not dial itself")
 	}
 
-	thisAwaiter := make(InitAwaiter)
+	n.PeersMutex.Lock()
+	defer n.PeersMutex.Unlock()
 
-	if client, loaded := n.Peers.LoadOrStore(address, thisAwaiter); loaded {
-		if awaiter, ok := client.(InitAwaiter); ok {
-			<-awaiter
-			var exists bool
-			client, exists = n.Peers.Load(address)
-			if !exists {
-				return nil, errors.New("initialization failed")
-			}
-		}
-		return client.(*PeerClient), nil
+	if client, exists := n.Peers[address]; exists {
+		return client, nil
 	} else {
-		defer func() {
-			close(thisAwaiter)
-		}()
-
 		session, err := n.Dial(address)
 
 		if err != nil {
-			n.Peers.Delete(address)
 			return nil, err
 		}
 
@@ -266,11 +246,9 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 
 		client, err := createPeerClient(n, address)
 		if err != nil {
-			n.Peers.Delete(address)
 			return nil, err
 		}
-		n.Peers.Store(address, client)
-
+		n.Peers[address] = client
 		return client, nil
 	}
 }
@@ -475,20 +453,16 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 
 // Broadcast asynchronously broadcasts a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
-	n.Peers.Range(func(key, value interface{}) bool {
-		client, ok := value.(*PeerClient)
-		if !ok {
-			return true
-		}
+	n.PeersMutex.RLock()
+	defer n.PeersMutex.RUnlock()
 
+	for _, client := range n.Peers {
 		err := client.Tell(message)
 
 		if err != nil {
 			glog.Warningf("Failed to send message to peer %v [err=%s]", client.ID, err)
 		}
-
-		return true
-	})
+	}
 }
 
 // BroadcastByAddresses broadcasts a message to a set of peer clients denoted by their addresses.
@@ -520,21 +494,18 @@ func (n *Network) BroadcastByIDs(message proto.Message, ids ...peer.ID) {
 func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	var addresses []string
 
-	n.Peers.Range(func(key, value interface{}) bool {
-		client, ok := value.(*PeerClient)
-		if !ok {
-			return true
-		}
+	n.PeersMutex.RLock()
 
+	for _, client := range n.Peers {
 		addresses = append(addresses, client.Address)
 
 		// Limit total amount of addresses in case we have a lot of peers.
 		if len(addresses) > K*3 {
-			return false
+			break
 		}
+	}
 
-		return true
-	})
+	n.PeersMutex.RUnlock()
 
 	// Flip a coin and shuffle :).
 	rand.Shuffle(len(addresses), func(i, j int) {
@@ -546,15 +517,4 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	}
 
 	n.BroadcastByAddresses(message, addresses[:K]...)
-}
-
-func (n *Network) closePeers() {
-	// clean up any connected peers
-	n.Peers.Range(func(key, value interface{}) bool {
-		c := value.(*PeerClient)
-		if c != nil {
-			c.Close()
-		}
-		return true
-	})
 }

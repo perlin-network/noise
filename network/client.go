@@ -11,7 +11,6 @@ import (
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
-	"github.com/xtaci/smux"
 )
 
 // PeerClient represents a single incoming peers client.
@@ -75,13 +74,9 @@ func (c *PeerClient) Close() error {
 
 	// Remove entries from node's network.
 	if c.ID != nil {
-		if val, exists := c.Network.Connections.Load(c.ID.Address); exists {
-			sess := val.(*smux.Session)
-			if sess != nil {
-				sess.Close()
-			}
-		}
-		c.Network.Peers.Delete(c.ID.Address)
+		c.Network.PeersMutex.Lock()
+		delete(c.Network.Peers, c.ID.Address)
+		c.Network.PeersMutex.Unlock()
 		c.Network.Connections.Delete(c.ID.Address)
 	}
 
