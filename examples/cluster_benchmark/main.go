@@ -35,7 +35,7 @@ func (state *BenchPlugin) PeerDisconnect(client *network.PeerClient) {
 	atomic.AddInt64(&numPeers, -1)
 }
 
-func (state *BenchPlugin) Receive(ctx *network.MessageContext) error {
+func (state *BenchPlugin) Receive(ctx *network.PluginContext) error {
 	atomic.AddUint64(&numMessages, 1)
 	sendBroadcast(ctx.Network())
 	return nil

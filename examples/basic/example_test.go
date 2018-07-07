@@ -23,7 +23,7 @@ func (state *BasicPlugin) Startup(net *network.Network) {
 	state.Mailbox = make(chan *messages.BasicMessage, 1)
 }
 
-func (state *BasicPlugin) Receive(ctx *network.MessageContext) error {
+func (state *BasicPlugin) Receive(ctx *network.PluginContext) error {
 	switch msg := ctx.Message().(type) {
 	case *messages.BasicMessage:
 		state.Mailbox <- msg

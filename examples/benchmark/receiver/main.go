@@ -23,7 +23,7 @@ type BenchmarkPlugin struct {
 	counter int
 }
 
-func (state *BenchmarkPlugin) Receive(ctx *network.MessageContext) error {
+func (state *BenchmarkPlugin) Receive(ctx *network.PluginContext) error {
 	switch ctx.Message().(type) {
 	case *messages.BasicMessage:
 		state.counter++

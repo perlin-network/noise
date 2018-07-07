@@ -24,7 +24,7 @@ func (state *MockPlugin) Startup(net *network.Network) {
 	state.Mailbox = make(chan *messages.BasicMessage, 1)
 }
 
-func (state *MockPlugin) Receive(ctx *network.MessageContext) error {
+func (state *MockPlugin) Receive(ctx *network.PluginContext) error {
 	switch msg := ctx.Message().(type) {
 	case *messages.BasicMessage:
 		state.Mailbox <- msg

@@ -16,7 +16,7 @@ import (
 
 type ChatPlugin struct{ *network.Plugin }
 
-func (state *ChatPlugin) Receive(ctx *network.MessageContext) error {
+func (state *ChatPlugin) Receive(ctx *network.PluginContext) error {
 	switch msg := ctx.Message().(type) {
 	case *messages.ChatMessage:
 		glog.Infof("<%s> %s", ctx.Client().ID.Address, msg.Message)

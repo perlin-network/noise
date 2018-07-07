@@ -22,7 +22,7 @@ type MockPlugin struct {
 	*network.Plugin
 }
 
-func (*MockPlugin) Receive(ctx *network.MessageContext) error {
+func (*MockPlugin) Receive(ctx *network.PluginContext) error {
 	switch ctx.Message().(type) {
 	case *protobuf.Ping:
 		err := ctx.Reply(&protobuf.Pong{})

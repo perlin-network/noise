@@ -74,7 +74,7 @@ func FindNode(net *network.Network, targetID peer.ID, alpha int) (results []peer
 	}
 
 	// Empty queue.
-	queue = []peer.ID{}
+	queue = queue[:0]
 
 	// Asynchronous breadth-first search.
 	for pending > 0 {
@@ -102,7 +102,7 @@ func FindNode(net *network.Network, targetID peer.ID, alpha int) (results []peer
 		}
 
 		// Empty queue.
-		queue = []peer.ID{}
+		queue = queue[:0]
 	}
 
 	// Sort resulting peers by XOR distance.

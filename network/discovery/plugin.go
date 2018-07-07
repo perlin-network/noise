@@ -27,7 +27,7 @@ func (state *Plugin) Startup(net *network.Network) {
 	state.Routes = dht.CreateRoutingTable(net.ID)
 }
 
-func (state *Plugin) Receive(ctx *network.MessageContext) error {
+func (state *Plugin) Receive(ctx *network.PluginContext) error {
 	// Update routing for every incoming message.
 	state.Routes.Update(ctx.Sender())
 

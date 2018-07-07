@@ -33,7 +33,7 @@ func (n *ProxyPlugin) Startup(net *network.Network) {
 }
 
 // Handle implements the network interface callback
-func (n *ProxyPlugin) Receive(ctx *network.MessageContext) error {
+func (n *ProxyPlugin) Receive(ctx *network.PluginContext) error {
 	// Handle the proxy message.
 	switch msg := ctx.Message().(type) {
 	case *messages.ProxyMessage:
