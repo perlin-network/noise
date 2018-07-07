@@ -31,12 +31,6 @@ var contextPool = sync.Pool{
 	},
 }
 
-var messagePool = sync.Pool{
-	New: func() interface{} {
-		return new(protobuf.Message)
-	},
-}
-
 type Packet struct {
 	Target  string
 	Payload *protobuf.Message
@@ -163,6 +157,8 @@ func (n *Network) handleRecvQueue() {
 							glog.Error(err)
 						}
 					})
+
+					contextPool.Put(ctx)
 				}
 			}
 		}
@@ -469,7 +465,7 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 		return nil, err
 	}
 
-	msg := messagePool.New().(*protobuf.Message)
+	msg := &protobuf.Message{}
 	msg.Message = raw
 	msg.Sender = &id
 	msg.Signature = signature
@@ -480,6 +476,8 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 // Write asynchronously sends a message to a denoted target address.
 func (n *Network) Write(address string, message *protobuf.Message) error {
 	packet := packetPool.New().(*Packet)
+	defer packetPool.Put(packet)
+
 	packet.Target = address
 	packet.Payload = message
 	packet.Result = make(chan interface{}, 1)
