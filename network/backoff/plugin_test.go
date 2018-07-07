@@ -104,14 +104,6 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 	return node, plugin, nil
 }
 
-// disconnectNode disconnects a node from the cluster
-func disconnectNode(n *network.Network) {
-	close(n.Shutdown)
-	for _, client := range n.Peers {
-		client.Close()
-	}
-}
-
 // TestPlugin tests the functionality of the exponential backoff as a plugin.
 func TestPlugin(t *testing.T) {
 	t.Parallel()
@@ -141,7 +133,8 @@ func TestPlugin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	disconnectNode(nodes[1])
+	// disconnect the node from the cluster
+	nodes[1].Close()
 
 	// wait until about the middle of the backoff period
 	time.Sleep(initialDelay + defaultMinInterval*2)
