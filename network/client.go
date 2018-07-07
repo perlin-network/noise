@@ -24,10 +24,9 @@ type PeerClient struct {
 	Requests     *sync.Map
 	RequestNonce uint64
 
-	// Closed should client have both incoming and outgoing sockets established.
-	ready  chan struct{}
-
 	stream StreamState
+
+	ready  chan struct{}
 }
 
 type StreamState struct {
@@ -86,9 +85,8 @@ func (c *PeerClient) Close() error {
 				sess.Close()
 			}
 		}
-		c.Network.PeersMutex.Lock()
-		delete(c.Network.Peers, c.ID.Address)
-		c.Network.PeersMutex.Unlock()
+
+		c.Network.Peers.Delete(c.ID.Address)
 		c.Network.Connections.Delete(c.ID.Address)
 	}
 
@@ -260,4 +258,14 @@ func (c *PeerClient) SetWriteDeadline(t time.Time) error {
 	c.stream.writeDeadline = t
 	c.stream.Unlock()
 	return nil
+}
+
+// IsReady returns true should the client have both incoming and outgoing sockets established.
+func (c *PeerClient) IsReady() bool {
+	select {
+	case <-c.ready:
+		return true
+	case <-time.After(3 * time.Second):
+		return false
+	}
 }

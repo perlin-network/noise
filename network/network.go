@@ -42,8 +42,7 @@ type Network struct {
 
 	// Map of connection addresses (string) <-> *network.PeerClient
 	// so that the Network doesn't dial multiple times to the same ip
-	Peers      map[string]*PeerClient
-	PeersMutex sync.RWMutex
+	Peers      *sync.Map
 
 	SendQueue chan *Packet
 	RecvQueue chan *protobuf.Message
@@ -111,17 +110,14 @@ func (n *Network) handleRecvQueue() {
 	for {
 		select {
 		case msg := <-n.RecvQueue:
-			n.PeersMutex.RLock()
-			client, exists := n.Peers[msg.Sender.Address]
-			n.PeersMutex.RUnlock()
+			if client, exists := n.Peers.Load(msg.Sender.Address); exists {
+				client := client.(*PeerClient)
 
-			if exists {
 				// Check if the client is ready.
-				select {
-				case <-client.ready:
-				case <-time.After(3 * time.Second):
+				if !client.IsReady() {
 					continue
 				}
+
 
 				var ptr ptypes.DynamicAny
 				if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
@@ -237,11 +233,9 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		return nil, errors.New("peer should not dial itself")
 	}
 
-	n.PeersMutex.Lock()
-	defer n.PeersMutex.Unlock()
 
-	if client, exists := n.Peers[address]; exists {
-		return client, nil
+	if client, exists := n.Peers.Load(address); exists {
+		return client.(*PeerClient), nil
 	} else {
 		session, err := n.Dial(address)
 
@@ -255,7 +249,8 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		if err != nil {
 			return nil, err
 		}
-		n.Peers[address] = client
+
+		n.Peers.Store(address, client)
 		return client, nil
 	}
 }
@@ -477,16 +472,17 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 
 // Broadcast asynchronously broadcasts a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
-	n.PeersMutex.RLock()
-	defer n.PeersMutex.RUnlock()
+	n.Peers.Range(func(key, value interface{}) bool {
+		client := value.(*PeerClient)
 
-	for _, client := range n.Peers {
 		err := client.Tell(message)
 
 		if err != nil {
 			glog.Warningf("Failed to send message to peer %v [err=%s]", client.ID, err)
 		}
-	}
+
+		return true
+	})
 }
 
 // BroadcastByAddresses broadcasts a message to a set of peer clients denoted by their addresses.
@@ -513,23 +509,19 @@ func (n *Network) BroadcastByIDs(message proto.Message, ids ...peer.ID) {
 	}
 }
 
-// BroadcastRandomly asynchronously broadcast message to random selected K peers.
+// BroadcastRandomly asynchronously broadcasts a message to random selected K peers.
 // Does not guarantee broadcasting to exactly K peers.
 func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	var addresses []string
 
-	n.PeersMutex.RLock()
+	n.Peers.Range(func(key, value interface{}) bool {
+		client := value.(*PeerClient)
 
-	for _, client := range n.Peers {
 		addresses = append(addresses, client.Address)
 
 		// Limit total amount of addresses in case we have a lot of peers.
-		if len(addresses) > K*3 {
-			break
-		}
-	}
-
-	n.PeersMutex.RUnlock()
+		return len(addresses) <= K*3
+	})
 
 	// Flip a coin and shuffle :).
 	rand.Shuffle(len(addresses), func(i, j int) {
@@ -543,13 +535,14 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	n.BroadcastByAddresses(message, addresses[:K]...)
 }
 
-// Close disconnects this node from the cluster
+// Close shuts down the entire network.
 func (n *Network) Close() {
-	// interrupt the server's listening port
+	// Kill the listener.
 	close(n.Kill)
 
-	// clean out client connections
-	for _, client := range n.Peers {
-		client.Close()
-	}
+	// Clean out client connections.
+	n.Peers.Range(func(key, value interface{}) bool {
+		value.(*PeerClient).Close()
+		return true
+	})
 }
