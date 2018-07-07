@@ -143,7 +143,7 @@ Plugins are a way to interface with the lifecycle of your network.
 type Plugin struct{}  
   
 func (*Plugin) Startup(net *Network)              {}  
-func (*Plugin) Receive(ctx *MessageContext) error { return nil }  
+func (*Plugin) Receive(ctx *PluginContext) error { return nil }  
 func (*Plugin) Cleanup(net *Network)              {}  
 func (*Plugin) PeerConnect(client *PeerClient)    {}  
 func (*Plugin) PeerDisconnect(client *PeerClient) {}  
@@ -174,7 +174,7 @@ Make sure to register `discovery.Plugin` if you want to make use of automatic pe
 
 All messages that pass through **noise** are serialized/deserialized as [protobufs](https://developers.google.com/protocol-buffers/).
   
-Once you have modeled your messages as protobufs, you may process and receive them over the network by creating a plugin and overriding the `Receive(ctx *MessageContext)` method to process specific incoming message types.
+Once you have modeled your messages as protobufs, you may process and receive them over the network by creating a plugin and overriding the `Receive(ctx *PluginContext)` method to process specific incoming message types.
 
 Here's a simple example:
   
@@ -182,7 +182,7 @@ Here's a simple example:
 // An example chat plugin that will print out a formatted chat message.  
 type ChatPlugin struct{ *network.Plugin }  
   
-func (state *ChatPlugin) Receive(ctx *network.MessageContext) error {  
+func (state *ChatPlugin) Receive(ctx *network.PluginContext) error {  
     switch msg := ctx.Message().(type) {
         case *messages.ChatMessage:
             glog.Infof("<%s> %s", ctx.Client().ID.Address, msg.Message)
@@ -194,7 +194,7 @@ func (state *ChatPlugin) Receive(ctx *network.MessageContext) error {
 builder.AddPlugin(new(ChatPlugin))
 ```  
   
-Through a `ctx *network.MessageContext`, you can access flexible methods to customize how you handle/interact with your peer network. All messages are signed and verified with one's cryptographic keys.
+Through a `ctx *network.PluginContext`, you can access flexible methods to customize how you handle/interact with your peer network. All messages are signed and verified with one's cryptographic keys.
   
 ```go  
 // Reply with a message should the incoming message be a request.  
