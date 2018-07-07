@@ -110,18 +110,18 @@ func (n *Network) handleSendQueue() {
 func (n *Network) handleRecvQueue() {
 	for {
 		select {
-		case packet := <-n.RecvQueue:
+		case msg := <-n.RecvQueue:
 			n.PeersMutex.RLock()
-			client, exists := n.Peers[packet.Sender.Address]
+			client, exists := n.Peers[msg.Sender.Address]
 			n.PeersMutex.RUnlock()
 
-			if exists {
+			if exists && client.ID != nil {
 				var ptr ptypes.DynamicAny
-				if err := ptypes.UnmarshalAny(packet.Message, &ptr); err != nil {
+				if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
 					continue
 				}
 
-				if channel, exists := client.Requests.Load(packet.Nonce); exists && packet.Nonce > 0 {
+				if channel, exists := client.Requests.Load(msg.Nonce); exists && msg.Nonce > 0 {
 					channel.(chan proto.Message) <- ptr.Message
 					continue
 				}
@@ -133,7 +133,7 @@ func (n *Network) handleRecvQueue() {
 					ctx := new(MessageContext)
 					ctx.client = client
 					ctx.message = ptr.Message
-					ctx.nonce = packet.Nonce
+					ctx.nonce = msg.Nonce
 
 					// Execute 'on receive message' callback for all plugins.
 					n.Plugins.Each(func(plugin PluginInterface) {

@@ -4,7 +4,7 @@ import (
 	blake2blib "golang.org/x/crypto/blake2b"
 )
 
-type Blake2b struct {}
+type Blake2b struct{}
 
 func New() *Blake2b {
 	return &Blake2b{}

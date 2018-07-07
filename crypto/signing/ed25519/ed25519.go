@@ -6,7 +6,7 @@ import (
 	ed25519lib "golang.org/x/crypto/ed25519"
 )
 
-type Ed25519 struct {}
+type Ed25519 struct{}
 
 func New() *Ed25519 {
 	return &Ed25519{}
@@ -37,8 +37,8 @@ func RandomKeyPair() *crypto.KeyPair {
 	if err != nil {
 		panic(err)
 	}
-	return &crypto.KeyPair {
-		PublicKey: publicKey,
+	return &crypto.KeyPair{
+		PublicKey:  publicKey,
 		PrivateKey: privateKey,
 	}
 }

@@ -1,9 +1,9 @@
 package ed25519
 
 import (
-	"testing"
-	"reflect"
 	"github.com/perlin-network/noise/crypto"
+	"reflect"
+	"testing"
 )
 
 func TestFromPrivateKey(t *testing.T) {

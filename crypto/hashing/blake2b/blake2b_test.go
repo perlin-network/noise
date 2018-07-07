@@ -2,9 +2,9 @@ package blake2b
 
 import (
 	"bytes"
+	"github.com/perlin-network/noise/crypto"
 	"math/big"
 	"testing"
-	"github.com/perlin-network/noise/crypto"
 )
 
 func TestHash(t *testing.T) {
