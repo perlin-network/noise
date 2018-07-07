@@ -115,7 +115,14 @@ func (n *Network) handleRecvQueue() {
 			client, exists := n.Peers[msg.Sender.Address]
 			n.PeersMutex.RUnlock()
 
-			if exists && client.ID != nil {
+			if exists {
+				// Check if the client is ready.
+				select {
+				case <-client.ready:
+				case <-time.After(3):
+					continue
+				}
+
 				var ptr ptypes.DynamicAny
 				if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
 					continue
@@ -378,6 +385,9 @@ func (n *Network) Accept(conn net.Conn) {
 				} else {
 					err = errors.New("failed to load session")
 				}
+
+				// Signal that the client is ready.
+				close(client.ready)
 			})
 
 			if err != nil {

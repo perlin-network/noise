@@ -24,6 +24,9 @@ type PeerClient struct {
 	Requests     *sync.Map
 	RequestNonce uint64
 
+	// Closed should client have both incoming and outgoing sockets established.
+	ready  chan struct{}
+
 	stream StreamState
 }
 
@@ -48,6 +51,8 @@ func createPeerClient(network *Network, address string) (*PeerClient, error) {
 		Address:      address,
 		Requests:     new(sync.Map),
 		RequestNonce: 0,
+
+		ready: make(chan struct{}),
 		stream: StreamState{
 			buffer:   make([]byte, 0),
 			buffered: make(chan struct{}),
