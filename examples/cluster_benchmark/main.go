@@ -15,6 +15,7 @@ import (
 	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/examples/cluster_benchmark/messages"
 	"github.com/perlin-network/noise/network"
+	"github.com/perlin-network/noise/network/backoff"
 	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
 )
@@ -105,6 +106,9 @@ func main() {
 
 	// Register peer discovery plugin.
 	builder.AddPlugin(new(discovery.Plugin))
+
+	// Add backoff plugin.
+	builder.AddPlugin(new(backoff.Plugin))
 
 	// Add custom chat plugin.
 	builder.AddPlugin(new(BenchPlugin))
