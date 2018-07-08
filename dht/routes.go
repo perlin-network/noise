@@ -8,9 +8,8 @@ import (
 	"github.com/perlin-network/noise/peer"
 )
 
-// BucketSize defines the NodeID, Key, and routing table datastructures
-// In Kademlia, proper bucket size is 20bytes/160bits
-const BucketSize = 20
+// BucketSize defines the NodeID, Key, and routing table data structures.
+const BucketSize = 16
 
 // RoutingTable contains one bucket list for lookups
 type RoutingTable struct {
