@@ -101,7 +101,7 @@ func (n *Network) receiveMessage(stream net.Conn) (*protobuf.Message, error) {
 		n.SignaturePolicy,
 		n.HashPolicy,
 		msg.Sender.PublicKey,
-		msg.Message.Value,
+		serializeMessageInfoForSigning(msg.Sender, msg.Message.Value),
 		msg.Signature,
 	) {
 		return nil, errors.New("received message had an malformed signature")
