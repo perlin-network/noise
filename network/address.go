@@ -41,6 +41,11 @@ func (info *AddressInfo) String() string {
 	return address
 }
 
+// HostPort returns the address wihout protocol, in the format `host:port`.
+func (info *AddressInfo) HostPort() string {
+	return net.JoinHostPort(info.Host, strconv.Itoa(int(info.Port)))
+}
+
 // FormatAddress properly marshals a destinations information into a string.
 func FormatAddress(protocol, host string, port uint16) string {
 	return NewAddressInfo(protocol, host, port).String()
