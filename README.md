@@ -187,6 +187,7 @@ Make sure to register `discovery.Plugin` if you want to make use of automatic pe
 ## Handling Messages
 
 All messages that pass through **noise** are serialized/deserialized as [protobufs](https://developers.google.com/protocol-buffers/).
+
 On a spawned `us-east1-b` Google Cloud (GCP) cluster comprised of 8 `n1-standard-1` (1 vCPU, 3.75GB memory) instances, **noise** is able to
 sign, send, receive, verify, and process a total of ~10,000 messages per second.
   
