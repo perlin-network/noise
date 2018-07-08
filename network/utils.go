@@ -5,7 +5,7 @@ import (
 	"github.com/perlin-network/noise/protobuf"
 )
 
-func serializeMessageInfoForSigning(id *protobuf.ID, message []byte) []byte {
+func serializeMessage(id *protobuf.ID, message []byte) []byte {
 	const UINT32_SIZE = 4
 
 	serialized := make([]byte, UINT32_SIZE + len(id.Address) + UINT32_SIZE + len(id.PublicKey) + len(message))

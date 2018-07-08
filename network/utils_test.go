@@ -38,7 +38,7 @@ func TestSerializeMessageInfoForSigning(t *testing.T) {
 
 	for _, id := range ids {
 		for _, msg := range messages {
-			outputs = append(outputs, serializeMessageInfoForSigning(&id, msg))
+			outputs = append(outputs, serializeMessage(&id, msg))
 		}
 	}
 
