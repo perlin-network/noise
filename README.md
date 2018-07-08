@@ -185,6 +185,8 @@ Make sure to register `discovery.Plugin` if you want to make use of automatic pe
 ## Handling Messages
 
 All messages that pass through **noise** are serialized/deserialized as [protobufs](https://developers.google.com/protocol-buffers/).
+On a cluster of 8 machines with 1 CPU core and 4GB of memory each, noise is able to
+handle a total of 10,000 messages per second.
   
 Once you have modeled your messages as protobufs, you may process and receive them over the network by creating a plugin and overriding the `Receive(ctx *PluginContext)` method to process specific incoming message types.
 
@@ -229,7 +231,7 @@ net := ctx.Network()
 ```
 
 Check out our documentation and look into the `examples/` directory to find out more.
-  
+
 ## Contributions  
   
 We at Perlin love reaching out to the open-source community and are open to accepting issues and pull-requests.  
