@@ -1,7 +1,7 @@
 .idea/
 .vscode/
 
-noise.exe
+*.exe
 noise
 chat
 debug
