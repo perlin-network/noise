@@ -459,7 +459,7 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 	signature, err := n.Keys.Sign(
 		n.SignaturePolicy,
 		n.HashPolicy,
-		raw.Value,
+		serializeMessage(&id, raw.Value),
 	)
 	if err != nil {
 		return nil, err
