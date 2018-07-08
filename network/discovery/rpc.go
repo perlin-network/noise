@@ -9,6 +9,7 @@ import (
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"sort"
+	"sync"
 )
 
 func queryPeerByID(net *network.Network, peerID peer.ID, targetID peer.ID, responses chan []*protobuf.ID) {
@@ -38,10 +39,64 @@ func queryPeerByID(net *network.Network, peerID peer.ID, targetID peer.ID, respo
 	}
 }
 
+type lookupBucket struct {
+	pending int
+	queue   []peer.ID
+}
+
+func (lookup *lookupBucket) performLookup(net *network.Network, targetID peer.ID, alpha int, visited *sync.Map) (results []peer.ID) {
+	responses := make(chan []*protobuf.ID)
+
+	// Go through every peer in the entire queue and queue up what peers believe
+	// is closest to a target ID.
+
+	for ; lookup.pending < alpha && len(lookup.queue) > 0; lookup.pending++ {
+		go queryPeerByID(net, lookup.queue[0], targetID, responses)
+
+		results = append(results, lookup.queue[0])
+		lookup.queue = lookup.queue[1:]
+	}
+
+	// Empty queue.
+	lookup.queue = lookup.queue[:0]
+
+	// Asynchronous breadth-first search.
+	for lookup.pending > 0 {
+		response := <-responses
+
+		lookup.pending--
+
+		// Expand responses containing a peer's belief on the closest peers to target ID.
+		for _, id := range response {
+			peerID := peer.ID(*id)
+
+			if _, seen := visited.LoadOrStore(peerID.PublicKeyHex(), struct{}{}); !seen {
+				// Append new peer to be queued by the routing table.
+				results = append(results, peerID)
+				lookup.queue = append(lookup.queue, peerID)
+			}
+		}
+
+		// Queue and request for #ALPHA closest peers to target ID from expanded results.
+		for ; lookup.pending < alpha && len(lookup.queue) > 0; lookup.pending++ {
+			go queryPeerByID(net, lookup.queue[0], targetID, responses)
+			lookup.queue = lookup.queue[1:]
+		}
+
+		// Empty queue.
+		lookup.queue = lookup.queue[:0]
+	}
+
+	return
+}
+
 // FindNode queries all peers this current node acknowledges for the closest peers
-// to a specified target ID. Queries at most #ALPHA nodes at a time, and returns
-// a bucket filled with the closest peers.
-func FindNode(net *network.Network, targetID peer.ID, alpha int) (results []peer.ID) {
+// to a specified target ID.
+//
+// All lookups are done under a number of disjoint lookups in parallel.
+//
+// Queries at most #ALPHA nodes at a time per lookup, and returns all peer IDs closest to a target peer ID.
+func FindNode(net *network.Network, targetID peer.ID, alpha int, disjointPaths int) (results []peer.ID) {
 	plugin, exists := net.Plugin(PluginID)
 
 	// Discovery plugin was not registered. Fail.
@@ -49,61 +104,41 @@ func FindNode(net *network.Network, targetID peer.ID, alpha int) (results []peer
 		return
 	}
 
-	var queue []peer.ID
+	visited := new(sync.Map)
 
-	responses, visited := make(chan []*protobuf.ID), make(map[string]struct{})
+	var lookups []*lookupBucket
 
 	// Start searching for target from #ALPHA peers closest to target by queuing
 	// them up and marking them as visited.
-	for _, peerID := range plugin.(*Plugin).Routes.FindClosestPeers(targetID, alpha) {
-		visited[peerID.PublicKeyHex()] = struct{}{}
-		queue = append(queue, peerID)
+	for i, peerID := range plugin.(*Plugin).Routes.FindClosestPeers(targetID, alpha) {
+		visited.Store(peerID.PublicKeyHex(), struct{}{})
+
+		if len(lookups) < disjointPaths {
+			lookups = append(lookups, new(lookupBucket))
+		}
+
+		lookup := lookups[i%disjointPaths]
+		lookup.queue = append(lookup.queue, peerID)
 
 		results = append(results, peerID)
 	}
 
-	pending := 0
+	wait, mutex := &sync.WaitGroup{}, &sync.Mutex{}
 
-	// Go through every peer in the entire queue and queue up what peers believe
-	// is closest to a target ID.
-	for ; pending < alpha && len(queue) > 0; pending++ {
-		go queryPeerByID(net, queue[0], targetID, responses)
+	for _, lookup := range lookups {
+		go func(lookup *lookupBucket) {
+			mutex.Lock()
+			results = append(results, lookup.performLookup(net, targetID, alpha, visited)...)
+			mutex.Unlock()
 
-		results = append(results, queue[0])
-		queue = queue[1:]
+			wait.Done()
+		}(lookup)
+
+		wait.Add(1)
 	}
 
-	// Empty queue.
-	queue = queue[:0]
-
-	// Asynchronous breadth-first search.
-	for pending > 0 {
-		response := <-responses
-
-		pending--
-
-		// Expand responses containing a peer's belief on the closest peers to target ID.
-		for _, id := range response {
-			peerID := peer.ID(*id)
-
-			if _, seen := visited[peerID.PublicKeyHex()]; !seen {
-				// Append new peer to be queued by the routing table.
-				results = append(results, peerID)
-
-				queue = append(queue, peerID)
-				visited[peerID.PublicKeyHex()] = struct{}{}
-			}
-		}
-
-		// Queue and request for #ALPHA closest peers to target ID from expanded results.
-		for ; pending < alpha && len(queue) > 0; pending++ {
-			go queryPeerByID(net, queue[0], targetID, responses)
-			queue = queue[1:]
-		}
-
-		// Empty queue.
-		queue = queue[:0]
-	}
+	// Wait until all #D parallel lookups have been completed.
+	wait.Wait()
 
 	// Sort resulting peers by XOR distance.
 	sort.Slice(results, func(i, j int) bool {

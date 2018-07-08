@@ -27,12 +27,6 @@ func RandByte() byte {
 	return MustReadRand(1)[0]
 }
 
-func TestBucketSize(t *testing.T) {
-	if BucketSize != 20 {
-		t.Fatalf("bucket size is expected %d but found %d", 20, BucketSize)
-	}
-}
-
 func TestSelf(t *testing.T) {
 	publicKey := MustReadRand(32)
 	id := peer.CreateID("0000", publicKey)
@@ -46,11 +40,12 @@ func TestSelf(t *testing.T) {
 }
 
 func TestPeerExists(t *testing.T) {
-
 	id1 := peer.CreateID("0000", MustReadRand(32))
 	id2 := peer.CreateID("0001", MustReadRand(32))
+
 	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
+
 	if !routingTable.PeerExists(id1) {
 		t.Fatal("peerexists() targeting self failed")
 	}

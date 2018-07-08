@@ -49,7 +49,7 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 			break
 		}
 
-		peers := FindNode(ctx.Network(), ctx.Sender(), dht.BucketSize)
+		peers := FindNode(ctx.Network(), ctx.Sender(), dht.BucketSize, 8)
 
 		// Update routing table w/ closest peers to self.
 		for _, peerID := range peers {
