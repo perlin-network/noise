@@ -1,14 +1,16 @@
 
 # Noise  
   
-[![GoDoc][1]][2] [![Powered][3]][4] [![MIT licensed][5]][6]  
+[![GoDoc][1]][2] [![Discord][7]][8] [![Powered][3]][4] [![MIT licensed][5]][6]
   
 [1]: https://godoc.org/github.com/perlin-network/noise?status.svg  
 [2]: https://godoc.org/github.com/perlin-network/noise  
 [3]: https://img.shields.io/badge/KCP-Powered-blue.svg  
 [4]: https://github.com/skywind3000/kcp  
 [5]: https://img.shields.io/badge/license-MIT-blue.svg  
-[6]: LICENSE  
+[6]: LICENSE
+[7]: https://shields.dougley.com/discord/458332417909063682.svg
+[8]: https://discord.gg/dMYfDPM
 
 
 <img align="right" width=400 src="media/chat.gif">
