@@ -188,12 +188,12 @@ func (n *Network) Listen() {
 	var listener net.Listener
 
 	if urlInfo.Scheme == "kcp" {
-		listener, err = kcp.ListenWithOptions(urlInfo.Host, nil, 10, 3)
+		listener, err = kcp.ListenWithOptions(":" + urlInfo.Port(), nil, 10, 3)
 		if err != nil {
 			glog.Fatal(err)
 		}
 	} else if urlInfo.Scheme == "tcp" {
-		listener, err = net.Listen("tcp", urlInfo.Host)
+		listener, err = net.Listen("tcp", ":" + urlInfo.Port())
 	} else {
 		err = errors.New("invalid scheme: " + urlInfo.Scheme)
 	}
