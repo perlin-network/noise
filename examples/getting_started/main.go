@@ -1,4 +1,4 @@
-package main
+package getting_started
 
 import (
 	"flag"

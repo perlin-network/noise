@@ -9,7 +9,10 @@
 [4]: https://github.com/skywind3000/kcp  
 [5]: https://img.shields.io/badge/license-MIT-blue.svg  
 [6]: LICENSE  
-  
+
+
+<img align="right" src="media/chat.gif">
+
 **noise** is an opinionated, easy-to-use P2P network stack for *decentralized applications, and cryptographic protocols* written in [Go](https://golang.org/) by Perlin Network.
   
 **noise** is made to be robust, developer-friendly, performant, secure, and cross-platform across multitudes of devices by making use of well-tested, production-grade dependencies.
@@ -158,14 +161,17 @@ builder := builders.NewNetworkBuilder()
 builder.AddPlugin(new(Plugin))  
 ```  
   
-**noise** comes with two plugins: `discovery.Plugin` and `nat.Plugin`.
+**noise** comes with three plugins: `discovery.Plugin`, `backoff.Plugin` and `nat.Plugin`.
 
 ```go
 // Enables peer discovery through the network. Check documentation for more info.
 builder.AddPlugin(new(discovery.Plugin))
 
+// Enables exponential backoff upon peer disconnection. Check documentation for more info.
+builder.AddPlugin(new(backoff.Plugin))
+
 // Enables automated UPnP port forwarding for your node. Check documentation for more info.
-builder.AddPlugin(new(nat.Plugin))
+nat.RegisterPlugin(builder)
 ```
 
 Make sure to register `discovery.Plugin` if you want to make use of automatic peer discovery within your application.

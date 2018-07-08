@@ -6,7 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/perlin-network/noise/crypto/signing/ed25519"
-	"github.com/perlin-network/noise/examples/benchmark/messages"
+	"github.com/perlin-network/noise/examples/local_benchmark/messages"
 	"github.com/perlin-network/noise/network/builders"
 	"log"
 	"net/http"

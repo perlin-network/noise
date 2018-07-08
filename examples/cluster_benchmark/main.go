@@ -110,7 +110,7 @@ func main() {
 	// Add backoff plugin.
 	builder.AddPlugin(new(backoff.Plugin))
 
-	// Add custom chat plugin.
+	// Add benchmark plugin.
 	builder.AddPlugin(new(BenchPlugin))
 
 	net, err := builder.Build()
