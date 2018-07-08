@@ -71,7 +71,7 @@ keys := ed25519.RandomKeyPair()
 keys := crypto.FromPrivateKey(ed25519.New(), "4d5333a68e3a96d0ad935cb6546b97bbb0c0771acf76c868a897f65dad0b7933e1442970cce57b7a35e1803e0e8acceb04dc6abf8a73df52e808ab5d966113ac")  
   
 // Load a private key through a provided 64-length byte array (for Ed25519 keypair).  
-keys := crypto.FromPrivateKeyBytes(ed25519.New(), [64]byte{ ...}...)  
+keys := crypto.FromPrivateKeyBytes(ed25519.New(), []byte{ ...}...)  
   
 // Print out loaded public/private keys.  
 glog.Info("Private Key: ", keys.PrivateKeyHex())  
