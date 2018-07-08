@@ -73,7 +73,7 @@ keys := ed25519.RandomKeyPair()
 keys := crypto.FromPrivateKey(ed25519.New(), "4d5333a68e3a96d0ad935cb6546b97bbb0c0771acf76c868a897f65dad0b7933e1442970cce57b7a35e1803e0e8acceb04dc6abf8a73df52e808ab5d966113ac")  
   
 // Load a private key through a provided 64-length byte array (for Ed25519 keypair).  
-keys := crypto.FromPrivateKeyBytes(ed25519.New(), [64]byte{ ...}...)  
+keys := crypto.FromPrivateKeyBytes(ed25519.New(), []byte{ ...}...)  
   
 // Print out loaded public/private keys.  
 glog.Info("Private Key: ", keys.PrivateKeyHex())  
@@ -104,7 +104,9 @@ Now that you have your keys, we can start listening and handling messages from i
 ```go  
 builder := builders.NewNetworkBuilder()  
   
-// Set the address in which peers will use to connect to you.  
+// Set the address which noise will listen on and peers will use to connect to you.  
+// For example, set the host part to `localhost` if you are testing locally, or your public IP
+// address if you are connected to the internet directly.
 builder.SetAddress("tcp://localhost:3000")
   
 // Alternatively...  
@@ -113,7 +115,7 @@ builder.SetAddress(network.FormatAddress("tcp", "localhost", 3000))
 // Set the cryptographic keys used for your network.  
 builder.SetKeys(keys)  
   
-// ... add plugins or set anymore options here.  
+// ... add plugins or set any more options here.  
   
 // Build the network.  
 net, err := builder.Build()  
@@ -138,6 +140,8 @@ net.BlockUntilListening()
 ```  
   
 ... in any goroutine you desire. The goroutine will block until the server is ready to start listening.  
+
+See `examples/getting_started` for a full working example to get started with.
   
 ## Plugins  
   
@@ -145,13 +149,15 @@ Plugins are a way to interface with the lifecycle of your network.
   
   
 ```go  
-type Plugin struct{}  
-  
-func (*Plugin) Startup(net *Network)              {}  
-func (*Plugin) Receive(ctx *PluginContext) error { return nil }  
-func (*Plugin) Cleanup(net *Network)              {}  
-func (*Plugin) PeerConnect(client *PeerClient)    {}  
-func (*Plugin) PeerDisconnect(client *PeerClient) {}  
+type YourAwesomePlugin struct {
+    network.Plugin
+}  
+
+func (state *YourAwesomePlugin) Startup(net *network.Network)              {}  
+func (state *YourAwesomePlugin) Receive(ctx *network.PluginContext) error  { return nil }  
+func (state *YourAwesomePlugin) Cleanup(net *network.Network)              {}  
+func (state *YourAwesomePlugin) PeerConnect(client *network.PeerClient)    {}  
+func (state *YourAwesomePlugin) PeerDisconnect(client *network.PeerClient) {}  
 ```  
   
 They are registered through `builders.NetworkBuilder` through the following:  
@@ -160,7 +166,7 @@ They are registered through `builders.NetworkBuilder` through the following:
 builder := builders.NewNetworkBuilder()  
   
 // Add plugin.  
-builder.AddPlugin(new(Plugin))  
+builder.AddPlugin(new(YourAwesomePlugin))  
 ```  
   
 **noise** comes with three plugins: `discovery.Plugin`, `backoff.Plugin` and `nat.Plugin`.
