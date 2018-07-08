@@ -3,8 +3,8 @@ package network
 import (
 	"math/rand"
 	"net"
-	"net/url"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
@@ -180,22 +180,22 @@ func (n *Network) Listen() {
 		})
 	}()
 
-	urlInfo, err := url.Parse(n.Address)
+	addrInfo, err := ParseAddress(n.Address)
 	if err != nil {
 		glog.Fatal(err)
 	}
 
 	var listener net.Listener
 
-	if urlInfo.Scheme == "kcp" {
-		listener, err = kcp.ListenWithOptions(":" + urlInfo.Port(), nil, 10, 3)
+	if addrInfo.Protocol == "kcp" {
+		listener, err = kcp.ListenWithOptions(":" + strconv.Itoa(int(addrInfo.Port)), nil, 10, 3)
 		if err != nil {
 			glog.Fatal(err)
 		}
-	} else if urlInfo.Scheme == "tcp" {
-		listener, err = net.Listen("tcp", ":" + urlInfo.Port())
+	} else if addrInfo.Protocol == "tcp" {
+		listener, err = net.Listen("tcp", ":" + strconv.Itoa(int(addrInfo.Port)))
 	} else {
-		err = errors.New("invalid scheme: " + urlInfo.Scheme)
+		err = errors.New("invalid protocol: " + addrInfo.Protocol)
 	}
 
 	if err != nil {
@@ -312,7 +312,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 
 // Dial establishes a bidirectional connection to an address, and additionally handshakes with said address.
 func (n *Network) Dial(address string) (*smux.Session, error) {
-	urlInfo, err := url.Parse(address)
+	addrInfo, err := ParseAddress(address)
 	if err != nil {
 		return nil, err
 	}
@@ -320,12 +320,12 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 	var conn net.Conn
 
 	// Choose scheme.
-	if urlInfo.Scheme == "kcp" {
-		conn, err = kcp.DialWithOptions(urlInfo.Host, nil, 10, 3)
-	} else if urlInfo.Scheme == "tcp" {
-		conn, err = net.Dial("tcp", urlInfo.Host)
+	if addrInfo.Protocol == "kcp" {
+		conn, err = kcp.DialWithOptions(addrInfo.HostPort(), nil, 10, 3)
+	} else if addrInfo.Protocol == "tcp" {
+		conn, err = net.Dial("tcp", addrInfo.HostPort())
 	} else {
-		err = errors.New("invalid scheme: " + urlInfo.Scheme)
+		err = errors.New("invalid protocol: " + addrInfo.Protocol)
 	}
 
 	// Failed to connect.
