@@ -5,7 +5,7 @@ sudo: false
 language: go
 
 go:
-    - 1.10
+    - "1.10"
 
 # Only clone the most recent commit.
 git:
