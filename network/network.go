@@ -119,6 +119,45 @@ func (n *Network) handleSendQueue() {
 	}
 }
 
+func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
+	// Check if the client is ready.
+	if !client.IncomingReady() {
+		return
+	}
+	var ptr ptypes.DynamicAny
+	if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
+		return
+	}
+
+	if channel, exists := client.Requests.Load(msg.RequestNonce); exists && msg.RequestNonce > 0 {
+		channel.(chan proto.Message) <- ptr.Message
+		return
+	}
+
+	switch ptr.Message.(type) {
+	case *protobuf.Bytes:
+		client.handleBytes(ptr.Message.(*protobuf.Bytes).Data)
+	default:
+		ctx := contextPool.Get().(*PluginContext)
+		ctx.client = client
+		ctx.message = ptr.Message
+		ctx.nonce = msg.RequestNonce
+
+		go func() {
+			// Execute 'on receive message' callback for all plugins.
+			n.Plugins.Each(func(plugin PluginInterface) {
+				err := plugin.Receive(ctx)
+
+				if err != nil {
+					glog.Error(err)
+				}
+			})
+
+			contextPool.Put(ctx)
+		}()
+	}
+}
+
 // Receive queue worker.
 func (n *Network) handleRecvQueue() {
 	for {
@@ -127,44 +166,7 @@ func (n *Network) handleRecvQueue() {
 			if client, exists := n.Peers.Load(msg.Sender.Address); exists {
 				client := client.(*PeerClient)
 
-				client.Submit(func() {
-					// Check if the client is ready.
-					if !client.IncomingReady() {
-						return
-					}
-					var ptr ptypes.DynamicAny
-					if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
-						return
-					}
-
-					if channel, exists := client.Requests.Load(msg.RequestNonce); exists && msg.RequestNonce > 0 {
-						channel.(chan proto.Message) <- ptr.Message
-						return
-					}
-
-					switch ptr.Message.(type) {
-					case *protobuf.Bytes:
-						client.handleBytes(ptr.Message.(*protobuf.Bytes).Data)
-					default:
-						ctx := contextPool.Get().(*PluginContext)
-						ctx.client = client
-						ctx.message = ptr.Message
-						ctx.nonce = msg.RequestNonce
-
-						go func() {
-							// Execute 'on receive message' callback for all plugins.
-							n.Plugins.Each(func(plugin PluginInterface) {
-								err := plugin.Receive(ctx)
-
-								if err != nil {
-									glog.Error(err)
-								}
-							})
-
-							contextPool.Put(ctx)
-						}()
-					}
-				})
+				client.Submit(func() { n.dispatchMessage(client, msg) })
 			}
 		}
 	}
