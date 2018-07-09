@@ -151,16 +151,18 @@ func (n *Network) handleRecvQueue() {
 						ctx.message = ptr.Message
 						ctx.nonce = msg.Nonce
 
-						// Execute 'on receive message' callback for all plugins.
-						n.Plugins.Each(func(plugin PluginInterface) {
-							err := plugin.Receive(ctx)
+						go func() {
+							// Execute 'on receive message' callback for all plugins.
+							n.Plugins.Each(func(plugin PluginInterface) {
+								err := plugin.Receive(ctx)
 
-							if err != nil {
-								glog.Error(err)
-							}
-						})
+								if err != nil {
+									glog.Error(err)
+								}
+							})
 
-						contextPool.Put(ctx)
+							contextPool.Put(ctx)
+						}()
 					}
 				})
 			}
