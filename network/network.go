@@ -33,9 +33,9 @@ var contextPool = sync.Pool{
 }
 
 type Packet struct {
-	Target  *ConnState
-	Payload *protobuf.Message
-	Result  chan interface{}
+	target  *ConnState
+	payload *protobuf.Message
+	result  chan interface{}
 }
 
 // Network represents the current networking state for this node.
@@ -96,25 +96,25 @@ func (n *Network) handleSendQueue() {
 	for {
 		select {
 		case packet := <-n.SendQueue:
-			stream, err := packet.Target.session.OpenStream()
+			stream, err := packet.target.session.OpenStream()
 			if err != nil {
-				packet.Result <- err
+				packet.result <- err
 				continue
 			}
 
-			err = n.sendMessage(stream, packet.Payload)
+			err = n.sendMessage(stream, packet.payload)
 			if err != nil {
-				packet.Result <- err
+				packet.result <- err
 				continue
 			}
 
 			err = stream.Close()
 			if err != nil {
-				packet.Result <- err
+				packet.result <- err
 				continue
 			}
 
-			packet.Result <- struct{}{}
+			packet.result <- struct{}{}
 		}
 	}
 }
@@ -500,9 +500,9 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 
 	message.MessageNonce = atomic.AddUint64(&state.messageNonce, 1)
 
-	packet.Target = state
-	packet.Payload = message
-	packet.Result = make(chan interface{}, 1)
+	packet.target = state
+	packet.payload = message
+	packet.result = make(chan interface{}, 1)
 
 	select {
 	case n.SendQueue <- packet:
@@ -511,7 +511,7 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 	}
 
 	select {
-	case raw := <-packet.Result:
+	case raw := <-packet.result:
 		switch err := raw.(type) {
 		case error:
 			return errors.Wrapf(err, "failed to send message to %s", address)
