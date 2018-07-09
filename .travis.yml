@@ -14,7 +14,6 @@ git:
 before_install:
     #- go get -t ./...
     - go get -u golang.org/x/vgo
-    - go install ./vendor/github.com/golangci/golangci-lint/cmd/golangci-lint
     - vgo mod -vendor
 
 #install:
@@ -24,11 +23,7 @@ before_install:
 # in vendor/
 install: true
 
-# script always runs to completion (set +e). If we have linter issues AND a
-# failing test, we want to see both. Configure golangci-lint with a
-# .golangci.yml file at the top level of your repo.
 script:
-    - golangci-lint run       # run a bunch of code checkers/linters in parallel
     - vgo test -coverprofile=coverage.txt -covermode=atomic -bench -race .
 
 after_success:
