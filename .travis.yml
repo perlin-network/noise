@@ -3,13 +3,13 @@ go:
     - 1.10
 
 before_install:
-    - go get -t -v ./...
+    - go get -u golang.org/x/vgo
 
 install:
     - go get github.com/perlin-network/noise
 
 script:
-    - go test -coverprofile=coverage.txt -covermode=atomic -bench .
+    - vgo test -coverprofile=coverage.txt -covermode=atomic -bench .
 
 after_success:
     - bash <(curl -s https://codecov.io/bash)
