@@ -30,6 +30,8 @@ type PeerClient struct {
 
 	jobQueue chan func()
 	jobExecutorInit sync.Once
+
+	closed uint32 // for atomic ops
 }
 
 type StreamState struct {
@@ -83,6 +85,10 @@ func (c *PeerClient) executeJobs() {
 // Close stops all sessions/streams and cleans up the nodes
 // routing table. Errors if session fails to close.
 func (c *PeerClient) Close() error {
+	if atomic.SwapUint32(&c.closed, 1) == 1 {
+		return nil
+	}
+
 	c.stream.Lock()
 	c.stream.closed = true
 	c.stream.Unlock()
