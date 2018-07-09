@@ -75,7 +75,7 @@ type Network struct {
 
 type ConnState struct {
 	session *smux.Session
-	seq uint64
+	messageNonce uint64
 }
 
 // Init starts all network I/O workers.
@@ -137,7 +137,7 @@ func (n *Network) handleRecvQueue() {
 						return
 					}
 
-					if channel, exists := client.Requests.Load(msg.Nonce); exists && msg.Nonce > 0 {
+					if channel, exists := client.Requests.Load(msg.RequestNonce); exists && msg.RequestNonce > 0 {
 						channel.(chan proto.Message) <- ptr.Message
 						return
 					}
@@ -149,7 +149,7 @@ func (n *Network) handleRecvQueue() {
 						ctx := contextPool.Get().(*PluginContext)
 						ctx.client = client
 						ctx.message = ptr.Message
-						ctx.nonce = msg.Nonce
+						ctx.nonce = msg.RequestNonce
 
 						go func() {
 							// Execute 'on receive message' callback for all plugins.
@@ -360,7 +360,7 @@ func (n *Network) Accept(conn net.Conn) {
 	var clientInit sync.Once
 
 	recvWindow := NewRingBuffer(RECV_WINDOW_SIZE) // value type = *protobuf.Message
-	recvSeq := uint64(1)
+	recvMessageNonce := uint64(1)
 	recvMutex := &sync.Mutex{}
 
 	var err error
@@ -396,7 +396,7 @@ func (n *Network) Accept(conn net.Conn) {
 		if i > 0 && i < RECV_WINDOW_SIZE {
 			recvWindow.MoveForward(i)
 		}
-		recvSeq += uint64(i)
+		recvMessageNonce += uint64(i)
 		recvMutex.Unlock()
 
 		//glog.Infof("Sending %d messages", len(ready))
@@ -470,9 +470,9 @@ func (n *Network) Accept(conn net.Conn) {
 			}
 
 			recvMutex.Lock()
-			offset := int(msg.Seq - recvSeq)
+			offset := int(msg.MessageNonce - recvMessageNonce)
 			if offset < 0 || offset >= RECV_WINDOW_SIZE {
-				glog.Errorf("Local seq is %d while received seq %d", recvSeq, msg.Seq)
+				glog.Errorf("Local message nonce is %d while received %d", recvMessageNonce, msg.MessageNonce)
 				recvMutex.Unlock()
 				incoming.Close()
 				return
@@ -540,7 +540,7 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 	}
 	state := _state.(*ConnState)
 
-	message.Seq = atomic.AddUint64(&state.seq, 1)
+	message.MessageNonce = atomic.AddUint64(&state.messageNonce, 1)
 
 	packet.Target = state
 	packet.Payload = message

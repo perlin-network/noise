@@ -148,7 +148,7 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 		return nil, err
 	}
 
-	signed.Nonce = atomic.AddUint64(&c.RequestNonce, 1)
+	signed.RequestNonce = atomic.AddUint64(&c.RequestNonce, 1)
 
 	err = c.Network.Write(c.Address, signed)
 	if err != nil {
@@ -157,11 +157,11 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 
 	// Start tracking the request.
 	channel := make(chan proto.Message, 1)
-	c.Requests.Store(signed.Nonce, channel)
+	c.Requests.Store(signed.RequestNonce, channel)
 
 	// Stop tracking the request.
 	defer close(channel)
-	defer c.Requests.Delete(signed.Nonce)
+	defer c.Requests.Delete(signed.RequestNonce)
 
 	select {
 	case res := <-channel:
@@ -180,7 +180,7 @@ func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
 	}
 
 	// Set the nonce.
-	signed.Nonce = nonce
+	signed.RequestNonce = nonce
 
 	err = c.Network.Write(c.Address, signed)
 	if err != nil {
