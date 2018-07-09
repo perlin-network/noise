@@ -73,6 +73,14 @@ func (c *PeerClient) Submit(job func()) {
 		c.jobQueue = make(chan func(), 128)
 		go c.executeJobs()
 	})
+
+	// FIXME: This is a hack to prevent closed c.jobQueue from panicking the program.
+	defer func() {
+		if err := recover(); err != nil {
+			
+		}
+	}()
+
 	c.jobQueue <- job
 }
 
