@@ -3,14 +3,14 @@ go:
     - "1.10"
 
 before_install:
-    - go get -t ./...
+    - go get -u -t ./...
 
 install:
     - go get github.com/perlin-network/noise
 
 script:
     #- go test -coverprofile=coverage.txt -covermode=atomic -bench .
-    - go test -v ./...
+    - go test -v -race ./...
 
 after_success:
     - bash <(curl -s https://codecov.io/bash)
