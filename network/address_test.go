@@ -70,6 +70,7 @@ func TestParseAddress(t *testing.T) {
 		t.Fatal("port url error not triggered")
 	}
 }
+
 func BenchmarkParseAddress(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ParseAddress("tcp://127.0.0.1:3000")

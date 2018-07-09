@@ -8,7 +8,6 @@ import (
 	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
 )
 
@@ -45,7 +44,7 @@ func ExampleBasic() {
 	var plugins []*BasicPlugin
 
 	for i := 0; i < numNodes; i++ {
-		builder := builders.NewNetworkBuilder()
+		builder := network.NewBuilder()
 		builder.SetKeys(ed25519.RandomKeyPair())
 		builder.SetAddress(network.FormatAddress("tcp", host, uint16(startPort+i)))
 

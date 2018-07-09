@@ -9,7 +9,6 @@ import (
 	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
 	"github.com/pkg/errors"
 )
@@ -73,7 +72,7 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 		keys[addr] = ed25519.RandomKeyPair()
 	}
 
-	builder := builders.NewNetworkBuilder()
+	builder := network.NewBuilder()
 	builder.SetKeys(keys[addr])
 	builder.SetAddress(addr)
 
