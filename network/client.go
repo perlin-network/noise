@@ -27,6 +27,9 @@ type PeerClient struct {
 
 	outgoingReady chan struct{}
 	incomingReady chan struct{}
+
+	jobQueue chan func()
+	jobExecutorInit sync.Once
 }
 
 type StreamState struct {
@@ -63,12 +66,30 @@ func createPeerClient(network *Network, address string) (*PeerClient, error) {
 	return client, nil
 }
 
+func (c *PeerClient) Submit(job func()) {
+	c.jobExecutorInit.Do(func() {
+		c.jobQueue = make(chan func(), 128)
+		go c.executeJobs()
+	})
+	c.jobQueue <- job
+}
+
+func (c *PeerClient) executeJobs() {
+	for job := range c.jobQueue {
+		job()
+	}
+}
+
 // Close stops all sessions/streams and cleans up the nodes
 // routing table. Errors if session fails to close.
 func (c *PeerClient) Close() error {
 	c.stream.Lock()
 	c.stream.closed = true
 	c.stream.Unlock()
+
+	if c.jobQueue != nil {
+		close(c.jobQueue)
+	}
 
 	// Handle 'on peer disconnect' callback for plugins.
 	c.Network.Plugins.Each(func(plugin PluginInterface) {
