@@ -3,7 +3,6 @@ package nat
 import (
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/peer"
 )
 
@@ -54,6 +53,6 @@ func (state *plugin) Cleanup(net *network.Network) {
 // listening socket through any available UPnP interface.
 //
 // The plugin is registered with a priority of -999999, and thus is executed first.
-func RegisterPlugin(builder *builders.NetworkBuilder) {
+func RegisterPlugin(builder *network.Builder) {
 	builder.AddPluginWithPriority(-99999, new(plugin))
 }

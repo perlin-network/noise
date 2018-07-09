@@ -1,4 +1,4 @@
-package builders
+package network
 
 import (
 	"bytes"
@@ -6,9 +6,6 @@ import (
 	"testing"
 
 	"github.com/perlin-network/noise/crypto/signing/ed25519"
-	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/network/discovery"
-	"github.com/perlin-network/noise/protobuf"
 )
 
 var (
@@ -18,32 +15,14 @@ var (
 	port     = uint16(12345)
 )
 
-type MockPlugin struct {
-	*network.Plugin
-}
-
-func (*MockPlugin) Receive(ctx *network.PluginContext) error {
-	switch ctx.Message().(type) {
-	case *protobuf.Ping:
-		err := ctx.Reply(&protobuf.Pong{})
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func buildNetwork(port uint16) (*network.Network, error) {
-	builder := NewNetworkBuilder()
+func buildNetwork(port uint16) (*Network, error) {
+	builder := NewBuilder()
 	builder.SetKeys(keys)
 	builder.SetAddress(
 		fmt.Sprintf("%s://%s:%d", protocol, host, port),
 	)
 
-	builder.AddPluginWithPriority(1, new(discovery.Plugin))
-	builder.AddPluginWithPriority(2, new(MockPlugin))
+	builder.AddPluginWithPriority(1, new(MockPlugin))
 
 	return builder.Build()
 }
@@ -77,7 +56,7 @@ func TestSetters(t *testing.T) {
 }
 
 func TestPeers(t *testing.T) {
-	var nodes []*network.Network
+	var nodes []*Network
 	addresses := []string{"tcp://127.0.0.1:12345", "tcp://127.0.0.1:12346", "tcp://127.0.0.1:12347"}
 	peers := [][2]int{{1, 2}, {0, 2}, {0, 1}}
 

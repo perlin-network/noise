@@ -16,7 +16,6 @@ import (
 	"github.com/perlin-network/noise/examples/cluster_benchmark/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/backoff"
-	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
 )
 
@@ -100,7 +99,7 @@ func main() {
 	glog.Infof("Private Key: %s", keys.PrivateKeyHex())
 	glog.Infof("Public Key: %s", keys.PublicKeyHex())
 
-	builder := builders.NewNetworkBuilder()
+	builder := network.NewBuilder()
 	builder.SetKeys(keys)
 	builder.SetAddress(network.FormatAddress(protocol, host, port))
 

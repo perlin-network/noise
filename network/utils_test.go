@@ -38,7 +38,7 @@ func TestSerializeMessageInfoForSigning(t *testing.T) {
 
 	for _, id := range ids {
 		for _, msg := range messages {
-			outputs = append(outputs, serializeMessage(&id, msg))
+			outputs = append(outputs, SerializeMessage(&id, msg))
 		}
 	}
 
@@ -65,6 +65,7 @@ func TestFilterPeers(t *testing.T) {
 		"tcp://localhost:3004",
 		"tcp://::1:3005",
 	})
+
 	expected := []string{
 		"tcp://10.0.0.5:3000",
 		"tcp://10.0.0.1:3000",
@@ -76,6 +77,7 @@ func TestFilterPeers(t *testing.T) {
 		"tcp://127.0.0.1:3004",
 		// "tcp://::1:3005" will be removed
 	}
+
 	if !reflect.DeepEqual(result, expected) {
 		t.Fatalf("Unexpected got %v, but expected %v", result, expected)
 	}

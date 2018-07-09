@@ -51,12 +51,14 @@ func TestWrongMoveForwardCycle(t *testing.T) {
 	rb := NewRingBuffer(2)
 	*rb.Index(0) = 1
 	*rb.Index(1) = 2
+
 	rb.MoveForward(1)
-	if rb.pos != 1 {
-		t.Errorf("current position should be 1, got %d", rb.pos)
+	if rb.Position != 1 {
+		t.Errorf("current position should be 1, got %d", rb.Position)
 	}
+
 	rb.MoveForward(1)
-	if rb.pos != 0 {
-		t.Errorf("current position should be 0, got %d", rb.pos)
+	if rb.Position != 0 {
+		t.Errorf("current position should be 0, got %d", rb.Position)
 	}
 }
