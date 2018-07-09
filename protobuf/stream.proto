@@ -22,8 +22,11 @@ message Message {
     // Sender's signature of message.
     bytes signature = 3;
 
-    // Nonce is the request/response ID. Null if ID associated to a message is not a request/response.
-    uint64 nonce = 4;
+    // request_nonce is the request/response ID. Null if ID associated to a message is not a request/response.
+    uint64 request_nonce = 4;
+
+    // message_nonce is the sequence ID.
+    uint64 message_nonce = 5;
 }
 
 message Ping {

@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/glog"
@@ -32,9 +33,9 @@ var contextPool = sync.Pool{
 }
 
 type Packet struct {
-	Target  string
-	Payload *protobuf.Message
-	Result  chan interface{}
+	target  *ConnState
+	payload *protobuf.Message
+	result  chan interface{}
 }
 
 // Network represents the current networking state for this node.
@@ -59,7 +60,7 @@ type Network struct {
 	SendQueue chan *Packet
 	RecvQueue chan *protobuf.Message
 
-	// Map of connection addresses (string) <-> net.Conn
+	// Map of connection addresses (string) <-> *ConnState
 	Connections *sync.Map
 
 	// <-Listening will block a goroutine until this node is listening for peers.
@@ -72,16 +73,21 @@ type Network struct {
 	Kill chan struct{}
 }
 
+type ConnState struct {
+	session      *smux.Session
+	messageNonce uint64
+}
+
 // Init starts all network I/O workers.
 func (n *Network) Init() {
 	workerCount := runtime.NumCPU() + 1
 
+	// Spawn worker routines for receiving and handling messages in the application layer.
+	go n.handleRecvQueue()
+
 	for i := 0; i < workerCount; i++ {
 		// Spawn worker routines for sending queued messages to the networking layer.
 		go n.handleSendQueue()
-
-		// Spawn worker routines for receiving and handling messages in the application layer.
-		go n.handleRecvQueue()
 	}
 }
 
@@ -90,30 +96,65 @@ func (n *Network) handleSendQueue() {
 	for {
 		select {
 		case packet := <-n.SendQueue:
-			if session, exists := n.Connections.Load(packet.Target); exists {
-				stream, err := session.(*smux.Session).OpenStream()
-				if err != nil {
-					packet.Result <- err
-					continue
-				}
-
-				err = n.sendMessage(stream, packet.Payload)
-				if err != nil {
-					packet.Result <- err
-					continue
-				}
-
-				err = stream.Close()
-				if err != nil {
-					packet.Result <- err
-					continue
-				}
-
-				packet.Result <- struct{}{}
-			} else {
-				packet.Result <- errors.Errorf("cannot send message; not connected to peer %s", packet.Target)
+			stream, err := packet.target.session.OpenStream()
+			if err != nil {
+				packet.result <- err
+				continue
 			}
+
+			err = n.sendMessage(stream, packet.payload)
+			if err != nil {
+				packet.result <- err
+				continue
+			}
+
+			err = stream.Close()
+			if err != nil {
+				packet.result <- err
+				continue
+			}
+
+			packet.result <- struct{}{}
 		}
+	}
+}
+
+func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
+	// Check if the client is ready.
+	if !client.IncomingReady() {
+		return
+	}
+	var ptr ptypes.DynamicAny
+	if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
+		return
+	}
+
+	if channel, exists := client.Requests.Load(msg.RequestNonce); exists && msg.RequestNonce > 0 {
+		channel.(chan proto.Message) <- ptr.Message
+		return
+	}
+
+	switch ptr.Message.(type) {
+	case *protobuf.Bytes:
+		client.handleBytes(ptr.Message.(*protobuf.Bytes).Data)
+	default:
+		ctx := contextPool.Get().(*PluginContext)
+		ctx.client = client
+		ctx.message = ptr.Message
+		ctx.nonce = msg.RequestNonce
+
+		go func() {
+			// Execute 'on receive message' callback for all plugins.
+			n.Plugins.Each(func(plugin PluginInterface) {
+				err := plugin.Receive(ctx)
+
+				if err != nil {
+					glog.Error(err)
+				}
+			})
+
+			contextPool.Put(ctx)
+		}()
 	}
 }
 
@@ -125,41 +166,7 @@ func (n *Network) handleRecvQueue() {
 			if client, exists := n.Peers.Load(msg.Sender.Address); exists {
 				client := client.(*PeerClient)
 
-				// Check if the client is ready.
-				if !client.IncomingReady() {
-					continue
-				}
-
-				var ptr ptypes.DynamicAny
-				if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
-					continue
-				}
-
-				if channel, exists := client.Requests.Load(msg.Nonce); exists && msg.Nonce > 0 {
-					channel.(chan proto.Message) <- ptr.Message
-					continue
-				}
-
-				switch ptr.Message.(type) {
-				case *protobuf.Bytes:
-					client.handleBytes(ptr.Message.(*protobuf.Bytes).Data)
-				default:
-					ctx := contextPool.Get().(*PluginContext)
-					ctx.client = client
-					ctx.message = ptr.Message
-					ctx.nonce = msg.Nonce
-
-					// Execute 'on receive message' callback for all plugins.
-					n.Plugins.Each(func(plugin PluginInterface) {
-						err := plugin.Receive(ctx)
-
-						if err != nil {
-							glog.Error(err)
-						}
-					})
-
-					contextPool.Put(ctx)
-				}
+				client.Submit(func() { n.dispatchMessage(client, msg) })
 			}
 		}
 	}
@@ -188,12 +195,12 @@ func (n *Network) Listen() {
 	var listener net.Listener
 
 	if addrInfo.Protocol == "kcp" {
-		listener, err = kcp.ListenWithOptions(":" + strconv.Itoa(int(addrInfo.Port)), nil, 10, 3)
+		listener, err = kcp.ListenWithOptions(":"+strconv.Itoa(int(addrInfo.Port)), nil, 10, 3)
 		if err != nil {
 			glog.Fatal(err)
 		}
 	} else if addrInfo.Protocol == "tcp" {
-		listener, err = net.Listen("tcp", ":" + strconv.Itoa(int(addrInfo.Port)))
+		listener, err = net.Listen("tcp", ":"+strconv.Itoa(int(addrInfo.Port)))
 	} else {
 		err = errors.New("invalid protocol: " + addrInfo.Protocol)
 	}
@@ -273,12 +280,11 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 			return nil, err
 		}
 
-		n.Connections.Store(address, session)
-
-		// Execute 'peer connect' callback for all registered plugins.
-		n.Plugins.Each(func(plugin PluginInterface) {
-			plugin.PeerConnect(client)
+		n.Connections.Store(address, &ConnState{
+			session: session,
 		})
+
+		client.Init()
 
 		return client, nil
 	}
@@ -344,11 +350,15 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 
 // Accept handles peer registration and processes incoming message streams.
 func (n *Network) Accept(conn net.Conn) {
+	const RECV_WINDOW_SIZE = 4096
+
 	var incoming *smux.Session
 	var outgoing *smux.Session
 
 	var client *PeerClient
 	var clientInit sync.Once
+
+	recvWindow := NewRecvWindow(RECV_WINDOW_SIZE)
 
 	var err error
 
@@ -404,8 +414,8 @@ func (n *Network) Accept(conn net.Conn) {
 				client.ID = (*peer.ID)(msg.Sender)
 
 				// Load an outgoing connection.
-				if session, established := n.Connections.Load(client.ID.Address); established {
-					outgoing = session.(*smux.Session)
+				if state, established := n.Connections.Load(client.ID.Address); established {
+					outgoing = state.(*ConnState).session
 				} else {
 					err = errors.New("failed to load session")
 				}
@@ -424,10 +434,14 @@ func (n *Network) Accept(conn net.Conn) {
 				return
 			}
 
-			select {
-			case n.RecvQueue <- msg:
-			default:
-				//glog.Errorf("recv queue full, dropping messages")
+			err = recvWindow.Input(msg)
+			if err == nil {
+				err = recvWindow.Update(n)
+			}
+
+			if err != nil {
+				glog.Error(err)
+				incoming.Close()
 			}
 		}()
 
@@ -478,9 +492,17 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 	packet := packetPool.Get().(*Packet)
 	defer packetPool.Put(packet)
 
-	packet.Target = address
-	packet.Payload = message
-	packet.Result = make(chan interface{}, 1)
+	_state, exists := n.Connections.Load(address)
+	if !exists {
+		return errors.New("connection does not exist")
+	}
+	state := _state.(*ConnState)
+
+	message.MessageNonce = atomic.AddUint64(&state.messageNonce, 1)
+
+	packet.target = state
+	packet.payload = message
+	packet.result = make(chan interface{}, 1)
 
 	select {
 	case n.SendQueue <- packet:
@@ -489,7 +511,7 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 	}
 
 	select {
-	case raw := <-packet.Result:
+	case raw := <-packet.result:
 		switch err := raw.(type) {
 		case error:
 			return errors.Wrapf(err, "failed to send message to %s", address)

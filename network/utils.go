@@ -8,7 +8,7 @@ import (
 func serializeMessage(id *protobuf.ID, message []byte) []byte {
 	const UINT32_SIZE = 4
 
-	serialized := make([]byte, UINT32_SIZE + len(id.Address) + UINT32_SIZE + len(id.PublicKey) + len(message))
+	serialized := make([]byte, UINT32_SIZE+len(id.Address)+UINT32_SIZE+len(id.PublicKey)+len(message))
 	pos := 0
 
 	binary.LittleEndian.PutUint32(serialized[pos:], uint32(len(id.Address)))

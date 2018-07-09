@@ -2,9 +2,9 @@ package network
 
 import (
 	"bytes"
+	"crypto/rand"
 	"reflect"
 	"testing"
-	"crypto/rand"
 
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
@@ -22,14 +22,14 @@ func TestSerializeMessageInfoForSigning(t *testing.T) {
 
 	pk1, pk2 := mustReadRand(32), mustReadRand(32)
 
-	ids := []protobuf.ID {
+	ids := []protobuf.ID{
 		protobuf.ID(peer.CreateID("tcp://127.0.0.1:3001", pk1)),
 		protobuf.ID(peer.CreateID("tcp://127.0.0.1:3001", pk2)),
 		protobuf.ID(peer.CreateID("tcp://127.0.0.1:3002", pk1)),
 		protobuf.ID(peer.CreateID("tcp://127.0.0.1:3002", pk2)),
 	}
 
-	messages := [][]byte {
+	messages := [][]byte{
 		[]byte("hello"),
 		[]byte("world"),
 	}
