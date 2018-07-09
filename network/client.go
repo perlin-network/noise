@@ -11,7 +11,6 @@ import (
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
-	"github.com/xtaci/smux"
 )
 
 // PeerClient represents a single incoming peers client.
@@ -28,6 +27,10 @@ type PeerClient struct {
 
 	outgoingReady chan struct{}
 	incomingReady chan struct{}
+
+	jobQueue chan func()
+
+	closed uint32 // for atomic ops
 }
 
 type StreamState struct {
@@ -59,17 +62,52 @@ func createPeerClient(network *Network, address string) (*PeerClient, error) {
 			buffer:   make([]byte, 0),
 			buffered: make(chan struct{}),
 		},
+
+		jobQueue: make(chan func(), 128),
 	}
 
 	return client, nil
 }
 
+func (c *PeerClient) Init() {
+	// Execute 'peer connect' callback for all registered plugins.
+	c.Network.Plugins.Each(func(plugin PluginInterface) {
+		plugin.PeerConnect(c)
+	})
+	go c.executeJobs()
+}
+
+func (c *PeerClient) Submit(job func()) {
+	// FIXME: This is a hack to prevent closed c.jobQueue from panicking the program.
+	defer func() {
+		if err := recover(); err != nil {
+			
+		}
+	}()
+
+	c.jobQueue <- job
+}
+
+func (c *PeerClient) executeJobs() {
+	for job := range c.jobQueue {
+		job()
+	}
+}
+
 // Close stops all sessions/streams and cleans up the nodes
 // routing table. Errors if session fails to close.
 func (c *PeerClient) Close() error {
+	if atomic.SwapUint32(&c.closed, 1) == 1 {
+		return nil
+	}
+
 	c.stream.Lock()
 	c.stream.closed = true
 	c.stream.Unlock()
+
+	if c.jobQueue != nil {
+		close(c.jobQueue)
+	}
 
 	// Handle 'on peer disconnect' callback for plugins.
 	c.Network.Plugins.Each(func(plugin PluginInterface) {
@@ -80,8 +118,8 @@ func (c *PeerClient) Close() error {
 	if c.ID != nil {
 		// close out connections
 		if conn, ok := c.Network.Connections.Load(c.ID.Address); ok {
-			if sess, ok := conn.(*smux.Session); ok && sess != nil {
-				sess.Close()
+			if state, ok := conn.(*ConnState); ok && state != nil {
+				state.session.Close()
 			}
 		}
 
@@ -114,7 +152,7 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 		return nil, err
 	}
 
-	signed.Nonce = atomic.AddUint64(&c.RequestNonce, 1)
+	signed.RequestNonce = atomic.AddUint64(&c.RequestNonce, 1)
 
 	err = c.Network.Write(c.Address, signed)
 	if err != nil {
@@ -123,11 +161,11 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 
 	// Start tracking the request.
 	channel := make(chan proto.Message, 1)
-	c.Requests.Store(signed.Nonce, channel)
+	c.Requests.Store(signed.RequestNonce, channel)
 
 	// Stop tracking the request.
 	defer close(channel)
-	defer c.Requests.Delete(signed.Nonce)
+	defer c.Requests.Delete(signed.RequestNonce)
 
 	select {
 	case res := <-channel:
@@ -146,7 +184,7 @@ func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
 	}
 
 	// Set the nonce.
-	signed.Nonce = nonce
+	signed.RequestNonce = nonce
 
 	err = c.Network.Write(c.Address, signed)
 	if err != nil {
