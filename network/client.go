@@ -28,7 +28,7 @@ type PeerClient struct {
 	outgoingReady chan struct{}
 	incomingReady chan struct{}
 
-	jobQueue chan func()
+	jobs chan func()
 
 	closed uint32 // for atomic ops
 }
@@ -63,7 +63,7 @@ func createPeerClient(network *Network, address string) (*PeerClient, error) {
 			buffered: make(chan struct{}),
 		},
 
-		jobQueue: make(chan func(), 128),
+		jobs: make(chan func(), 128),
 	}
 
 	return client, nil
@@ -78,18 +78,18 @@ func (c *PeerClient) Init() {
 }
 
 func (c *PeerClient) Submit(job func()) {
-	// FIXME: This is a hack to prevent closed c.jobQueue from panicking the program.
+	// FIXME: This is a hack to prevent closed c.jobs from panicking the program.
 	defer func() {
 		if err := recover(); err != nil {
 			
 		}
 	}()
 
-	c.jobQueue <- job
+	c.jobs <- job
 }
 
 func (c *PeerClient) executeJobs() {
-	for job := range c.jobQueue {
+	for job := range c.jobs {
 		job()
 	}
 }
@@ -105,8 +105,8 @@ func (c *PeerClient) Close() error {
 	c.stream.closed = true
 	c.stream.Unlock()
 
-	if c.jobQueue != nil {
-		close(c.jobQueue)
+	if c.jobs != nil {
+		close(c.jobs)
 	}
 
 	// Handle 'on peer disconnect' callback for plugins.
