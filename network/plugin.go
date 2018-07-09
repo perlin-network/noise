@@ -22,8 +22,19 @@ type PluginInterface interface {
 // Plugin is an abstract class which all plugins extend.
 type Plugin struct{}
 
-func (*Plugin) Startup(net *Network)              {}
-func (*Plugin) Receive(ctx *PluginContext) error  { return nil }
-func (*Plugin) Cleanup(net *Network)              {}
-func (*Plugin) PeerConnect(client *PeerClient)    {}
+// Hook callbacks of network builder plugins
+
+// Startup is called only once when the plugin is loaded
+func (*Plugin) Startup(net *Network) {}
+
+// Receive is called every time when messages are received
+func (*Plugin) Receive(ctx *PluginContext) error { return nil }
+
+// Cleanup is called only once after network stops listening
+func (*Plugin) Cleanup(net *Network) {}
+
+// PeerConnect is called every time a PeerClient is initialized and connected
+func (*Plugin) PeerConnect(client *PeerClient) {}
+
+// PeerDisconnect is called every time a PeerClient connection is closed
 func (*Plugin) PeerDisconnect(client *PeerClient) {}
