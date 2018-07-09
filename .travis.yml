@@ -25,6 +25,7 @@ install: true
 
 script:
     - vgo test -coverprofile=coverage.txt -covermode=atomic -bench -race .
+    - vgo test -race ./...
 
 after_success:
     - bash <(curl -s https://codecov.io/bash)
