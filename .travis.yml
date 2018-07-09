@@ -3,7 +3,7 @@ go:
     - "1.10"
 
 before_install:
-    - go get -u -t ./...
+    - go get -t -v ./...
 
 install:
     - go get github.com/perlin-network/noise
