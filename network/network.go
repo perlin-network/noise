@@ -380,7 +380,7 @@ func (n *Network) Accept(conn net.Conn) {
 		}
 	}()
 
-	checkRecvWindow := func() {
+	checkRecvWindow := func() error {
 		ready := make([]*protobuf.Message, 0)
 
 		recvMutex.Lock()
@@ -402,16 +402,14 @@ func (n *Network) Accept(conn net.Conn) {
 		//glog.Infof("Sending %d messages", len(ready))
 
 		for _, msg := range ready {
-			if msg.Priority == 0 {
-				n.RecvQueue <- msg
-			} else {
-				select {
-				case n.RecvQueue <- msg:
-				default:
-					//glog.Errorf("recv queue full, dropping messages")
-				}
+			select {
+			case n.RecvQueue <- msg:
+			default:
+				return errors.New("recv queue is full")
+				//glog.Errorf("recv queue full, dropping messages")
 			}
 		}
+		return nil
 	}
 
 	// Wrap a session around the incoming connection.
@@ -482,7 +480,11 @@ func (n *Network) Accept(conn net.Conn) {
 			*recvWindow.Index(offset) = msg
 			recvMutex.Unlock()
 
-			checkRecvWindow()
+			err = checkRecvWindow()
+			if err != nil {
+				glog.Error(err)
+				incoming.Close()
+			}
 		}()
 
 	}
