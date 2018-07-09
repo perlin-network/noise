@@ -29,7 +29,6 @@ type PeerClient struct {
 	incomingReady chan struct{}
 
 	jobQueue chan func()
-	jobExecutorInit sync.Once
 
 	closed uint32 // for atomic ops
 }
@@ -63,17 +62,22 @@ func createPeerClient(network *Network, address string) (*PeerClient, error) {
 			buffer:   make([]byte, 0),
 			buffered: make(chan struct{}),
 		},
+
+		jobQueue: make(chan func(), 128),
 	}
 
 	return client, nil
 }
 
-func (c *PeerClient) Submit(job func()) {
-	c.jobExecutorInit.Do(func() {
-		c.jobQueue = make(chan func(), 128)
-		go c.executeJobs()
+func (c *PeerClient) Init() {
+	// Execute 'peer connect' callback for all registered plugins.
+	c.Network.Plugins.Each(func(plugin PluginInterface) {
+		plugin.PeerConnect(c)
 	})
+	go c.executeJobs()
+}
 
+func (c *PeerClient) Submit(job func()) {
 	// FIXME: This is a hack to prevent closed c.jobQueue from panicking the program.
 	defer func() {
 		if err := recover(); err != nil {

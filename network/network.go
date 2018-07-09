@@ -284,10 +284,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 			session: session,
 		})
 
-		// Execute 'peer connect' callback for all registered plugins.
-		n.Plugins.Each(func(plugin PluginInterface) {
-			plugin.PeerConnect(client)
-		})
+		client.Init()
 
 		return client, nil
 	}
