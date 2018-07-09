@@ -2,8 +2,8 @@ language: go
 go:
     - 1.10
 
-before_install:
-    - go get -t ./...
+#before_install:
+#    - go get -t ./...
 
 #install:
 #    - go get github.com/perlin-network/noise
