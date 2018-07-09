@@ -1,15 +1,15 @@
 language: go
 go:
-    - 1.9
+    - 1.10
 
 before_install:
-    - go get -t -v ./...
+    - go get -t ./...
 
-install:
-    - go get github.com/perlin-network/noise
+#install:
+#    - go get github.com/perlin-network/noise
 
 script:
-    - go test -coverprofile=coverage.txt -covermode=atomic -bench .
+    - go test -coverprofile=coverage.txt -covermode=atomic -bench -race .
 
 after_success:
     - bash <(curl -s https://codecov.io/bash)
