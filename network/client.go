@@ -11,7 +11,6 @@ import (
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
-	"github.com/xtaci/smux"
 )
 
 // PeerClient represents a single incoming peers client.
@@ -80,8 +79,8 @@ func (c *PeerClient) Close() error {
 	if c.ID != nil {
 		// close out connections
 		if conn, ok := c.Network.Connections.Load(c.ID.Address); ok {
-			if sess, ok := conn.(*smux.Session); ok && sess != nil {
-				sess.Close()
+			if state, ok := conn.(*ConnState); ok && state != nil {
+				state.session.Close()
 			}
 		}
 

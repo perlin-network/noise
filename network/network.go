@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/glog"
@@ -32,7 +33,7 @@ var contextPool = sync.Pool{
 }
 
 type Packet struct {
-	Target  string
+	Target  *ConnState
 	Payload *protobuf.Message
 	Result  chan interface{}
 }
@@ -59,7 +60,7 @@ type Network struct {
 	SendQueue chan *Packet
 	RecvQueue chan *protobuf.Message
 
-	// Map of connection addresses (string) <-> net.Conn
+	// Map of connection addresses (string) <-> *ConnState
 	Connections *sync.Map
 
 	// <-Listening will block a goroutine until this node is listening for peers.
@@ -70,6 +71,11 @@ type Network struct {
 
 	// <-Kill will begin the server shutdown process
 	Kill chan struct{}
+}
+
+type ConnState struct {
+	session *smux.Session
+	seq uint64
 }
 
 // Init starts all network I/O workers.
@@ -90,29 +96,25 @@ func (n *Network) handleSendQueue() {
 	for {
 		select {
 		case packet := <-n.SendQueue:
-			if session, exists := n.Connections.Load(packet.Target); exists {
-				stream, err := session.(*smux.Session).OpenStream()
-				if err != nil {
-					packet.Result <- err
-					continue
-				}
-
-				err = n.sendMessage(stream, packet.Payload)
-				if err != nil {
-					packet.Result <- err
-					continue
-				}
-
-				err = stream.Close()
-				if err != nil {
-					packet.Result <- err
-					continue
-				}
-
-				packet.Result <- struct{}{}
-			} else {
-				packet.Result <- errors.Errorf("cannot send message; not connected to peer %s", packet.Target)
+			stream, err := packet.Target.session.OpenStream()
+			if err != nil {
+				packet.Result <- err
+				continue
 			}
+
+			err = n.sendMessage(stream, packet.Payload)
+			if err != nil {
+				packet.Result <- err
+				continue
+			}
+
+			err = stream.Close()
+			if err != nil {
+				packet.Result <- err
+				continue
+			}
+
+			packet.Result <- struct{}{}
 		}
 	}
 }
@@ -273,7 +275,9 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 			return nil, err
 		}
 
-		n.Connections.Store(address, session)
+		n.Connections.Store(address, &ConnState {
+			session: session,
+		})
 
 		// Execute 'peer connect' callback for all registered plugins.
 		n.Plugins.Each(func(plugin PluginInterface) {
@@ -344,11 +348,17 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 
 // Accept handles peer registration and processes incoming message streams.
 func (n *Network) Accept(conn net.Conn) {
+	const RECV_WINDOW_SIZE = 64
+
 	var incoming *smux.Session
 	var outgoing *smux.Session
 
 	var client *PeerClient
 	var clientInit sync.Once
+
+	recvWindow := NewRingBuffer(RECV_WINDOW_SIZE) // value type = *protobuf.Message
+	recvSeq := uint64(1)
+	recvMutex := &sync.Mutex{}
 
 	var err error
 
@@ -366,6 +376,40 @@ func (n *Network) Accept(conn net.Conn) {
 			outgoing.Close()
 		}
 	}()
+
+	checkRecvWindow := func() {
+		ready := make([]*protobuf.Message, 0)
+
+		recvMutex.Lock()
+		i := 0
+		for ; i < RECV_WINDOW_SIZE; i++ {
+			cursor := recvWindow.Index(i)
+			if *cursor == nil {
+				break
+			}
+			ready = append(ready, (*cursor).(*protobuf.Message))
+			*cursor = nil
+		}
+		if i > 0 && i < RECV_WINDOW_SIZE {
+			recvWindow.MoveForward(i)
+		}
+		recvSeq += uint64(i)
+		recvMutex.Unlock()
+
+		//glog.Infof("Sending %d messages", len(ready))
+
+		for _, msg := range ready {
+			if msg.Priority == 0 {
+				n.RecvQueue <- msg
+			} else {
+				select {
+				case n.RecvQueue <- msg:
+				default:
+					//glog.Errorf("recv queue full, dropping messages")
+				}
+			}
+		}
+	}
 
 	// Wrap a session around the incoming connection.
 	incoming, err = smux.Server(conn, muxConfig())
@@ -404,8 +448,8 @@ func (n *Network) Accept(conn net.Conn) {
 				client.ID = (*peer.ID)(msg.Sender)
 
 				// Load an outgoing connection.
-				if session, established := n.Connections.Load(client.ID.Address); established {
-					outgoing = session.(*smux.Session)
+				if state, established := n.Connections.Load(client.ID.Address); established {
+					outgoing = state.(*ConnState).session
 				} else {
 					err = errors.New("failed to load session")
 				}
@@ -424,11 +468,17 @@ func (n *Network) Accept(conn net.Conn) {
 				return
 			}
 
-			select {
-			case n.RecvQueue <- msg:
-			default:
-				//glog.Errorf("recv queue full, dropping messages")
+			recvMutex.Lock()
+			offset := int(msg.Seq - recvSeq)
+			if offset < 0 || offset >= RECV_WINDOW_SIZE {
+				glog.Errorf("Local seq is %d while received seq %d", recvSeq, msg.Seq)
+				recvMutex.Unlock()
+				return
 			}
+			*recvWindow.Index(offset) = msg
+			recvMutex.Unlock()
+
+			checkRecvWindow()
 		}()
 
 	}
@@ -478,7 +528,15 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 	packet := packetPool.Get().(*Packet)
 	defer packetPool.Put(packet)
 
-	packet.Target = address
+	_state, exists := n.Connections.Load(address)
+	if !exists {
+		return errors.New("connection does not exist")
+	}
+	state := _state.(*ConnState)
+
+	message.Seq = atomic.AddUint64(&state.seq, 1)
+
+	packet.Target = state
 	packet.Payload = message
 	packet.Result = make(chan interface{}, 1)
 
