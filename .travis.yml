@@ -12,20 +12,14 @@ git:
     depth: 1
 
 before_install:
-    #- go get -t ./...
     - go get -u golang.org/x/vgo
     - vgo mod -vendor
 
-#install:
-#    - go get github.com/perlin-network/noise
-
-# Skip the install step. Don't `go get` dependencies. Only build with the code
-# in vendor/
+# Skip the install step. Don't `go get` dependencies. Only build with the code in vendor/
 install: true
 
 script:
-    - vgo test -coverprofile=coverage.txt -covermode=atomic -bench -race .
-    - vgo test -race ./...
+    - vgo test -coverprofile=coverage.txt -covermode=atomic -bench -race ./...
 
 after_success:
     - bash <(curl -s https://codecov.io/bash)
