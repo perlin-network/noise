@@ -31,7 +31,7 @@ func (m *ID) Reset()         { *m = ID{} }
 func (m *ID) String() string { return proto.CompactTextString(m) }
 func (*ID) ProtoMessage()    {}
 func (*ID) Descriptor() ([]byte, []int) {
-	return fileDescriptor_stream_bc585796027993bb, []int{0}
+	return fileDescriptor_stream_11be9e0c69aa9a75, []int{0}
 }
 func (m *ID) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ID.Unmarshal(m, b)
@@ -84,7 +84,7 @@ func (m *Message) Reset()         { *m = Message{} }
 func (m *Message) String() string { return proto.CompactTextString(m) }
 func (*Message) ProtoMessage()    {}
 func (*Message) Descriptor() ([]byte, []int) {
-	return fileDescriptor_stream_bc585796027993bb, []int{1}
+	return fileDescriptor_stream_11be9e0c69aa9a75, []int{1}
 }
 func (m *Message) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Message.Unmarshal(m, b)
@@ -149,7 +149,7 @@ func (m *Ping) Reset()         { *m = Ping{} }
 func (m *Ping) String() string { return proto.CompactTextString(m) }
 func (*Ping) ProtoMessage()    {}
 func (*Ping) Descriptor() ([]byte, []int) {
-	return fileDescriptor_stream_bc585796027993bb, []int{2}
+	return fileDescriptor_stream_11be9e0c69aa9a75, []int{2}
 }
 func (m *Ping) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Ping.Unmarshal(m, b)
@@ -179,7 +179,7 @@ func (m *Pong) Reset()         { *m = Pong{} }
 func (m *Pong) String() string { return proto.CompactTextString(m) }
 func (*Pong) ProtoMessage()    {}
 func (*Pong) Descriptor() ([]byte, []int) {
-	return fileDescriptor_stream_bc585796027993bb, []int{3}
+	return fileDescriptor_stream_11be9e0c69aa9a75, []int{3}
 }
 func (m *Pong) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Pong.Unmarshal(m, b)
@@ -210,7 +210,7 @@ func (m *LookupNodeRequest) Reset()         { *m = LookupNodeRequest{} }
 func (m *LookupNodeRequest) String() string { return proto.CompactTextString(m) }
 func (*LookupNodeRequest) ProtoMessage()    {}
 func (*LookupNodeRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_stream_bc585796027993bb, []int{4}
+	return fileDescriptor_stream_11be9e0c69aa9a75, []int{4}
 }
 func (m *LookupNodeRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LookupNodeRequest.Unmarshal(m, b)
@@ -248,7 +248,7 @@ func (m *LookupNodeResponse) Reset()         { *m = LookupNodeResponse{} }
 func (m *LookupNodeResponse) String() string { return proto.CompactTextString(m) }
 func (*LookupNodeResponse) ProtoMessage()    {}
 func (*LookupNodeResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_stream_bc585796027993bb, []int{5}
+	return fileDescriptor_stream_11be9e0c69aa9a75, []int{5}
 }
 func (m *LookupNodeResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LookupNodeResponse.Unmarshal(m, b)
@@ -286,7 +286,7 @@ func (m *Bytes) Reset()         { *m = Bytes{} }
 func (m *Bytes) String() string { return proto.CompactTextString(m) }
 func (*Bytes) ProtoMessage()    {}
 func (*Bytes) Descriptor() ([]byte, []int) {
-	return fileDescriptor_stream_bc585796027993bb, []int{6}
+	return fileDescriptor_stream_11be9e0c69aa9a75, []int{6}
 }
 func (m *Bytes) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Bytes.Unmarshal(m, b)
@@ -323,9 +323,9 @@ func init() {
 	proto.RegisterType((*Bytes)(nil), "protobuf.Bytes")
 }
 
-func init() { proto.RegisterFile("protobuf/stream.proto", fileDescriptor_stream_bc585796027993bb) }
+func init() { proto.RegisterFile("protobuf/stream.proto", fileDescriptor_stream_11be9e0c69aa9a75) }
 
-var fileDescriptor_stream_bc585796027993bb = []byte{
+var fileDescriptor_stream_11be9e0c69aa9a75 = []byte{
 	// 337 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x64, 0x91, 0xcd, 0x4e, 0xc2, 0x40,
 	0x10, 0x80, 0x53, 0x28, 0x20, 0x03, 0x1e, 0xdc, 0xa8, 0xa9, 0x7f, 0x49, 0x53, 0x8d, 0xe1, 0xb4,
