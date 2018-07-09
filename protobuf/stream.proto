@@ -27,9 +27,6 @@ message Message {
 
     // Seq is the sequence ID.
     uint64 seq = 5;
-
-    // A priority of zero guarantees the message will be received.
-    uint32 priority = 6;
 }
 
 message Ping {
