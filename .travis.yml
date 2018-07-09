@@ -1,7 +1,6 @@
 language: go
 go:
     - "1.10"
-    - "tip"
 
 before_install:
     - go get -t ./...
