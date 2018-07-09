@@ -1,6 +1,6 @@
 language: go
 go:
-    - "1.10"
+    - 1.9
 
 before_install:
     - go get -t -v ./...
@@ -10,7 +10,6 @@ install:
 
 script:
     - go test -coverprofile=coverage.txt -covermode=atomic -bench .
-    #- go test -v -race ./...
 
 after_success:
     - bash <(curl -s https://codecov.io/bash)
