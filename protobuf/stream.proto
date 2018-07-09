@@ -24,6 +24,12 @@ message Message {
 
     // Nonce is the request/response ID. Null if ID associated to a message is not a request/response.
     uint64 nonce = 4;
+
+    // Seq is the sequence ID.
+    uint64 seq = 5;
+
+    // A priority of zero guarantees the message will be received.
+    uint32 priority = 6;
 }
 
 message Ping {
