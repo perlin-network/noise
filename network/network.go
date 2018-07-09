@@ -476,6 +476,7 @@ func (n *Network) Accept(conn net.Conn) {
 			if offset < 0 || offset >= RECV_WINDOW_SIZE {
 				glog.Errorf("Local seq is %d while received seq %d", recvSeq, msg.Seq)
 				recvMutex.Unlock()
+				incoming.Close()
 				return
 			}
 			*recvWindow.Index(offset) = msg
