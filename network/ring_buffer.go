@@ -1,10 +1,12 @@
 package network
 
+// RingBuffer is a circular list.
 type RingBuffer struct {
 	data []interface{}
 	pos  int
 }
 
+// NewRingBuffer returns a new ring buffer with a fixed length.
 func NewRingBuffer(len int) *RingBuffer {
 	return &RingBuffer{
 		data: make([]interface{}, len),
@@ -12,6 +14,7 @@ func NewRingBuffer(len int) *RingBuffer {
 	}
 }
 
+// Index returns an item at pos % len(Ringbuffer) in O(1) time.
 func (b *RingBuffer) Index(pos int) *interface{} {
 	if pos < 0 {
 		panic("index out of bounds")
@@ -29,6 +32,7 @@ func (b *RingBuffer) Index(pos int) *interface{} {
 	return &b.data[target]
 }
 
+// MoveForward shifts all items in the ring buffer N steps.
 func (b *RingBuffer) MoveForward(n int) {
 	if n >= len(b.data) || n < 0 {
 		panic("n out of range")
