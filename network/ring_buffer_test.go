@@ -23,6 +23,6 @@ func TestRingBuffer(t *testing.T) {
 	rb.MoveForward(1)
 	if (*rb.Index(0)).(int) != 2 || (*rb.Index(1)).(int) != 3 ||
 		(*rb.Index(2)).(int) != 4 || (*rb.Index(3)).(int) != 1 {
-			panic("incorrect value(s) after moving forward")
-		}
+		panic("incorrect value(s) after moving forward")
+	}
 }

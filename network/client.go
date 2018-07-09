@@ -81,7 +81,7 @@ func (c *PeerClient) Submit(job func()) {
 	// FIXME: This is a hack to prevent closed c.jobs from panicking the program.
 	defer func() {
 		if err := recover(); err != nil {
-			
+
 		}
 	}()
 

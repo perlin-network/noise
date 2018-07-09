@@ -2,13 +2,13 @@ package network
 
 type RingBuffer struct {
 	data []interface{}
-	pos int
+	pos  int
 }
 
 func NewRingBuffer(len int) *RingBuffer {
-	return &RingBuffer {
+	return &RingBuffer{
 		data: make([]interface{}, len),
-		pos: 0,
+		pos:  0,
 	}
 }
 

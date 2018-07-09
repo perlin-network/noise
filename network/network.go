@@ -74,7 +74,7 @@ type Network struct {
 }
 
 type ConnState struct {
-	session *smux.Session
+	session      *smux.Session
 	messageNonce uint64
 }
 
@@ -195,12 +195,12 @@ func (n *Network) Listen() {
 	var listener net.Listener
 
 	if addrInfo.Protocol == "kcp" {
-		listener, err = kcp.ListenWithOptions(":" + strconv.Itoa(int(addrInfo.Port)), nil, 10, 3)
+		listener, err = kcp.ListenWithOptions(":"+strconv.Itoa(int(addrInfo.Port)), nil, 10, 3)
 		if err != nil {
 			glog.Fatal(err)
 		}
 	} else if addrInfo.Protocol == "tcp" {
-		listener, err = net.Listen("tcp", ":" + strconv.Itoa(int(addrInfo.Port)))
+		listener, err = net.Listen("tcp", ":"+strconv.Itoa(int(addrInfo.Port)))
 	} else {
 		err = errors.New("invalid protocol: " + addrInfo.Protocol)
 	}
@@ -280,7 +280,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 			return nil, err
 		}
 
-		n.Connections.Store(address, &ConnState {
+		n.Connections.Store(address, &ConnState{
 			session: session,
 		})
 

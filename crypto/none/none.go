@@ -6,9 +6,9 @@ import (
 )
 
 func RandomKeyPair() *crypto.KeyPair {
-	kp := &crypto.KeyPair {
+	kp := &crypto.KeyPair{
 		PrivateKey: []byte{},
-		PublicKey: make([]byte, 32),
+		PublicKey:  make([]byte, 32),
 	}
 
 	_, err := rand.Read(kp.PublicKey)
