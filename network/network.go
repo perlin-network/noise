@@ -359,9 +359,7 @@ func (n *Network) Accept(conn net.Conn) {
 	var client *PeerClient
 	var clientInit sync.Once
 
-	recvWindow := NewRingBuffer(RECV_WINDOW_SIZE) // value type = *protobuf.Message
-	recvMessageNonce := uint64(1)
-	recvMutex := &sync.Mutex{}
+	recvWindow := NewRecvWindow(RECV_WINDOW_SIZE)
 
 	var err error
 
@@ -379,38 +377,6 @@ func (n *Network) Accept(conn net.Conn) {
 			outgoing.Close()
 		}
 	}()
-
-	checkRecvWindow := func() error {
-		ready := make([]*protobuf.Message, 0)
-
-		recvMutex.Lock()
-		i := 0
-		for ; i < RECV_WINDOW_SIZE; i++ {
-			cursor := recvWindow.Index(i)
-			if *cursor == nil {
-				break
-			}
-			ready = append(ready, (*cursor).(*protobuf.Message))
-			*cursor = nil
-		}
-		if i > 0 && i < RECV_WINDOW_SIZE {
-			recvWindow.MoveForward(i)
-		}
-		recvMessageNonce += uint64(i)
-		recvMutex.Unlock()
-
-		//glog.Infof("Sending %d messages", len(ready))
-
-		for _, msg := range ready {
-			select {
-			case n.RecvQueue <- msg:
-			default:
-				return errors.New("recv queue is full")
-				//glog.Errorf("recv queue full, dropping messages")
-			}
-		}
-		return nil
-	}
 
 	// Wrap a session around the incoming connection.
 	incoming, err = smux.Server(conn, muxConfig())
@@ -469,18 +435,11 @@ func (n *Network) Accept(conn net.Conn) {
 				return
 			}
 
-			recvMutex.Lock()
-			offset := int(msg.MessageNonce - recvMessageNonce)
-			if offset < 0 || offset >= RECV_WINDOW_SIZE {
-				glog.Errorf("Local message nonce is %d while received %d", recvMessageNonce, msg.MessageNonce)
-				recvMutex.Unlock()
-				incoming.Close()
-				return
+			err = recvWindow.Input(msg)
+			if err == nil {
+				err = recvWindow.Update(n)
 			}
-			*recvWindow.Index(offset) = msg
-			recvMutex.Unlock()
 
-			err = checkRecvWindow()
 			if err != nil {
 				glog.Error(err)
 				incoming.Close()
