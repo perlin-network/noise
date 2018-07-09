@@ -82,12 +82,12 @@ type ConnState struct {
 func (n *Network) Init() {
 	workerCount := runtime.NumCPU() + 1
 
+	// Spawn worker routines for receiving and handling messages in the application layer.
+	go n.handleRecvQueue()
+
 	for i := 0; i < workerCount; i++ {
 		// Spawn worker routines for sending queued messages to the networking layer.
 		go n.handleSendQueue()
-
-		// Spawn worker routines for receiving and handling messages in the application layer.
-		go n.handleRecvQueue()
 	}
 }
 
@@ -127,41 +127,42 @@ func (n *Network) handleRecvQueue() {
 			if client, exists := n.Peers.Load(msg.Sender.Address); exists {
 				client := client.(*PeerClient)
 
-				// Check if the client is ready.
-				if !client.IncomingReady() {
-					continue
-				}
+				client.Submit(func() {
+					// Check if the client is ready.
+					if !client.IncomingReady() {
+						return
+					}
+					var ptr ptypes.DynamicAny
+					if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
+						return
+					}
 
-				var ptr ptypes.DynamicAny
-				if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
-					continue
-				}
+					if channel, exists := client.Requests.Load(msg.Nonce); exists && msg.Nonce > 0 {
+						channel.(chan proto.Message) <- ptr.Message
+						return
+					}
 
-				if channel, exists := client.Requests.Load(msg.Nonce); exists && msg.Nonce > 0 {
-					channel.(chan proto.Message) <- ptr.Message
-					continue
-				}
+					switch ptr.Message.(type) {
+					case *protobuf.Bytes:
+						client.handleBytes(ptr.Message.(*protobuf.Bytes).Data)
+					default:
+						ctx := contextPool.Get().(*PluginContext)
+						ctx.client = client
+						ctx.message = ptr.Message
+						ctx.nonce = msg.Nonce
 
-				switch ptr.Message.(type) {
-				case *protobuf.Bytes:
-					client.handleBytes(ptr.Message.(*protobuf.Bytes).Data)
-				default:
-					ctx := contextPool.Get().(*PluginContext)
-					ctx.client = client
-					ctx.message = ptr.Message
-					ctx.nonce = msg.Nonce
+						// Execute 'on receive message' callback for all plugins.
+						n.Plugins.Each(func(plugin PluginInterface) {
+							err := plugin.Receive(ctx)
 
-					// Execute 'on receive message' callback for all plugins.
-					n.Plugins.Each(func(plugin PluginInterface) {
-						err := plugin.Receive(ctx)
+							if err != nil {
+								glog.Error(err)
+							}
+						})
 
-						if err != nil {
-							glog.Error(err)
-						}
-					})
-
-					contextPool.Put(ctx)
-				}
+						contextPool.Put(ctx)
+					}
+				})
 			}
 		}
 	}
@@ -348,7 +349,7 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 
 // Accept handles peer registration and processes incoming message streams.
 func (n *Network) Accept(conn net.Conn) {
-	const RECV_WINDOW_SIZE = 64
+	const RECV_WINDOW_SIZE = 4096
 
 	var incoming *smux.Session
 	var outgoing *smux.Session
