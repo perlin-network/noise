@@ -5,14 +5,13 @@ go:
 
 before_install:
     - go get -t ./...
-    - go get -u golang.org/x/vgo
 
 install:
     - go get github.com/perlin-network/noise
-    - vgo mod -vendor
 
 script:
-    - vgo test -coverprofile=coverage.txt -covermode=atomic -bench .
+    #- go test -coverprofile=coverage.txt -covermode=atomic -bench .
+    - go test -v ./...
 
 after_success:
     - bash <(curl -s https://codecov.io/bash)
