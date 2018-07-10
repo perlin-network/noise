@@ -10,6 +10,7 @@ import "google/protobuf/any.proto";
 
 import "gogo/protobuf/gogoproto/gogo.proto";
 
+option (gogoproto.equal_all) = true;
 option (gogoproto.goproto_stringer_all) = false;
 option (gogoproto.gostring_all) = true;
 option (gogoproto.marshaler_all) = true;
@@ -20,7 +21,6 @@ option (gogoproto.verbose_equal_all) = true;
 
 // Test options
 // FIXME(jack0): uncomment when fixed https://github.com/gogo/protobuf/issues/407
-// option (gogoproto.equal_all) = true;
 // option (gogoproto.populate_all) = true;
 // option (gogoproto.testgen_all) = true;
 
