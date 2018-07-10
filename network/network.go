@@ -522,7 +522,6 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 		return errors.Errorf("worker must be too busy; failed to send message to %s", address)
 	}
 
-	return nil
 }
 
 // Broadcast asynchronously broadcasts a message to all peer clients.
