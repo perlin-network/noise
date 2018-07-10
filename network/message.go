@@ -1,7 +1,7 @@
 package network
 
 import (
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/peer"
 )
 

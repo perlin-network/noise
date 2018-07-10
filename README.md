@@ -45,8 +45,8 @@
 # install vgo tooling  
 go get -u golang.org/x/vgo
 
-# install protoc-gen-go
-go get -u github.com/golang/protobuf/protoc-gen-go
+# install protoc-gen-gogofaster
+go get github.com/gogo/protobuf/protoc-gen-gogofaster
 
 # download the dependencies to vendor folder  
 vgo mod -vendor  

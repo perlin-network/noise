@@ -3,6 +3,7 @@ module github.com/perlin-network/noise
 require (
 	github.com/NebulousLabs/fastrand v0.0.0-20180208210444-3cf7173006a0
 	github.com/NebulousLabs/go-upnp v0.0.0-20180202185039-29b680b06c82
+	github.com/gogo/protobuf v1.0.0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/protobuf v1.1.0
 	github.com/klauspost/cpuid v0.0.0-20180405133222-e7e905edc00e
