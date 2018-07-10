@@ -8,3 +8,5 @@ debug
 vendor
 
 *.test
+coverage.tmp.txt
+coverage.txt
