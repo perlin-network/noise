@@ -19,9 +19,10 @@ option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.verbose_equal_all) = true;
 
 // Test options
-option (gogoproto.equal_all) = true;
-option (gogoproto.populate_all) = true;
-option (gogoproto.testgen_all) = true;
+// FIXME(jack0): uncomment when fixed https://github.com/gogo/protobuf/issues/407
+// option (gogoproto.equal_all) = true;
+// option (gogoproto.populate_all) = true;
+// option (gogoproto.testgen_all) = true;
 
 message ID {
     bytes public_key = 1;
