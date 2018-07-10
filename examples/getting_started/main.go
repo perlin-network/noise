@@ -68,5 +68,4 @@ func main() {
 
 	select {}
 
-	glog.Flush()
 }

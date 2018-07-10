@@ -47,7 +47,7 @@ func (b *Backoff) TimeoutExceeded() bool {
 	return b.attempt >= math.Max(0, b.MaxAttempts)
 }
 
-// ForAttempt calculates the approprate exponential duration given an attempt count
+// ForAttempt calculates the appropriate exponential duration given an attempt count
 func (b *Backoff) ForAttempt(attempt float64) time.Duration {
 	min := b.MinInterval
 	max := b.MaxInterval
@@ -67,7 +67,7 @@ func (b *Backoff) ForAttempt(attempt float64) time.Duration {
 	}
 
 	// Calculate the new duration
-	durf := float64(min) * math.Pow(b.Factor, attempt)
+	durf := float64(min) * math.Pow(factor, attempt)
 
 	// Check for overflow
 	if durf > maxInt64 {
@@ -85,7 +85,7 @@ func (b *Backoff) ForAttempt(attempt float64) time.Duration {
 	return dur
 }
 
-// Resets the attempt number for Backoff.
+// Reset resets the attempt number for Backoff.
 func (b *Backoff) Reset() {
 	b.attempt = 0
 }

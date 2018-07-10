@@ -30,9 +30,9 @@ func (state *BasicPlugin) Receive(ctx *network.PluginContext) error {
 	return nil
 }
 
-// ExampleBasic demonstrates how to broadcast a message to a set of peers that discover
+// ExampleBasicPlugin demonstrates how to broadcast a message to a set of peers that discover
 // each other through peer discovery.
-func ExampleBasic() {
+func ExampleBasicPlugin() {
 	flag.Parse()
 
 	numNodes := 3

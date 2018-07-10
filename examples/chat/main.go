@@ -81,5 +81,4 @@ func main() {
 		net.Broadcast(&messages.ChatMessage{Message: input})
 	}
 
-	glog.Flush()
 }
