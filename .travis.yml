@@ -19,8 +19,7 @@ before_install:
 install: true
 
 script:
-    - vgo test -coverprofile=coverage.tmp.txt -covermode=atomic -bench -race ./...
-    - cat coverage.tmp.txt | grep -v ".pb.go" > coverage.txt
+    - vgo test -coverprofile=coverage.txt -covermode=atomic -bench -race ./...
 
 after_success:
     - bash <(curl -s https://codecov.io/bash)

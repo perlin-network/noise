@@ -9,5 +9,4 @@ vendor
 go.sum
 
 *.test
-coverage.tmp.txt
 coverage.txt
