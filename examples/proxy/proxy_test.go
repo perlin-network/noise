@@ -90,11 +90,11 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 	return nil
 }
 
-// ProxyExample demonstrates how to send a message to nodes which do not directly have connections
+// ExampleProxyPlugin demonstrates how to send a message to nodes which do not directly have connections
 // to their desired messaging target.
 //
 // Messages are proxied to closer nodes using the Kademlia routing table.
-func ProxyExample() {
+func ExampleProxyPlugin() {
 	numNodes := 5
 	sender := 0
 	target := numNodes - 1
