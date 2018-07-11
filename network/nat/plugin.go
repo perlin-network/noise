@@ -1,48 +1,85 @@
 package nat
 
 import (
+	"github.com/fd/go-nat"
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
+	"net"
+	"time"
 )
 
 type plugin struct {
 	*network.Plugin
 
-	mapping *LocalPortMappingInfo
+	gateway nat.NAT
+
+	internalIP net.IP
+	externalIP net.IP
+
+	internalPort int
+	externalPort int
 }
 
 func (state *plugin) Startup(net *network.Network) {
-	glog.Info("Setting up UPnP...")
+	glog.Info("Setting up NAT traversal...")
 
 	info, err := network.ParseAddress(net.Address)
 	if err != nil {
 		return
 	}
 
-	mapping, err := ForwardPort(info.Port)
-	if err == nil {
-		defer mapping.Close()
+	state.internalPort = int(info.Port)
 
-		info.Host = mapping.ExternalIP
-		info.Port = mapping.ExternalPort
-
-		// Set peer information base off of port mapping info.
-		net.Address = info.String()
-		net.ID = peer.CreateID(net.Address, net.Keys.PublicKey)
-
-		// Keep reference to port mapping.
-		state.mapping = mapping
-	} else {
-		glog.Warning("Cannot setup UPnP mapping: ", err)
+	gateway, err := nat.DiscoverGateway()
+	if err != nil {
+		glog.Warning("Unable to discover gateway: ", err)
+		return
 	}
+
+	state.internalIP, err = gateway.GetInternalAddress()
+	if err != nil {
+		glog.Warning("Unable to fetch internal IP: ", err)
+		return
+	}
+
+	state.externalIP, err = gateway.GetExternalAddress()
+	if err != nil {
+		glog.Warning("Unable to fetch external IP: ", err)
+		return
+	}
+
+	glog.Infof("Discovered gateway following the protocol %s.", gateway.Type())
+
+	glog.Info("Internal IP: ", state.internalIP.String())
+	glog.Info("External IP: ", state.externalIP.String())
+
+	state.externalPort, err = gateway.AddPortMapping("tcp", state.internalPort, "noise", 1*time.Second)
+
+	if err != nil {
+		glog.Warning("Cannot setup port mapping: ", err)
+		return
+	}
+
+	glog.Infof("External port %d now forwards to your local port %d.", state.externalPort, state.internalPort)
+
+	state.gateway = gateway
+
+	info.Host = state.externalIP.String()
+	info.Port = uint16(state.externalPort)
+
+	// Set peer information based off of port mapping info.
+	net.Address = info.String()
+	net.ID = peer.CreateID(net.Address, net.Keys.PublicKey)
+
+	glog.Infof("Other peers may connect to you through the address %s.", net.Address)
 }
 
 func (state *plugin) Cleanup(net *network.Network) {
-	if state.mapping != nil {
-		glog.Info("Removing UPnP port binding...")
+	if state.gateway != nil {
+		glog.Info("Removing port binding...")
 
-		err := state.mapping.Close()
+		err := state.gateway.DeletePortMapping("tcp", state.internalPort)
 		if err != nil {
 			glog.Error(err)
 		}
