@@ -28,10 +28,10 @@
 ## Features  
   
 - Real-time, bidirectional streaming between peers via. [KCP](https://github.com/xtaci/kcp-go)/TCP and [Protobufs](https://developers.google.com/protocol-buffers/).
+- NAT traversal/automated port forwarding (NAT-PMP, UPnP).
 - [NaCL/Ed25519](https://tweetnacl.cr.yp.to/) scheme for peer identities and signatures.
 - Kademlia DHT-inspired peer discovery.  
 - Request/Response and Messaging RPC.
-- UPnP/NAT Port Forwarding.
 - Logging via. [glog](https://github.com/golang/glog).
 - Plugin system.  
   
@@ -184,7 +184,7 @@ builder.AddPlugin(new(discovery.Plugin))
 // Enables exponential backoff upon peer disconnection. Check documentation for more info.
 builder.AddPlugin(new(backoff.Plugin))
 
-// Enables automated UPnP port forwarding for your node. Check documentation for more info.
+// Enables automated NAT traversal/port forwarding for your node. Check documentation for more info.
 nat.RegisterPlugin(builder)
 ```
 

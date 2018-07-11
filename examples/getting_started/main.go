@@ -21,14 +21,14 @@ func main() {
 	hostFlag := flag.String("host", "localhost", "host to listen to")
 	protocolFlag := flag.String("protocol", "tcp", "protocol to use (kcp/tcp)")
 	peersFlag := flag.String("peers", "", "peers to connect to")
-	upnpFlag := flag.Bool("upnp", false, "enable upnp")
+	natFlag := flag.Bool("nat", false, "enable nat traversal")
 	reconnectFlag := flag.Bool("reconnect", false, "enable reconnections")
 	flag.Parse()
 
 	port := uint16(*portFlag)
 	host := *hostFlag
 	protocol := *protocolFlag
-	upnpEnabled := *upnpFlag
+	natEnabled := *natFlag
 	reconnectEnabled := *reconnectFlag
 	peers := strings.Split(*peersFlag, ",")
 
@@ -41,8 +41,8 @@ func main() {
 	builder.SetKeys(keys)
 	builder.SetAddress(network.FormatAddress(protocol, host, port))
 
-	// Register UPnP plugin.
-	if upnpEnabled {
+	// Register NAT traversal plugin.
+	if natEnabled {
 		nat.RegisterPlugin(builder)
 	}
 
