@@ -1,3 +1,3 @@
-//go:generate protoc --go_out=. protobuf/stream.proto
+//go:generate ./gen_proto.sh
 
 package main
