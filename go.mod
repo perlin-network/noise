@@ -2,6 +2,7 @@ module github.com/perlin-network/noise
 
 require (
 	github.com/fd/go-nat v1.0.0
+	github.com/gogo/protobuf v1.0.0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/protobuf v1.1.0
 	github.com/klauspost/cpuid v0.0.0-20180405133222-e7e905edc00e

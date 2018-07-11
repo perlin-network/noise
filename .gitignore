@@ -6,5 +6,7 @@ noise
 chat
 debug
 vendor
+go.sum
 
 *.test
+coverage.txt
