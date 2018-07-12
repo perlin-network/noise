@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/crypto/hashing/blake2b"
-	"github.com/perlin-network/noise/crypto/signing/ed25519"
+	"github.com/perlin-network/noise/crypto/hashing"
+	"github.com/perlin-network/noise/crypto/signing"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
@@ -28,8 +28,8 @@ type Builder struct {
 // NewBuilder lets you configure a network to build.
 func NewBuilder() *Builder {
 	return &Builder{
-		signaturePolicy: ed25519.New(),
-		hashPolicy:      blake2b.New(),
+		signaturePolicy: signing.NewEd25519(),
+		hashPolicy:      hashing.NewBlake2b(),
 	}
 }
 

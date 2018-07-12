@@ -1,4 +1,4 @@
-package blake2b
+package hashing
 
 import (
 	blake2blib "golang.org/x/crypto/blake2b"
@@ -6,7 +6,11 @@ import (
 
 type Blake2b struct{}
 
-func New() *Blake2b {
+var (
+	_ HashPolicy = (*Blake2b)(nil)
+)
+
+func NewBlake2b() *Blake2b {
 	return &Blake2b{}
 }
 

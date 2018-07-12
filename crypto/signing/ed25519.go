@@ -1,0 +1,53 @@
+package signing
+
+import (
+	"crypto/rand"
+
+	ed25519lib "golang.org/x/crypto/ed25519"
+)
+
+type Ed25519 struct {
+}
+
+var (
+	_ SignaturePolicy = (*Ed25519)(nil)
+)
+
+func NewEd25519() *Ed25519 {
+	p := &Ed25519{}
+	return p
+}
+
+func (p *Ed25519) GenerateKeys() ([]byte, []byte, error) {
+	publicKey, privateKey, err := ed25519lib.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+	return privateKey, publicKey, nil
+}
+
+func (p *Ed25519) PrivateKeySize() int {
+	return ed25519lib.PrivateKeySize
+}
+
+func (p *Ed25519) PrivateToPublic(privateKey []byte) ([]byte, error) {
+	return ([]byte)(ed25519lib.PrivateKey(privateKey).Public().(ed25519lib.PublicKey)), nil
+}
+
+func (p *Ed25519) PublicKeySize() int {
+	return ed25519lib.PublicKeySize
+}
+
+func (p *Ed25519) Sign(privateKey []byte, message []byte) []byte {
+	if len(privateKey) != ed25519lib.PrivateKeySize {
+		return make([]byte, 0)
+	}
+	return ed25519lib.Sign(ed25519lib.PrivateKey(privateKey), message)
+}
+
+func (p *Ed25519) Verify(publicKey []byte, message []byte, signature []byte) bool {
+	if len(publicKey) != ed25519lib.PublicKeySize {
+		return false
+	}
+	return ed25519lib.Verify(publicKey, message, signature)
+}

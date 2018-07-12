@@ -1,5 +1,3 @@
-//go:generate protoc --go_out=. messages/bench.proto
-
 package main
 
 import (
@@ -12,7 +10,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/perlin-network/noise/crypto/signing/ed25519"
+	"github.com/perlin-network/noise/crypto/signing"
 	"github.com/perlin-network/noise/examples/cluster_benchmark/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/backoff"
@@ -92,7 +90,7 @@ func main() {
 	protocol := *protocolFlag
 	peers := strings.Split(*peersFlag, ",")
 
-	keys := ed25519.RandomKeyPair()
+	keys := signing.NewEd25519()
 
 	go setupPPROF(*portFlag)
 
