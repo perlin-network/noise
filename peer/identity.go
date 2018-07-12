@@ -57,5 +57,5 @@ func (id ID) PrefixLen() int {
 			return i*8 + bits.LeadingZeros8(uint8(b))
 		}
 	}
-	return len(id.PublicKey) * 8
+	return len(id.PublicKey)*8 - 1
 }

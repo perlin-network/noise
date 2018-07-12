@@ -15,7 +15,7 @@ var (
 	_ crypto.SignaturePolicy = (*Ed25519)(nil)
 )
 
-func NewEd25519() *Ed25519 {
+func New() *Ed25519 {
 	return &Ed25519{}
 }
 
@@ -54,7 +54,7 @@ func (p *Ed25519) Verify(publicKey []byte, message []byte, signature []byte) boo
 }
 
 func RandomKeyPair() *crypto.KeyPair {
-	p := NewEd25519()
+	p := New()
 	publicKey, privateKey, err := p.GenerateKeys()
 	if err != nil {
 		panic(err)

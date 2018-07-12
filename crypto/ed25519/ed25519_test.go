@@ -7,7 +7,7 @@ import (
 
 func TestEd25519(t *testing.T) {
 	t.Parallel()
-	p := NewEd25519()
+	p := New()
 
 	privateKey, publicKey, err := p.GenerateKeys()
 	if err != nil {

@@ -28,8 +28,8 @@ type Builder struct {
 // NewBuilder lets you configure a network to build.
 func NewBuilder() *Builder {
 	return &Builder{
-		signaturePolicy: ed25519.NewEd25519(),
-		hashPolicy:      blake2b.NewBlake2b(),
+		signaturePolicy: ed25519.New(),
+		hashPolicy:      blake2b.New(),
 	}
 }
 

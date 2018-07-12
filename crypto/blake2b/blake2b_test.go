@@ -10,7 +10,7 @@ import (
 
 func TestHash(t *testing.T) {
 	t.Parallel()
-	hp := NewBlake2b()
+	hp := New()
 
 	r := crypto.Hash(hp, big.NewInt(123))
 
@@ -26,7 +26,7 @@ func TestHash(t *testing.T) {
 
 func TestHashBytes(t *testing.T) {
 	t.Parallel()
-	hp := NewBlake2b()
+	hp := New()
 
 	r := hp.HashBytes([]byte("123"))
 

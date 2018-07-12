@@ -12,7 +12,7 @@ var (
 	_ crypto.HashPolicy = (*Blake2b)(nil)
 )
 
-func NewBlake2b() *Blake2b {
+func New() *Blake2b {
 	return &Blake2b{}
 }
 
