@@ -2,6 +2,7 @@ package peer
 
 import (
 	"bytes"
+	"encoding/binary"
 	"testing"
 )
 
@@ -27,7 +28,7 @@ func TestID(t *testing.T) {
 	})
 
 	t.Run("String()", func(t *testing.T) {
-		if id1.String() != "ID{PublicKey: [49 50 51 52 53 54 55 56 57 48 49 50 51 52 53 54 55 56 57 48 49 50 51 52 53 54 55 56 57 48 49 50], Address: localhost:12345}" {
+		if id1.String() != "ID{Address: localhost:12345, PublicKey: [49 50 51 52 53 54 55 56 57 48 49 50 51 52 53 54 55 56 57 48 49 50 51 52 53 54 55 56 57 48 49 50]}" {
 			t.Fatalf("string() error: %s", id1.String())
 		}
 	})
@@ -41,6 +42,10 @@ func TestID(t *testing.T) {
 	t.Run("Less()", func(t *testing.T) {
 		if id1.Less(id2) {
 			t.Fatalf("%s < %s", id1.PublicKeyHex(), id2.PublicKeyHex())
+		}
+
+		if !id2.Less(id1) {
+			t.Fatalf("%s > %s", id2.PublicKeyHex(), id1.PublicKeyHex())
 		}
 
 		if !id1.Less(id3) {
@@ -64,6 +69,29 @@ func TestID(t *testing.T) {
 
 		if !xor.Equals(result) {
 			t.Fatalf("%v != %v", xor, result)
+		}
+	})
+
+	t.Run("PrefixLen()", func(t *testing.T) {
+		testCases := []struct {
+			publicKey uint32
+			expected  int
+		}{
+			{1, 7},
+			{2, 6},
+			{4, 5},
+			{8, 4},
+			{16, 3},
+			{32, 2},
+			{64, 1},
+		}
+		for _, tt := range testCases {
+			publicKey := make([]byte, 4)
+			binary.LittleEndian.PutUint32(publicKey, tt.publicKey)
+			id := CreateID(address, publicKey)
+			if id.PrefixLen() != tt.expected {
+				t.Fatalf("PrefixLen() expected: %d, value: %d", tt.expected, id.PrefixLen())
+			}
 		}
 	})
 }

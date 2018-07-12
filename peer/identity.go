@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"math/bits"
 
 	"github.com/perlin-network/noise/protobuf"
 )
@@ -13,12 +14,12 @@ type ID protobuf.ID
 
 // CreateID is a factory function creating ID
 func CreateID(address string, publicKey []byte) ID {
-	return ID{PublicKey: publicKey, Address: address}
+	return ID{Address: address, PublicKey: publicKey}
 }
 
 //
 func (id ID) String() string {
-	return fmt.Sprintf("ID{PublicKey: %v, Address: %v}", id.PublicKey, id.Address)
+	return fmt.Sprintf("ID{Address: %v, PublicKey: %v}", id.Address, id.PublicKey)
 }
 
 // Equals determines if two peer IDs are equal to each other based on the contents of their public keys.
@@ -51,12 +52,10 @@ func (id ID) Xor(other ID) ID {
 
 // PrefixLen returns the number of prefixed zeros in a peer ID.
 func (id ID) PrefixLen() int {
-	for x := 0; x < len(id.PublicKey); x++ {
-		for y := 0; y < 8; y++ {
-			if (id.PublicKey[x]>>uint8(7-y))&0x1 != 0 {
-				return x*8 + y
-			}
+	for i, b := range id.PublicKey {
+		if b != 0 {
+			return i*8 + bits.LeadingZeros8(uint8(b))
 		}
 	}
-	return len(id.PublicKey)*8 - 1
+	return len(id.PublicKey) * 8
 }
