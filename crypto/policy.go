@@ -7,6 +7,7 @@ import (
 	"math/big"
 )
 
+// SignaturePolicy defines the creation and validation of a cryptographic signature.
 type SignaturePolicy interface {
 	GenerateKeys() ([]byte, []byte, error)
 	PrivateKeySize() int
@@ -16,10 +17,12 @@ type SignaturePolicy interface {
 	Verify(publicKey []byte, message []byte, signature []byte) bool
 }
 
+// HashPolicy defines how to create a cryptographic hash.
 type HashPolicy interface {
 	HashBytes(b []byte) []byte
 }
 
+// Hash returns a hash of a big integer given a hash policy.
 func Hash(hp HashPolicy, s *big.Int) *big.Int {
 	return s.SetBytes(hp.HashBytes(s.Bytes()))
 }

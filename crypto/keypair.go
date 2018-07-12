@@ -2,19 +2,20 @@ package crypto
 
 import (
 	"encoding/hex"
-	"errors"
 	"fmt"
 )
 
+// KeyPair represents a private and public key pair.
 type KeyPair struct {
 	PrivateKey []byte
 	PublicKey  []byte
 }
 
 func newErrPrivKeySize(length int, sp SignaturePolicy) error {
-	return errors.New(fmt.Sprintf("private key length %d does not equal expected key length %d", length, sp.PrivateKeySize()))
+	return fmt.Errorf("private key length %d does not equal expected key length %d", length, sp.PrivateKeySize())
 }
 
+// Sign returns a cryptographic signature that is a signed hash of the message.
 func (k *KeyPair) Sign(sp SignaturePolicy, hp HashPolicy, message []byte) ([]byte, error) {
 	if len(k.PrivateKey) != sp.PrivateKeySize() {
 		return nil, newErrPrivKeySize(len(k.PrivateKey), sp)
@@ -26,28 +27,32 @@ func (k *KeyPair) Sign(sp SignaturePolicy, hp HashPolicy, message []byte) ([]byt
 	return signature, nil
 }
 
+// PrivateKeyHex returns the hex representation of the private key.
 func (k *KeyPair) PrivateKeyHex() string {
 	return hex.EncodeToString(k.PrivateKey)
 }
 
+// PublicKeyHex returns the hex representation of the public key.
 func (k *KeyPair) PublicKeyHex() string {
 	return hex.EncodeToString(k.PublicKey)
 }
 
+// String returns the private and public key pair.
 func (k *KeyPair) String() (string, string) {
 	return k.PrivateKeyHex(), k.PublicKeyHex()
 }
 
-func FromPrivateKey(sp SignaturePolicy, hp HashPolicy, privateKey string) (*KeyPair, error) {
+// FromPrivateKey returns a KeyPair given a signature policy and private key.
+func FromPrivateKey(sp SignaturePolicy, privateKey string) (*KeyPair, error) {
 	rawPrivateKey, err := hex.DecodeString(privateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	return FromPrivateKeyBytes(sp, hp, rawPrivateKey)
+	return fromPrivateKeyBytes(sp, rawPrivateKey)
 }
 
-func FromPrivateKeyBytes(sp SignaturePolicy, hp HashPolicy, rawPrivateKey []byte) (*KeyPair, error) {
+func fromPrivateKeyBytes(sp SignaturePolicy, rawPrivateKey []byte) (*KeyPair, error) {
 	if len(rawPrivateKey) != sp.PrivateKeySize() {
 		return nil, newErrPrivKeySize(len(rawPrivateKey), sp)
 	}
@@ -65,6 +70,7 @@ func FromPrivateKeyBytes(sp SignaturePolicy, hp HashPolicy, rawPrivateKey []byte
 	return keyPair, nil
 }
 
+// Verify returns true if the given signature was generated using the given public key, message, signature policy, and hash policy.
 func Verify(sp SignaturePolicy, hp HashPolicy, publicKey []byte, message []byte, signature []byte) bool {
 	// Public key must be a set size.
 	if len(publicKey) != sp.PublicKeySize() {

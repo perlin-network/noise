@@ -11,7 +11,7 @@ import (
 // BucketSize defines the NodeID, Key, and routing table data structures.
 const BucketSize = 16
 
-// RoutingTable contains one bucket list for lookups
+// RoutingTable contains one bucket list for lookups.
 type RoutingTable struct {
 	// Current node's ID.
 	self peer.ID
@@ -19,13 +19,13 @@ type RoutingTable struct {
 	buckets []*Bucket
 }
 
-// Bucket holds a list of contacts of this node
+// Bucket holds a list of contacts of this node.
 type Bucket struct {
 	*list.List
 	mutex *sync.RWMutex
 }
 
-// NewBucket is a Factory method of Bucket, contains an empty list
+// NewBucket is a Factory method of Bucket, contains an empty list.
 func NewBucket() *Bucket {
 	return &Bucket{
 		List:  list.New(),
@@ -33,8 +33,7 @@ func NewBucket() *Bucket {
 	}
 }
 
-// CreateRoutingTable is a Factory method of RoutingTable
-// , contains empty buckets
+// CreateRoutingTable is a Factory method of RoutingTable containing empty buckets.
 func CreateRoutingTable(id peer.ID) *RoutingTable {
 	table := &RoutingTable{
 		self:    id,
@@ -54,7 +53,7 @@ func (t *RoutingTable) Self() peer.ID {
 	return t.self
 }
 
-// Update moves a peer to the front of a bucket int he routing table.
+// Update moves a peer to the front of a bucket in the routing table.
 func (t *RoutingTable) Update(target peer.ID) {
 	if len(t.self.PublicKey) != len(target.PublicKey) {
 		return
@@ -87,7 +86,7 @@ func (t *RoutingTable) Update(target peer.ID) {
 	bucket.mutex.Unlock()
 }
 
-// GetPeers returns an unique list of all peers within the routing network (excluding yourself).
+// GetPeers returns a unique list of all peers within the routing network (excluding itself).
 func (t *RoutingTable) GetPeers() (peers []peer.ID) {
 	visited := make(map[string]struct{})
 	visited[t.self.PublicKeyHex()] = struct{}{}
@@ -109,7 +108,7 @@ func (t *RoutingTable) GetPeers() (peers []peer.ID) {
 	return
 }
 
-// GetPeerAddresses returns an unique list of all peer addresses within the routing network.
+// GetPeerAddresses returns a unique list of all peer addresses within the routing network.
 func (t *RoutingTable) GetPeerAddresses() (peers []string) {
 	visited := make(map[string]struct{})
 	visited[t.self.PublicKeyHex()] = struct{}{}
@@ -131,7 +130,7 @@ func (t *RoutingTable) GetPeerAddresses() (peers []string) {
 	return
 }
 
-// RemovePeer removes a peer from the routing table. O(bucket_size).
+// RemovePeer removes a peer from the routing table with O(bucket_size) time complexity.
 func (t *RoutingTable) RemovePeer(target peer.ID) bool {
 	bucketID := target.Xor(t.self).PrefixLen()
 	bucket := t.Bucket(bucketID)
@@ -152,7 +151,7 @@ func (t *RoutingTable) RemovePeer(target peer.ID) bool {
 	return false
 }
 
-// PeerExists check if a peer exists in the routing table. O(bucket_size).
+// PeerExists checks if a peer exists in the routing table with O(bucket_size) time complexity.
 func (t *RoutingTable) PeerExists(target peer.ID) bool {
 	bucketID := target.Xor(t.self).PrefixLen()
 	bucket := t.Bucket(bucketID)
@@ -170,7 +169,7 @@ func (t *RoutingTable) PeerExists(target peer.ID) bool {
 	return false
 }
 
-// FindClosestPeers returns a list of k(count param) peers with smallest XOR distance
+// FindClosestPeers returns a list of k(count) peers with smallest XOR distance.
 func (t *RoutingTable) FindClosestPeers(target peer.ID, count int) (peers []peer.ID) {
 	if len(t.self.PublicKey) != len(target.PublicKey) {
 		return []peer.ID{}
@@ -221,7 +220,7 @@ func (t *RoutingTable) FindClosestPeers(target peer.ID, count int) (peers []peer
 	return peers
 }
 
-// Bucket returns a specific Bucket by id
+// Bucket returns a specific Bucket by ID.
 func (t *RoutingTable) Bucket(id int) *Bucket {
 	if id >= 0 && id < len(t.buckets) {
 		return t.buckets[id]

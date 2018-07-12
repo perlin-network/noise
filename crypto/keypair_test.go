@@ -75,7 +75,6 @@ func TestFromPrivateKey(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	sp := mocks.NewMockSignaturePolicy(mockCtrl)
-	hp := mocks.NewMockHashPolicy(mockCtrl)
 
 	// mock inputs
 	privateKey := "1234567890"
@@ -91,7 +90,7 @@ func TestFromPrivateKey(t *testing.T) {
 		PublicKey:  publicKey,
 	}
 
-	kp2, err := FromPrivateKey(sp, hp, privateKey)
+	kp2, err := FromPrivateKey(sp, privateKey)
 	if err != nil {
 		t.Errorf("FromPrivateKey() = %v, expected <nil>", err)
 	}
