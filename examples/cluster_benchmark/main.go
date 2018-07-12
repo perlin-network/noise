@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/perlin-network/noise/crypto/signing"
+	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/examples/cluster_benchmark/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/backoff"
@@ -90,7 +90,7 @@ func main() {
 	protocol := *protocolFlag
 	peers := strings.Split(*peersFlag, ",")
 
-	keys := signing.NewEd25519()
+	keys := ed25519.NewEd25519()
 
 	go setupPPROF(*portFlag)
 

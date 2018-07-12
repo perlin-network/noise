@@ -1,13 +1,15 @@
-package hashing
+package blake2b
 
 import (
+	"github.com/perlin-network/noise/crypto"
+
 	blake2blib "golang.org/x/crypto/blake2b"
 )
 
 type Blake2b struct{}
 
 var (
-	_ HashPolicy = (*Blake2b)(nil)
+	_ crypto.HashPolicy = (*Blake2b)(nil)
 )
 
 func NewBlake2b() *Blake2b {

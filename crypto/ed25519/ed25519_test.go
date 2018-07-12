@@ -1,4 +1,4 @@
-package signing
+package ed25519
 
 import (
 	"reflect"

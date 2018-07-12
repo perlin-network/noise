@@ -1,16 +1,18 @@
-package hashing
+package blake2b
 
 import (
 	"bytes"
 	"math/big"
 	"testing"
+
+	"github.com/perlin-network/noise/crypto"
 )
 
 func TestHash(t *testing.T) {
 	t.Parallel()
 	hp := NewBlake2b()
 
-	r := Hash(hp, big.NewInt(123))
+	r := crypto.Hash(hp, big.NewInt(123))
 
 	n := new(big.Int)
 	n, ok := n.SetString("89391711502145780362310349925943903708999319576398061903082165979787487688967", 10)

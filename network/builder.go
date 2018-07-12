@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/crypto/hashing"
-	"github.com/perlin-network/noise/crypto/signing"
+	"github.com/perlin-network/noise/crypto/blake2b"
+	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
@@ -21,15 +21,15 @@ type Builder struct {
 	plugins     *PluginList
 	pluginCount int
 
-	signaturePolicy signing.SignaturePolicy
-	hashPolicy      hashing.HashPolicy
+	signaturePolicy crypto.SignaturePolicy
+	hashPolicy      crypto.HashPolicy
 }
 
 // NewBuilder lets you configure a network to build.
 func NewBuilder() *Builder {
 	return &Builder{
-		signaturePolicy: signing.NewEd25519(),
-		hashPolicy:      hashing.NewBlake2b(),
+		signaturePolicy: ed25519.NewEd25519(),
+		hashPolicy:      blake2b.NewBlake2b(),
 	}
 }
 
@@ -44,12 +44,12 @@ func (builder *Builder) SetAddress(address string) {
 }
 
 // SetSignaturePolicy sets the signature policy for the network.
-func (builder *Builder) SetSignaturePolicy(policy signing.SignaturePolicy) {
+func (builder *Builder) SetSignaturePolicy(policy crypto.SignaturePolicy) {
 	builder.signaturePolicy = policy
 }
 
 // SetHashPolicy sets the hash policy for the network.
-func (builder *Builder) SetHashPolicy(policy hashing.HashPolicy) {
+func (builder *Builder) SetHashPolicy(policy crypto.HashPolicy) {
 	builder.hashPolicy = policy
 }
 

@@ -1,7 +1,9 @@
-package signing
+package ed25519
 
 import (
 	"crypto/rand"
+
+	"github.com/perlin-network/noise/crypto"
 
 	ed25519lib "golang.org/x/crypto/ed25519"
 )
@@ -10,12 +12,11 @@ type Ed25519 struct {
 }
 
 var (
-	_ SignaturePolicy = (*Ed25519)(nil)
+	_ crypto.SignaturePolicy = (*Ed25519)(nil)
 )
 
 func NewEd25519() *Ed25519 {
-	p := &Ed25519{}
-	return p
+	return &Ed25519{}
 }
 
 func (p *Ed25519) GenerateKeys() ([]byte, []byte, error) {
@@ -50,4 +51,16 @@ func (p *Ed25519) Verify(publicKey []byte, message []byte, signature []byte) boo
 		return false
 	}
 	return ed25519lib.Verify(publicKey, message, signature)
+}
+
+func RandomKeyPair() *crypto.KeyPair {
+	p := NewEd25519()
+	publicKey, privateKey, err := p.GenerateKeys()
+	if err != nil {
+		panic(err)
+	}
+	return &crypto.KeyPair{
+		PublicKey:  publicKey,
+		PrivateKey: privateKey,
+	}
 }

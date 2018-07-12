@@ -30,7 +30,6 @@ func TestKeyPair(t *testing.T) {
 	signature := []byte("signed test message")
 
 	// setup expected mock return values
-	sp.EXPECT().GenerateKeys().Return(privateKey, publicKey, nil).Times(1)
 	sp.EXPECT().PrivateKeySize().Return(len(privateKey)).AnyTimes()
 	sp.EXPECT().PublicKeySize().Return(len(publicKey)).AnyTimes()
 	sp.EXPECT().Sign(privateKey, hashed).Return(signature).Times(1)
@@ -38,9 +37,12 @@ func TestKeyPair(t *testing.T) {
 
 	hp.EXPECT().HashBytes(message).Return(hashed).AnyTimes()
 
-	kp := NewKeyPair(sp, hp)
+	kp := KeyPair{
+		PrivateKey: privateKey,
+		PublicKey:  publicKey,
+	}
 
-	sig, err := kp.Sign(message)
+	sig, err := kp.Sign(sp, hp, message)
 	if err != nil {
 		t.Errorf("Sign() = %v, expected <nil>", err)
 	}
@@ -48,7 +50,7 @@ func TestKeyPair(t *testing.T) {
 		t.Errorf("Sign() = '%s', expected '%s'", sig, []byte("signed test message"))
 	}
 
-	if !kp.Verify(message, signature) {
+	if !Verify(sp, hp, publicKey, message, signature) {
 		t.Errorf("Verify('%s', '%s') = false, expected true", message, signature)
 	}
 
@@ -81,11 +83,13 @@ func TestFromPrivateKey(t *testing.T) {
 	publicKey := []byte("0987654321")
 
 	// setup expected mock return values
-	sp.EXPECT().GenerateKeys().Return(privateKeyHexBytes, publicKey, nil).Times(1)
 	sp.EXPECT().PrivateKeySize().Return(len(privateKeyHexBytes)).Times(1)
 	sp.EXPECT().PrivateToPublic(privateKeyHexBytes).Return(publicKey, nil).Times(1)
 
-	kp1 := NewKeyPair(sp, hp)
+	kp1 := &KeyPair{
+		PrivateKey: privateKeyHexBytes,
+		PublicKey:  publicKey,
+	}
 
 	kp2, err := FromPrivateKey(sp, hp, privateKey)
 	if err != nil {
