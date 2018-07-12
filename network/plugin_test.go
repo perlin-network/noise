@@ -2,8 +2,10 @@ package network
 
 import (
 	"fmt"
-	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"testing"
+
+	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/signing"
 )
 
 var (
@@ -47,7 +49,7 @@ func TestPluginHooks(t *testing.T) {
 
 	for i := 0; i < nodeCount; i++ {
 		builder := NewBuilder()
-		builder.SetKeys(ed25519.RandomKeyPair())
+		builder.SetKeys(crypto.NewKeyPair(signing.NewEd25519(), nil))
 		builder.SetAddress(FormatAddress("tcp", host, uint16(port+i)))
 		builder.AddPlugin(new(MockPlugin))
 

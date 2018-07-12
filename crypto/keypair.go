@@ -59,13 +59,7 @@ func (k *KeyPair) String() (string, string) {
 }
 
 func (k *KeyPair) Verify(message []byte, signature []byte) bool {
-	// Public key must be a set size.
-	if len(k.PublicKey) != k.sp.PublicKeySize() {
-		return false
-	}
-
-	message = k.hp.HashBytes(message)
-	return k.sp.Verify(k.PublicKey, message, signature)
+	return Verify(k.sp, k.hp, k.PublicKey, message, signature)
 }
 
 func FromPrivateKey(sp signing.SignaturePolicy, hp hashing.HashPolicy, privateKey string) (*KeyPair, error) {
@@ -95,4 +89,14 @@ func FromPrivateKeyBytes(sp signing.SignaturePolicy, hp hashing.HashPolicy, rawP
 	}
 
 	return keyPair, nil
+}
+
+func Verify(sp signing.SignaturePolicy, hp hashing.HashPolicy, publicKey []byte, message []byte, signature []byte) bool {
+	// Public key must be a set size.
+	if len(publicKey) != sp.PublicKeySize() {
+		return false
+	}
+
+	message = hp.HashBytes(message)
+	return sp.Verify(publicKey, message, signature)
 }

@@ -1,13 +1,13 @@
 package network
 
 import (
+	"errors"
 	"net"
 	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/perlin-network/noise/types/lru"
-	"github.com/pkg/errors"
 )
 
 var domainLookupCache = lru.NewCache(1000)
@@ -19,7 +19,17 @@ type AddressInfo struct {
 	Port     uint16
 }
 
-// NewAddressInfo creates a new address info instance.
+const (
+	networkClientName = "noise"
+)
+
+// Errors
+var (
+	ErrAddressEmpty         = errors.New("address: cannot dial, address was empty")
+	ErrNoAvailableAddresses = errors.New("address: no available addresses")
+)
+
+// NewAddressInfo creates a new AddressInfo instance.
 func NewAddressInfo(protocol string, host string, port uint16) *AddressInfo {
 	return &AddressInfo{
 		Protocol: protocol,
@@ -28,9 +38,9 @@ func NewAddressInfo(protocol string, host string, port uint16) *AddressInfo {
 	}
 }
 
-// Network return the name of the network client
+// Network returns the name of the network client.
 func (info *AddressInfo) Network() string {
-	return "noise"
+	return networkClientName
 }
 
 // String prints out either the URL representation of the address info, or
@@ -88,7 +98,7 @@ func ToUnifiedHost(host string) (string, error) {
 				return "", err
 			}
 			if len(addresses) == 0 {
-				return "", errors.New("no available addresses")
+				return "", ErrNoAvailableAddresses
 			}
 
 			host = addresses[0]
@@ -109,7 +119,7 @@ func ToUnifiedHost(host string) (string, error) {
 func ToUnifiedAddress(address string) (string, error) {
 	address = strings.TrimSpace(address)
 	if len(address) == 0 {
-		return "", errors.Errorf("cannot dial, address was empty")
+		return "", ErrAddressEmpty
 	}
 
 	info, err := ParseAddress(address)

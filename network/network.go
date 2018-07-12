@@ -9,12 +9,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/hashing"
+	"github.com/perlin-network/noise/crypto/signing"
+	"github.com/perlin-network/noise/peer"
+	"github.com/perlin-network/noise/protobuf"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
 	"github.com/golang/glog"
-	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/peer"
-	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 	"github.com/xtaci/smux"
@@ -66,8 +69,8 @@ type Network struct {
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
 
-	SignaturePolicy crypto.SignaturePolicy
-	HashPolicy      crypto.HashPolicy
+	SignaturePolicy signing.SignaturePolicy
+	HashPolicy      hashing.HashPolicy
 
 	// <-Kill will begin the server shutdown process
 	Kill chan struct{}
@@ -472,8 +475,6 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 	id := protobuf.ID(n.ID)
 
 	signature, err := n.Keys.Sign(
-		n.SignaturePolicy,
-		n.HashPolicy,
 		SerializeMessage(&id, raw.Value),
 	)
 	if err != nil {

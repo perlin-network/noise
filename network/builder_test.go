@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/perlin-network/noise/crypto/signing/ed25519"
+	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/signing"
 )
 
 var (
-	keys     = ed25519.RandomKeyPair()
+	keys     = crypto.NewKeyPair(signing.NewEd25519(), nil)
 	host     = "localhost"
 	protocol = "tcp"
 	port     = uint16(12345)

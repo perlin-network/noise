@@ -21,8 +21,8 @@ type Builder struct {
 	plugins     *PluginList
 	pluginCount int
 
-	signaturePolicy crypto.SignaturePolicy
-	hashPolicy      crypto.HashPolicy
+	signaturePolicy signing.SignaturePolicy
+	hashPolicy      hashing.HashPolicy
 }
 
 // NewBuilder lets you configure a network to build.
@@ -44,12 +44,12 @@ func (builder *Builder) SetAddress(address string) {
 }
 
 // SetSignaturePolicy sets the signature policy for the network.
-func (builder *Builder) SetSignaturePolicy(policy crypto.SignaturePolicy) {
+func (builder *Builder) SetSignaturePolicy(policy signing.SignaturePolicy) {
 	builder.signaturePolicy = policy
 }
 
 // SetHashPolicy sets the hash policy for the network.
-func (builder *Builder) SetHashPolicy(policy crypto.HashPolicy) {
+func (builder *Builder) SetHashPolicy(policy hashing.HashPolicy) {
 	builder.hashPolicy = policy
 }
 
