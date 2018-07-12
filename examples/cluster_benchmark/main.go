@@ -90,7 +90,7 @@ func main() {
 	protocol := *protocolFlag
 	peers := strings.Split(*peersFlag, ",")
 
-	keys := ed25519.New()
+	keys := ed25519.RandomKeyPair()
 
 	go setupPPROF(*portFlag)
 
