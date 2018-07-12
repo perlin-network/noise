@@ -23,8 +23,8 @@ func TestKeyPair(t *testing.T) {
 	// mock inputs
 	privateKey := []byte("1234567890")
 	privateKeyHex := "31323334353637383930"
-	publicKey := []byte("0987654321")
-	publicKeyHex := "30393837363534333231"
+	publicKey := []byte("12345678901234567890")
+	publicKeyHex := "3132333435363738393031323334353637383930"
 	message := []byte("test message")
 	hashed := []byte("hashed test message")
 	signature := []byte("signed test message")
@@ -80,7 +80,7 @@ func TestFromPrivateKey(t *testing.T) {
 	// mock inputs
 	privateKey := "1234567890"
 	privateKeyHexBytes, _ := hex.DecodeString(privateKey)
-	publicKey := []byte("0987654321")
+	publicKey := []byte("12345678901234567890")
 
 	// setup expected mock return values
 	sp.EXPECT().PrivateKeySize().Return(len(privateKeyHexBytes)).Times(1)

@@ -16,7 +16,7 @@ func newErrPrivKeySize(length int, sp SignaturePolicy) error {
 }
 
 func (k *KeyPair) Sign(sp SignaturePolicy, hp HashPolicy, message []byte) ([]byte, error) {
-	if len(k.PublicKey) != sp.PrivateKeySize() {
+	if len(k.PrivateKey) != sp.PrivateKeySize() {
 		return nil, newErrPrivKeySize(len(k.PrivateKey), sp)
 	}
 
