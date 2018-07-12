@@ -9,15 +9,15 @@ import (
 	"github.com/perlin-network/noise/protobuf"
 )
 
-// ID is an identity of nodes, using its public key and network address
+// ID is an identity of nodes, using its public key and network address.
 type ID protobuf.ID
 
-// CreateID is a factory function creating ID
+// CreateID is a factory function creating ID.
 func CreateID(address string, publicKey []byte) ID {
 	return ID{Address: address, PublicKey: publicKey}
 }
 
-//
+// String returns the identity address and public key.
 func (id ID) String() string {
 	return fmt.Sprintf("ID{Address: %v, PublicKey: %v}", id.Address, id.PublicKey)
 }
@@ -27,7 +27,7 @@ func (id ID) Equals(other ID) bool {
 	return bytes.Equal(id.PublicKey, other.PublicKey)
 }
 
-// Less determines if this peer.ID's public keys is less than the other's
+// Less determines if this peer ID's public key is less than other ID's public key.
 func (id ID) Less(other interface{}) bool {
 	if other, is := other.(ID); is {
 		return bytes.Compare(id.PublicKey, other.PublicKey) == -1
@@ -35,7 +35,7 @@ func (id ID) Less(other interface{}) bool {
 	return false
 }
 
-// PublicKeyHex generates hex-encoded string of public key of this given peer ID.
+// PublicKeyHex generates a hex-encoded string of public key of this given peer ID.
 func (id ID) PublicKeyHex() string {
 	return hex.EncodeToString(id.PublicKey)
 }

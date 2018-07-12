@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"bytes"
 	"encoding/hex"
 	"reflect"
 	"testing"
@@ -43,7 +44,7 @@ func TestKeyPair(t *testing.T) {
 	if err != nil {
 		t.Errorf("Sign() = %v, expected <nil>", err)
 	}
-	if !reflect.DeepEqual(sig, []byte("signed test message")) {
+	if !bytes.Equal(sig, []byte("signed test message")) {
 		t.Errorf("Sign() = '%s', expected '%s'", sig, []byte("signed test message"))
 	}
 
