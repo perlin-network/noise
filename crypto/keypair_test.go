@@ -11,6 +11,28 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
+var (
+	privateKey    []byte
+	privateKeyHex string
+	publicKey     []byte
+	publicKeyHex  string
+	message       []byte
+	hashed        []byte
+	signature     []byte
+)
+
+func init() {
+	// mock inputs
+	privateKey = []byte("1234567890")
+	privateKeyHex = "31323334353637383930"
+	publicKey = []byte("12345678901234567890")
+	publicKeyHex = "3132333435363738393031323334353637383930"
+
+	message = []byte("test message")
+	hashed = []byte("hashed test message")
+	signature = []byte("signed test message")
+}
+
 func TestKeyPair(t *testing.T) {
 	t.Parallel()
 
@@ -20,19 +42,10 @@ func TestKeyPair(t *testing.T) {
 	sp := mocks.NewMockSignaturePolicy(mockCtrl)
 	hp := mocks.NewMockHashPolicy(mockCtrl)
 
-	// mock inputs
-	privateKey := []byte("1234567890")
-	privateKeyHex := "31323334353637383930"
-	publicKey := []byte("12345678901234567890")
-	publicKeyHex := "3132333435363738393031323334353637383930"
-	message := []byte("test message")
-	hashed := []byte("hashed test message")
-	signature := []byte("signed test message")
-
 	// setup expected mock return values
 	sp.EXPECT().PrivateKeySize().Return(len(privateKey)).AnyTimes()
 	sp.EXPECT().PublicKeySize().Return(len(publicKey)).AnyTimes()
-	sp.EXPECT().Sign(privateKey, hashed).Return(signature).Times(1)
+	sp.EXPECT().Sign(privateKey, hashed).Return(signature).AnyTimes()
 	sp.EXPECT().Verify(publicKey, hashed, signature).Return(true).Times(1)
 
 	hp.EXPECT().HashBytes(message).Return(hashed).AnyTimes()
@@ -68,6 +81,51 @@ func TestKeyPair(t *testing.T) {
 	}
 }
 
+func TestKeyPairErrors(t *testing.T) {
+	t.Parallel()
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	sp := mocks.NewMockSignaturePolicy(mockCtrl)
+	hp := mocks.NewMockHashPolicy(mockCtrl)
+
+	sp.EXPECT().PrivateKeySize().Return(100).Times(2)
+	sp.EXPECT().PublicKeySize().Return(100).Times(1)
+	sp.EXPECT().Sign(privateKey, hashed).Return(signature).AnyTimes()
+
+	hp.EXPECT().HashBytes(message).Return(hashed).AnyTimes()
+
+	kp := KeyPair{
+		PrivateKey: []byte{},
+		PublicKey:  []byte{},
+	}
+
+	// private key size does not match signature size
+	_, err := kp.Sign(sp, hp, message)
+	if err != privateKeySizeErr {
+		t.Errorf("Sign() = %v, expected %v", err, privateKeySizeErr)
+	}
+
+	// private key is a bad format
+	errorString := "encoding/hex: invalid byte: U+0020 ' '"
+	_, err = FromPrivateKey(sp, "bad key")
+	if err.Error() != errorString {
+		t.Errorf("FromPrivateKey() = %v, expected %s", err, errorString)
+	}
+
+	// private key size does not match signature size
+	_, err = FromPrivateKey(sp, string(privateKey))
+	if err != privateKeySizeErr {
+		t.Errorf("FromPrivateKey() = %v, expected %v", err, privateKeySizeErr)
+	}
+
+	// public key size does not match signature size
+	if Verify(sp, hp, []byte{}, message, signature) {
+		t.Errorf("Verify() = true, expected false")
+	}
+}
+
 func TestFromPrivateKey(t *testing.T) {
 	t.Parallel()
 
@@ -77,9 +135,7 @@ func TestFromPrivateKey(t *testing.T) {
 	sp := mocks.NewMockSignaturePolicy(mockCtrl)
 
 	// mock inputs
-	privateKey := "1234567890"
-	privateKeyHexBytes, _ := hex.DecodeString(privateKey)
-	publicKey := []byte("12345678901234567890")
+	privateKeyHexBytes, _ := hex.DecodeString(string(privateKey))
 
 	// setup expected mock return values
 	sp.EXPECT().PrivateKeySize().Return(len(privateKeyHexBytes)).Times(1)
@@ -90,7 +146,7 @@ func TestFromPrivateKey(t *testing.T) {
 		PublicKey:  publicKey,
 	}
 
-	kp2, err := FromPrivateKey(sp, privateKey)
+	kp2, err := FromPrivateKey(sp, string(privateKey))
 	if err != nil {
 		t.Errorf("FromPrivateKey() = %v, expected <nil>", err)
 	}
