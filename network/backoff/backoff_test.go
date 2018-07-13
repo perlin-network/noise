@@ -35,7 +35,7 @@ func TestReset(t *testing.T) {
 
 	b := createTestBackoff()
 
-	assertClose(t, b.NextDuration().Seconds(), 0.1, 0.05)
+	assert.InEpsilon(t, 0.1, b.NextDuration().Seconds(), 0.05)
 	assert.InEpsilon(t, 0.2, b.NextDuration().Seconds(), 0.05)
 	b.Reset()
 	assert.InEpsilon(t, 0.1, b.NextDuration().Seconds(), 0.05)

@@ -1,7 +1,6 @@
 package backoff
 
 import (
-	"fmt"
 	"math"
 	"math/rand"
 	"time"
