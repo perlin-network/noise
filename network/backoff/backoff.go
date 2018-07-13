@@ -2,36 +2,44 @@ package backoff
 
 import (
 	"math"
+	"math/rand"
 	"time"
 )
 
 // Backoff keeps track of connection retry attempts and calculates the delay between each one.
 type Backoff struct {
-	attempt, MaxAttempts float64
+	// attempt tracks number of attempts so far
+	attempt int
+	// MaxAttempts specifies max attempts to try before erroring
+	MaxAttempts int
+	// BackoffInterval is duration to increment each attempt
+	BackoffInterval float64
+	// Jitter specifies deviation from backoff interval
+	Jitter float64
 
-	// Increment factor for each time step.
-	Factor float64
-
-	// Min and max intervals allowed for backoff intervals.
-	MinInterval, MaxInterval time.Duration
+	// MinInterval specifies minimum time allowed for backoff interval
+	MinInterval time.Duration
+	// MaxInterval specifies maximum time allowed for backoff interval
+	MaxInterval time.Duration
 }
 
 const (
-	defaultMaxAttempts = 5
-	defaultFactor      = 2.0
-	defaultMinInterval = 1000 * time.Millisecond
-	defaultMaxInterval = 16 * time.Second
-	maxInt64           = float64(math.MaxInt64 - 512)
+	defaultMaxAttempts     = 5
+	defaultBackoffInterval = 2.0
+	defaultJitter          = 0.05
+	defaultMinInterval     = 1000 * time.Millisecond
+	defaultMaxInterval     = 16 * time.Second
+	maxInt64               = float64(math.MaxInt64 - 512)
 )
 
 // DefaultBackoff creates a default configuration for Backoff.
 func DefaultBackoff() *Backoff {
 	return &Backoff{
-		attempt:     0,
-		MaxAttempts: defaultMaxAttempts,
-		Factor:      defaultFactor,
-		MinInterval: defaultMinInterval,
-		MaxInterval: defaultMaxInterval,
+		MaxAttempts:     defaultMaxAttempts,
+		BackoffInterval: defaultBackoffInterval,
+		Jitter:          defaultJitter,
+		MinInterval:     defaultMinInterval,
+		MaxInterval:     defaultMaxInterval,
 	}
 }
 
@@ -44,11 +52,11 @@ func (b *Backoff) NextDuration() time.Duration {
 
 // TimeoutExceeded returns true if the backoff total duration has been exceeded
 func (b *Backoff) TimeoutExceeded() bool {
-	return b.attempt >= math.Max(0, b.MaxAttempts)
+	return float64(b.attempt) >= math.Max(0, float64(b.MaxAttempts))
 }
 
 // ForAttempt calculates the appropriate exponential duration given an attempt count
-func (b *Backoff) ForAttempt(attempt float64) time.Duration {
+func (b *Backoff) ForAttempt(attempt int) time.Duration {
 	min := b.MinInterval
 	max := b.MaxInterval
 	if min <= 0 {
@@ -61,13 +69,14 @@ func (b *Backoff) ForAttempt(attempt float64) time.Duration {
 		return max
 	}
 
-	factor := b.Factor
-	if factor <= 0 {
-		factor = defaultFactor
+	backoffInterval := b.BackoffInterval
+	if backoffInterval <= 0 {
+		backoffInterval = defaultBackoffInterval
 	}
 
 	// Calculate the new duration
-	durf := float64(min) * math.Pow(factor, attempt)
+	jitter := b.Jitter * 2 * (rand.Float64() - 0.5)
+	durf := float64(min) * math.Pow(backoffInterval*(1-jitter), float64(attempt))
 
 	// Check for overflow
 	if durf > maxInt64 {

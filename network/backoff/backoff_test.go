@@ -6,9 +6,15 @@ import (
 	"time"
 )
 
-func assertEquals(t *testing.T, expected, got interface{}) {
+func assertEquals(t *testing.T, got, expected interface{}) {
 	if !reflect.DeepEqual(expected, got) {
-		t.Fatalf("Expected %v, got %v.", expected, got)
+		t.Fatalf("got %v, expected %v", got, expected)
+	}
+}
+
+func assertClose(t *testing.T, got, expected float64, diff float64) {
+	if expected*(1.0+diff) < got || expected*(1.0-diff) > got {
+		t.Fatalf("got %f, expected range [%f, %f]", got, expected*(1.0-diff), expected*(1.0+diff))
 	}
 }
 
@@ -16,7 +22,7 @@ func createTestBackoff() *Backoff {
 	b := DefaultBackoff()
 
 	b.MaxAttempts = 3
-	b.Factor = 2
+	b.BackoffInterval = 2
 	b.MinInterval = 100 * time.Millisecond
 	b.MaxInterval = 10 * time.Second
 
@@ -24,25 +30,31 @@ func createTestBackoff() *Backoff {
 }
 
 func TestBasic(t *testing.T) {
+	t.Parallel()
+
 	b := createTestBackoff()
 
-	assertEquals(t, b.NextDuration(), 100*time.Millisecond)
-	assertEquals(t, b.NextDuration(), 200*time.Millisecond)
+	assertClose(t, b.NextDuration().Seconds(), 0.1, 0.1)
+	assertClose(t, b.NextDuration().Seconds(), 0.2, 0.1)
 	assertEquals(t, b.TimeoutExceeded(), false)
-	assertEquals(t, b.NextDuration(), 400*time.Millisecond)
+	assertClose(t, b.NextDuration().Seconds(), 0.4, 0.1)
 	assertEquals(t, b.TimeoutExceeded(), true)
 }
 
 func TestReset(t *testing.T) {
+	t.Parallel()
+
 	b := createTestBackoff()
 
-	assertEquals(t, b.NextDuration(), 100*time.Millisecond)
+	assertClose(t, b.NextDuration().Seconds(), 0.1, 0.1)
 	b.Reset()
-	assertEquals(t, b.NextDuration(), 100*time.Millisecond)
-	assertEquals(t, b.NextDuration(), 200*time.Millisecond)
+	assertClose(t, b.NextDuration().Seconds(), 0.1, 0.1)
+	assertClose(t, b.NextDuration().Seconds(), 0.2, 0.1)
 }
 
 func TestEdgeCases(t *testing.T) {
+	t.Parallel()
+
 	b := createTestBackoff()
 
 	b.MinInterval = 0 * time.Millisecond
