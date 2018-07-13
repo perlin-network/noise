@@ -63,8 +63,7 @@ func (p *Ed25519) Verify(publicKey []byte, message []byte, signature []byte) boo
 
 // RandomKeyPair generates a randomly seeded ed25519 key pair.
 func RandomKeyPair() *crypto.KeyPair {
-	p := New()
-	publicKey, privateKey, err := p.GenerateKeys()
+	publicKey, privateKey, err := ed25519lib.GenerateKey(rand.Reader)
 	if err != nil {
 		panic(err)
 	}
