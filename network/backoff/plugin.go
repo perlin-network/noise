@@ -12,12 +12,13 @@ import (
 type Plugin struct {
 	*network.Plugin
 
-	net *network.Network
-	// map[string]*Backoff
+	net      *network.Network
 	backoffs sync.Map
 }
 
 var (
+	_ network.PluginInterface = (*Plugin)(nil)
+	// PluginID is used to check existence of the backoff plugin
 	PluginID        = (*Plugin)(nil)
 	initialDelay    = 5 * time.Second
 	limitIterations = 100
@@ -30,9 +31,7 @@ func (p *Plugin) Startup(net *network.Network) {
 
 // PeerDisconnect implements the plugin callback
 func (p *Plugin) PeerDisconnect(client *network.PeerClient) {
-	addr := client.Address
-
-	go p.startBackoff(addr)
+	go p.startBackoff(client.Address)
 }
 
 // startBackoff uses an exponentially increasing timer to try to reconnect to a given address

@@ -1,6 +1,7 @@
 package backoff
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"time"
@@ -29,7 +30,8 @@ const (
 	defaultJitter          = 0.05
 	defaultMinInterval     = 1000 * time.Millisecond
 	defaultMaxInterval     = 16 * time.Second
-	maxInt64               = float64(math.MaxInt64 - 512)
+	// anything greater than this overflows time.Duration
+	maxInt64 = float64(math.MaxInt64 - 512)
 )
 
 // DefaultBackoff creates a default configuration for Backoff.
