@@ -89,7 +89,7 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 		builder.AddPlugin(new(discovery.Plugin))
 	}
 	if addBackoffPlugin {
-		builder.AddPlugin(New(WithInitialDelay(5)))
+		builder.AddPlugin(New())
 	}
 
 	plugin := new(mockPlugin)
