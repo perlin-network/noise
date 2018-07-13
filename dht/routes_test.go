@@ -15,9 +15,10 @@ import (
 )
 
 var (
-	id1       peer.ID
-	id2       peer.ID
-	id3       peer.ID
+	id1 peer.ID
+	id2 peer.ID
+	id3 peer.ID
+
 	publicKey []byte
 )
 
@@ -45,12 +46,15 @@ func RandByte() byte {
 func TestSelf(t *testing.T) {
 	t.Parallel()
 
-	routes := CreateRoutingTable(id1)
-	if routes.Self().Address != "0000" {
-		t.Fatalf("wrong address: %s", routes.Self().Address)
+	routingTable := CreateRoutingTable(id1)
+	routingTable.Update(id2)
+	routingTable.Update(id3)
+
+	if routingTable.Self().Address != "0000" {
+		t.Fatalf("wrong address: %s", routingTable.Self().Address)
 	}
-	if !bytes.Equal(routes.Self().PublicKey, publicKey) {
-		t.Fatalf("wrong public key: %v", routes.Self().PublicKey)
+	if !bytes.Equal(routingTable.Self().PublicKey, publicKey) {
+		t.Fatalf("wrong public key: %v", routingTable.Self().PublicKey)
 	}
 }
 
@@ -59,6 +63,7 @@ func TestPeerExists(t *testing.T) {
 
 	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
+	routingTable.Update(id3)
 
 	if !routingTable.PeerExists(id1) {
 		t.Fatal("peerexists() targeting self failed")
@@ -73,6 +78,7 @@ func TestGetPeerAddresses(t *testing.T) {
 	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
 	routingTable.Update(id3)
+
 	tester := routingTable.GetPeerAddresses()
 	sort.Strings(tester)
 	testee := []string{"0001", "0002"}
@@ -82,12 +88,29 @@ func TestGetPeerAddresses(t *testing.T) {
 	}
 }
 
+func TestGetPeers(t *testing.T) {
+	t.Parallel()
+
+	routingTable := CreateRoutingTable(id1)
+	routingTable.Update(id2)
+
+	peers := routingTable.GetPeers()
+	if len(peers) != 1 {
+		t.Errorf("len(peers) = %d, expected 1", len(peers))
+	}
+	peer1 := peers[0]
+	if !peer1.Equals(id2) {
+		t.Errorf("'%v'.Equals(%v) = false, expected true", peer1, id2)
+	}
+}
+
 func TestRemovePeer(t *testing.T) {
 	t.Parallel()
 
 	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
 	routingTable.Update(id3)
+
 	routingTable.RemovePeer(id2)
 	testee := routingTable.GetPeerAddresses()
 	sort.Strings(testee)

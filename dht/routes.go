@@ -86,7 +86,7 @@ func (t *RoutingTable) Update(target peer.ID) {
 	bucket.mutex.Unlock()
 }
 
-// GetPeers returns a unique list of all peers within the routing network (excluding itself).
+// GetPeers returns a randomly-ordered, unique list of all peers within the routing network (excluding itself).
 func (t *RoutingTable) GetPeers() (peers []peer.ID) {
 	visited := make(map[string]struct{})
 	visited[t.self.PublicKeyHex()] = struct{}{}
