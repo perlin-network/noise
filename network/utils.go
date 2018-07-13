@@ -2,24 +2,26 @@ package network
 
 import (
 	"encoding/binary"
+	"net"
+
 	"github.com/perlin-network/noise/protobuf"
 )
 
 // SerializeMessage compactly packs all bytes of a message together for cryptographic signing purposes.
 func SerializeMessage(id *protobuf.ID, message []byte) []byte {
-	const UINT32_SIZE = 4
+	const uint32Size = 4
 
-	serialized := make([]byte, UINT32_SIZE+len(id.Address)+UINT32_SIZE+len(id.PublicKey)+len(message))
+	serialized := make([]byte, uint32Size+len(id.Address)+uint32Size+len(id.PublicKey)+len(message))
 	pos := 0
 
 	binary.LittleEndian.PutUint32(serialized[pos:], uint32(len(id.Address)))
-	pos += UINT32_SIZE
+	pos += uint32Size
 
 	copy(serialized[pos:], []byte(id.Address))
 	pos += len(id.Address)
 
 	binary.LittleEndian.PutUint32(serialized[pos:], uint32(len(id.PublicKey)))
-	pos += UINT32_SIZE
+	pos += uint32Size
 
 	copy(serialized[pos:], id.PublicKey)
 	pos += len(id.PublicKey)
@@ -54,4 +56,11 @@ func FilterPeers(address string, peers []string) (filtered []string) {
 		}
 	}
 	return filtered
+}
+
+// GetRandomUnusedPort returns a random unused port
+func GetRandomUnusedPort() int {
+	listener, _ := net.Listen("tcp", ":0")
+	defer listener.Close()
+	return listener.Addr().(*net.TCPAddr).Port
 }

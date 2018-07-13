@@ -1,8 +1,9 @@
 package network
 
 import (
-	"github.com/xtaci/smux"
 	"time"
+
+	"github.com/xtaci/smux"
 )
 
 func muxConfig() *smux.Config {

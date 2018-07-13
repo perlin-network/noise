@@ -91,7 +91,6 @@ func (b *Backoff) ForAttempt(attempt int) time.Duration {
 	if dur > max {
 		return max
 	}
-
 	return dur
 }
 

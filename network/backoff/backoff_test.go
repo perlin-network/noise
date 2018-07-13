@@ -73,7 +73,8 @@ func TestEdgeCases(t *testing.T) {
 
 	// backoff duration less than min interval
 	b.Reset()
-	b.BackoffInterval = 1
+	b.BackoffInterval = 0.1
+	b.NextDuration()
 	assert.Equal(t, b.MinInterval, b.NextDuration())
 
 	// backoff duration greater than max interval

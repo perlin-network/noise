@@ -5,6 +5,8 @@ import (
 )
 
 func TestRingBuffer(t *testing.T) {
+	t.Parallel()
+
 	rb := NewRingBuffer(4)
 	*rb.Index(0) = 1
 	*rb.Index(1) = 2
@@ -37,6 +39,8 @@ func TestWrongPosOfIndex(t *testing.T) {
 	_ = rb.Index(-1)
 }
 func TestWrongMoveForward1(t *testing.T) {
+	t.Parallel()
+
 	defer func() {
 		if r := recover(); r == nil {
 			t.Errorf("panic is expected but not pop")
@@ -47,6 +51,7 @@ func TestWrongMoveForward1(t *testing.T) {
 	rb.MoveForward(1)
 }
 func TestWrongMoveForwardCycle(t *testing.T) {
+	t.Parallel()
 
 	rb := NewRingBuffer(2)
 	*rb.Index(0) = 1
