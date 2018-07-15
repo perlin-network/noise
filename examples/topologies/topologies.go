@@ -8,7 +8,6 @@ import (
 	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/examples/topologies/messages"
 	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/network/builders"
 )
 
 const host = "127.0.0.1"
@@ -184,7 +183,7 @@ func setupNodes(ports []int) ([]*network.Network, []*MockPlugin, error) {
 	var plugins []*MockPlugin
 
 	for i, port := range ports {
-		builder := &builders.NetworkBuilder{}
+		builder := network.NewBuilder()
 		builder.SetKeys(ed25519.RandomKeyPair())
 		builder.SetAddress(fmt.Sprintf("tcp://%s:%d", host, port))
 

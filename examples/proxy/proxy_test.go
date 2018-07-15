@@ -7,7 +7,6 @@ import (
 	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/examples/proxy/messages"
 	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
 	"github.com/perlin-network/noise/peer"
 	"github.com/pkg/errors"
@@ -91,11 +90,11 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 	return nil
 }
 
-// ExampleProxy demonstrates how to send a message to nodes which do not directly have connections
+// ExampleProxyPlugin demonstrates how to send a message to nodes which do not directly have connections
 // to their desired messaging target.
 //
 // Messages are proxied to closer nodes using the Kademlia routing table.
-func ExampleProxy() {
+func ExampleProxyPlugin() {
 	numNodes := 5
 	sender := 0
 	target := numNodes - 1
@@ -107,7 +106,7 @@ func ExampleProxy() {
 		addr := fmt.Sprintf("tcp://%s:%d", host, startPort+i)
 		ids[addr] = i
 
-		builder := builders.NewNetworkBuilder()
+		builder := network.NewBuilder()
 		builder.SetKeys(ed25519.RandomKeyPair())
 		builder.SetAddress(addr)
 

@@ -9,9 +9,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
+	"github.com/gogo/protobuf/types"
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
@@ -124,8 +124,9 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 	if !client.IncomingReady() {
 		return
 	}
-	var ptr ptypes.DynamicAny
-	if err := ptypes.UnmarshalAny(msg.Message, &ptr); err != nil {
+	var ptr types.DynamicAny
+	if err := types.UnmarshalAny(msg.Message, &ptr); err != nil {
+		glog.Error(err)
 		return
 	}
 
@@ -469,7 +470,7 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 		return nil, errors.New("message is null")
 	}
 
-	raw, err := ptypes.MarshalAny(message)
+	raw, err := types.MarshalAny(message)
 	if err != nil {
 		return nil, err
 	}
@@ -479,7 +480,7 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 	signature, err := n.Keys.Sign(
 		n.SignaturePolicy,
 		n.HashPolicy,
-		serializeMessage(&id, raw.Value),
+		SerializeMessage(&id, raw.Value),
 	)
 	if err != nil {
 		return nil, err

@@ -26,3 +26,39 @@ func TestRingBuffer(t *testing.T) {
 		panic("incorrect value(s) after moving forward")
 	}
 }
+
+func TestWrongPosOfIndex(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("panic is expected but not pop")
+		}
+	}()
+	rb := NewRingBuffer(1)
+	_ = rb.Index(-1)
+}
+func TestWrongMoveForward1(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("panic is expected but not pop")
+		}
+	}()
+	rb := NewRingBuffer(1)
+	*rb.Index(0) = 1
+	rb.MoveForward(1)
+}
+func TestWrongMoveForwardCycle(t *testing.T) {
+
+	rb := NewRingBuffer(2)
+	*rb.Index(0) = 1
+	*rb.Index(1) = 2
+
+	rb.MoveForward(1)
+	if rb.Position != 1 {
+		t.Errorf("current position should be 1, got %d", rb.Position)
+	}
+
+	rb.MoveForward(1)
+	if rb.Position != 0 {
+		t.Errorf("current position should be 0, got %d", rb.Position)
+	}
+}

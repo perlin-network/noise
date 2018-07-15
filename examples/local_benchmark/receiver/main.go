@@ -8,7 +8,6 @@ import (
 	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/examples/local_benchmark/messages"
 	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/network/builders"
 	"log"
 	"net/http"
 	"os"
@@ -62,7 +61,7 @@ func main() {
 		pprof.StartCPUProfile(f)
 	}
 
-	builder := builders.NewNetworkBuilder()
+	builder := network.NewBuilder()
 	builder.SetAddress("tcp://localhost:3001")
 	builder.SetKeys(ed25519.RandomKeyPair())
 

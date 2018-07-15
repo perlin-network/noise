@@ -28,10 +28,10 @@
 ## Features  
   
 - Real-time, bidirectional streaming between peers via. [KCP](https://github.com/xtaci/kcp-go)/TCP and [Protobufs](https://developers.google.com/protocol-buffers/).
+- NAT traversal/automated port forwarding (NAT-PMP, UPnP).
 - [NaCL/Ed25519](https://tweetnacl.cr.yp.to/) scheme for peer identities and signatures.
 - Kademlia DHT-inspired peer discovery.  
 - Request/Response and Messaging RPC.
-- UPnP/NAT Port Forwarding.
 - Logging via. [glog](https://github.com/golang/glog).
 - Plugin system.  
   
@@ -45,8 +45,8 @@
 # install vgo tooling  
 go get -u golang.org/x/vgo
 
-# install protoc-gen-go
-go get -u github.com/golang/protobuf/protoc-gen-go
+# install protoc-gen-gogofaster
+go get github.com/gogo/protobuf/protoc-gen-gogofaster
 
 # download the dependencies to vendor folder  
 vgo mod -vendor  
@@ -108,7 +108,7 @@ glog.Info("Is the signature valid? ", verified)
 Now that you have your keys, we can start listening and handling messages from incoming peers.  
   
 ```go  
-builder := builders.NewNetworkBuilder()  
+builder := network.NewBuilder()
   
 // Set the address which noise will listen on and peers will use to connect to you.  
 // For example, set the host part to `localhost` if you are testing locally, or your public IP
@@ -166,10 +166,10 @@ func (state *YourAwesomePlugin) PeerConnect(client *network.PeerClient)    {}
 func (state *YourAwesomePlugin) PeerDisconnect(client *network.PeerClient) {}  
 ```  
   
-They are registered through `builders.NetworkBuilder` through the following:  
+They are registered through `network.Builder` through the following:
   
 ```go
-builder := builders.NewNetworkBuilder()  
+builder := network.NewBuilder()
   
 // Add plugin.  
 builder.AddPlugin(new(YourAwesomePlugin))  
@@ -184,7 +184,7 @@ builder.AddPlugin(new(discovery.Plugin))
 // Enables exponential backoff upon peer disconnection. Check documentation for more info.
 builder.AddPlugin(new(backoff.Plugin))
 
-// Enables automated UPnP port forwarding for your node. Check documentation for more info.
+// Enables automated NAT traversal/port forwarding for your node. Check documentation for more info.
 nat.RegisterPlugin(builder)
 ```
 
@@ -213,7 +213,7 @@ func (state *ChatPlugin) Receive(ctx *network.PluginContext) error {
     return nil
 }
 
-// Register plugin to *builders.NetworkBuilder.
+// Register plugin to *network.Builder.
 builder.AddPlugin(new(ChatPlugin))
 ```  
   
@@ -251,7 +251,7 @@ For all code contributions, please ensure they adhere as close as possible to th
 2. Commit messages are in the format `module_name: Change typed down as a sentence.` This allows our maintainers and everyone else to know what specific code changes you wish to address.
     - `network: Added in message broadcasting methods.`
     - `builders/network: Added in new option to address PoW in generating peer IDs.`
-3. Consider backwards compatibility. New methods are perfectly fine, though changing the `builders.NetworkBuilder` pattern radically for example should only be done should there be a good reason.
+3. Consider backwards compatibility. New methods are perfectly fine, though changing the `network.Builder` pattern radically for example should only be done should there be a good reason.
   
 If you...
 

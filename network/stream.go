@@ -7,7 +7,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
@@ -101,7 +101,7 @@ func (n *Network) receiveMessage(stream net.Conn) (*protobuf.Message, error) {
 		n.SignaturePolicy,
 		n.HashPolicy,
 		msg.Sender.PublicKey,
-		serializeMessage(msg.Sender, msg.Message.Value),
+		SerializeMessage(msg.Sender, msg.Message.Value),
 		msg.Signature,
 	) {
 		return nil, errors.New("received message had an malformed signature")

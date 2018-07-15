@@ -8,7 +8,6 @@ import (
 	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/network/builders"
 	"github.com/perlin-network/noise/network/discovery"
 )
 
@@ -31,9 +30,9 @@ func (state *BasicPlugin) Receive(ctx *network.PluginContext) error {
 	return nil
 }
 
-// ExampleBasic demonstrates how to broadcast a message to a set of peers that discover
+// ExampleBasicPlugin demonstrates how to broadcast a message to a set of peers that discover
 // each other through peer discovery.
-func ExampleBasic() {
+func ExampleBasicPlugin() {
 	flag.Parse()
 
 	numNodes := 3
@@ -45,7 +44,7 @@ func ExampleBasic() {
 	var plugins []*BasicPlugin
 
 	for i := 0; i < numNodes; i++ {
-		builder := builders.NewNetworkBuilder()
+		builder := network.NewBuilder()
 		builder.SetKeys(ed25519.RandomKeyPair())
 		builder.SetAddress(network.FormatAddress("tcp", host, uint16(startPort+i)))
 

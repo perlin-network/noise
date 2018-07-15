@@ -1,12 +1,13 @@
 package network
 
 import (
-	"github.com/perlin-network/noise/types/lru"
-	"github.com/pkg/errors"
 	"net"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/perlin-network/noise/types/lru"
+	"github.com/pkg/errors"
 )
 
 var domainLookupCache = lru.NewCache(1000)
@@ -19,7 +20,7 @@ type AddressInfo struct {
 }
 
 // NewAddressInfo creates a new address info instance.
-func NewAddressInfo(protocol, host string, port uint16) *AddressInfo {
+func NewAddressInfo(protocol string, host string, port uint16) *AddressInfo {
 	return &AddressInfo{
 		Protocol: protocol,
 		Host:     host,
@@ -27,6 +28,7 @@ func NewAddressInfo(protocol, host string, port uint16) *AddressInfo {
 	}
 }
 
+// Network return the name of the network client
 func (info *AddressInfo) Network() string {
 	return "noise"
 }
@@ -47,7 +49,7 @@ func (info *AddressInfo) HostPort() string {
 }
 
 // FormatAddress properly marshals a destinations information into a string.
-func FormatAddress(protocol, host string, port uint16) string {
+func FormatAddress(protocol string, host string, port uint16) string {
 	return NewAddressInfo(protocol, host, port).String()
 }
 

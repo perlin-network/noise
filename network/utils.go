@@ -5,7 +5,8 @@ import (
 	"github.com/perlin-network/noise/protobuf"
 )
 
-func serializeMessage(id *protobuf.ID, message []byte) []byte {
+// SerializeMessage compactly packs all bytes of a message together for cryptographic signing purposes.
+func SerializeMessage(id *protobuf.ID, message []byte) []byte {
 	const UINT32_SIZE = 4
 
 	serialized := make([]byte, UINT32_SIZE+len(id.Address)+UINT32_SIZE+len(id.PublicKey)+len(message))

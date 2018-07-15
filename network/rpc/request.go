@@ -1,8 +1,9 @@
 package rpc
 
 import (
-	"github.com/golang/protobuf/proto"
 	"time"
+
+	"github.com/gogo/protobuf/proto"
 )
 
 // Request represents a single message which, once sent, expects
