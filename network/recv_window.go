@@ -3,7 +3,6 @@ package network
 import (
 	"sync"
 
-	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
 )
 
@@ -13,7 +12,7 @@ type RecvWindow struct {
 
 	size         int
 	buffer       *RingBuffer
-	messageNonce uint64
+	localNonce uint64
 }
 
 // NewRecvWindow creates a new receive buffer window with a specific buffer size.
@@ -21,13 +20,19 @@ func NewRecvWindow(size int) *RecvWindow {
 	return &RecvWindow{
 		size:         size,
 		buffer:       NewRingBuffer(size),
-		messageNonce: 1,
+		localNonce: 1,
 	}
 }
 
+func (w *RecvWindow) SetLocalNonce(nonce uint64) {
+	w.Lock()
+	w.localNonce = nonce
+	w.Unlock()
+}
+
 // Update pushes messages from the networks receive queue into the buffer.
-func (w *RecvWindow) Update(n *Network) error {
-	ready := make([]*protobuf.Message, 0)
+func (w *RecvWindow) Update() []interface{} {
+	ready := make([]interface{}, 0)
 
 	w.Lock()
 	i := 0
@@ -36,35 +41,27 @@ func (w *RecvWindow) Update(n *Network) error {
 		if *cursor == nil {
 			break
 		}
-		ready = append(ready, (*cursor).(*protobuf.Message))
+		ready = append(ready, *cursor)
 		*cursor = nil
 	}
 	if i > 0 && i < w.size {
 		w.buffer.MoveForward(i)
 	}
-	w.messageNonce += uint64(i)
+	w.localNonce += uint64(i)
 	w.Unlock()
 
-	for _, msg := range ready {
-		select {
-		case n.RecvQueue <- msg:
-		default:
-			return errors.New("recv queue is full")
-		}
-	}
-
-	return nil
+	return ready
 }
 
 // Input places a new received message into the receive buffer.
-func (w *RecvWindow) Input(msg *protobuf.Message) error {
+func (w *RecvWindow) Input(nonce uint64, msg interface{}) error {
 	w.Lock()
 	defer w.Unlock()
 
-	offset := int(msg.MessageNonce - w.messageNonce)
+	offset := int(nonce - w.localNonce)
 
 	if offset < 0 || offset >= w.size {
-		return errors.Errorf("Local message nonce is %d while received %d", w.messageNonce, msg.MessageNonce)
+		return errors.Errorf("Local nonce is %d while received %d", w.localNonce, nonce)
 	}
 
 	*w.buffer.Index(offset) = msg

@@ -435,14 +435,20 @@ func (n *Network) Accept(conn net.Conn) {
 				return
 			}
 
-			err = recvWindow.Input(msg)
-			if err == nil {
-				err = recvWindow.Update(n)
-			}
-
+			err = recvWindow.Input(msg.MessageNonce, msg)
 			if err != nil {
 				glog.Error(err)
-				incoming.Close()
+				return
+			}
+
+			ready := recvWindow.Update()
+			for _, msg := range ready {
+				select {
+				case n.RecvQueue <- msg.(*protobuf.Message):
+				default:
+					glog.Error("recv queue is full")
+					return
+				}
 			}
 		}()
 
