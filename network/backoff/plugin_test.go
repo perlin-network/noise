@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/crypto/signing/ed25519"
+	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
@@ -14,13 +14,15 @@ import (
 )
 
 const (
-	numNodes  = 2
-	protocol  = "tcp"
-	host      = "127.0.0.1"
-	startPort = 21200
+	numNodes = 2
+	protocol = "tcp"
+	host     = "127.0.0.1"
 )
 
-var keys = make(map[string]*crypto.KeyPair)
+var (
+	clientIDPortMap = make(map[int]uint16)
+	keys            = make(map[string]*crypto.KeyPair)
+)
 
 // mockPlugin buffers all messages into a mailbox for this test.
 type mockPlugin struct {
@@ -66,8 +68,15 @@ func broadcastAndCheck(nodes []*network.Network, plugins []*mockPlugin) error {
 
 // newNode creates a new node and and adds it to the cluster, allows adding certain plugins if needed
 func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Network, *mockPlugin, error) {
+	port := uint16(0)
+	ok := false
+	// get random port
+	if port, ok = clientIDPortMap[i]; !ok {
+		port = uint16(network.GetRandomUnusedPort())
+		clientIDPortMap[i] = port
+	}
 	// restore the key if it was created in the past
-	addr := network.FormatAddress(protocol, host, uint16(startPort+i))
+	addr := network.FormatAddress(protocol, host, port)
 	if _, ok := keys[addr]; !ok {
 		keys[addr] = ed25519.RandomKeyPair()
 	}
@@ -80,7 +89,7 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 		builder.AddPlugin(new(discovery.Plugin))
 	}
 	if addBackoffPlugin {
-		builder.AddPlugin(new(Plugin))
+		builder.AddPlugin(New())
 	}
 
 	plugin := new(mockPlugin)
@@ -97,7 +106,7 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 
 	// Bootstrap to Node 0
 	if addDiscoveryPlugin && i != 0 {
-		node.Bootstrap(network.FormatAddress(protocol, host, uint16(startPort)))
+		node.Bootstrap(network.FormatAddress(protocol, host, uint16(clientIDPortMap[0])))
 	}
 
 	return node, plugin, nil
@@ -136,7 +145,7 @@ func TestPlugin(t *testing.T) {
 	nodes[1].Close()
 
 	// wait until about the middle of the backoff period
-	time.Sleep(initialDelay + defaultMinInterval*2)
+	time.Sleep(defaultPluginInitialDelay + defaultMinInterval*2)
 
 	// tests that broadcasting fails
 	if err := broadcastAndCheck(nodes, plugins); err == nil {

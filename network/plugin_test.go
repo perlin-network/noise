@@ -2,8 +2,9 @@ package network
 
 import (
 	"fmt"
-	"github.com/perlin-network/noise/crypto/signing/ed25519"
 	"testing"
+
+	"github.com/perlin-network/noise/crypto/ed25519"
 )
 
 var (
@@ -41,14 +42,13 @@ func (state *MockPlugin) PeerDisconnect(client *PeerClient) {
 
 func TestPluginHooks(t *testing.T) {
 	host := "localhost"
-	port := 10000
 	var nodes []*Network
 	nodeCount := 4
 
 	for i := 0; i < nodeCount; i++ {
 		builder := NewBuilder()
 		builder.SetKeys(ed25519.RandomKeyPair())
-		builder.SetAddress(FormatAddress("tcp", host, uint16(port+i)))
+		builder.SetAddress(FormatAddress("tcp", host, uint16(GetRandomUnusedPort())))
 		builder.AddPlugin(new(MockPlugin))
 
 		node, err := builder.Build()

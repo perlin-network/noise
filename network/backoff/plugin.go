@@ -9,19 +9,77 @@ import (
 	"github.com/perlin-network/noise/protobuf"
 )
 
+const (
+	defaultPluginInitialDelay = 5 * time.Second
+	defaultPluginMaxAttempts  = 100
+	defaultPluginPriority     = 100
+)
+
+// Plugin is the backoff plugin
 type Plugin struct {
 	*network.Plugin
 
-	net *network.Network
-	// map[string]*Backoff
+	// plugin options
+	// initialDelay specifies initial backoff interval
+	initialDelay time.Duration
+	// maxAttempts specifies total number of retries
+	maxAttempts int
+	// priority specifies plugin priority
+	priority int
+
+	net      *network.Network
 	backoffs sync.Map
 }
 
+// PluginOption are configurable options for the backoff plugin
+type PluginOption func(*Plugin)
+
+// WithInitialDelay specifies initial backoff interval
+func WithInitialDelay(d time.Duration) PluginOption {
+	return func(o *Plugin) {
+		o.initialDelay = d
+	}
+}
+
+// WithMaxAttempts specifies max attempts to retry upon client disconnect
+func WithMaxAttempts(i int) PluginOption {
+	return func(o *Plugin) {
+		o.maxAttempts = i
+	}
+}
+
+// WithPriority specifies plugin priority
+func WithPriority(i int) PluginOption {
+	return func(o *Plugin) {
+		o.priority = i
+	}
+}
+
+func defaultOptions() PluginOption {
+	return func(o *Plugin) {
+		o.initialDelay = defaultPluginInitialDelay
+		o.maxAttempts = defaultPluginMaxAttempts
+		o.priority = defaultPluginPriority
+	}
+}
+
 var (
-	PluginID        = (*Plugin)(nil)
-	initialDelay    = 5 * time.Second
-	limitIterations = 100
+	_ network.PluginInterface = (*Plugin)(nil)
+	// PluginID is used to check existence of the backoff plugin
+	PluginID = (*Plugin)(nil)
 )
+
+// New returns a new backoff plugin with specified options
+func New(opts ...PluginOption) *Plugin {
+	p := new(Plugin)
+	defaultOptions()(p)
+
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
+}
 
 // Startup implements the plugin callback
 func (p *Plugin) Startup(net *network.Network) {
@@ -30,14 +88,12 @@ func (p *Plugin) Startup(net *network.Network) {
 
 // PeerDisconnect implements the plugin callback
 func (p *Plugin) PeerDisconnect(client *network.PeerClient) {
-	addr := client.Address
-
-	go p.startBackoff(addr)
+	go p.startBackoff(client.Address)
 }
 
 // startBackoff uses an exponentially increasing timer to try to reconnect to a given address
 func (p *Plugin) startBackoff(addr string) {
-	time.Sleep(initialDelay)
+	time.Sleep(p.initialDelay)
 
 	if _, exists := p.backoffs.Load(addr); exists {
 		// don't activate if backoff is already active
@@ -47,7 +103,7 @@ func (p *Plugin) startBackoff(addr string) {
 	// reset the backoff counter
 	p.backoffs.Store(addr, DefaultBackoff())
 	startTime := time.Now()
-	for i := 0; i < limitIterations; i++ {
+	for i := 0; i < p.maxAttempts; i++ {
 		s, active := p.backoffs.Load(addr)
 		if !active {
 			break

@@ -20,7 +20,10 @@ type Plugin struct {
 	Routes *dht.RoutingTable
 }
 
-var PluginID = (*Plugin)(nil)
+var (
+	PluginID                         = (*Plugin)(nil)
+	_        network.PluginInterface = (*Plugin)(nil)
+)
 
 func (state *Plugin) Startup(net *network.Network) {
 	// Create routing table.

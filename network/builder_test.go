@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/perlin-network/noise/crypto/signing/ed25519"
+	"github.com/perlin-network/noise/crypto/ed25519"
 )
 
 var (

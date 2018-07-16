@@ -14,6 +14,22 @@ import (
 	"github.com/perlin-network/noise/peer"
 )
 
+var (
+	id1 peer.ID
+	id2 peer.ID
+	id3 peer.ID
+
+	publicKey []byte
+)
+
+func init() {
+	publicKey = MustReadRand(32)
+
+	id1 = peer.CreateID("0000", publicKey)
+	id2 = peer.CreateID("0001", MustReadRand(32))
+	id3 = peer.CreateID("0002", MustReadRand(32))
+}
+
 func MustReadRand(size int) []byte {
 	out := make([]byte, size)
 	_, err := rand.Read(out)
@@ -28,23 +44,26 @@ func RandByte() byte {
 }
 
 func TestSelf(t *testing.T) {
-	publicKey := MustReadRand(32)
-	id := peer.CreateID("0000", publicKey)
-	routes := CreateRoutingTable(id)
-	if routes.Self().Address != "0000" {
-		t.Fatalf("wrong address: %s", routes.Self().Address)
+	t.Parallel()
+
+	routingTable := CreateRoutingTable(id1)
+	routingTable.Update(id2)
+	routingTable.Update(id3)
+
+	if routingTable.Self().Address != "0000" {
+		t.Fatalf("wrong address: %s", routingTable.Self().Address)
 	}
-	if !bytes.Equal(routes.Self().PublicKey, publicKey) {
-		t.Fatalf("wrong public key: %v", routes.Self().PublicKey)
+	if !bytes.Equal(routingTable.Self().PublicKey, publicKey) {
+		t.Fatalf("wrong public key: %v", routingTable.Self().PublicKey)
 	}
 }
 
 func TestPeerExists(t *testing.T) {
-	id1 := peer.CreateID("0000", MustReadRand(32))
-	id2 := peer.CreateID("0001", MustReadRand(32))
+	t.Parallel()
 
 	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
+	routingTable.Update(id3)
 
 	if !routingTable.PeerExists(id1) {
 		t.Fatal("peerexists() targeting self failed")
@@ -54,13 +73,12 @@ func TestPeerExists(t *testing.T) {
 	}
 }
 func TestGetPeerAddresses(t *testing.T) {
+	t.Parallel()
 
-	id1 := peer.CreateID("0000", MustReadRand(32))
-	id2 := peer.CreateID("0001", MustReadRand(32))
-	id3 := peer.CreateID("0002", MustReadRand(32))
 	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
 	routingTable.Update(id3)
+
 	tester := routingTable.GetPeerAddresses()
 	sort.Strings(tester)
 	testee := []string{"0001", "0002"}
@@ -68,16 +86,31 @@ func TestGetPeerAddresses(t *testing.T) {
 	if !reflect.DeepEqual(tester, testee) {
 		t.Fatalf("getpeeraddress() failed got: %v, expected : %v", routingTable.GetPeerAddresses(), testee)
 	}
-
 }
-func TestRemovePeer(t *testing.T) {
 
-	id1 := peer.CreateID("0000", MustReadRand(32))
-	id2 := peer.CreateID("0001", MustReadRand(32))
-	id3 := peer.CreateID("0002", MustReadRand(32))
+func TestGetPeers(t *testing.T) {
+	t.Parallel()
+
+	routingTable := CreateRoutingTable(id1)
+	routingTable.Update(id2)
+
+	peers := routingTable.GetPeers()
+	if len(peers) != 1 {
+		t.Errorf("len(peers) = %d, expected 1", len(peers))
+	}
+	peer1 := peers[0]
+	if !peer1.Equals(id2) {
+		t.Errorf("'%v'.Equals(%v) = false, expected true", peer1, id2)
+	}
+}
+
+func TestRemovePeer(t *testing.T) {
+	t.Parallel()
+
 	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
 	routingTable.Update(id3)
+
 	routingTable.RemovePeer(id2)
 	testee := routingTable.GetPeerAddresses()
 	sort.Strings(testee)
@@ -90,6 +123,8 @@ func TestRemovePeer(t *testing.T) {
 }
 
 func TestFindClosestPeers(t *testing.T) {
+	t.Parallel()
+
 	nodes := []peer.ID{}
 
 	nodes = append(nodes, peer.CreateID("0000", []byte("12345678901234567890123456789010")))
@@ -135,6 +170,8 @@ func TestFindClosestPeers(t *testing.T) {
 }
 
 func TestRoutingTable(t *testing.T) {
+	t.Parallel()
+
 	const IDPoolSize = 16
 	const concurrentCount = 16
 

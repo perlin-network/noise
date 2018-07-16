@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/crypto/hashing/blake2b"
-	"github.com/perlin-network/noise/crypto/signing/ed25519"
+	"github.com/perlin-network/noise/crypto/blake2b"
+	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"

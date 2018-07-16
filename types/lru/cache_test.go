@@ -10,6 +10,8 @@ var (
 )
 
 func TestNormalSave(t *testing.T) {
+	t.Parallel()
+
 	cache := NewCache(1)
 	myData := "mydata"
 	testdata, err := cache.Get("mykey", func() (interface{}, error) {
@@ -25,6 +27,8 @@ func TestNormalSave(t *testing.T) {
 }
 
 func TestErrorSave(t *testing.T) {
+	t.Parallel()
+
 	cache := NewCache(1)
 	myError := errors.New("myerror")
 
@@ -41,6 +45,8 @@ func TestErrorSave(t *testing.T) {
 }
 
 func TestOldEntryDeleting(t *testing.T) {
+	t.Parallel()
+
 	cache := NewCache(2)
 	cache.Get("mykey1", func() (interface{}, error) {
 		return "mydata1", nil
@@ -58,6 +64,8 @@ func TestOldEntryDeleting(t *testing.T) {
 }
 
 func TestUnusedEntryDeleting(t *testing.T) {
+	t.Parallel()
+
 	cache := NewCache(2)
 	cache.Get("mykey1", func() (interface{}, error) {
 		return "mydata1", nil

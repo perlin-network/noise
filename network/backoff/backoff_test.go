@@ -1,22 +1,17 @@
 package backoff
 
 import (
-	"reflect"
 	"testing"
 	"time"
-)
 
-func assertEquals(t *testing.T, expected, got interface{}) {
-	if !reflect.DeepEqual(expected, got) {
-		t.Fatalf("Expected %v, got %v.", expected, got)
-	}
-}
+	"github.com/stretchr/testify/assert"
+)
 
 func createTestBackoff() *Backoff {
 	b := DefaultBackoff()
 
 	b.MaxAttempts = 3
-	b.Factor = 2
+	b.BackoffInterval = 2
 	b.MinInterval = 100 * time.Millisecond
 	b.MaxInterval = 10 * time.Second
 
@@ -24,36 +19,67 @@ func createTestBackoff() *Backoff {
 }
 
 func TestBasic(t *testing.T) {
+	t.Parallel()
+
 	b := createTestBackoff()
 
-	assertEquals(t, b.NextDuration(), 100*time.Millisecond)
-	assertEquals(t, b.NextDuration(), 200*time.Millisecond)
-	assertEquals(t, b.TimeoutExceeded(), false)
-	assertEquals(t, b.NextDuration(), 400*time.Millisecond)
-	assertEquals(t, b.TimeoutExceeded(), true)
+	assert.InEpsilon(t, 0.1, b.NextDuration().Seconds(), 0.05)
+	assert.InEpsilon(t, 0.2, b.NextDuration().Seconds(), 0.05)
+	assert.Equal(t, false, b.TimeoutExceeded())
+	assert.InEpsilon(t, 0.4, b.NextDuration().Seconds(), 0.05)
+	assert.Equal(t, true, b.TimeoutExceeded())
 }
 
 func TestReset(t *testing.T) {
+	t.Parallel()
+
 	b := createTestBackoff()
 
-	assertEquals(t, b.NextDuration(), 100*time.Millisecond)
+	assert.InEpsilon(t, 0.1, b.NextDuration().Seconds(), 0.05)
+	assert.InEpsilon(t, 0.2, b.NextDuration().Seconds(), 0.05)
 	b.Reset()
-	assertEquals(t, b.NextDuration(), 100*time.Millisecond)
-	assertEquals(t, b.NextDuration(), 200*time.Millisecond)
+	assert.InEpsilon(t, 0.1, b.NextDuration().Seconds(), 0.05)
+	assert.InEpsilon(t, 0.2, b.NextDuration().Seconds(), 0.05)
 }
 
 func TestEdgeCases(t *testing.T) {
+	t.Parallel()
+
 	b := createTestBackoff()
 
 	b.MinInterval = 0 * time.Millisecond
-	assertEquals(t, b.NextDuration(), defaultMinInterval)
+	assert.Equal(t, defaultMinInterval, b.NextDuration())
 
 	b.Reset()
 	b.MaxInterval = 1 * time.Millisecond
-	assertEquals(t, b.NextDuration(), 1*time.Millisecond)
+	assert.Equal(t, b.MaxInterval, b.NextDuration())
 
 	b.Reset()
 	b.MinInterval = 2 * time.Millisecond
 	b.MaxInterval = 1 * time.Millisecond
-	assertEquals(t, b.NextDuration(), 1*time.Millisecond)
+	assert.Equal(t, b.MaxInterval, b.NextDuration())
+
+	b.Reset()
+	b.MaxInterval = 0
+	b.BackoffInterval = 0
+	assert.Equal(t, 2*time.Millisecond, b.NextDuration())
+
+	// trigger returning MaxInterval due to duration overflow
+	b.BackoffInterval = maxInt64
+	b.NextDuration()
+	b.MinInterval = 3 * time.Second
+	b.MaxInterval = 5 * time.Second
+	assert.Equal(t, b.MaxInterval, b.NextDuration())
+
+	// backoff duration less than min interval
+	b.Reset()
+	b.BackoffInterval = 0.1
+	b.NextDuration()
+	assert.Equal(t, b.MinInterval, b.NextDuration())
+
+	// backoff duration greater than max interval
+	b.Reset()
+	b.BackoffInterval = 5
+	b.NextDuration()
+	assert.Equal(t, b.MaxInterval, b.NextDuration())
 }

@@ -4,21 +4,22 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"math/bits"
 
 	"github.com/perlin-network/noise/protobuf"
 )
 
-// ID is an identity of nodes, using its public key and network address
+// ID is an identity of nodes, using its public key and network address.
 type ID protobuf.ID
 
-// CreateID is a factory function creating ID
+// CreateID is a factory function creating ID.
 func CreateID(address string, publicKey []byte) ID {
-	return ID{PublicKey: publicKey, Address: address}
+	return ID{Address: address, PublicKey: publicKey}
 }
 
-//
+// String returns the identity address and public key.
 func (id ID) String() string {
-	return fmt.Sprintf("ID{PublicKey: %v, Address: %v}", id.PublicKey, id.Address)
+	return fmt.Sprintf("ID{Address: %v, PublicKey: %v}", id.Address, id.PublicKey)
 }
 
 // Equals determines if two peer IDs are equal to each other based on the contents of their public keys.
@@ -26,7 +27,7 @@ func (id ID) Equals(other ID) bool {
 	return bytes.Equal(id.PublicKey, other.PublicKey)
 }
 
-// Less determines if this peer.ID's public keys is less than the other's
+// Less determines if this peer ID's public key is less than other ID's public key.
 func (id ID) Less(other interface{}) bool {
 	if other, is := other.(ID); is {
 		return bytes.Compare(id.PublicKey, other.PublicKey) == -1
@@ -34,7 +35,7 @@ func (id ID) Less(other interface{}) bool {
 	return false
 }
 
-// PublicKeyHex generates hex-encoded string of public key of this given peer ID.
+// PublicKeyHex generates a hex-encoded string of public key of this given peer ID.
 func (id ID) PublicKeyHex() string {
 	return hex.EncodeToString(id.PublicKey)
 }
@@ -51,11 +52,9 @@ func (id ID) Xor(other ID) ID {
 
 // PrefixLen returns the number of prefixed zeros in a peer ID.
 func (id ID) PrefixLen() int {
-	for x := 0; x < len(id.PublicKey); x++ {
-		for y := 0; y < 8; y++ {
-			if (id.PublicKey[x]>>uint8(7-y))&0x1 != 0 {
-				return x*8 + y
-			}
+	for i, b := range id.PublicKey {
+		if b != 0 {
+			return i*8 + bits.LeadingZeros8(uint8(b))
 		}
 	}
 	return len(id.PublicKey)*8 - 1
