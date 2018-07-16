@@ -9,7 +9,6 @@ import (
 	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/peer"
-	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
 )
 
@@ -111,8 +110,6 @@ func (builder *Builder) Build() (*Network, error) {
 		Peers: new(sync.Map),
 
 		Connections: new(sync.Map),
-		SendQueue:   make(chan *Packet, 4096),
-		RecvQueue:   make(chan *protobuf.Message, 4096),
 
 		Listening: make(chan struct{}),
 

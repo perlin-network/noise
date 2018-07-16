@@ -75,7 +75,7 @@ func main() {
 
 	go net.Listen()
 
-	fmt.Println("Waiting for sender on kcp://localhost:3001.")
+	fmt.Println("Waiting for sender on tcp://localhost:3001.")
 
 	// Run loop every 1 second.
 	for range time.Tick(1 * time.Second) {

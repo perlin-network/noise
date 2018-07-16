@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
-	"time"
-
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
@@ -17,24 +15,14 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
+	"bufio"
+	"time"
 )
-
-var packetPool = sync.Pool{
-	New: func() interface{} {
-		return new(Packet)
-	},
-}
 
 var contextPool = sync.Pool{
 	New: func() interface{} {
 		return new(PluginContext)
 	},
-}
-
-type Packet struct {
-	target  *ConnState
-	payload *protobuf.Message
-	result  chan interface{}
 }
 
 // Network represents the current networking state for this node.
@@ -56,8 +44,7 @@ type Network struct {
 	// so that the Network doesn't dial multiple times to the same ip
 	Peers *sync.Map
 
-	SendQueue chan *Packet
-	RecvQueue chan *protobuf.Message
+	//RecvQueue chan *protobuf.Message
 
 	// Map of connection addresses (string) <-> *ConnState
 	Connections *sync.Map
@@ -74,32 +61,30 @@ type Network struct {
 
 type ConnState struct {
 	conn         net.Conn
+	writer       *bufio.Writer
 	messageNonce uint64
+	writerMutex  *sync.Mutex
 }
 
 // Init starts all network I/O workers.
 func (n *Network) Init() {
-	// Spawn worker routines for receiving and handling messages in the application layer.
-	go n.handleRecvQueue()
+	// Spawn write flusher.
+	go func() {
+		for range time.Tick(500 * time.Millisecond) {
+			n.Connections.Range(func(key, value interface{}) bool {
+				if state, ok := value.(*ConnState); ok {
+					state.writerMutex.Lock()
+					defer state.writerMutex.Unlock()
 
-	// Spawn worker routines for sending queued messages to the networking layer.
-	go n.handleSendQueue()
-}
-
-// Send queue worker.
-func (n *Network) handleSendQueue() {
-	for {
-		select {
-		case packet := <-n.SendQueue:
-			err := n.sendMessage(packet.target.conn, packet.payload)
-			if err != nil {
-				packet.result <- err
-				continue
-			}
-
-			packet.result <- struct{}{}
+					err := state.writer.Flush()
+					if err != nil {
+						glog.Warning(err)
+					}
+				}
+				return true
+			})
 		}
-	}
+	}()
 }
 
 func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
@@ -146,20 +131,6 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 	}
 }
 
-// Receive queue worker.
-func (n *Network) handleRecvQueue() {
-	for {
-		select {
-		case msg := <-n.RecvQueue:
-			if client, exists := n.Peers.Load(msg.Sender.Address); exists {
-				client := client.(*PeerClient)
-
-				client.Submit(func() { n.dispatchMessage(client, msg) })
-			}
-		}
-	}
-}
-
 // Listen starts listening for peers on a port.
 func (n *Network) Listen() {
 
@@ -183,18 +154,21 @@ func (n *Network) Listen() {
 	var listener net.Listener
 
 	if addrInfo.Protocol == "kcp" {
-		listener, err = kcp.ListenWithOptions(":"+strconv.Itoa(int(addrInfo.Port)), nil, 10, 3)
+		server, err := kcp.ListenWithOptions(":"+strconv.Itoa(int(addrInfo.Port)), nil, 0, 0)
 		if err != nil {
 			glog.Fatal(err)
 		}
-	} else if addrInfo.Protocol == "tcp" {
-		listener, err = net.Listen("tcp", ":"+strconv.Itoa(int(addrInfo.Port)))
-	} else {
-		err = errors.New("invalid protocol: " + addrInfo.Protocol)
-	}
 
-	if err != nil {
-		glog.Fatal(err)
+		listener = server
+	} else if addrInfo.Protocol == "tcp" {
+		server, err := net.Listen("tcp", ":"+strconv.Itoa(int(addrInfo.Port)))
+		if err != nil {
+			glog.Fatal(err)
+		}
+
+		listener = server
+	} else {
+		glog.Fatal("invalid protocol: " + addrInfo.Protocol)
 	}
 
 	close(n.Listening)
@@ -269,7 +243,9 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		}
 
 		n.Connections.Store(address, &ConnState{
-			conn: conn,
+			conn:        conn,
+			writer:      bufio.NewWriter(conn),
+			writerMutex: new(sync.Mutex),
 		})
 
 		client.Init()
@@ -315,9 +291,29 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 
 	// Choose scheme.
 	if addrInfo.Protocol == "kcp" {
-		conn, err = kcp.DialWithOptions(addrInfo.HostPort(), nil, 10, 3)
+		dialer, err := kcp.DialWithOptions(addrInfo.HostPort(), nil, 0, 0)
+		dialer.SetWindowSize(10000, 10000)
+
+		if err != nil {
+			return nil, err
+		}
+
+		conn = dialer
 	} else if addrInfo.Protocol == "tcp" {
-		conn, err = net.Dial("tcp", addrInfo.HostPort())
+		address, err := net.ResolveTCPAddr("tcp", addrInfo.HostPort())
+		if err != nil {
+			return nil, err
+		}
+
+		dialer, err := net.DialTCP("tcp", nil, address)
+		dialer.SetWriteBuffer(10000)
+		dialer.SetNoDelay(false)
+
+		if err != nil {
+			return nil, err
+		}
+
+		conn = dialer
 	} else {
 		err = errors.New("invalid protocol: " + addrInfo.Protocol)
 	}
@@ -364,8 +360,6 @@ func (n *Network) Accept(incoming net.Conn) {
 		}
 
 		go func() {
-			var err error
-
 			// Initialize client if not exists.
 			clientInit.Do(func() {
 				client, err = n.Client(msg.Sender.Address)
@@ -405,15 +399,9 @@ func (n *Network) Accept(incoming net.Conn) {
 
 			ready := recvWindow.Update()
 			for _, msg := range ready {
-				select {
-				case n.RecvQueue <- msg.(*protobuf.Message):
-				default:
-					glog.Error("recv queue is full")
-					return
-				}
+				client.Submit(func() { n.dispatchMessage(client, msg.(*protobuf.Message)) })
 			}
 		}()
-
 	}
 }
 
@@ -458,9 +446,6 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 
 // Write asynchronously sends a message to a denoted target address.
 func (n *Network) Write(address string, message *protobuf.Message) error {
-	packet := packetPool.Get().(*Packet)
-	defer packetPool.Put(packet)
-
 	_state, exists := n.Connections.Load(address)
 	if !exists {
 		return errors.New("connection does not exist")
@@ -469,26 +454,11 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 
 	message.MessageNonce = atomic.AddUint64(&state.messageNonce, 1)
 
-	packet.target = state
-	packet.payload = message
-	packet.result = make(chan interface{}, 1)
+	state.conn.SetWriteDeadline(time.Now().Add(3 * time.Second))
 
-	select {
-	case n.SendQueue <- packet:
-	default:
-		return errors.New("send queue full")
-	}
-
-	select {
-	case raw := <-packet.result:
-		switch err := raw.(type) {
-		case error:
-			return errors.Wrapf(err, "failed to send message to %s", address)
-		default:
-			return nil
-		}
-	case <-time.After(3 * time.Second):
-		return errors.Errorf("worker must be too busy; failed to send message to %s", address)
+	err := n.sendMessage(state.writer, message, state.writerMutex)
+	if err != nil {
+		return err
 	}
 
 	return nil
