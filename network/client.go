@@ -30,7 +30,7 @@ type PeerClient struct {
 
 	jobs chan func()
 
-	closed uint32 // for atomic ops
+	closed      uint32 // for atomic ops
 	closeSignal chan struct{}
 }
 
@@ -44,7 +44,7 @@ type StreamState struct {
 }
 
 type RequestState struct {
-	data chan proto.Message
+	data        chan proto.Message
 	closeSignal chan struct{}
 }
 
@@ -68,7 +68,7 @@ func createPeerClient(network *Network, address string) (*PeerClient, error) {
 			buffered: make(chan struct{}),
 		},
 
-		jobs: make(chan func(), 128),
+		jobs:        make(chan func(), 128),
 		closeSignal: make(chan struct{}),
 	}
 
@@ -124,7 +124,7 @@ func (c *PeerClient) Close() error {
 		// close out connections
 		if conn, ok := c.Network.Connections.Load(c.ID.Address); ok {
 			if state, ok := conn.(*ConnState); ok && state != nil {
-				state.session.Close()
+				state.conn.Close()
 			}
 		}
 
@@ -168,8 +168,8 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 	channel := make(chan proto.Message, 1)
 	closeSignal := make(chan struct{})
 
-	c.Requests.Store(signed.RequestNonce, &RequestState {
-		data: channel,
+	c.Requests.Store(signed.RequestNonce, &RequestState{
+		data:        channel,
 		closeSignal: closeSignal,
 	})
 

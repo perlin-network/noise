@@ -3,7 +3,6 @@ package network
 import (
 	"math/rand"
 	"net"
-	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -18,7 +17,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
-	"github.com/xtaci/smux"
 )
 
 var packetPool = sync.Pool{
@@ -75,21 +73,17 @@ type Network struct {
 }
 
 type ConnState struct {
-	session      *smux.Session
+	conn         net.Conn
 	messageNonce uint64
 }
 
 // Init starts all network I/O workers.
 func (n *Network) Init() {
-	workerCount := runtime.NumCPU() + 1
-
 	// Spawn worker routines for receiving and handling messages in the application layer.
 	go n.handleRecvQueue()
 
-	for i := 0; i < workerCount; i++ {
-		// Spawn worker routines for sending queued messages to the networking layer.
-		go n.handleSendQueue()
-	}
+	// Spawn worker routines for sending queued messages to the networking layer.
+	go n.handleSendQueue()
 }
 
 // Send queue worker.
@@ -97,19 +91,7 @@ func (n *Network) handleSendQueue() {
 	for {
 		select {
 		case packet := <-n.SendQueue:
-			stream, err := packet.target.session.OpenStream()
-			if err != nil {
-				packet.result <- err
-				continue
-			}
-
-			err = n.sendMessage(stream, packet.payload)
-			if err != nil {
-				packet.result <- err
-				continue
-			}
-
-			err = stream.Close()
+			err := n.sendMessage(packet.target.conn, packet.payload)
 			if err != nil {
 				packet.result <- err
 				continue
@@ -279,7 +261,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 			close(client.outgoingReady)
 		}()
 
-		session, err := n.Dial(address)
+		conn, err := n.Dial(address)
 
 		if err != nil {
 			n.Peers.Delete(address)
@@ -287,7 +269,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		}
 
 		n.Connections.Store(address, &ConnState{
-			session: session,
+			conn: conn,
 		})
 
 		client.Init()
@@ -323,7 +305,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 }
 
 // Dial establishes a bidirectional connection to an address, and additionally handshakes with said address.
-func (n *Network) Dial(address string) (*smux.Session, error) {
+func (n *Network) Dial(address string) (net.Conn, error) {
 	addrInfo, err := ParseAddress(address)
 	if err != nil {
 		return nil, err
@@ -345,28 +327,19 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 		return nil, err
 	}
 
-	// Wrap a session around the outgoing connection.
-	session, err := smux.Client(conn, muxConfig())
-	if err != nil {
-		return nil, err
-	}
-
-	return session, nil
+	return conn, nil
 }
 
 // Accept handles peer registration and processes incoming message streams.
-func (n *Network) Accept(conn net.Conn) {
+func (n *Network) Accept(incoming net.Conn) {
 	const RECV_WINDOW_SIZE = 4096
 
-	var incoming *smux.Session
-	var outgoing *smux.Session
+	var outgoing net.Conn
 
 	var client *PeerClient
 	var clientInit sync.Once
 
 	recvWindow := NewRecvWindow(RECV_WINDOW_SIZE)
-
-	var err error
 
 	// Cleanup connections when we are done with them.
 	defer func() {
@@ -383,31 +356,15 @@ func (n *Network) Accept(conn net.Conn) {
 		}
 	}()
 
-	// Wrap a session around the incoming connection.
-	incoming, err = smux.Server(conn, muxConfig())
-	if err != nil {
-		glog.Error(err)
-		return
-	}
-
 	for {
-		stream, err := incoming.AcceptStream()
+		msg, err := n.receiveMessage(incoming)
 		if err != nil {
+			glog.Error(err)
 			break
 		}
 
 		go func() {
-			defer stream.Close()
-
 			var err error
-
-			// Receive a message from the stream.
-			msg, err := n.receiveMessage(stream)
-
-			// Will trigger 'broken pipe' on peer disconnection.
-			if err != nil {
-				return
-			}
 
 			// Initialize client if not exists.
 			clientInit.Do(func() {
@@ -421,7 +378,7 @@ func (n *Network) Accept(conn net.Conn) {
 
 				// Load an outgoing connection.
 				if state, established := n.Connections.Load(client.ID.Address); established {
-					outgoing = state.(*ConnState).session
+					outgoing = state.(*ConnState).conn
 				} else {
 					err = errors.New("failed to load session")
 				}
