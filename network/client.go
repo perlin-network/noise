@@ -20,7 +20,7 @@ type PeerClient struct {
 	ID      *peer.ID
 	Address string
 
-	Requests     *sync.Map
+	Requests     sync.Map // uint64 -> *RequestState
 	RequestNonce uint64
 
 	stream StreamState
@@ -31,6 +31,7 @@ type PeerClient struct {
 	jobs chan func()
 
 	closed uint32 // for atomic ops
+	closeSignal chan struct{}
 }
 
 type StreamState struct {
@@ -40,6 +41,11 @@ type StreamState struct {
 	closed        bool
 	readDeadline  time.Time
 	writeDeadline time.Time
+}
+
+type RequestState struct {
+	data chan proto.Message
+	closeSignal chan struct{}
 }
 
 // createPeerClient creates a stub peer client.
@@ -52,7 +58,6 @@ func createPeerClient(network *Network, address string) (*PeerClient, error) {
 	client := &PeerClient{
 		Network:      network,
 		Address:      address,
-		Requests:     new(sync.Map),
 		RequestNonce: 0,
 
 		incomingReady: make(chan struct{}),
@@ -64,6 +69,7 @@ func createPeerClient(network *Network, address string) (*PeerClient, error) {
 		},
 
 		jobs: make(chan func(), 128),
+		closeSignal: make(chan struct{}),
 	}
 
 	return client, nil
@@ -78,19 +84,20 @@ func (c *PeerClient) Init() {
 }
 
 func (c *PeerClient) Submit(job func()) {
-	// FIXME: This is a hack to prevent closed c.jobs from panicking the program.
-	defer func() {
-		if err := recover(); err != nil {
-
-		}
-	}()
-
-	c.jobs <- job
+	select {
+	case c.jobs <- job:
+	case <-c.closeSignal:
+	}
 }
 
 func (c *PeerClient) executeJobs() {
-	for job := range c.jobs {
-		job()
+	for {
+		select {
+		case job := <-c.jobs:
+			job()
+		case <-c.closeSignal:
+			return
+		}
 	}
 }
 
@@ -101,13 +108,11 @@ func (c *PeerClient) Close() error {
 		return nil
 	}
 
+	close(c.closeSignal)
+
 	c.stream.Lock()
 	c.stream.closed = true
 	c.stream.Unlock()
-
-	if c.jobs != nil {
-		close(c.jobs)
-	}
 
 	// Handle 'on peer disconnect' callback for plugins.
 	c.Network.Plugins.Each(func(plugin PluginInterface) {
@@ -161,10 +166,15 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 
 	// Start tracking the request.
 	channel := make(chan proto.Message, 1)
-	c.Requests.Store(signed.RequestNonce, channel)
+	closeSignal := make(chan struct{})
+
+	c.Requests.Store(signed.RequestNonce, &RequestState {
+		data: channel,
+		closeSignal: closeSignal,
+	})
 
 	// Stop tracking the request.
-	defer close(channel)
+	defer close(closeSignal)
 	defer c.Requests.Delete(signed.RequestNonce)
 
 	select {

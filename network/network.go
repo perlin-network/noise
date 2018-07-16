@@ -131,8 +131,12 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 		return
 	}
 
-	if channel, exists := client.Requests.Load(msg.RequestNonce); exists && msg.RequestNonce > 0 {
-		channel.(chan proto.Message) <- ptr.Message
+	if _state, exists := client.Requests.Load(msg.RequestNonce); exists && msg.RequestNonce > 0 {
+		state := _state.(*RequestState)
+		select {
+		case state.data <- ptr.Message:
+		case <-state.closeSignal:
+		}
 		return
 	}
 
