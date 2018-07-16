@@ -10,16 +10,16 @@ import (
 type RecvWindow struct {
 	sync.Mutex
 
-	size         int
-	buffer       *RingBuffer
+	size       int
+	buffer     *RingBuffer
 	localNonce uint64
 }
 
 // NewRecvWindow creates a new receive buffer window with a specific buffer size.
 func NewRecvWindow(size int) *RecvWindow {
 	return &RecvWindow{
-		size:         size,
-		buffer:       NewRingBuffer(size),
+		size:       size,
+		buffer:     NewRingBuffer(size),
 		localNonce: 1,
 	}
 }
