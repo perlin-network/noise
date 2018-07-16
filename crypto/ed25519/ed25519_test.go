@@ -1,9 +1,58 @@
 package ed25519
 
 import (
+	"crypto/rand"
 	"reflect"
 	"testing"
 )
+
+func BenchmarkSign(b *testing.B) {
+	p := New()
+	privateKey, _, err := p.GenerateKeys()
+	if err != nil {
+		panic(err)
+	}
+
+	message := make([]byte, 32)
+	_, err = rand.Read(message)
+	if err != nil {
+		panic(err)
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		sig := p.Sign(privateKey, message)
+		if len(sig) == 0 {
+			panic("signing failed")
+		}
+	}
+}
+
+func BenchmarkVerify(b *testing.B) {
+	p := New()
+	privateKey, publicKey, err := p.GenerateKeys()
+	if err != nil {
+		panic(err)
+	}
+
+	message := make([]byte, 32)
+	_, err = rand.Read(message)
+	if err != nil {
+		panic(err)
+	}
+
+	b.ResetTimer()
+
+	sig := p.Sign(privateKey, message)
+
+	for i := 0; i < b.N; i++ {
+		ok := p.Verify(publicKey, message, sig)
+		if !ok {
+			panic("verification failed")
+		}
+	}
+}
 
 func TestEd25519(t *testing.T) {
 	t.Parallel()
