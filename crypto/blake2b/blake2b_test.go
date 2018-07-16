@@ -2,11 +2,28 @@ package blake2b
 
 import (
 	"bytes"
+	"crypto/rand"
 	"math/big"
 	"testing"
 
 	"github.com/perlin-network/noise/crypto"
 )
+
+func BenchmarkHash(b *testing.B) {
+	hp := New()
+
+	message := make([]byte, 64)
+	_, err := rand.Read(message)
+	if err != nil {
+		panic(err)
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		hp.HashBytes(message)
+	}
+}
 
 func TestHash(t *testing.T) {
 	t.Parallel()
