@@ -1,73 +1,124 @@
 package network
 
 import (
+	"fmt"
 	"net"
 	"net/url"
-	"strings"
 	"testing"
 )
 
 func TestFormatAddress(t *testing.T) {
-	address := FormatAddress("kcp", "127.0.0.1", 10000)
-	if address != "kcp://127.0.0.1:10000" {
-		t.Fatal("formataddress() error")
+	t.Parallel()
+
+	testCases := []struct {
+		protocol string
+		host     string
+		port     uint16
+	}{
+		{"kcp", "127.0.0.1", 10000},
+		{"tcp", "localhost", 10001},
+		{"ppp", "localhost", 10001},
 	}
-	address = FormatAddress("tcp", "localhost", 10001)
-	if address != "tcp://localhost:10001" {
-		t.Fatalf("formataddress() error, got %s", address)
-	}
-	address = FormatAddress("ppp", "localhost", 10001)
-	if address != "ppp://localhost:10001" {
-		t.Fatalf("formataddress() error, got %s", address)
+	for _, tt := range testCases {
+		address := FormatAddress(tt.protocol, tt.host, tt.port)
+		expected := fmt.Sprintf("%s://%s:%d", tt.protocol, tt.host, tt.port)
+		if address != expected {
+			t.Errorf("FormatAddress() = %v, expected %v", address, expected)
+		}
 	}
 }
 
 func TestNetworkName(t *testing.T) {
+	t.Parallel()
+
 	address := NewAddressInfo("kcp", "127.0.0.1", 10000)
-	if "noise" != address.Network() {
-		t.Fatalf("network name got: %s, expected 'noise'", address.Network())
+	expected := "noise"
+	if address.Network() != expected {
+		t.Errorf("Network() = %s, expected %s", address.Network(), expected)
 	}
 }
 
 func TestHostPort(t *testing.T) {
+	t.Parallel()
+
 	address := NewAddressInfo("kcp", "127.0.0.1", 10000)
-	if "127.0.0.1:10000" != address.HostPort() {
-		t.Fatalf("network name got: %s, expected '127.0.0.1:10000'", address.HostPort())
+	expected := "127.0.0.1:10000"
+	if address.HostPort() != expected {
+		t.Errorf("HostPort() = %s, expected %s", address.HostPort(), expected)
 	}
 }
 
 func TestToUnifiedAddress(t *testing.T) {
-	address, err := ToUnifiedAddress("tcp://localhost:1000")
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Parallel()
 
-	urlInfo, err := url.Parse(address)
-	if err != nil {
-		t.Fatal(err)
+	testCases := []struct {
+		address      string
+		expectedPort string
+	}{
+		{"tcp://localhost:1000", "1000"},
+		{"kcp://example.com:2000", "2000"},
 	}
+	for _, tt := range testCases {
+		address, err := ToUnifiedAddress(tt.address)
+		if err != nil {
+			t.Errorf("ToUnifiedAddress() = %v, expected <nil>", err)
+		}
 
-	ip, port, err := net.SplitHostPort(urlInfo.Host)
-	if err != nil {
-		t.Fatal(err)
-	}
+		urlInfo, err := url.Parse(address)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	if !strings.HasPrefix(ip, "127.") && !strings.HasPrefix(ip, "::") {
-		t.Fatal("localhost resolved to invalid address", ip)
+		_, port, err := net.SplitHostPort(urlInfo.Host)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if port != tt.expectedPort {
+			t.Fatal("port mismatch")
+		}
 	}
-	if port != "1000" {
-		t.Fatal("port mismatch")
+}
+
+func TestToUnifiedHost(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		address     string
+		err         error
+		expected    string
+		description string
+	}{
+		{"tcp://asdf:1000", ErrNoAvailableAddresses, "", "LookupHost fails to resolve"},
+		{"localhost", nil, "127.0.0.1", "should resolve localhost to 127.0.0.1"},
+	}
+	for _, tt := range testCases {
+		address, err := ToUnifiedHost(tt.address)
+		if err != tt.err {
+			t.Errorf("ToUnifiedHost() = %v, expected %v (%s)", err, tt.err, tt.description)
+		}
+		if address != tt.expected {
+			t.Errorf("address %s, expected %s", address, tt.expected)
+		}
 	}
 }
 
 func TestParseAddress(t *testing.T) {
-	_, err := ParseAddress("tcp://")
-	if err == nil {
-		t.Fatal("empty url error not triggered")
+	t.Parallel()
+
+	testCases := []struct {
+		address     string
+		description string
+	}{
+		{"https://[2b01:e34:ef40:7730:8e70:5aff:fefe:edac]:foo/foo", "url.Parse fails"},
+		{"tcp://", "empty url error not triggered"},
+		{"tcp://host:k", "port url error not triggered"},
 	}
-	_, err = ParseAddress("tcp://host:k")
-	if err == nil {
-		t.Fatal("port url error not triggered")
+	for _, tt := range testCases {
+		_, err := ParseAddress(tt.address)
+		if err != nil {
+			t.Errorf("ParseAddress() = <nil>, expected %v (%s)", err, tt.description)
+		}
 	}
 }
 
