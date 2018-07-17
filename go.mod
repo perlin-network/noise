@@ -1,6 +1,7 @@
 module github.com/perlin-network/noise
 
 require (
+	github.com/davecgh/go-spew v1.1.0
 	github.com/fd/go-nat v1.0.0
 	github.com/gogo/protobuf v1.0.0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
@@ -9,6 +10,7 @@ require (
 	github.com/klauspost/cpuid v0.0.0-20180405133222-e7e905edc00e
 	github.com/klauspost/reedsolomon v0.0.0-20180704173009-925cb01d6510
 	github.com/pkg/errors v0.8.0
+	github.com/pmezard/go-difflib v1.0.0
 	github.com/stretchr/objx v0.1.1
 	github.com/stretchr/testify v1.2.2
 	github.com/templexxx/cpufeat v0.0.0-20170927014610-3794dfbfb047

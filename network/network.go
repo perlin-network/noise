@@ -70,8 +70,8 @@ type Network struct {
 	SignaturePolicy crypto.SignaturePolicy
 	HashPolicy      crypto.HashPolicy
 
-	// <-Kill will begin the server shutdown process
-	Kill chan struct{}
+	// kill will begin the server shutdown process
+	kill chan struct{}
 }
 
 type ConnState struct {
@@ -222,7 +222,7 @@ func (n *Network) Listen() {
 	// handle server shutdowns
 	go func() {
 		select {
-		case <-n.Kill:
+		case <-n.kill:
 			// cause listener.Accept() to stop blocking so it can continue the loop
 			listener.Close()
 		}
@@ -236,7 +236,7 @@ func (n *Network) Listen() {
 		} else {
 			// if the Shutdown flag is set, no need to continue with the for loop
 			select {
-			case <-n.Kill:
+			case <-n.kill:
 				glog.Infof("Shutting down server on %s.\n", n.Address)
 				return
 			default:
@@ -506,7 +506,7 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 
 	_state, exists := n.Connections.Load(address)
 	if !exists {
-		return errors.New("connection does not exist")
+		return errors.New("network: connection does not exist")
 	}
 	state := _state.(*ConnState)
 
@@ -605,7 +605,7 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 // Close shuts down the entire network.
 func (n *Network) Close() {
 	// Kill the listener.
-	close(n.Kill)
+	close(n.kill)
 
 	// Clean out client connections.
 	n.Peers.Range(func(key, value interface{}) bool {

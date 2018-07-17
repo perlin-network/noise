@@ -14,6 +14,7 @@ type SignaturePolicy interface {
 	PrivateToPublic(privateKey []byte) ([]byte, error)
 	PublicKeySize() int
 	Sign(privateKey []byte, message []byte) []byte
+	RandomKeyPair() *KeyPair
 	Verify(publicKey []byte, message []byte, signature []byte) bool
 }
 
