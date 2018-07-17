@@ -5,6 +5,7 @@ codecov:
 
 ignore:
   - "./protobuf"
+  - "./examples"
 
 comment: false
 
