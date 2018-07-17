@@ -94,6 +94,11 @@ func (n *Network) Init() {
 	}
 }
 
+// GetKeys() returns the keypair for this network
+func (n *Network) GetKeys() *crypto.KeyPair {
+	return n.Keys
+}
+
 // Send queue worker.
 func (n *Network) handleSendQueue() {
 	for {

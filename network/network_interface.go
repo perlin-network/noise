@@ -4,6 +4,7 @@ import (
 	"net"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/xtaci/smux"
@@ -13,6 +14,9 @@ type NetworkInterface interface {
 
 	// Init starts all network I/O workers.
 	Init()
+
+	// GetKeys() returns the keypair for this network
+	GetKeys() *crypto.KeyPair
 
 	// Listen starts listening for peers on a port.
 	Listen()
