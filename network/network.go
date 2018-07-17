@@ -21,6 +21,8 @@ import (
 	"github.com/xtaci/smux"
 )
 
+var _ (NetworkInterface) = (*Network)(nil)
+
 var packetPool = sync.Pool{
 	New: func() interface{} {
 		return new(Packet)
@@ -90,6 +92,11 @@ func (n *Network) Init() {
 		// Spawn worker routines for sending queued messages to the networking layer.
 		go n.handleSendQueue()
 	}
+}
+
+// GetKeys() returns the keypair for this network
+func (n *Network) GetKeys() *crypto.KeyPair {
+	return n.Keys
 }
 
 // Send queue worker.
