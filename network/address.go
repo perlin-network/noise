@@ -1,13 +1,13 @@
 package network
 
 import (
-	"errors"
 	"net"
 	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/perlin-network/noise/types/lru"
+	"github.com/pkg/errors"
 )
 
 var domainLookupCache = lru.NewCache(1000)
@@ -25,6 +25,8 @@ const (
 
 // Errors
 var (
+	// ErrInvalidAddress returns if an invalid address was given
+	ErrInvalidAddress       = errors.New("address: invalid address")
 	ErrAddressEmpty         = errors.New("address: cannot dial, address was empty")
 	ErrNoAvailableAddresses = errors.New("address: no available addresses")
 )
@@ -95,7 +97,7 @@ func ToUnifiedHost(host string) (string, error) {
 			// Probably a domain name is provided.
 			addresses, err := net.LookupHost(host)
 			if err != nil {
-				return "", err
+				return "", errors.Wrapf(ErrNoAvailableAddresses, err.Error())
 			}
 			if len(addresses) == 0 {
 				return "", ErrNoAvailableAddresses
@@ -111,6 +113,10 @@ func ToUnifiedHost(host string) (string, error) {
 
 		return host, nil
 	})
+
+	if unifiedHost == nil {
+		return "", ErrNoAvailableAddresses
+	}
 
 	return unifiedHost.(string), err
 }

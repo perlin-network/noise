@@ -5,9 +5,10 @@ codecov:
 
 ignore:
   - "./examples"
+  - "**/mocks"
   - "./protobuf"
-  - "./scripts.go"
-  - "mocks/*"
+  - "**/*.pb.go"
+  - "scripts.go"
 
 comment: false
 
