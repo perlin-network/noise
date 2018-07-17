@@ -43,16 +43,6 @@ func (builder *Builder) SetAddress(address string) {
 	builder.address = address
 }
 
-// SetSignaturePolicy sets the signature policy for the network.
-func (builder *Builder) SetSignaturePolicy(policy crypto.SignaturePolicy) {
-	builder.signaturePolicy = policy
-}
-
-// SetHashPolicy sets the hash policy for the network.
-func (builder *Builder) SetHashPolicy(policy crypto.HashPolicy) {
-	builder.hashPolicy = policy
-}
-
 // AddPluginWithPriority register a new plugin onto the network with a set priority.
 func (builder *Builder) AddPluginWithPriority(priority int, plugin PluginInterface) error {
 	// Initialize plugin list if not exist.
@@ -115,9 +105,6 @@ func (builder *Builder) Build() (*Network, error) {
 		RecvQueue:   make(chan *protobuf.Message, 4096),
 
 		Listening: make(chan struct{}),
-
-		SignaturePolicy: builder.signaturePolicy,
-		HashPolicy:      builder.hashPolicy,
 
 		Kill: make(chan struct{}),
 	}

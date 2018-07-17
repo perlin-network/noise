@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/blake2b"
+	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 
@@ -21,7 +23,9 @@ import (
 	"github.com/xtaci/smux"
 )
 
-var _ (NetworkInterface) = (*Network)(nil)
+const (
+	defaultConnectionTimeout = 60 * time.Second
+)
 
 var packetPool = sync.Pool{
 	New: func() interface{} {
@@ -41,10 +45,16 @@ type Packet struct {
 	result  chan interface{}
 }
 
+var (
+	_ (NetworkInterface) = (*Network)(nil)
+)
+
 // Network represents the current networking state for this node.
 type Network struct {
+	opts options
+
 	// Node's keypair.
-	Keys *crypto.KeyPair
+	keys *crypto.KeyPair
 
 	// Full address to listen on. `protocol://host:port`
 	Address string
@@ -69,11 +79,82 @@ type Network struct {
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
 
-	SignaturePolicy crypto.SignaturePolicy
-	HashPolicy      crypto.HashPolicy
+	// <-kill will begin the server shutdown process
+	kill chan struct{}
+}
 
-	// <-Kill will begin the server shutdown process
-	Kill chan struct{}
+// options for network struct
+type options struct {
+	connectionTimeout time.Duration
+	signaturePolicy   crypto.SignaturePolicy
+	hashPolicy        crypto.HashPolicy
+}
+
+var defaultNetworkOptions = options{
+	connectionTimeout: defaultConnectionTimeout,
+	signaturePolicy:   ed25519.New(),
+	hashPolicy:        blake2b.New(),
+}
+
+// A NetworkOption sets options such as connection timeout and cryptographic // policies for the network
+type NetworkOption func(*options)
+
+// ConnectionTimeout returns a NetworkOption that sets the timeout for
+// establishing new connections (default: 60 seconds)
+func ConnectionTimeout(d time.Duration) NetworkOption {
+	return func(o *options) {
+		o.connectionTimeout = d
+	}
+}
+
+// SignaturePolicy returns a NetworkOption that sets the the signature policy
+// for the network.
+func SignaturePolicy(policy crypto.SignaturePolicy) NetworkOption {
+	return func(o *options) {
+		o.signaturePolicy = policy
+	}
+}
+
+// HashPolicy returns a NetworkOption that sets the the hash policy for the network.
+func HashPolicy(policy crypto.HashPolicy) NetworkOption {
+	return func(o *options) {
+		o.hashPolicy = policy
+	}
+}
+
+// NewNetwork creates a network which is ready to accept connections
+func NewNetwork(address string, keypair *crypto.KeyPair, opt ...NetworkOption) (*Network, error) {
+	opts := defaultNetworkOptions
+	for _, o := range opt {
+		o(&opts)
+	}
+
+	unifiedAddress, err := ToUnifiedAddress(address)
+	if err != nil {
+		return nil, err
+	}
+
+	id := peer.CreateID(unifiedAddress, keypair.PublicKey)
+
+	net := &Network{
+		ID:   id,
+		opts: opts,
+		keys: keypair,
+
+		Peers: new(sync.Map),
+
+		Connections: new(sync.Map),
+		SendQueue:   make(chan *Packet, 4096),
+		RecvQueue:   make(chan *protobuf.Message, 4096),
+
+		Listening: make(chan struct{}),
+
+		kill: make(chan struct{}),
+	}
+
+	net.Init()
+
+	return net, nil
 }
 
 type ConnState struct {
@@ -94,9 +175,9 @@ func (n *Network) Init() {
 	}
 }
 
-// GetKeys() returns the keypair for this network
+// GetKeys returns the keypair for this network
 func (n *Network) GetKeys() *crypto.KeyPair {
-	return n.Keys
+	return n.keys
 }
 
 // Send queue worker.
@@ -229,7 +310,7 @@ func (n *Network) Listen() {
 	// handle server shutdowns
 	go func() {
 		select {
-		case <-n.Kill:
+		case <-n.kill:
 			// cause listener.Accept() to stop blocking so it can continue the loop
 			listener.Close()
 		}
@@ -243,7 +324,7 @@ func (n *Network) Listen() {
 		} else {
 			// if the Shutdown flag is set, no need to continue with the for loop
 			select {
-			case <-n.Kill:
+			case <-n.kill:
 				glog.Infof("Shutting down server on %s.\n", n.Address)
 				return
 			default:
@@ -489,9 +570,9 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 
 	id := protobuf.ID(n.ID)
 
-	signature, err := n.Keys.Sign(
-		n.SignaturePolicy,
-		n.HashPolicy,
+	signature, err := n.keys.Sign(
+		n.opts.signaturePolicy,
+		n.opts.hashPolicy,
 		SerializeMessage(&id, raw.Value),
 	)
 	if err != nil {
@@ -612,7 +693,7 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 // Close shuts down the entire network.
 func (n *Network) Close() {
 	// Kill the listener.
-	close(n.Kill)
+	close(n.kill)
 
 	// Clean out client connections.
 	n.Peers.Range(func(key, value interface{}) bool {
