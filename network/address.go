@@ -1,7 +1,6 @@
 package network
 
 import (
-	"fmt"
 	"net"
 	"net/url"
 	"strconv"
@@ -98,11 +97,9 @@ func ToUnifiedHost(host string) (string, error) {
 			// Probably a domain name is provided.
 			addresses, err := net.LookupHost(host)
 			if err != nil {
-				fmt.Printf("XXXXX lookuphost fails\n")
 				return "", errors.Wrapf(ErrNoAvailableAddresses, err.Error())
 			}
 			if len(addresses) == 0 {
-				fmt.Printf("XXXXX here no address\n")
 				return "", ErrNoAvailableAddresses
 			}
 

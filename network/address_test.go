@@ -116,7 +116,7 @@ func TestParseAddress(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		_, err := ParseAddress(tt.address)
-		if err != nil {
+		if err == nil {
 			t.Errorf("ParseAddress() = <nil>, expected %v (%s)", err, tt.description)
 		}
 	}
