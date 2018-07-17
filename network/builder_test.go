@@ -45,14 +45,51 @@ func TestSetters(t *testing.T) {
 		t.Fatalf("address is wrong: expected %s but got %s", fmt.Sprintf("tcp://127.0.0.1:%d", port), net.Address)
 	}
 
-	if !bytes.Equal(net.Keys.PrivateKey, keys.PrivateKey) {
+	if !bytes.Equal(net.keys.PrivateKey, keys.PrivateKey) {
 		t.Fatalf("private key is wrong")
 	}
 
-	if !bytes.Equal(net.Keys.PublicKey, keys.PublicKey) {
+	if !bytes.Equal(net.keys.PublicKey, keys.PublicKey) {
 		t.Fatalf("public key is wrong")
 	}
+}
 
+func TestNoKeys(t *testing.T) {
+	t.Parallel()
+
+	builder := NewBuilder()
+	builder.SetKeys(nil)
+	_, err := builder.Build()
+	if err == nil {
+		t.Errorf("Build() = nil, expected %v", ErrNoKeyPair)
+	}
+}
+
+func TestBuilderAddress(t *testing.T) {
+	t.Parallel()
+
+	builder := NewBuilder()
+	builder.SetAddress("")
+	_, err := builder.Build()
+	if err == nil || err != ErrNoAddress {
+		t.Errorf("Build() = %v, expected %v", err, ErrNoAddress)
+	}
+}
+
+func TestDuplicatePlugin(t *testing.T) {
+	t.Parallel()
+
+	builder := NewBuilder()
+
+	err := builder.AddPluginWithPriority(1, new(MockPlugin))
+	if err != nil {
+		t.Errorf("AddPluginWithPriority() = %v, expected <nil>", err)
+	}
+
+	err = builder.AddPluginWithPriority(1, new(MockPlugin))
+	if err == nil || err != ErrDuplicatePlugin {
+		t.Errorf("Build() = %v, expected %v", err, ErrDuplicatePlugin)
+	}
 }
 
 func TestPeers(t *testing.T) {

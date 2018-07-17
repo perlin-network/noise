@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/crypto/blake2b"
-	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 
@@ -25,6 +23,8 @@ import (
 
 const (
 	defaultConnectionTimeout = 60 * time.Second
+	defaultReceiveWindowSize = 4096
+	defaultSendWindowSize    = 4096
 )
 
 var packetPool = sync.Pool{
@@ -88,73 +88,8 @@ type options struct {
 	connectionTimeout time.Duration
 	signaturePolicy   crypto.SignaturePolicy
 	hashPolicy        crypto.HashPolicy
-}
-
-var defaultNetworkOptions = options{
-	connectionTimeout: defaultConnectionTimeout,
-	signaturePolicy:   ed25519.New(),
-	hashPolicy:        blake2b.New(),
-}
-
-// A NetworkOption sets options such as connection timeout and cryptographic // policies for the network
-type NetworkOption func(*options)
-
-// ConnectionTimeout returns a NetworkOption that sets the timeout for
-// establishing new connections (default: 60 seconds)
-func ConnectionTimeout(d time.Duration) NetworkOption {
-	return func(o *options) {
-		o.connectionTimeout = d
-	}
-}
-
-// SignaturePolicy returns a NetworkOption that sets the the signature policy
-// for the network.
-func SignaturePolicy(policy crypto.SignaturePolicy) NetworkOption {
-	return func(o *options) {
-		o.signaturePolicy = policy
-	}
-}
-
-// HashPolicy returns a NetworkOption that sets the the hash policy for the network.
-func HashPolicy(policy crypto.HashPolicy) NetworkOption {
-	return func(o *options) {
-		o.hashPolicy = policy
-	}
-}
-
-// NewNetwork creates a network which is ready to accept connections
-func NewNetwork(address string, keypair *crypto.KeyPair, opt ...NetworkOption) (*Network, error) {
-	opts := defaultNetworkOptions
-	for _, o := range opt {
-		o(&opts)
-	}
-
-	unifiedAddress, err := ToUnifiedAddress(address)
-	if err != nil {
-		return nil, err
-	}
-
-	id := peer.CreateID(unifiedAddress, keypair.PublicKey)
-
-	net := &Network{
-		ID:   id,
-		opts: opts,
-		keys: keypair,
-
-		Peers: new(sync.Map),
-
-		Connections: new(sync.Map),
-		SendQueue:   make(chan *Packet, 4096),
-		RecvQueue:   make(chan *protobuf.Message, 4096),
-
-		Listening: make(chan struct{}),
-
-		kill: make(chan struct{}),
-	}
-
-	net.Init()
-
-	return net, nil
+	recvWindowSize    int
+	sendWindowSize    int
 }
 
 type ConnState struct {
@@ -444,15 +379,13 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 
 // Accept handles peer registration and processes incoming message streams.
 func (n *Network) Accept(conn net.Conn) {
-	const RECV_WINDOW_SIZE = 4096
-
 	var incoming *smux.Session
 	var outgoing *smux.Session
 
 	var client *PeerClient
 	var clientInit sync.Once
 
-	recvWindow := NewRecvWindow(RECV_WINDOW_SIZE)
+	recvWindow := NewRecvWindow(n.opts.recvWindowSize)
 
 	var err error
 
