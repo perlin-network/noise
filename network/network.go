@@ -21,6 +21,8 @@ import (
 	"github.com/xtaci/smux"
 )
 
+var _ (NetworkInterface) = (*Network)(nil)
+
 var packetPool = sync.Pool{
 	New: func() interface{} {
 		return new(Packet)
