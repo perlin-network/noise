@@ -4,8 +4,10 @@ codecov:
   max_report_age: off
 
 ignore:
-  - "./protobuf"
   - "./examples"
+  - "**/mocks"
+  - "**/protobuf"
+  - "*.pb.go"
 
 comment: false
 
