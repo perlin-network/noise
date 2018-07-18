@@ -25,6 +25,7 @@ const (
 	defaultConnectionTimeout = 60 * time.Second
 	defaultReceiveWindowSize = 4096
 	defaultSendWindowSize    = 4096
+	defaultWriteTimeout      = 3 * time.Second
 )
 
 var packetPool = sync.Pool{
@@ -90,6 +91,7 @@ type options struct {
 	hashPolicy        crypto.HashPolicy
 	recvWindowSize    int
 	sendWindowSize    int
+	writeTimeout      time.Duration
 }
 
 type ConnState struct {
@@ -231,7 +233,7 @@ func (n *Network) Listen() {
 	} else if addrInfo.Protocol == "tcp" {
 		listener, err = net.Listen("tcp", ":"+strconv.Itoa(int(addrInfo.Port)))
 	} else {
-		err = errors.New("invalid protocol: " + addrInfo.Protocol)
+		err = errors.Errorf("network: invalid protocol '%s'", addrInfo.Protocol)
 	}
 
 	if err != nil {
@@ -279,7 +281,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 	}
 
 	if address == n.Address {
-		return nil, errors.New("peer should not dial itself")
+		return nil, errors.New("network: peer should not dial itself")
 	}
 
 	client, err := createPeerClient(n, address)
@@ -291,7 +293,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		client := client.(*PeerClient)
 
 		if !client.OutgoingReady() {
-			return nil, errors.New("peer failed to connect")
+			return nil, errors.New("network: peer failed to connect")
 		}
 
 		return client, nil
@@ -444,7 +446,7 @@ func (n *Network) Accept(conn net.Conn) {
 				if state, established := n.Connections.Load(client.ID.Address); established {
 					outgoing = state.(*ConnState).session
 				} else {
-					err = errors.New("failed to load session")
+					err = errors.New("network: failed to load session")
 				}
 
 				// Signal that the client is ready.
@@ -457,7 +459,7 @@ func (n *Network) Accept(conn net.Conn) {
 
 			// Peer sent message with a completely different ID. Disconnect.
 			if !client.ID.Equals(peer.ID(*msg.Sender)) {
-				glog.Errorf("Message signed by peer %s but client is %s", peer.ID(*msg.Sender), client.ID.Address)
+				glog.Errorf("message signed by peer %s but client is %s", peer.ID(*msg.Sender), client.ID.Address)
 				return
 			}
 
@@ -493,7 +495,7 @@ func (n *Network) Plugin(key interface{}) (PluginInterface, bool) {
 // nodes private key. Errors if the message is null.
 func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, error) {
 	if message == nil {
-		return nil, errors.New("message is null")
+		return nil, errors.New("network: message is null")
 	}
 
 	raw, err := types.MarshalAny(message)
@@ -540,19 +542,19 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 	select {
 	case n.SendQueue <- packet:
 	default:
-		return errors.New("send queue full")
+		return errors.New("network: send queue full")
 	}
 
 	select {
 	case raw := <-packet.result:
 		switch err := raw.(type) {
 		case error:
-			return errors.Wrapf(err, "failed to send message to %s", address)
+			return errors.Wrapf(err, "network: failed to send message to %s", address)
 		default:
 			return nil
 		}
-	case <-time.After(3 * time.Second):
-		return errors.Errorf("worker must be too busy; failed to send message to %s", address)
+	case <-time.After(n.opts.writeTimeout):
+		return errors.Errorf("network: worker must be too busy; failed to send message to %s", address)
 	}
 
 	return nil
@@ -566,7 +568,7 @@ func (n *Network) Broadcast(message proto.Message) {
 		err := client.Tell(message)
 
 		if err != nil {
-			glog.Warningf("Failed to send message to peer %v [err=%s]", client.ID, err)
+			glog.Warningf("failed to send message to peer %v [err=%s]", client.ID, err)
 		}
 
 		return true
