@@ -5,6 +5,8 @@ import (
 	"net"
 	"net/url"
 	"testing"
+
+	"github.com/pkg/errors"
 )
 
 func TestFormatAddress(t *testing.T) {
@@ -23,7 +25,7 @@ func TestFormatAddress(t *testing.T) {
 		address := FormatAddress(tt.protocol, tt.host, tt.port)
 		expected := fmt.Sprintf("%s://%s:%d", tt.protocol, tt.host, tt.port)
 		if address != expected {
-			t.Errorf("FormatAddress() = %v, expected %v", address, expected)
+			t.Errorf("FormatAddress() = %+v, expected %+v", address, expected)
 		}
 	}
 }
@@ -61,21 +63,21 @@ func TestToUnifiedAddress(t *testing.T) {
 	for _, tt := range testCases {
 		address, err := ToUnifiedAddress(tt.address)
 		if err != nil {
-			t.Errorf("ToUnifiedAddress() = %v, expected <nil>", err)
+			t.Errorf("ToUnifiedAddress() = %+v, expected <nil>", err)
 		}
 
 		urlInfo, err := url.Parse(address)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 
 		_, port, err := net.SplitHostPort(urlInfo.Host)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 
 		if port != tt.expectedPort {
-			t.Fatal("port mismatch")
+			t.Error("port mismatch")
 		}
 	}
 }
@@ -89,13 +91,16 @@ func TestToUnifiedHost(t *testing.T) {
 		expected    string
 		description string
 	}{
-		{"tcp://asdf:1000", ErrNoAvailableAddresses, "", "LookupHost fails to resolve"},
+		{"tcp://asdf:1000", errors.New(ErrStrNoAvailableAddresses), "", "LookupHost fails to resolve"},
 		{"localhost", nil, "127.0.0.1", "should resolve localhost to 127.0.0.1"},
 	}
 	for _, tt := range testCases {
 		address, err := ToUnifiedHost(tt.address)
-		if err != tt.err {
-			t.Errorf("ToUnifiedHost() = %v, expected %v (%s)", err, tt.err, tt.description)
+
+		if tt.err == nil && err != nil {
+			t.Errorf("ToUnifiedHost() = %+v, expected %+v (%s)", err, tt.err, tt.description)
+		} else if tt.err != nil && err.Error() != tt.err.Error() {
+			t.Errorf("ToUnifiedHost() = %+v, expected %+v (%s)", err, tt.err, tt.description)
 		}
 		if address != tt.expected {
 			t.Errorf("address %s, expected %s", address, tt.expected)
@@ -117,7 +122,7 @@ func TestParseAddress(t *testing.T) {
 	for _, tt := range testCases {
 		_, err := ParseAddress(tt.address)
 		if err == nil {
-			t.Errorf("ParseAddress() = <nil>, expected %v (%s)", err, tt.description)
+			t.Errorf("ParseAddress() = <nil>, expected %+v (%s)", err, tt.description)
 		}
 	}
 }

@@ -6,7 +6,6 @@ codecov:
 ignore:
   - "./examples"
   - "**/mocks"
-  - "./protobuf"
   - "**/*.pb.go"
   - "scripts.go"
 

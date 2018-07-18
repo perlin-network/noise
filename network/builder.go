@@ -1,7 +1,7 @@
 package network
 
 import (
-	"errors"
+	"reflect"
 	"sync"
 	"time"
 
@@ -10,6 +10,7 @@ import (
 	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -17,13 +18,13 @@ const (
 )
 
 var (
-	// ErrDuplicatePlugin returns if the plugin has already been registered
+	// ErrStrDuplicatePlugin returns if the plugin has already been registered
 	// with the builder
-	ErrDuplicatePlugin = errors.New("builder: plugin is already registered")
-	// ErrNoAddress returns if no address was given to the builder
-	ErrNoAddress = errors.New("builder: network requires public server IP for peers to connect to")
-	// ErrNoKeyPair returns if no keypair was given to the builder
-	ErrNoKeyPair = errors.New("builder: cryptography keys not provided to Network; cannot create node ID")
+	ErrStrDuplicatePlugin = "builder: plugin %s is already registered"
+	// ErrStrNoAddress returns if no address was given to the builder
+	ErrStrNoAddress = "builder: network requires public server IP for peers to connect to"
+	// ErrStrNoKeyPair returns if no keypair was given to the builder
+	ErrStrNoKeyPair = "builder: cryptography keys not provided to Network; cannot create node ID"
 )
 
 // Builder is a Address->processors struct
@@ -126,7 +127,7 @@ func (builder *Builder) AddPluginWithPriority(priority int, plugin PluginInterfa
 	}
 
 	if !builder.plugins.Put(priority, plugin) {
-		return ErrDuplicatePlugin
+		return errors.Errorf(ErrStrDuplicatePlugin, reflect.TypeOf(plugin).String())
 	}
 
 	return nil
@@ -145,11 +146,11 @@ func (builder *Builder) AddPlugin(plugin PluginInterface) error {
 // misconfiguration, or a *Network.
 func (builder *Builder) Build() (*Network, error) {
 	if builder.keys == nil {
-		return nil, ErrNoKeyPair
+		return nil, errors.New(ErrStrNoKeyPair)
 	}
 
 	if len(builder.address) == 0 {
-		return nil, ErrNoAddress
+		return nil, errors.New(ErrStrNoAddress)
 	}
 
 	// Initialize plugin list if not exist.

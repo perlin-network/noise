@@ -2,13 +2,13 @@ package network
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/crypto/ed25519"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -65,7 +65,7 @@ func TestNoKeys(t *testing.T) {
 	builder.SetKeys(nil)
 	_, err := builder.Build()
 	if err == nil {
-		t.Errorf("Build() = nil, expected %v", ErrNoKeyPair)
+		t.Errorf("Build() = %+v, expected %+v", err, errors.New(ErrStrNoKeyPair))
 	}
 }
 
@@ -75,15 +75,15 @@ func TestBuilderAddress(t *testing.T) {
 	builder := NewBuilder()
 	builder.SetAddress("")
 	_, err := builder.Build()
-	if err == nil || err != ErrNoAddress {
-		t.Errorf("Build() = %v, expected %v", err, ErrNoAddress)
+	if err == nil {
+		t.Errorf("Build() = %+v, expected %+v", err, errors.New(ErrStrNoAddress))
 	}
 
 	errMissingPort := errors.New("missing port in address")
 	builder.SetAddress("localhost")
 	_, err = builder.Build()
-	if err == nil || err.Error() != errMissingPort.Error() {
-		t.Errorf("Build() = %v, expected %v", err, errMissingPort)
+	if err == nil {
+		t.Errorf("Build() = %+v, expected %+v", err, errMissingPort)
 	}
 }
 
@@ -93,18 +93,18 @@ func TestDuplicatePlugin(t *testing.T) {
 	builder := NewBuilder()
 	_, err := builder.Build()
 	if err != nil {
-		t.Errorf("Build() = %v, expected <nil>", err)
+		t.Errorf("Build() = %+v, expected <nil>", err)
 	}
 	assert.Equal(t, builder.pluginCount, 0, "should have no plugins")
 
 	err = builder.AddPluginWithPriority(1, new(MockPlugin))
 	if err != nil {
-		t.Errorf("AddPluginWithPriority() = %v, expected <nil>", err)
+		t.Errorf("AddPluginWithPriority() = %+v, expected <nil>", err)
 	}
 
 	err = builder.AddPluginWithPriority(1, new(MockPlugin))
-	if err == nil || err != ErrDuplicatePlugin {
-		t.Errorf("Build() = %v, expected %v", err, ErrDuplicatePlugin)
+	if err == nil {
+		t.Errorf("Build() = %+v, expected %+v", err, errors.New(ErrStrDuplicatePlugin))
 	}
 }
 
@@ -115,10 +115,10 @@ func TestConnectionTimeout(t *testing.T) {
 	builder := NewBuilderWithOptions(ConnectionTimeout(timeout))
 	net, err := builder.Build()
 	if err != nil {
-		t.Errorf("Build() = %v, expected <nil>", err)
+		t.Errorf("Build() = %+v, expected <nil>", err)
 	}
 	if net.opts.connectionTimeout != timeout {
-		t.Errorf("connectionTimeout = %v, expected %v", net.opts.connectionTimeout, timeout)
+		t.Errorf("connectionTimeout = %+v, expected %+v", net.opts.connectionTimeout, timeout)
 	}
 }
 
@@ -128,9 +128,7 @@ func TestSignaturePolicy(t *testing.T) {
 	signaturePolicy := ed25519.New()
 	builder := NewBuilderWithOptions(SignaturePolicy(signaturePolicy))
 	net, err := builder.Build()
-	if err != nil {
-		t.Errorf("Build() = %v, expected <nil>", err)
-	}
+	assert.Equal(t, nil, err)
 	assert.Equal(t, net.opts.signaturePolicy, signaturePolicy, "signature policy given should match found")
 }
 
@@ -141,7 +139,7 @@ func TestHashPolicy(t *testing.T) {
 	builder := NewBuilderWithOptions(HashPolicy(hashPolicy))
 	net, err := builder.Build()
 	if err != nil {
-		t.Errorf("Build() = %v, expected <nil>", err)
+		t.Errorf("Build() = %+v, expected <nil>", err)
 	}
 	assert.Equal(t, net.opts.hashPolicy, hashPolicy, "hash policy given should match found")
 }
@@ -157,7 +155,7 @@ func TestWindowSize(t *testing.T) {
 	)
 	net, err := builder.Build()
 	if err != nil {
-		t.Errorf("Build() = %v, expected <nil>", err)
+		t.Errorf("Build() = %+v, expected <nil>", err)
 	}
 	assert.Equal(t, net.opts.recvWindowSize, recvWindowSize, "recv window size given should match found")
 	assert.Equal(t, net.opts.sendWindowSize, sendWindowSize, "send window size given should match found")
