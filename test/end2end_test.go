@@ -149,6 +149,9 @@ func testNodeConnect(t *testing.T, e env) {
 
 func TestNodeBroadcast(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skipf("skipping %s in short mode", t.Name())
+	}
 
 	for _, e := range allEnvs {
 		testNodeBroadcast(t, e)
@@ -184,6 +187,9 @@ func testNodeBroadcast(t *testing.T, e env) {
 FIXME(jack0): something wrong with the sending, might be related to other PR
 func TestNodeBroadcastByIDs(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skipf("skipping %s in short mode", t.Name())
+	}
 
 	for _, e := range allEnvs {
 		testNodeBroadcastByIDs(t, e)
@@ -222,6 +228,9 @@ func testNodeBroadcastByIDs(t *testing.T, e env) {
 
 func TestNodeBroadcastByAddresses(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skipf("skipping %s in short mode", t.Name())
+	}
 
 	for _, e := range allEnvs {
 		testNodeBroadcastByAddresses(t, e)
