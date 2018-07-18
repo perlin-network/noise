@@ -44,6 +44,7 @@ var defaultBuilderOptions = options{
 	hashPolicy:        blake2b.New(),
 	recvWindowSize:    defaultReceiveWindowSize,
 	sendWindowSize:    defaultSendWindowSize,
+	writeTimeout:      defaultWriteTimeout,
 }
 
 // A BuilderOption sets options such as connection timeout and cryptographic // policies for the network
@@ -86,6 +87,14 @@ func RecvWindowSize(recvWindowSize int) BuilderOption {
 func SendWindowSize(sendWindowSize int) BuilderOption {
 	return func(o *options) {
 		o.sendWindowSize = sendWindowSize
+	}
+}
+
+// WriteTimeout returns a BuilderOption that sets the write timeout
+// (default: 4096).
+func WriteTimeout(d time.Duration) BuilderOption {
+	return func(o *options) {
+		o.writeTimeout = d
 	}
 }
 

@@ -6,6 +6,7 @@ package mocks
 
 import (
 	gomock "github.com/golang/mock/gomock"
+	crypto "github.com/perlin-network/noise/crypto"
 	reflect "reflect"
 )
 
@@ -81,6 +82,18 @@ func (m *MockSignaturePolicy) PublicKeySize() int {
 // PublicKeySize indicates an expected call of PublicKeySize
 func (mr *MockSignaturePolicyMockRecorder) PublicKeySize() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublicKeySize", reflect.TypeOf((*MockSignaturePolicy)(nil).PublicKeySize))
+}
+
+// RandomKeyPair mocks base method
+func (m *MockSignaturePolicy) RandomKeyPair() *crypto.KeyPair {
+	ret := m.ctrl.Call(m, "RandomKeyPair")
+	ret0, _ := ret[0].(*crypto.KeyPair)
+	return ret0
+}
+
+// RandomKeyPair indicates an expected call of RandomKeyPair
+func (mr *MockSignaturePolicyMockRecorder) RandomKeyPair() *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RandomKeyPair", reflect.TypeOf((*MockSignaturePolicy)(nil).RandomKeyPair))
 }
 
 // Sign mocks base method

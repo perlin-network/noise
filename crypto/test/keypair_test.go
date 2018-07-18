@@ -1,4 +1,4 @@
-package crypto
+package test
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/crypto/mocks"
 
 	gomock "github.com/golang/mock/gomock"
@@ -50,7 +51,7 @@ func TestKeyPair(t *testing.T) {
 
 	hp.EXPECT().HashBytes(message).Return(hashed).AnyTimes()
 
-	kp := KeyPair{
+	kp := crypto.KeyPair{
 		PrivateKey: privateKey,
 		PublicKey:  publicKey,
 	}
@@ -63,7 +64,7 @@ func TestKeyPair(t *testing.T) {
 		t.Errorf("Sign() = '%s', expected '%s'", sig, []byte("signed test message"))
 	}
 
-	if !Verify(sp, hp, publicKey, message, signature) {
+	if !crypto.Verify(sp, hp, publicKey, message, signature) {
 		t.Errorf("Verify('%s', '%s') = false, expected true", message, signature)
 	}
 
@@ -96,32 +97,32 @@ func TestKeyPairErrors(t *testing.T) {
 
 	hp.EXPECT().HashBytes(message).Return(hashed).AnyTimes()
 
-	kp := KeyPair{
+	kp := crypto.KeyPair{
 		PrivateKey: []byte{},
 		PublicKey:  []byte{},
 	}
 
 	// private key size does not match signature size
 	_, err := kp.Sign(sp, hp, message)
-	if err != privateKeySizeErr {
-		t.Errorf("Sign() = %v, expected %v", err, privateKeySizeErr)
+	if err != crypto.PrivateKeySizeErr {
+		t.Errorf("Sign() = %v, expected %v", err, crypto.PrivateKeySizeErr)
 	}
 
 	// private key is a bad format
 	errorString := "encoding/hex: invalid byte: U+0020 ' '"
-	_, err = FromPrivateKey(sp, "bad key")
+	_, err = crypto.FromPrivateKey(sp, "bad key")
 	if err.Error() != errorString {
 		t.Errorf("FromPrivateKey() = %v, expected %s", err, errorString)
 	}
 
 	// private key size does not match signature size
-	_, err = FromPrivateKey(sp, string(privateKey))
-	if err != privateKeySizeErr {
-		t.Errorf("FromPrivateKey() = %v, expected %v", err, privateKeySizeErr)
+	_, err = crypto.FromPrivateKey(sp, string(privateKey))
+	if err != crypto.PrivateKeySizeErr {
+		t.Errorf("FromPrivateKey() = %v, expected %v", err, crypto.PrivateKeySizeErr)
 	}
 
 	// public key size does not match signature size
-	if Verify(sp, hp, []byte{}, message, signature) {
+	if crypto.Verify(sp, hp, []byte{}, message, signature) {
 		t.Errorf("Verify() = true, expected false")
 	}
 }
@@ -141,12 +142,12 @@ func TestFromPrivateKey(t *testing.T) {
 	sp.EXPECT().PrivateKeySize().Return(len(privateKeyHexBytes)).Times(1)
 	sp.EXPECT().PrivateToPublic(privateKeyHexBytes).Return(publicKey, nil).Times(1)
 
-	kp1 := &KeyPair{
+	kp1 := &crypto.KeyPair{
 		PrivateKey: privateKeyHexBytes,
 		PublicKey:  publicKey,
 	}
 
-	kp2, err := FromPrivateKey(sp, string(privateKey))
+	kp2, err := crypto.FromPrivateKey(sp, string(privateKey))
 	if err != nil {
 		t.Errorf("FromPrivateKey() = %v, expected <nil>", err)
 	}

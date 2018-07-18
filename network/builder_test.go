@@ -161,6 +161,20 @@ func TestWindowSize(t *testing.T) {
 	assert.Equal(t, net.opts.sendWindowSize, sendWindowSize, "send window size given should match found")
 }
 
+func TestWriteTimeout(t *testing.T) {
+	t.Parallel()
+
+	writeTimeout := 1 * time.Second
+	builder := NewBuilderWithOptions(
+		WriteTimeout(writeTimeout),
+	)
+	net, err := builder.Build()
+	if err != nil {
+		t.Errorf("Build() = %+v, expected <nil>", err)
+	}
+	assert.Equal(t, net.opts.writeTimeout, writeTimeout, "write timeout given should match found")
+}
+
 func TestPeers(t *testing.T) {
 	var nodes []*Network
 	addresses := []string{"tcp://127.0.0.1:12345", "tcp://127.0.0.1:12346", "tcp://127.0.0.1:12347"}

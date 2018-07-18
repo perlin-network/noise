@@ -45,6 +45,11 @@ func (p *Ed25519) PublicKeySize() int {
 	return ed25519lib.PublicKeySize
 }
 
+// RandomKeyPair generates a randomly seeded ed25519 key pair.
+func (p *Ed25519) RandomKeyPair() *crypto.KeyPair {
+	return RandomKeyPair()
+}
+
 // Sign returns an ed25519-signed message given an private key and message.
 func (p *Ed25519) Sign(privateKey []byte, message []byte) []byte {
 	if len(privateKey) != ed25519lib.PrivateKeySize {
