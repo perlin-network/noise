@@ -70,7 +70,7 @@ func (state *plugin) Startup(net *network.Network) {
 
 	// Set peer information based off of port mapping info.
 	net.Address = info.String()
-	net.ID = peer.CreateID(net.Address, net.Keys.PublicKey)
+	net.ID = peer.CreateID(net.Address, net.GetKeys().PublicKey)
 
 	glog.Infof("Other peers may connect to you through the address %s.", net.Address)
 }

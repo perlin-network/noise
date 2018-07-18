@@ -21,7 +21,11 @@ import (
 	"github.com/xtaci/smux"
 )
 
-var _ (NetworkInterface) = (*Network)(nil)
+const (
+	defaultConnectionTimeout = 60 * time.Second
+	defaultReceiveWindowSize = 4096
+	defaultSendWindowSize    = 4096
+)
 
 var packetPool = sync.Pool{
 	New: func() interface{} {
@@ -41,10 +45,16 @@ type Packet struct {
 	result  chan interface{}
 }
 
+var (
+	_ (NetworkInterface) = (*Network)(nil)
+)
+
 // Network represents the current networking state for this node.
 type Network struct {
+	opts options
+
 	// Node's keypair.
-	Keys *crypto.KeyPair
+	keys *crypto.KeyPair
 
 	// Full address to listen on. `protocol://host:port`
 	Address string
@@ -69,11 +79,17 @@ type Network struct {
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
 
-	SignaturePolicy crypto.SignaturePolicy
-	HashPolicy      crypto.HashPolicy
+	// <-kill will begin the server shutdown process
+	kill chan struct{}
+}
 
-	// <-Kill will begin the server shutdown process
-	Kill chan struct{}
+// options for network struct
+type options struct {
+	connectionTimeout time.Duration
+	signaturePolicy   crypto.SignaturePolicy
+	hashPolicy        crypto.HashPolicy
+	recvWindowSize    int
+	sendWindowSize    int
 }
 
 type ConnState struct {
@@ -94,9 +110,9 @@ func (n *Network) Init() {
 	}
 }
 
-// GetKeys() returns the keypair for this network
+// GetKeys returns the keypair for this network
 func (n *Network) GetKeys() *crypto.KeyPair {
-	return n.Keys
+	return n.keys
 }
 
 // Send queue worker.
@@ -229,7 +245,7 @@ func (n *Network) Listen() {
 	// handle server shutdowns
 	go func() {
 		select {
-		case <-n.Kill:
+		case <-n.kill:
 			// cause listener.Accept() to stop blocking so it can continue the loop
 			listener.Close()
 		}
@@ -243,7 +259,7 @@ func (n *Network) Listen() {
 		} else {
 			// if the Shutdown flag is set, no need to continue with the for loop
 			select {
-			case <-n.Kill:
+			case <-n.kill:
 				glog.Infof("Shutting down server on %s.\n", n.Address)
 				return
 			default:
@@ -363,15 +379,13 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 
 // Accept handles peer registration and processes incoming message streams.
 func (n *Network) Accept(conn net.Conn) {
-	const RECV_WINDOW_SIZE = 4096
-
 	var incoming *smux.Session
 	var outgoing *smux.Session
 
 	var client *PeerClient
 	var clientInit sync.Once
 
-	recvWindow := NewRecvWindow(RECV_WINDOW_SIZE)
+	recvWindow := NewRecvWindow(n.opts.recvWindowSize)
 
 	var err error
 
@@ -489,9 +503,9 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 
 	id := protobuf.ID(n.ID)
 
-	signature, err := n.Keys.Sign(
-		n.SignaturePolicy,
-		n.HashPolicy,
+	signature, err := n.keys.Sign(
+		n.opts.signaturePolicy,
+		n.opts.hashPolicy,
 		SerializeMessage(&id, raw.Value),
 	)
 	if err != nil {
@@ -612,7 +626,7 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 // Close shuts down the entire network.
 func (n *Network) Close() {
 	// Kill the listener.
-	close(n.Kill)
+	close(n.kill)
 
 	// Clean out client connections.
 	n.Peers.Range(func(key, value interface{}) bool {
