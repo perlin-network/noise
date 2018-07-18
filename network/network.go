@@ -358,9 +358,9 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 	if addrInfo.Protocol == "kcp" {
 		conn, err = kcp.DialWithOptions(addrInfo.HostPort(), nil, 10, 3)
 	} else if addrInfo.Protocol == "tcp" {
-		conn, err = net.Dial("tcp", addrInfo.HostPort())
+		conn, err = net.DialTimeout("tcp", addrInfo.HostPort(), n.opts.connectionTimeout)
 	} else {
-		err = errors.New("invalid protocol: " + addrInfo.Protocol)
+		err = errors.New("network: invalid protocol " + addrInfo.Protocol)
 	}
 
 	// Failed to connect.

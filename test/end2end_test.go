@@ -62,11 +62,6 @@ func (te *test) startBoostrap(numNodes int, plugins ...network.PluginInterface) 
 		}
 	}
 
-	// TODO(jack0): fix this, doesn't work for large # of nodes
-	for _, node := range te.nodes {
-		node.BlockUntilListening()
-	}
-
 	for _, node := range te.nodes {
 		node.Bootstrap(te.bootstrapNode.Address)
 	}
@@ -82,6 +77,7 @@ func (te *test) startBoostrap(numNodes int, plugins ...network.PluginInterface) 
 		peers := routes.GetPeers()
 		for len(peers) < numNodes-1 {
 			peers = routes.GetPeers()
+			time.Sleep(50 * time.Millisecond)
 		}
 	}
 }
@@ -149,7 +145,7 @@ func TestNodeBroadcast(t *testing.T) {
 
 func testNodeBroadcast(t *testing.T, e env) {
 	te := newTest(t, e)
-	numNodes := 3
+	numNodes := 10
 	te.startBoostrap(numNodes)
 	defer te.tearDown()
 
@@ -161,9 +157,9 @@ func testNodeBroadcast(t *testing.T, e env) {
 		select {
 		case received := <-te.getMailbox(node).RecvMailbox:
 			if received.Message != expected {
-				t.Errorf("Expected message %s to be received by node %d but got %v\n", expected, i, received.Message)
+				t.Errorf("Expected message %s to be received by node %d but got %v\n", expected, i+1, received.Message)
 			} else {
-				t.Logf("Node %d received a message from Node 0.\n", i)
+				t.Logf("Node %d received a message from Node 0.\n", i+1)
 			}
 		case <-time.After(3 * time.Second):
 			t.Errorf("Timed out attempting to receive message from Node 0.\n")
