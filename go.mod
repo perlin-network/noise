@@ -8,6 +8,7 @@ require (
 	github.com/golang/protobuf v1.1.0
 	github.com/klauspost/cpuid v0.0.0-20180405133222-e7e905edc00e
 	github.com/klauspost/reedsolomon v0.0.0-20180704173009-925cb01d6510
+	github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1
 	github.com/pkg/errors v0.8.0
 	github.com/stretchr/objx v0.1.1
 	github.com/stretchr/testify v1.2.2
