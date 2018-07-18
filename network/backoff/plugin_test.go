@@ -20,8 +20,8 @@ const (
 )
 
 var (
-	clientIDPortMap = make(map[int]uint16)
-	keys            = make(map[string]*crypto.KeyPair)
+	idToPort = make(map[int]uint16)
+	keys     = make(map[string]*crypto.KeyPair)
 )
 
 // mockPlugin buffers all messages into a mailbox for this test.
@@ -71,9 +71,9 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 	port := uint16(0)
 	ok := false
 	// get random port
-	if port, ok = clientIDPortMap[i]; !ok {
+	if port, ok = idToPort[i]; !ok {
 		port = uint16(network.GetRandomUnusedPort())
-		clientIDPortMap[i] = port
+		idToPort[i] = port
 	}
 	// restore the key if it was created in the past
 	addr := network.FormatAddress(protocol, host, port)
@@ -106,7 +106,7 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 
 	// Bootstrap to Node 0
 	if addDiscoveryPlugin && i != 0 {
-		node.Bootstrap(network.FormatAddress(protocol, host, uint16(clientIDPortMap[0])))
+		node.Bootstrap(network.FormatAddress(protocol, host, uint16(idToPort[0])))
 	}
 
 	return node, plugin, nil

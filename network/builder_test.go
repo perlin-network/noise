@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
+	"time"
 
+	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/crypto/ed25519"
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -45,14 +49,130 @@ func TestSetters(t *testing.T) {
 		t.Fatalf("address is wrong: expected %s but got %s", fmt.Sprintf("tcp://127.0.0.1:%d", port), net.Address)
 	}
 
-	if !bytes.Equal(net.Keys.PrivateKey, keys.PrivateKey) {
+	if !bytes.Equal(net.keys.PrivateKey, keys.PrivateKey) {
 		t.Fatalf("private key is wrong")
 	}
 
-	if !bytes.Equal(net.Keys.PublicKey, keys.PublicKey) {
+	if !bytes.Equal(net.keys.PublicKey, keys.PublicKey) {
 		t.Fatalf("public key is wrong")
 	}
+}
 
+func TestNoKeys(t *testing.T) {
+	t.Parallel()
+
+	builder := NewBuilder()
+	builder.SetKeys(nil)
+	_, err := builder.Build()
+	if err == nil {
+		t.Errorf("Build() = %+v, expected %+v", err, errors.New(ErrStrNoKeyPair))
+	}
+}
+
+func TestBuilderAddress(t *testing.T) {
+	t.Parallel()
+
+	builder := NewBuilder()
+	builder.SetAddress("")
+	_, err := builder.Build()
+	if err == nil {
+		t.Errorf("Build() = %+v, expected %+v", err, errors.New(ErrStrNoAddress))
+	}
+
+	errMissingPort := errors.New("missing port in address")
+	builder.SetAddress("localhost")
+	_, err = builder.Build()
+	if err == nil {
+		t.Errorf("Build() = %+v, expected %+v", err, errMissingPort)
+	}
+}
+
+func TestDuplicatePlugin(t *testing.T) {
+	t.Parallel()
+
+	builder := NewBuilder()
+	_, err := builder.Build()
+	if err != nil {
+		t.Errorf("Build() = %+v, expected <nil>", err)
+	}
+	assert.Equal(t, builder.pluginCount, 0, "should have no plugins")
+
+	err = builder.AddPluginWithPriority(1, new(MockPlugin))
+	if err != nil {
+		t.Errorf("AddPluginWithPriority() = %+v, expected <nil>", err)
+	}
+
+	err = builder.AddPluginWithPriority(1, new(MockPlugin))
+	if err == nil {
+		t.Errorf("Build() = %+v, expected %+v", err, errors.New(ErrStrDuplicatePlugin))
+	}
+}
+
+func TestConnectionTimeout(t *testing.T) {
+	t.Parallel()
+
+	timeout := 5 * time.Second
+	builder := NewBuilderWithOptions(ConnectionTimeout(timeout))
+	net, err := builder.Build()
+	if err != nil {
+		t.Errorf("Build() = %+v, expected <nil>", err)
+	}
+	if net.opts.connectionTimeout != timeout {
+		t.Errorf("connectionTimeout = %+v, expected %+v", net.opts.connectionTimeout, timeout)
+	}
+}
+
+func TestSignaturePolicy(t *testing.T) {
+	t.Parallel()
+
+	signaturePolicy := ed25519.New()
+	builder := NewBuilderWithOptions(SignaturePolicy(signaturePolicy))
+	net, err := builder.Build()
+	assert.Equal(t, nil, err)
+	assert.Equal(t, net.opts.signaturePolicy, signaturePolicy, "signature policy given should match found")
+}
+
+func TestHashPolicy(t *testing.T) {
+	t.Parallel()
+
+	hashPolicy := blake2b.New()
+	builder := NewBuilderWithOptions(HashPolicy(hashPolicy))
+	net, err := builder.Build()
+	if err != nil {
+		t.Errorf("Build() = %+v, expected <nil>", err)
+	}
+	assert.Equal(t, net.opts.hashPolicy, hashPolicy, "hash policy given should match found")
+}
+
+func TestWindowSize(t *testing.T) {
+	t.Parallel()
+
+	recvWindowSize := 2000
+	sendWindowSize := 1000
+	builder := NewBuilderWithOptions(
+		RecvWindowSize(recvWindowSize),
+		SendWindowSize(sendWindowSize),
+	)
+	net, err := builder.Build()
+	if err != nil {
+		t.Errorf("Build() = %+v, expected <nil>", err)
+	}
+	assert.Equal(t, net.opts.recvWindowSize, recvWindowSize, "recv window size given should match found")
+	assert.Equal(t, net.opts.sendWindowSize, sendWindowSize, "send window size given should match found")
+}
+
+func TestWriteTimeout(t *testing.T) {
+	t.Parallel()
+
+	writeTimeout := 1 * time.Second
+	builder := NewBuilderWithOptions(
+		WriteTimeout(writeTimeout),
+	)
+	net, err := builder.Build()
+	if err != nil {
+		t.Errorf("Build() = %+v, expected <nil>", err)
+	}
+	assert.Equal(t, net.opts.writeTimeout, writeTimeout, "write timeout given should match found")
 }
 
 func TestPeers(t *testing.T) {

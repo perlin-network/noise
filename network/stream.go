@@ -91,8 +91,8 @@ func (n *Network) receiveMessage(conn net.Conn) (*protobuf.Message, error) {
 
 	// Verify signature of message.
 	if !crypto.Verify(
-		n.SignaturePolicy,
-		n.HashPolicy,
+		n.opts.signaturePolicy,
+		n.opts.hashPolicy,
 		msg.Sender.PublicKey,
 		SerializeMessage(msg.Sender, msg.Message.Value),
 		msg.Signature,

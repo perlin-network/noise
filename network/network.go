@@ -1,22 +1,29 @@
 package network
 
 import (
+	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/peer"
+	"github.com/perlin-network/noise/protobuf"
 	"math/rand"
 	"net"
 	"strconv"
 	"sync"
 	"sync/atomic"
-	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/peer"
-	"github.com/perlin-network/noise/protobuf"
 
+	"bufio"
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
-	"bufio"
 	"time"
+)
+
+const (
+	defaultConnectionTimeout = 60 * time.Second
+	defaultReceiveWindowSize = 4096
+	defaultSendWindowSize    = 4096
+	defaultWriteTimeout      = 3 * time.Second
 )
 
 var contextPool = sync.Pool{
@@ -25,10 +32,16 @@ var contextPool = sync.Pool{
 	},
 }
 
+var (
+	_ (NetworkInterface) = (*Network)(nil)
+)
+
 // Network represents the current networking state for this node.
 type Network struct {
+	opts options
+
 	// Node's keypair.
-	Keys *crypto.KeyPair
+	keys *crypto.KeyPair
 
 	// Full address to listen on. `protocol://host:port`
 	Address string
@@ -52,11 +65,18 @@ type Network struct {
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
 
-	SignaturePolicy crypto.SignaturePolicy
-	HashPolicy      crypto.HashPolicy
+	// <-kill will begin the server shutdown process
+	kill chan struct{}
+}
 
-	// <-Kill will begin the server shutdown process
-	Kill chan struct{}
+// options for network struct
+type options struct {
+	connectionTimeout time.Duration
+	signaturePolicy   crypto.SignaturePolicy
+	hashPolicy        crypto.HashPolicy
+	recvWindowSize    int
+	sendWindowSize    int
+	writeTimeout      time.Duration
 }
 
 type ConnState struct {
@@ -70,7 +90,7 @@ type ConnState struct {
 func (n *Network) Init() {
 	// Spawn write flusher.
 	go func() {
-		for range time.Tick(500 * time.Millisecond) {
+		for range time.Tick(50 * time.Millisecond) {
 			n.Connections.Range(func(key, value interface{}) bool {
 				if state, ok := value.(*ConnState); ok {
 					state.writerMutex.Lock()
@@ -85,6 +105,11 @@ func (n *Network) Init() {
 			})
 		}
 	}()
+}
+
+// GetKeys returns the keypair for this network
+func (n *Network) GetKeys() *crypto.KeyPair {
+	return n.keys
 }
 
 func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
@@ -178,7 +203,7 @@ func (n *Network) Listen() {
 	// handle server shutdowns
 	go func() {
 		select {
-		case <-n.Kill:
+		case <-n.kill:
 			// cause listener.Accept() to stop blocking so it can continue the loop
 			listener.Close()
 		}
@@ -192,7 +217,7 @@ func (n *Network) Listen() {
 		} else {
 			// if the Shutdown flag is set, no need to continue with the for loop
 			select {
-			case <-n.Kill:
+			case <-n.kill:
 				glog.Infof("Shutting down server on %s.\n", n.Address)
 				return
 			default:
@@ -212,7 +237,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 	}
 
 	if address == n.Address {
-		return nil, errors.New("peer should not dial itself")
+		return nil, errors.New("network: peer should not dial itself")
 	}
 
 	client, err := createPeerClient(n, address)
@@ -224,7 +249,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		client := client.(*PeerClient)
 
 		if !client.OutgoingReady() {
-			return nil, errors.New("peer failed to connect")
+			return nil, errors.New("network: peer failed to connect")
 		}
 
 		return client, nil
@@ -306,16 +331,15 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 		}
 
 		dialer, err := net.DialTCP("tcp", nil, address)
-		dialer.SetWriteBuffer(10000)
-		dialer.SetNoDelay(false)
-
 		if err != nil {
 			return nil, err
 		}
+		dialer.SetWriteBuffer(10000)
+		dialer.SetNoDelay(false)
 
 		conn = dialer
 	} else {
-		err = errors.New("invalid protocol: " + addrInfo.Protocol)
+		err = errors.New("network: invalid protocol " + addrInfo.Protocol)
 	}
 
 	// Failed to connect.
@@ -328,14 +352,12 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 
 // Accept handles peer registration and processes incoming message streams.
 func (n *Network) Accept(incoming net.Conn) {
-	const RECV_WINDOW_SIZE = 4096
-
 	var outgoing net.Conn
 
 	var client *PeerClient
 	var clientInit sync.Once
 
-	recvWindow := NewRecvWindow(RECV_WINDOW_SIZE)
+	recvWindow := NewRecvWindow(n.opts.recvWindowSize)
 
 	// Cleanup connections when we are done with them.
 	defer func() {
@@ -374,7 +396,7 @@ func (n *Network) Accept(incoming net.Conn) {
 				if state, established := n.Connections.Load(client.ID.Address); established {
 					outgoing = state.(*ConnState).conn
 				} else {
-					err = errors.New("failed to load session")
+					err = errors.New("network: failed to load session")
 				}
 
 				// Signal that the client is ready.
@@ -387,7 +409,7 @@ func (n *Network) Accept(incoming net.Conn) {
 
 			// Peer sent message with a completely different ID. Disconnect.
 			if !client.ID.Equals(peer.ID(*msg.Sender)) {
-				glog.Errorf("Message signed by peer %s but client is %s", peer.ID(*msg.Sender), client.ID.Address)
+				glog.Errorf("message signed by peer %s but client is %s", peer.ID(*msg.Sender), client.ID.Address)
 				return
 			}
 
@@ -417,7 +439,7 @@ func (n *Network) Plugin(key interface{}) (PluginInterface, bool) {
 // nodes private key. Errors if the message is null.
 func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, error) {
 	if message == nil {
-		return nil, errors.New("message is null")
+		return nil, errors.New("network: message is null")
 	}
 
 	raw, err := types.MarshalAny(message)
@@ -427,9 +449,9 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 
 	id := protobuf.ID(n.ID)
 
-	signature, err := n.Keys.Sign(
-		n.SignaturePolicy,
-		n.HashPolicy,
+	signature, err := n.keys.Sign(
+		n.opts.signaturePolicy,
+		n.opts.hashPolicy,
 		SerializeMessage(&id, raw.Value),
 	)
 	if err != nil {
@@ -448,7 +470,7 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 func (n *Network) Write(address string, message *protobuf.Message) error {
 	_state, exists := n.Connections.Load(address)
 	if !exists {
-		return errors.New("connection does not exist")
+		return errors.New("network: connection does not exist")
 	}
 	state := _state.(*ConnState)
 
@@ -472,7 +494,7 @@ func (n *Network) Broadcast(message proto.Message) {
 		err := client.Tell(message)
 
 		if err != nil {
-			glog.Warningf("Failed to send message to peer %v [err=%s]", client.ID, err)
+			glog.Warningf("failed to send message to peer %v [err=%s]", client.ID, err)
 		}
 
 		return true
@@ -532,7 +554,7 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 // Close shuts down the entire network.
 func (n *Network) Close() {
 	// Kill the listener.
-	close(n.Kill)
+	close(n.kill)
 
 	// Clean out client connections.
 	n.Peers.Range(func(key, value interface{}) bool {

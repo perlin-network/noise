@@ -10,3 +10,6 @@ go.sum
 
 *.test
 coverage.txt
+
+vendor/
+yes/
