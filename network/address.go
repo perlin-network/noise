@@ -97,7 +97,7 @@ func ToUnifiedHost(host string) (string, error) {
 			// Probably a domain name is provided.
 			addresses, err := net.LookupHost(host)
 			if err != nil {
-				return "", errors.Wrapf(ErrNoAvailableAddresses, err.Error())
+				return "", errors.Wrapf(err, ErrNoAvailableAddresses.Error())
 			}
 			if len(addresses) == 0 {
 				return "", ErrNoAvailableAddresses

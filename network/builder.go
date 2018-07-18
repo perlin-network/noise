@@ -1,7 +1,7 @@
 package network
 
 import (
-	"errors"
+	"reflect"
 	"sync"
 	"time"
 
@@ -10,6 +10,7 @@ import (
 	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -126,7 +127,7 @@ func (builder *Builder) AddPluginWithPriority(priority int, plugin PluginInterfa
 	}
 
 	if !builder.plugins.Put(priority, plugin) {
-		return ErrDuplicatePlugin
+		return errors.Wrapf(ErrDuplicatePlugin, "plugin %s is already registered", reflect.TypeOf(plugin).String())
 	}
 
 	return nil
@@ -145,11 +146,11 @@ func (builder *Builder) AddPlugin(plugin PluginInterface) error {
 // misconfiguration, or a *Network.
 func (builder *Builder) Build() (*Network, error) {
 	if builder.keys == nil {
-		return nil, ErrNoKeyPair
+		return nil, errors.Wrapf(ErrNoKeyPair, "")
 	}
 
 	if len(builder.address) == 0 {
-		return nil, ErrNoAddress
+		return nil, errors.Wrapf(ErrNoAddress, "")
 	}
 
 	// Initialize plugin list if not exist.
