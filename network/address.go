@@ -100,7 +100,7 @@ func ToUnifiedHost(host string) (string, error) {
 				return "", errors.Wrapf(err, ErrNoAvailableAddresses.Error())
 			}
 			if len(addresses) == 0 {
-				return "", ErrNoAvailableAddresses
+				return "", errors.Wrapf(ErrNoAvailableAddresses, "")
 			}
 
 			host = addresses[0]
@@ -115,7 +115,7 @@ func ToUnifiedHost(host string) (string, error) {
 	})
 
 	if unifiedHost == nil {
-		return "", ErrNoAvailableAddresses
+		return "", errors.Wrapf(ErrNoAvailableAddresses, "")
 	}
 
 	return unifiedHost.(string), err
@@ -125,7 +125,7 @@ func ToUnifiedHost(host string) (string, error) {
 func ToUnifiedAddress(address string) (string, error) {
 	address = strings.TrimSpace(address)
 	if len(address) == 0 {
-		return "", ErrAddressEmpty
+		return "", errors.Wrapf(ErrAddressEmpty, "")
 	}
 
 	info, err := ParseAddress(address)
