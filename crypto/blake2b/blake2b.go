@@ -3,7 +3,7 @@ package blake2b
 import (
 	"github.com/perlin-network/noise/crypto"
 
-	blake2blib "golang.org/x/crypto/blake2b"
+	blake2blib "github.com/minio/blake2b-simd"
 )
 
 // Blake2b represents the BLAKE2 cryptographic hash algorithm.
