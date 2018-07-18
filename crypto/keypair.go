@@ -13,13 +13,13 @@ type KeyPair struct {
 }
 
 var (
-	privateKeySizeErr = errors.New("private key length does not equal expected key length")
+	PrivateKeySizeErr = errors.New("private key length does not equal expected key length")
 )
 
 // Sign returns a cryptographic signature that is a signed hash of the message.
 func (k *KeyPair) Sign(sp SignaturePolicy, hp HashPolicy, message []byte) ([]byte, error) {
 	if len(k.PrivateKey) != sp.PrivateKeySize() {
-		return nil, privateKeySizeErr
+		return nil, PrivateKeySizeErr
 	}
 
 	message = hp.HashBytes(message)
@@ -55,7 +55,7 @@ func FromPrivateKey(sp SignaturePolicy, privateKey string) (*KeyPair, error) {
 
 func fromPrivateKeyBytes(sp SignaturePolicy, rawPrivateKey []byte) (*KeyPair, error) {
 	if len(rawPrivateKey) != sp.PrivateKeySize() {
-		return nil, privateKeySizeErr
+		return nil, PrivateKeySizeErr
 	}
 
 	rawPublicKey, err := sp.PrivateToPublic(rawPrivateKey)

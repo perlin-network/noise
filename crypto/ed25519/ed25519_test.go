@@ -110,7 +110,7 @@ func TestEd25519(t *testing.T) {
 func TestRandomKeyPair(t *testing.T) {
 	t.Parallel()
 
-	kp := RandomKeyPair()
+	kp := New().RandomKeyPair()
 	if len(kp.PrivateKey) == 0 {
 		t.Errorf("private key length should not be 0")
 	}
