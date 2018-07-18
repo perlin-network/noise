@@ -25,10 +25,10 @@ const (
 
 // Errors
 var (
-	// ErrInvalidAddress returns if an invalid address was given
-	ErrInvalidAddress       = errors.New("address: invalid address")
-	ErrAddressEmpty         = errors.New("address: cannot dial, address was empty")
-	ErrNoAvailableAddresses = errors.New("address: no available addresses")
+	// ErrStrInvalidAddress returns if an invalid address was given
+	ErrStrInvalidAddress       = "address: invalid address"
+	ErrStrAddressEmpty         = "address: cannot dial, address was empty"
+	ErrStrNoAvailableAddresses = "address: no available addresses"
 )
 
 // NewAddressInfo creates a new AddressInfo instance.
@@ -97,10 +97,10 @@ func ToUnifiedHost(host string) (string, error) {
 			// Probably a domain name is provided.
 			addresses, err := net.LookupHost(host)
 			if err != nil {
-				return "", errors.Wrapf(err, ErrNoAvailableAddresses.Error())
+				return "", errors.New(ErrStrNoAvailableAddresses)
 			}
 			if len(addresses) == 0 {
-				return "", errors.Wrapf(ErrNoAvailableAddresses, "")
+				return "", errors.New(ErrStrNoAvailableAddresses)
 			}
 
 			host = addresses[0]
@@ -115,7 +115,7 @@ func ToUnifiedHost(host string) (string, error) {
 	})
 
 	if unifiedHost == nil {
-		return "", errors.Wrapf(ErrNoAvailableAddresses, "")
+		return "", errors.New(ErrStrNoAvailableAddresses)
 	}
 
 	return unifiedHost.(string), err
@@ -125,7 +125,7 @@ func ToUnifiedHost(host string) (string, error) {
 func ToUnifiedAddress(address string) (string, error) {
 	address = strings.TrimSpace(address)
 	if len(address) == 0 {
-		return "", errors.Wrapf(ErrAddressEmpty, "")
+		return "", errors.New(ErrStrAddressEmpty)
 	}
 
 	info, err := ParseAddress(address)

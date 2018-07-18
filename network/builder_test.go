@@ -65,7 +65,7 @@ func TestNoKeys(t *testing.T) {
 	builder.SetKeys(nil)
 	_, err := builder.Build()
 	if err == nil {
-		t.Errorf("Build() = %+v, expected %+v", err, ErrNoKeyPair)
+		t.Errorf("Build() = %+v, expected %+v", err, errors.New(ErrStrNoKeyPair))
 	}
 }
 
@@ -76,7 +76,7 @@ func TestBuilderAddress(t *testing.T) {
 	builder.SetAddress("")
 	_, err := builder.Build()
 	if err == nil {
-		t.Errorf("Build() = %+v, expected %+v", err, ErrNoAddress)
+		t.Errorf("Build() = %+v, expected %+v", err, errors.New(ErrStrNoAddress))
 	}
 
 	errMissingPort := errors.New("missing port in address")
@@ -104,7 +104,7 @@ func TestDuplicatePlugin(t *testing.T) {
 
 	err = builder.AddPluginWithPriority(1, new(MockPlugin))
 	if err == nil {
-		t.Errorf("Build() = %+v, expected %+v", err, ErrDuplicatePlugin)
+		t.Errorf("Build() = %+v, expected %+v", err, errors.New(ErrStrDuplicatePlugin))
 	}
 }
 
