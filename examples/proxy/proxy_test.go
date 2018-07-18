@@ -171,7 +171,7 @@ func ExampleProxyPlugin() {
 		} else {
 			fmt.Printf("Node %d successfully proxied a message to node %d.\n", sender, target)
 		}
-	case <-time.After(1 * time.Second):
+	case <-time.After(3 * time.Second):
 		fmt.Printf("Timed out attempting to receive message from Node %d.\n", sender)
 	}
 
