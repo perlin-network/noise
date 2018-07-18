@@ -23,6 +23,8 @@ const (
 	defaultConnectionTimeout = 60 * time.Second
 	defaultReceiveWindowSize = 4096
 	defaultSendWindowSize    = 4096
+	defaultWriteBufferSize   = 4096
+	defaultWriteFlushLatency = 50 * time.Millisecond
 	defaultWriteTimeout      = 3 * time.Second
 )
 
@@ -76,6 +78,8 @@ type options struct {
 	hashPolicy        crypto.HashPolicy
 	recvWindowSize    int
 	sendWindowSize    int
+	writeBufferSize   int
+	writeFlushLatency time.Duration
 	writeTimeout      time.Duration
 }
 
@@ -89,22 +93,29 @@ type ConnState struct {
 // Init starts all network I/O workers.
 func (n *Network) Init() {
 	// Spawn write flusher.
-	go func() {
-		for range time.Tick(50 * time.Millisecond) {
+	go n.flushLoop()
+}
+
+func (n *Network) flushLoop() {
+	t := time.NewTicker(n.opts.writeFlushLatency)
+	defer t.Stop()
+	for {
+		select {
+		case <-n.kill:
+			return
+		case <-t.C:
 			n.Connections.Range(func(key, value interface{}) bool {
 				if state, ok := value.(*ConnState); ok {
 					state.writerMutex.Lock()
-					defer state.writerMutex.Unlock()
-
-					err := state.writer.Flush()
-					if err != nil {
+					if err := state.writer.Flush(); err != nil {
 						glog.Warning(err)
 					}
+					state.writerMutex.Unlock()
 				}
 				return true
 			})
 		}
-	}()
+	}
 }
 
 // GetKeys returns the keypair for this network
@@ -269,7 +280,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 
 		n.Connections.Store(address, &ConnState{
 			conn:        conn,
-			writer:      bufio.NewWriter(conn),
+			writer:      bufio.NewWriterSize(conn, n.opts.writeBufferSize),
 			writerMutex: new(sync.Mutex),
 		})
 
@@ -476,7 +487,7 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 
 	message.MessageNonce = atomic.AddUint64(&state.messageNonce, 1)
 
-	state.conn.SetWriteDeadline(time.Now().Add(3 * time.Second))
+	state.conn.SetWriteDeadline(time.Now().Add(n.opts.writeTimeout))
 
 	err := n.sendMessage(state.writer, message, state.writerMutex)
 	if err != nil {

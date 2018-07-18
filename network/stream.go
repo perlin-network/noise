@@ -1,18 +1,21 @@
 package network
 
 import (
+	"bufio"
 	"encoding/binary"
+	"io"
 	"net"
+	"sync"
+
 	"github.com/gogo/protobuf/proto"
+	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
-	"sync"
-	"io"
 )
 
 // sendMessage marshals, signs and sends a message over a stream.
-func (n *Network) sendMessage(conn io.Writer, message *protobuf.Message, writerMutex *sync.Mutex) error {
+func (n *Network) sendMessage(w io.Writer, message *protobuf.Message, writerMutex *sync.Mutex) error {
 	bytes, err := proto.Marshal(message)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal message")
@@ -23,21 +26,32 @@ func (n *Network) sendMessage(conn io.Writer, message *protobuf.Message, writerM
 	binary.BigEndian.PutUint32(buffer, uint32(len(bytes)))
 
 	buffer = append(buffer, bytes...)
+	totalSize := len(buffer)
 
 	// Write until all bytes have been written.
 	bytesWritten, totalBytesWritten := 0, 0
 
 	writerMutex.Lock()
 
+	bw, isBuffered := w.(*bufio.Writer)
+	if isBuffered && (bw.Buffered() > 0) && (bw.Available() < totalSize) {
+		if err := bw.Flush(); err != nil {
+			return err
+		}
+	}
+
 	for totalBytesWritten < len(buffer) && err == nil {
-		bytesWritten, err = conn.Write(buffer[totalBytesWritten:])
+		bytesWritten, err = w.Write(buffer[totalBytesWritten:])
+		if err != nil {
+			glog.Errorf("stream: failed to write entire buffer, err: %+v\n", err)
+		}
 		totalBytesWritten += bytesWritten
 	}
 
 	writerMutex.Unlock()
 
 	if err != nil {
-		return errors.Wrap(err, "failed to write to socket")
+		return errors.Wrap(err, "stream: failed to write to socket")
 	}
 
 	return nil

@@ -43,6 +43,8 @@ var defaultBuilderOptions = options{
 	hashPolicy:        blake2b.New(),
 	recvWindowSize:    defaultReceiveWindowSize,
 	sendWindowSize:    defaultSendWindowSize,
+	writeBufferSize:   defaultWriteBufferSize,
+	writeFlushLatency: defaultWriteFlushLatency,
 	writeTimeout:      defaultWriteTimeout,
 }
 
@@ -86,6 +88,22 @@ func RecvWindowSize(recvWindowSize int) BuilderOption {
 func SendWindowSize(sendWindowSize int) BuilderOption {
 	return func(o *options) {
 		o.sendWindowSize = sendWindowSize
+	}
+}
+
+// WriteBufferSize returns a BuilderOption that sets the write buffer size
+// (default: 4096 bytes).
+func WriteBufferSize(byteSize int) BuilderOption {
+	return func(o *options) {
+		o.writeBufferSize = byteSize
+	}
+}
+
+// WriteFlushLatency returns a BuilderOption that sets the write flush interval
+// (default: 50ms).
+func WriteFlushLatency(d time.Duration) BuilderOption {
+	return func(o *options) {
+		o.writeFlushLatency = d
 	}
 }
 

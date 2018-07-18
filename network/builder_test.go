@@ -161,6 +161,34 @@ func TestWindowSize(t *testing.T) {
 	assert.Equal(t, net.opts.sendWindowSize, sendWindowSize, "send window size given should match found")
 }
 
+func TestWriteBufferSize(t *testing.T) {
+	t.Parallel()
+
+	writeBufferSize := 2048
+	builder := NewBuilderWithOptions(
+		WriteBufferSize(writeBufferSize),
+	)
+	net, err := builder.Build()
+	if err != nil {
+		t.Errorf("Build() = %+v, expected <nil>", err)
+	}
+	assert.Equal(t, net.opts.writeBufferSize, writeBufferSize, "write buffer size given should match found")
+}
+
+func TestWriteFlushLatency(t *testing.T) {
+	t.Parallel()
+
+	writeFlushLatency := 100 * time.Millisecond
+	builder := NewBuilderWithOptions(
+		WriteFlushLatency(writeFlushLatency),
+	)
+	net, err := builder.Build()
+	if err != nil {
+		t.Errorf("Build() = %+v, expected <nil>", err)
+	}
+	assert.Equal(t, net.opts.writeFlushLatency, writeFlushLatency, "write flush latency given should match found")
+}
+
 func TestWriteTimeout(t *testing.T) {
 	t.Parallel()
 
