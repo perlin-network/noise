@@ -1,4 +1,4 @@
-package test
+package crypto_test
 
 import (
 	"bytes"
