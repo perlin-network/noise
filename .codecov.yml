@@ -8,6 +8,7 @@ ignore:
   - "**/mocks"
   - "**/*.pb.go"
   - "scripts.go"
+  - "./crypto/ed25519/internal/edwards25519"
 
 comment: false
 
