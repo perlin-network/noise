@@ -325,6 +325,17 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 
 	var conn net.Conn
 
+	if addrInfo.Host != "127.0.0.1" {
+		host, err := ParseAddress(n.Address)
+		if err != nil {
+			return nil, err
+		}
+		// check if dialing address is same as its own IP
+		if addrInfo.Host == host.Host {
+			addrInfo.Host = "127.0.0.1"
+		}
+	}
+
 	// Choose scheme.
 	if addrInfo.Protocol == "kcp" {
 		dialer, err := kcp.DialWithOptions(addrInfo.HostPort(), nil, 0, 0)
