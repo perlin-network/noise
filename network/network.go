@@ -65,6 +65,7 @@ type Network struct {
 
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
+	lis       net.Listener
 
 	// <-kill will begin the server shutdown process
 	kill chan struct{}
@@ -170,6 +171,8 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 func (n *Network) Listen(lis net.Listener) error {
 	if lis == nil {
 		return errors.New("network: listener is nil")
+	} else {
+		n.lis = lis
 	}
 	// Handle 'network starts listening' callback for plugins.
 	n.Plugins.Each(func(plugin PluginInterface) {
@@ -191,14 +194,14 @@ func (n *Network) Listen(lis net.Listener) error {
 	go func() {
 		select {
 		case <-n.kill:
-			// cause listener.Accept() to stop blocking so it can continue the loop
-			lis.Close()
+			// cause n.lis.Accept() to stop blocking so it can continue the loop
+			n.lis.Close()
 		}
 	}()
 
 	// Handle new clients.
 	for {
-		if conn, err := lis.Accept(); err == nil {
+		if conn, err := n.lis.Accept(); err == nil {
 			go n.Accept(conn)
 		} else {
 			// if the Shutdown flag is set, no need to continue with the for loop
@@ -335,8 +338,9 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 		dialer.SetNoDelay(false)
 
 		conn = dialer
+	} else if addrInfo.Protocol == "unix" {
+		conn, err = net.DialTimeout(addrInfo.Protocol, addrInfo.Host, n.opts.connectionTimeout)
 	} else {
-		//err = errors.New("network: invalid protocol " + addrInfo.Protocol)
 		conn, err = net.DialTimeout(addrInfo.Protocol, addrInfo.HostPort(), n.opts.connectionTimeout)
 	}
 

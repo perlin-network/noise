@@ -1,6 +1,8 @@
 package nat
 
 import (
+	"flag"
+	"fmt"
 	"testing"
 	"time"
 
@@ -8,6 +10,13 @@ import (
 	"github.com/perlin-network/noise/network/discovery"
 	"github.com/stretchr/testify/assert"
 )
+
+func init() {
+	flag.Set("alsologtostderr", fmt.Sprintf("%t", true))
+	var logLevel string
+	flag.StringVar(&logLevel, "logLevel", "4", "test")
+	flag.Lookup("v").Value.Set(logLevel)
+}
 
 func TestRegisterPlugin(t *testing.T) {
 	t.Parallel()
@@ -30,11 +39,14 @@ func TestNatConnect(t *testing.T) {
 	for i := 0; i < numNodes; i++ {
 		b := network.NewBuilder()
 		port := network.GetRandomUnusedPort()
-		b.SetAddress(network.FormatAddress("tcp", "localhost", uint16(port)))
+		addr := network.FormatAddress("tcp", "localhost", uint16(port))
+		b.SetAddress(addr)
 		RegisterPlugin(b)
 		b.AddPlugin(new(discovery.Plugin))
 		n, err := b.Build()
-		go n.Listen()
+		lis, err := network.NewTcpListener(addr)
+		assert.Equal(t, nil, err, "%+v", err)
+		go n.Listen(lis)
 
 		assert.Equal(t, nil, err)
 		pInt, ok := n.Plugins.Get(PluginID)
@@ -43,6 +55,7 @@ func TestNatConnect(t *testing.T) {
 		assert.NotEqual(t, nil, p)
 		nodes = append(nodes, n)
 		n.BlockUntilListening()
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	nodes[1].Bootstrap(nodes[0].Address)
