@@ -5,82 +5,89 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
-	"time"
+	"sync"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
 )
 
 // sendMessage marshals, signs and sends a message over a stream.
-func (n *Network) sendMessage(stream net.Conn, message *protobuf.Message) error {
+func (n *Network) sendMessage(w io.Writer, message *protobuf.Message, writerMutex *sync.Mutex) error {
 	bytes, err := proto.Marshal(message)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal message")
 	}
 
 	// Serialize size.
-	buffer := make([]byte, binary.MaxVarintLen64)
-	binary.PutUvarint(buffer, uint64(len(bytes)))
+	buffer := make([]byte, 4)
+	binary.BigEndian.PutUint32(buffer, uint32(len(bytes)))
 
-	// Prefix message with its size.
-	bytes = append(buffer, bytes...)
+	buffer = append(buffer, bytes...)
+	totalSize := len(buffer)
 
-	stream.SetDeadline(time.Now().Add(3 * time.Second))
+	// Write until all bytes have been written.
+	bytesWritten, totalBytesWritten := 0, 0
 
-	writer := bufio.NewWriter(stream)
+	writerMutex.Lock()
 
-	// Send request bytes.
-	written, err := writer.Write(bytes)
-	if err != nil {
-		return errors.Wrap(err, "failed to send request bytes")
+	bw, isBuffered := w.(*bufio.Writer)
+	if isBuffered && (bw.Buffered() > 0) && (bw.Available() < totalSize) {
+		if err := bw.Flush(); err != nil {
+			return err
+		}
 	}
 
-	// Flush writer.
-	err = writer.Flush()
-	if err != nil {
-		return errors.Wrap(err, "failed to flush writer")
+	for totalBytesWritten < len(buffer) && err == nil {
+		bytesWritten, err = w.Write(buffer[totalBytesWritten:])
+		if err != nil {
+			glog.Errorf("stream: failed to write entire buffer, err: %+v\n", err)
+		}
+		totalBytesWritten += bytesWritten
 	}
 
-	if written != len(bytes) {
-		return errors.Errorf("only wrote %d / %d bytes to stream", written, len(bytes))
+	writerMutex.Unlock()
+
+	if err != nil {
+		return errors.Wrap(err, "stream: failed to write to socket")
 	}
 
 	return nil
 }
 
-// receiveMessage reads, unmarshals and verifies a message from a stream.
-func (n *Network) receiveMessage(stream net.Conn) (*protobuf.Message, error) {
-	reader := bufio.NewReader(stream)
+// receiveMessage reads, unmarshals and verifies a message from a net.Conn.
+func (n *Network) receiveMessage(conn net.Conn) (*protobuf.Message, error) {
+	var err error
 
-	buffer := make([]byte, binary.MaxVarintLen64)
+	// Read until all header bytes have been read.
+	buffer := make([]byte, 4)
 
-	_, err := reader.Read(buffer)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to recv message size")
+	bytesRead, totalBytesRead := 0, 0
+
+	for totalBytesRead < 4 && err == nil {
+		bytesRead, err = conn.Read(buffer[totalBytesRead:])
+		totalBytesRead += bytesRead
 	}
 
-	// Decode unsigned varint representing message size.
-	size, read := binary.Uvarint(buffer)
+	// Decode message size.
+	size := binary.BigEndian.Uint32(buffer)
 
-	// Check if unsigned varint overflows, or if protobuf message is too large.
 	// Message size at most is limited to 4MB. If a big message need be sent,
 	// consider partitioning to message into chunks of 4MB.
-	if read <= 0 || size > 4e+6 {
-		return nil, errors.New("message len is either broken or too large")
+	if size > 4e+6 {
+		return nil, errors.Errorf("message has length of %d which is either broken or too large", size)
 	}
 
-	// Read message from buffered I/O completely.
+	// Read until all message bytes have been read.
 	buffer = make([]byte, size)
-	_, err = io.ReadFull(reader, buffer)
 
-	if err != nil {
-		// Potentially malicious or dead client; kill it.
-		if err == io.ErrUnexpectedEOF {
-			stream.Close()
-		}
-		return nil, errors.Wrap(err, "failed to recv serialized message")
+	bytesRead, totalBytesRead = 0, 0
+
+	for totalBytesRead < int(size) && err == nil {
+		bytesRead, err = conn.Read(buffer[totalBytesRead:])
+		totalBytesRead += bytesRead
 	}
 
 	// Deserialize message.

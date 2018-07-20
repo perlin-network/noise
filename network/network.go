@@ -1,49 +1,37 @@
 package network
 
 import (
+	"bufio"
 	"math/rand"
 	"net"
-	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/peer"
-	"github.com/perlin-network/noise/protobuf"
-
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
 	"github.com/golang/glog"
+	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/peer"
+	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
-	"github.com/xtaci/smux"
 )
 
 const (
 	defaultConnectionTimeout = 60 * time.Second
 	defaultReceiveWindowSize = 4096
 	defaultSendWindowSize    = 4096
+	defaultWriteBufferSize   = 4096
+	defaultWriteFlushLatency = 50 * time.Millisecond
 	defaultWriteTimeout      = 3 * time.Second
 )
-
-var packetPool = sync.Pool{
-	New: func() interface{} {
-		return new(Packet)
-	},
-}
 
 var contextPool = sync.Pool{
 	New: func() interface{} {
 		return new(PluginContext)
 	},
-}
-
-type Packet struct {
-	target  *ConnState
-	payload *protobuf.Message
-	result  chan interface{}
 }
 
 var (
@@ -71,8 +59,7 @@ type Network struct {
 	// so that the Network doesn't dial multiple times to the same ip
 	Peers *sync.Map
 
-	SendQueue chan *Packet
-	RecvQueue chan *protobuf.Message
+	//RecvQueue chan *protobuf.Message
 
 	// Map of connection addresses (string) <-> *ConnState
 	Connections *sync.Map
@@ -91,58 +78,49 @@ type options struct {
 	hashPolicy        crypto.HashPolicy
 	recvWindowSize    int
 	sendWindowSize    int
+	writeBufferSize   int
+	writeFlushLatency time.Duration
 	writeTimeout      time.Duration
 }
 
 type ConnState struct {
-	session      *smux.Session
+	conn         net.Conn
+	writer       *bufio.Writer
 	messageNonce uint64
+	writerMutex  *sync.Mutex
 }
 
 // Init starts all network I/O workers.
 func (n *Network) Init() {
-	workerCount := runtime.NumCPU() + 1
+	// Spawn write flusher.
+	go n.flushLoop()
+}
 
-	// Spawn worker routines for receiving and handling messages in the application layer.
-	go n.handleRecvQueue()
-
-	for i := 0; i < workerCount; i++ {
-		// Spawn worker routines for sending queued messages to the networking layer.
-		go n.handleSendQueue()
+func (n *Network) flushLoop() {
+	t := time.NewTicker(n.opts.writeFlushLatency)
+	defer t.Stop()
+	for {
+		select {
+		case <-n.kill:
+			return
+		case <-t.C:
+			n.Connections.Range(func(key, value interface{}) bool {
+				if state, ok := value.(*ConnState); ok {
+					state.writerMutex.Lock()
+					if err := state.writer.Flush(); err != nil {
+						glog.Warning(err)
+					}
+					state.writerMutex.Unlock()
+				}
+				return true
+			})
+		}
 	}
 }
 
 // GetKeys returns the keypair for this network
 func (n *Network) GetKeys() *crypto.KeyPair {
 	return n.keys
-}
-
-// Send queue worker.
-func (n *Network) handleSendQueue() {
-	for {
-		select {
-		case packet := <-n.SendQueue:
-			stream, err := packet.target.session.OpenStream()
-			if err != nil {
-				packet.result <- err
-				continue
-			}
-
-			err = n.sendMessage(stream, packet.payload)
-			if err != nil {
-				packet.result <- err
-				continue
-			}
-
-			err = stream.Close()
-			if err != nil {
-				packet.result <- err
-				continue
-			}
-
-			packet.result <- struct{}{}
-		}
-	}
 }
 
 func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
@@ -189,20 +167,6 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 	}
 }
 
-// Receive queue worker.
-func (n *Network) handleRecvQueue() {
-	for {
-		select {
-		case msg := <-n.RecvQueue:
-			if client, exists := n.Peers.Load(msg.Sender.Address); exists {
-				client := client.(*PeerClient)
-
-				client.Submit(func() { n.dispatchMessage(client, msg) })
-			}
-		}
-	}
-}
-
 // Listen starts listening for peers on a port.
 func (n *Network) Listen() {
 
@@ -226,18 +190,21 @@ func (n *Network) Listen() {
 	var listener net.Listener
 
 	if addrInfo.Protocol == "kcp" {
-		listener, err = kcp.ListenWithOptions(":"+strconv.Itoa(int(addrInfo.Port)), nil, 10, 3)
+		server, err := kcp.ListenWithOptions(":"+strconv.Itoa(int(addrInfo.Port)), nil, 0, 0)
 		if err != nil {
 			glog.Fatal(err)
 		}
-	} else if addrInfo.Protocol == "tcp" {
-		listener, err = net.Listen("tcp", ":"+strconv.Itoa(int(addrInfo.Port)))
-	} else {
-		err = errors.Errorf("network: invalid protocol '%s'", addrInfo.Protocol)
-	}
 
-	if err != nil {
-		glog.Fatal(err)
+		listener = server
+	} else if addrInfo.Protocol == "tcp" {
+		server, err := net.Listen("tcp", ":"+strconv.Itoa(int(addrInfo.Port)))
+		if err != nil {
+			glog.Fatal(err)
+		}
+
+		listener = server
+	} else {
+		glog.Fatal("invalid protocol: " + addrInfo.Protocol)
 	}
 
 	close(n.Listening)
@@ -304,7 +271,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 			close(client.outgoingReady)
 		}()
 
-		session, err := n.Dial(address)
+		conn, err := n.Dial(address)
 
 		if err != nil {
 			n.Peers.Delete(address)
@@ -312,7 +279,9 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		}
 
 		n.Connections.Store(address, &ConnState{
-			session: session,
+			conn:        conn,
+			writer:      bufio.NewWriterSize(conn, n.opts.writeBufferSize),
+			writerMutex: new(sync.Mutex),
 		})
 
 		client.Init()
@@ -348,7 +317,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 }
 
 // Dial establishes a bidirectional connection to an address, and additionally handshakes with said address.
-func (n *Network) Dial(address string) (*smux.Session, error) {
+func (n *Network) Dial(address string) (net.Conn, error) {
 	addrInfo, err := ParseAddress(address)
 	if err != nil {
 		return nil, err
@@ -356,11 +325,41 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 
 	var conn net.Conn
 
+	if addrInfo.Host != "127.0.0.1" {
+		host, err := ParseAddress(n.Address)
+		if err != nil {
+			return nil, err
+		}
+		// check if dialing address is same as its own IP
+		if addrInfo.Host == host.Host {
+			addrInfo.Host = "127.0.0.1"
+		}
+	}
+
 	// Choose scheme.
 	if addrInfo.Protocol == "kcp" {
-		conn, err = kcp.DialWithOptions(addrInfo.HostPort(), nil, 10, 3)
+		dialer, err := kcp.DialWithOptions(addrInfo.HostPort(), nil, 0, 0)
+		dialer.SetWindowSize(10000, 10000)
+
+		if err != nil {
+			return nil, err
+		}
+
+		conn = dialer
 	} else if addrInfo.Protocol == "tcp" {
-		conn, err = net.DialTimeout("tcp", addrInfo.HostPort(), n.opts.connectionTimeout)
+		address, err := net.ResolveTCPAddr("tcp", addrInfo.HostPort())
+		if err != nil {
+			return nil, err
+		}
+
+		dialer, err := net.DialTCP("tcp", nil, address)
+		if err != nil {
+			return nil, err
+		}
+		dialer.SetWriteBuffer(10000)
+		dialer.SetNoDelay(false)
+
+		conn = dialer
 	} else {
 		err = errors.New("network: invalid protocol " + addrInfo.Protocol)
 	}
@@ -370,26 +369,17 @@ func (n *Network) Dial(address string) (*smux.Session, error) {
 		return nil, err
 	}
 
-	// Wrap a session around the outgoing connection.
-	session, err := smux.Client(conn, muxConfig())
-	if err != nil {
-		return nil, err
-	}
-
-	return session, nil
+	return conn, nil
 }
 
 // Accept handles peer registration and processes incoming message streams.
-func (n *Network) Accept(conn net.Conn) {
-	var incoming *smux.Session
-	var outgoing *smux.Session
+func (n *Network) Accept(incoming net.Conn) {
+	var outgoing net.Conn
 
 	var client *PeerClient
 	var clientInit sync.Once
 
 	recvWindow := NewRecvWindow(n.opts.recvWindowSize)
-
-	var err error
 
 	// Cleanup connections when we are done with them.
 	defer func() {
@@ -406,32 +396,14 @@ func (n *Network) Accept(conn net.Conn) {
 		}
 	}()
 
-	// Wrap a session around the incoming connection.
-	incoming, err = smux.Server(conn, muxConfig())
-	if err != nil {
-		glog.Error(err)
-		return
-	}
-
 	for {
-		stream, err := incoming.AcceptStream()
+		msg, err := n.receiveMessage(incoming)
 		if err != nil {
+			glog.Error(err)
 			break
 		}
 
 		go func() {
-			defer stream.Close()
-
-			var err error
-
-			// Receive a message from the stream.
-			msg, err := n.receiveMessage(stream)
-
-			// Will trigger 'broken pipe' on peer disconnection.
-			if err != nil {
-				return
-			}
-
 			// Initialize client if not exists.
 			clientInit.Do(func() {
 				client, err = n.Client(msg.Sender.Address)
@@ -444,7 +416,7 @@ func (n *Network) Accept(conn net.Conn) {
 
 				// Load an outgoing connection.
 				if state, established := n.Connections.Load(client.ID.Address); established {
-					outgoing = state.(*ConnState).session
+					outgoing = state.(*ConnState).conn
 				} else {
 					err = errors.New("network: failed to load session")
 				}
@@ -471,15 +443,9 @@ func (n *Network) Accept(conn net.Conn) {
 
 			ready := recvWindow.Update()
 			for _, msg := range ready {
-				select {
-				case n.RecvQueue <- msg.(*protobuf.Message):
-				default:
-					glog.Error("recv queue is full")
-					return
-				}
+				client.Submit(func() { n.dispatchMessage(client, msg.(*protobuf.Message)) })
 			}
 		}()
-
 	}
 }
 
@@ -524,9 +490,6 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 
 // Write asynchronously sends a message to a denoted target address.
 func (n *Network) Write(address string, message *protobuf.Message) error {
-	packet := packetPool.Get().(*Packet)
-	defer packetPool.Put(packet)
-
 	_state, exists := n.Connections.Load(address)
 	if !exists {
 		return errors.New("network: connection does not exist")
@@ -535,26 +498,11 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 
 	message.MessageNonce = atomic.AddUint64(&state.messageNonce, 1)
 
-	packet.target = state
-	packet.payload = message
-	packet.result = make(chan interface{}, 1)
+	state.conn.SetWriteDeadline(time.Now().Add(n.opts.writeTimeout))
 
-	select {
-	case n.SendQueue <- packet:
-	default:
-		return errors.New("network: send queue full")
-	}
-
-	select {
-	case raw := <-packet.result:
-		switch err := raw.(type) {
-		case error:
-			return errors.Wrapf(err, "network: failed to send message to %s", address)
-		default:
-			return nil
-		}
-	case <-time.After(n.opts.writeTimeout):
-		return errors.Errorf("network: worker must be too busy; failed to send message to %s", address)
+	err := n.sendMessage(state.writer, message, state.writerMutex)
+	if err != nil {
+		return err
 	}
 
 	return nil

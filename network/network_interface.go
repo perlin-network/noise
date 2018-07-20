@@ -7,7 +7,6 @@ import (
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
-	"github.com/xtaci/smux"
 )
 
 type NetworkInterface interface {
@@ -31,7 +30,7 @@ type NetworkInterface interface {
 	Bootstrap(addresses ...string)
 
 	// Dial establishes a bidirectional connection to an address, and additionally handshakes with said address.
-	Dial(address string) (*smux.Session, error)
+	Dial(address string) (net.Conn, error)
 
 	// Accept handles peer registration and processes incoming message streams.
 	Accept(conn net.Conn)

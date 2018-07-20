@@ -75,9 +75,7 @@ func TestBuilderAddress(t *testing.T) {
 	builder := NewBuilder()
 	builder.SetAddress("")
 	_, err := builder.Build()
-	if err == nil {
-		t.Errorf("Build() = %+v, expected %+v", err, errors.New(ErrStrNoAddress))
-	}
+	assert.NotEqual(t, nil, err)
 
 	errMissingPort := errors.New("missing port in address")
 	builder.SetAddress("localhost")
@@ -92,20 +90,15 @@ func TestDuplicatePlugin(t *testing.T) {
 
 	builder := NewBuilder()
 	_, err := builder.Build()
-	if err != nil {
-		t.Errorf("Build() = %+v, expected <nil>", err)
-	}
+
+	assert.Equal(t, nil, err)
 	assert.Equal(t, builder.pluginCount, 0, "should have no plugins")
 
 	err = builder.AddPluginWithPriority(1, new(MockPlugin))
-	if err != nil {
-		t.Errorf("AddPluginWithPriority() = %+v, expected <nil>", err)
-	}
+	assert.Equal(t, nil, err)
 
 	err = builder.AddPluginWithPriority(1, new(MockPlugin))
-	if err == nil {
-		t.Errorf("Build() = %+v, expected %+v", err, errors.New(ErrStrDuplicatePlugin))
-	}
+	assert.NotEqual(t, nil, err)
 }
 
 func TestConnectionTimeout(t *testing.T) {
@@ -114,12 +107,8 @@ func TestConnectionTimeout(t *testing.T) {
 	timeout := 5 * time.Second
 	builder := NewBuilderWithOptions(ConnectionTimeout(timeout))
 	net, err := builder.Build()
-	if err != nil {
-		t.Errorf("Build() = %+v, expected <nil>", err)
-	}
-	if net.opts.connectionTimeout != timeout {
-		t.Errorf("connectionTimeout = %+v, expected %+v", net.opts.connectionTimeout, timeout)
-	}
+	assert.Equal(t, nil, err)
+	assert.Equal(t, net.opts.connectionTimeout, timeout, "connection timeout given should match found")
 }
 
 func TestSignaturePolicy(t *testing.T) {
@@ -138,9 +127,7 @@ func TestHashPolicy(t *testing.T) {
 	hashPolicy := blake2b.New()
 	builder := NewBuilderWithOptions(HashPolicy(hashPolicy))
 	net, err := builder.Build()
-	if err != nil {
-		t.Errorf("Build() = %+v, expected <nil>", err)
-	}
+	assert.Equal(t, nil, err)
 	assert.Equal(t, net.opts.hashPolicy, hashPolicy, "hash policy given should match found")
 }
 
@@ -161,6 +148,30 @@ func TestWindowSize(t *testing.T) {
 	assert.Equal(t, net.opts.sendWindowSize, sendWindowSize, "send window size given should match found")
 }
 
+func TestWriteBufferSize(t *testing.T) {
+	t.Parallel()
+
+	writeBufferSize := 2048
+	builder := NewBuilderWithOptions(
+		WriteBufferSize(writeBufferSize),
+	)
+	net, err := builder.Build()
+	assert.Equal(t, nil, err)
+	assert.Equal(t, net.opts.writeBufferSize, writeBufferSize, "write buffer size given should match found")
+}
+
+func TestWriteFlushLatency(t *testing.T) {
+	t.Parallel()
+
+	writeFlushLatency := 100 * time.Millisecond
+	builder := NewBuilderWithOptions(
+		WriteFlushLatency(writeFlushLatency),
+	)
+	net, err := builder.Build()
+	assert.Equal(t, nil, err)
+	assert.Equal(t, net.opts.writeFlushLatency, writeFlushLatency, "write flush latency given should match found")
+}
+
 func TestWriteTimeout(t *testing.T) {
 	t.Parallel()
 
@@ -169,9 +180,7 @@ func TestWriteTimeout(t *testing.T) {
 		WriteTimeout(writeTimeout),
 	)
 	net, err := builder.Build()
-	if err != nil {
-		t.Errorf("Build() = %+v, expected <nil>", err)
-	}
+	assert.Equal(t, nil, err)
 	assert.Equal(t, net.opts.writeTimeout, writeTimeout, "write timeout given should match found")
 }
 
