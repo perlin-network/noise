@@ -1,21 +1,19 @@
 package main
 
-import _ "net/http/pprof"
-
 import (
 	"flag"
 	"fmt"
-	"github.com/perlin-network/noise/crypto/ed25519"
-	"github.com/perlin-network/noise/examples/local_benchmark/messages"
-	"github.com/perlin-network/noise/network"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
 	"runtime/pprof"
-	"strconv"
 	"time"
+
+	"github.com/perlin-network/noise/crypto/ed25519"
+	"github.com/perlin-network/noise/examples/local_benchmark/messages"
+	"github.com/perlin-network/noise/network"
 )
 
 var profile = flag.String("profile", "", "write cpu profile to file")
