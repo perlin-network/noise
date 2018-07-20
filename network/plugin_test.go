@@ -48,15 +48,17 @@ func TestPluginHooks(t *testing.T) {
 	for i := 0; i < nodeCount; i++ {
 		builder := NewBuilder()
 		builder.SetKeys(ed25519.RandomKeyPair())
-		builder.SetAddress(FormatAddress("tcp", host, uint16(GetRandomUnusedPort())))
+		addr := FormatAddress("tcp", host, uint16(GetRandomUnusedPort()))
+		builder.SetAddress(addr)
 		builder.AddPlugin(new(MockPlugin))
+		lis, _ := NewTcpListener(addr)
 
 		node, err := builder.Build()
 		if err != nil {
 			fmt.Println(err)
 		}
 
-		go node.Listen(nil)
+		go node.Listen(lis)
 
 		nodes = append(nodes, node)
 	}

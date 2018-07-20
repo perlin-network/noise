@@ -84,6 +84,7 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 	builder := network.NewBuilder()
 	builder.SetKeys(keys[addr])
 	builder.SetAddress(addr)
+	lis, _ := network.NewTcpListener(addr)
 
 	if addDiscoveryPlugin {
 		builder.AddPlugin(new(discovery.Plugin))
@@ -100,7 +101,7 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 		return nil, nil, err
 	}
 
-	go node.Listen(nil)
+	go node.Listen(lis)
 
 	node.BlockUntilListening()
 

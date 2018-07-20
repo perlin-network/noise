@@ -1,6 +1,8 @@
 package test
 
 import (
+	"fmt"
+	"net"
 	"testing"
 	"time"
 
@@ -39,8 +41,27 @@ type test struct {
 
 func (te *test) startBoostrap(numNodes int, plugins ...network.PluginInterface) {
 	for i := 0; i < numNodes; i++ {
+		addr := network.FormatAddress(te.e.network, "localhost", uint16(network.GetRandomUnusedPort()))
+		var lis net.Listener
+		var err error
+		switch te.e.network {
+		case "tcp":
+			lis, err = network.NewTcpListener(addr)
+			if err != nil {
+				te.t.Fatalf("NewTcpListener() = expected no error, got %v", err)
+			}
+		case "kcp":
+			lis, err = network.NewKcpListener(addr)
+			if err != nil {
+				te.t.Fatalf("NewKcpListener() = expected no error, got %v", err)
+			}
+		default:
+			te.t.Fatalf("undefined network: %s", te.e.network)
+		}
+
+		addr = fmt.Sprintf("%s://%s", lis.Addr().Network(), lis.Addr().String())
 		te.builder.SetKeys(te.e.signature.RandomKeyPair())
-		te.builder.SetAddress(network.FormatAddress(te.e.network, "localhost", uint16(network.GetRandomUnusedPort())))
+		te.builder.SetAddress(addr)
 
 		te.builder.AddPlugin(new(discovery.Plugin))
 		te.builder.AddPlugin(new(MailBoxPlugin))
@@ -54,7 +75,7 @@ func (te *test) startBoostrap(numNodes int, plugins ...network.PluginInterface) 
 			te.t.Fatalf("Build() = expected no error, got %v", err)
 		}
 
-		go node.Listen()
+		go node.Listen(lis)
 
 		if i == 0 {
 			te.bootstrapNode = node

@@ -109,6 +109,7 @@ func ExampleProxyPlugin() {
 		builder := network.NewBuilder()
 		builder.SetKeys(ed25519.RandomKeyPair())
 		builder.SetAddress(addr)
+		lis, _ := network.NewTcpListener(addr)
 
 		// DisablePong will preserve the line topology
 		builder.AddPlugin(&discovery.Plugin{
@@ -124,7 +125,7 @@ func ExampleProxyPlugin() {
 		}
 		nodes = append(nodes, node)
 
-		go node.Listen(nil)
+		go node.Listen(lis)
 	}
 
 	// Make sure all nodes are listening for incoming peers.

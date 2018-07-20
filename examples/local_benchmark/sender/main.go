@@ -51,15 +51,17 @@ func main() {
 	}
 
 	builder := network.NewBuilder()
-	builder.SetAddress("tcp://localhost:" + strconv.Itoa(int(*port)))
 	builder.SetKeys(ed25519.RandomKeyPair())
+	addr := fmt.Sprintf("tcp://localhost:%d", *port)
+	lis, _ := network.NewTcpListener(addr)
+	builder.SetAddress(addr)
 
 	net, err := builder.Build()
 	if err != nil {
 		panic(err)
 	}
 
-	go net.Listen(nil)
+	go net.Listen(lis)
 	net.Bootstrap(receiver)
 
 	time.Sleep(500 * time.Millisecond)

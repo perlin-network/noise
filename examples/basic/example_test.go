@@ -46,7 +46,9 @@ func ExampleBasicPlugin() {
 	for i := 0; i < numNodes; i++ {
 		builder := network.NewBuilder()
 		builder.SetKeys(ed25519.RandomKeyPair())
-		builder.SetAddress(network.FormatAddress("tcp", host, uint16(startPort+i)))
+		addr := network.FormatAddress("tcp", host, uint16(startPort+i))
+		builder.SetAddress(addr)
+		lis, _ := network.NewTcpListener(addr)
 
 		builder.AddPlugin(new(discovery.Plugin))
 
@@ -58,7 +60,7 @@ func ExampleBasicPlugin() {
 			fmt.Println(err)
 		}
 
-		go node.Listen(nil)
+		go node.Listen(lis)
 
 		nodes = append(nodes, node)
 	}

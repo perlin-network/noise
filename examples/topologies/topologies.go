@@ -185,7 +185,9 @@ func setupNodes(ports []int) ([]*network.Network, []*MockPlugin, error) {
 	for i, port := range ports {
 		builder := network.NewBuilder()
 		builder.SetKeys(ed25519.RandomKeyPair())
-		builder.SetAddress(fmt.Sprintf("tcp://%s:%d", host, port))
+		addr := fmt.Sprintf("tcp://%s:%d", host, port)
+		builder.SetAddress(addr)
+		lis, _ := network.NewTcpListener(addr)
 
 		// Attach mock plugin.
 		plugins = append(plugins, new(MockPlugin))
@@ -197,7 +199,7 @@ func setupNodes(ports []int) ([]*network.Network, []*MockPlugin, error) {
 		}
 		nodes = append(nodes, node)
 
-		go node.Listen(nil)
+		go node.Listen(lis)
 	}
 
 	// make sure all the servers are listening
