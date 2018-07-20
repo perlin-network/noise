@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"math/rand"
 	"net"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -167,9 +166,11 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 	}
 }
 
-// Listen starts listening for peers on a port.
-func (n *Network) Listen() {
-
+// Listen starts listening for peers on a new listener
+func (n *Network) Listen(lis net.Listener) error {
+	if lis == nil {
+		return errors.New("network: listener is nil")
+	}
 	// Handle 'network starts listening' callback for plugins.
 	n.Plugins.Each(func(plugin PluginInterface) {
 		plugin.Startup(n)
@@ -182,31 +183,6 @@ func (n *Network) Listen() {
 		})
 	}()
 
-	addrInfo, err := ParseAddress(n.Address)
-	if err != nil {
-		glog.Fatal(err)
-	}
-
-	var listener net.Listener
-
-	if addrInfo.Protocol == "kcp" {
-		server, err := kcp.ListenWithOptions(":"+strconv.Itoa(int(addrInfo.Port)), nil, 0, 0)
-		if err != nil {
-			glog.Fatal(err)
-		}
-
-		listener = server
-	} else if addrInfo.Protocol == "tcp" {
-		server, err := net.Listen("tcp", ":"+strconv.Itoa(int(addrInfo.Port)))
-		if err != nil {
-			glog.Fatal(err)
-		}
-
-		listener = server
-	} else {
-		glog.Fatal("invalid protocol: " + addrInfo.Protocol)
-	}
-
 	close(n.Listening)
 
 	glog.Infof("Listening for peers on %s.\n", n.Address)
@@ -216,21 +192,20 @@ func (n *Network) Listen() {
 		select {
 		case <-n.kill:
 			// cause listener.Accept() to stop blocking so it can continue the loop
-			listener.Close()
+			lis.Close()
 		}
 	}()
 
 	// Handle new clients.
 	for {
-		if conn, err := listener.Accept(); err == nil {
+		if conn, err := lis.Accept(); err == nil {
 			go n.Accept(conn)
-
 		} else {
 			// if the Shutdown flag is set, no need to continue with the for loop
 			select {
 			case <-n.kill:
 				glog.Infof("Shutting down server on %s.\n", n.Address)
-				return
+				return err
 			default:
 				// without the default case the select will block.
 			}
@@ -361,7 +336,8 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 
 		conn = dialer
 	} else {
-		err = errors.New("network: invalid protocol " + addrInfo.Protocol)
+		//err = errors.New("network: invalid protocol " + addrInfo.Protocol)
+		conn, err = net.DialTimeout(addrInfo.Protocol, addrInfo.HostPort(), n.opts.connectionTimeout)
 	}
 
 	// Failed to connect.

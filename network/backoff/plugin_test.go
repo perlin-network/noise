@@ -100,7 +100,7 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 		return nil, nil, err
 	}
 
-	go node.Listen()
+	go node.Listen(nil)
 
 	node.BlockUntilListening()
 

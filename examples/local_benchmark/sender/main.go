@@ -59,7 +59,7 @@ func main() {
 		panic(err)
 	}
 
-	go net.Listen()
+	go net.Listen(nil)
 	net.Bootstrap(receiver)
 
 	time.Sleep(500 * time.Millisecond)

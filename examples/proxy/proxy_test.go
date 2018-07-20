@@ -124,7 +124,7 @@ func ExampleProxyPlugin() {
 		}
 		nodes = append(nodes, node)
 
-		go node.Listen()
+		go node.Listen(nil)
 	}
 
 	// Make sure all nodes are listening for incoming peers.

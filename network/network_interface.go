@@ -17,8 +17,8 @@ type NetworkInterface interface {
 	// GetKeys() returns the keypair for this network
 	GetKeys() *crypto.KeyPair
 
-	// Listen starts listening for peers on a port.
-	Listen()
+	// Listen starts listening for peers on a new listener
+	Listen(lis net.Listener) error
 
 	// Client either creates or returns a cached peer client given its host address.
 	Client(address string) (*PeerClient, error)

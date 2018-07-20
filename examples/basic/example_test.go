@@ -58,7 +58,7 @@ func ExampleBasicPlugin() {
 			fmt.Println(err)
 		}
 
-		go node.Listen()
+		go node.Listen(nil)
 
 		nodes = append(nodes, node)
 	}

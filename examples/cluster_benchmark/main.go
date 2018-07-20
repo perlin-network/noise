@@ -116,7 +116,7 @@ func main() {
 		return
 	}
 
-	go net.Listen()
+	go net.Listen(nil)
 
 	net.BlockUntilListening()
 

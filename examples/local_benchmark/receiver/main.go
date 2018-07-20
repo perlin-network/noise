@@ -73,7 +73,7 @@ func main() {
 		panic(err)
 	}
 
-	go net.Listen()
+	go net.Listen(nil)
 
 	fmt.Println("Waiting for sender on tcp://localhost:3001.")
 

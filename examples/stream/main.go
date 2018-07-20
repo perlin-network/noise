@@ -179,7 +179,7 @@ func main() {
 		return
 	}
 
-	go net.Listen()
+	go net.Listen(nil)
 
 	if len(peers) > 0 {
 		net.Bootstrap(peers...)

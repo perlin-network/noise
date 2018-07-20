@@ -195,7 +195,7 @@ func TestPeers(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		go net.Listen()
+		go net.Listen(nil)
 		net.BlockUntilListening()
 
 		if i != 0 {

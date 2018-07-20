@@ -56,7 +56,7 @@ func TestPluginHooks(t *testing.T) {
 			fmt.Println(err)
 		}
 
-		go node.Listen()
+		go node.Listen(nil)
 
 		nodes = append(nodes, node)
 	}

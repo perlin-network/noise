@@ -197,7 +197,7 @@ func setupNodes(ports []int) ([]*network.Network, []*MockPlugin, error) {
 		}
 		nodes = append(nodes, node)
 
-		go node.Listen()
+		go node.Listen(nil)
 	}
 
 	// make sure all the servers are listening
