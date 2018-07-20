@@ -36,6 +36,8 @@ func (p *plugin) Startup(n *network.Network) {
 		return
 	}
 
+	p.internalPort = int(info.Port)
+
 	gateway, err := nat.DiscoverGateway()
 	if err != nil {
 		glog.Warning("Unable to discover gateway: ", err)
