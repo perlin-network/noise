@@ -171,9 +171,9 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 func (n *Network) Listen(lis net.Listener) error {
 	if lis == nil {
 		return errors.New("network: listener is nil")
-	} else {
-		n.lis = lis
 	}
+	n.lis = lis
+
 	// Handle 'network starts listening' callback for plugins.
 	n.Plugins.Each(func(plugin PluginInterface) {
 		plugin.Startup(n)
@@ -226,7 +226,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 	}
 
 	if address == n.Address {
-		return nil, errors.New("network: peer should not dial itself")
+		return nil, errors.Errorf("network: peer should not dial itself %s", address)
 	}
 
 	client, err := createPeerClient(n, address)
