@@ -1,6 +1,7 @@
 package network
 
 import (
+	"net"
 	"reflect"
 	"sync"
 	"time"
@@ -35,6 +36,8 @@ type Builder struct {
 
 	plugins     *PluginList
 	pluginCount int
+
+	listener net.Listener
 }
 
 var defaultBuilderOptions = options{
@@ -145,6 +148,11 @@ func (builder *Builder) SetAddress(address string) {
 	builder.address = address
 }
 
+// SetAddress sets the host address for the network.
+func (builder *Builder) SetTransportLayer(lis net.Listener) {
+	builder.listener = lis
+}
+
 // AddPluginWithPriority registers a new plugin onto the network with a set priority.
 func (builder *Builder) AddPluginWithPriority(priority int, plugin PluginInterface) error {
 	// Initialize plugin list if not exist.
@@ -206,6 +214,7 @@ func (builder *Builder) Build() (*Network, error) {
 		Connections: new(sync.Map),
 
 		Listening: make(chan struct{}),
+		lis:       builder.listener,
 
 		kill: make(chan struct{}),
 	}

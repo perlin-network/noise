@@ -195,8 +195,7 @@ func TestPeers(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		lis, _ := NewTcpListener(addresses[i])
-		go net.Listen(lis)
+		go net.Listen()
 		net.BlockUntilListening()
 
 		if i != 0 {

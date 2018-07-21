@@ -63,9 +63,7 @@ func main() {
 
 	builder := network.NewBuilder()
 	builder.SetKeys(ed25519.RandomKeyPair())
-	addr := "tcp://localhost:3001"
-	lis, _ := network.NewTcpListener(addr)
-	builder.SetAddress(addr)
+	builder.SetAddress("tcp://localhost:3001")
 
 	state := new(BenchmarkPlugin)
 	builder.AddPlugin(state)
@@ -75,7 +73,7 @@ func main() {
 		panic(err)
 	}
 
-	go net.Listen(lis)
+	go net.Listen()
 
 	fmt.Println("Waiting for sender on tcp://localhost:3001.")
 

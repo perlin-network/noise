@@ -169,13 +169,8 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 	}
 }
 
-// Listen starts listening for peers on a new listener
-func (n *Network) Listen(lis net.Listener) error {
-	if lis == nil {
-		return errors.New("network: listener is nil")
-	}
-	n.lis = lis
-
+// Listen starts listening for peers.
+func (n *Network) Listen() {
 	// Handle 'network starts listening' callback for plugins.
 	n.Plugins.Each(func(plugin PluginInterface) {
 		plugin.Startup(n)
@@ -187,6 +182,31 @@ func (n *Network) Listen(lis net.Listener) error {
 			plugin.Cleanup(n)
 		})
 	}()
+
+	if n.lis == nil {
+		addrInfo, err := ParseAddress(n.Address)
+		if err != nil {
+			glog.Fatal(err)
+		}
+
+		if addrInfo.Protocol == "kcp" {
+			server, err := NewKcpListener(n.Address)
+			if err != nil {
+				glog.Fatal(err)
+			}
+
+			n.lis = server
+		} else if addrInfo.Protocol == "tcp" {
+			server, err := NewTcpListener(n.Address)
+			if err != nil {
+				glog.Fatal(err)
+			}
+
+			n.lis = server
+		} else {
+			glog.Fatal("invalid protocol: " + addrInfo.Protocol)
+		}
+	}
 
 	close(n.Listening)
 
@@ -210,7 +230,7 @@ func (n *Network) Listen(lis net.Listener) error {
 			select {
 			case <-n.kill:
 				glog.Infof("Shutting down server on %s.\n", n.Address)
-				return err
+				return
 			default:
 				// without the default case the select will block.
 			}

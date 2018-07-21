@@ -40,7 +40,6 @@ func main() {
 	builder := network.NewBuilder()
 	builder.SetKeys(keys)
 	addr := network.FormatAddress(protocol, host, port)
-	lis, _ := network.NewTcpListener(addr)
 	builder.SetAddress(addr)
 
 	// Register NAT traversal plugin.
@@ -62,7 +61,7 @@ func main() {
 		return
 	}
 
-	go net.Listen(lis)
+	go net.Listen()
 
 	if len(peers) > 0 {
 		net.Bootstrap(peers...)

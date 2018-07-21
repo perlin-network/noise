@@ -48,8 +48,6 @@ func ExampleBasicPlugin() {
 		builder.SetKeys(ed25519.RandomKeyPair())
 		addr := network.FormatAddress("tcp", host, uint16(startPort+i))
 		builder.SetAddress(addr)
-		lis, _ := network.NewTcpListener(addr)
-
 		builder.AddPlugin(new(discovery.Plugin))
 
 		plugins = append(plugins, new(BasicPlugin))
@@ -60,7 +58,7 @@ func ExampleBasicPlugin() {
 			fmt.Println(err)
 		}
 
-		go node.Listen(lis)
+		go node.Listen()
 
 		nodes = append(nodes, node)
 	}

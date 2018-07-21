@@ -122,9 +122,6 @@ builder.SetAddress(addr)
 // Alternatively...
 builder.SetAddress(network.FormatAddress("tcp", "localhost", 3000))
 
-// Create a network listener
-lis, _ := NewTcpListener(addr)
-
 // Set the cryptographic keys used for your network.
 builder.SetKeys(keys)
 
@@ -136,8 +133,8 @@ if err != nil {
     panic(err)
 }
 
-// Have the server start listening for peers on the listener.
-go net.Listen(lis)
+// Have the server start listening for peers.
+go net.Listen()
 
 // Connect to some peers and form a peer cluster automatically with built-in peer discovery.
 net.Bootstrap("tcp://localhost:3000", "tcp://localhost:3001")

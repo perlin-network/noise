@@ -51,14 +51,13 @@ func TestPluginHooks(t *testing.T) {
 		addr := FormatAddress("tcp", host, uint16(GetRandomUnusedPort()))
 		builder.SetAddress(addr)
 		builder.AddPlugin(new(MockPlugin))
-		lis, _ := NewTcpListener(addr)
 
 		node, err := builder.Build()
 		if err != nil {
 			fmt.Println(err)
 		}
 
-		go node.Listen(lis)
+		go node.Listen()
 
 		nodes = append(nodes, node)
 	}

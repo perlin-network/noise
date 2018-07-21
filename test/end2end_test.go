@@ -61,6 +61,7 @@ func (te *test) startBoostrap(numNodes int, plugins ...network.PluginInterface) 
 
 		te.builder.SetKeys(te.e.signature.RandomKeyPair())
 		te.builder.SetAddress(addr)
+		te.builder.SetTransportLayer(lis)
 
 		te.builder.AddPlugin(new(discovery.Plugin))
 		te.builder.AddPlugin(new(MailBoxPlugin))
@@ -74,7 +75,7 @@ func (te *test) startBoostrap(numNodes int, plugins ...network.PluginInterface) 
 			te.t.Fatalf("Build() = expected no error, got %v", err)
 		}
 
-		go node.Listen(lis)
+		go node.Listen()
 
 		if i == 0 {
 			te.bootstrapNode = node
@@ -162,7 +163,6 @@ func testNodeConnect(t *testing.T, e env) {
 	plugin := pluginInt.(*discovery.Plugin)
 	routes := plugin.Routes
 	peers := routes.GetPeers()
-	t.Logf("peers: %+v\n", peers)
 	if len(peers) != numNodes-1 {
 		t.Errorf("len(peers) = %d, want %d", len(peers), numNodes-1)
 	}

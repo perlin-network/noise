@@ -163,7 +163,6 @@ func main() {
 	builder.SetKeys(keys)
 	addr := network.FormatAddress(protocol, host, port)
 	builder.SetAddress(addr)
-	lis, _ := network.NewTcpListener(addr)
 
 	// Register peer discovery plugin.
 	builder.AddPlugin(new(discovery.Plugin))
@@ -181,7 +180,7 @@ func main() {
 		return
 	}
 
-	go net.Listen(lis)
+	go net.Listen()
 
 	if len(peers) > 0 {
 		net.Bootstrap(peers...)

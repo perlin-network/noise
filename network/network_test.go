@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
 	"syscall"
 	"testing"
 	"time"
@@ -38,29 +39,31 @@ func TestListen(t *testing.T) {
 		switch tt.protocol {
 		case "unix":
 			name := fmt.Sprintf("testsocket-%d", time.Now().UnixNano())
-			ioutil.TempFile("/tmp", name)
-			addr = fmt.Sprintf("/tmp/%s", name)
+			ioutil.TempFile(os.TempDir(), name)
+			addr = fmt.Sprintf("%s/%s", os.TempDir(), name)
 			syscall.Unlink(addr)
 		}
 		lis1, err := net.Listen(tt.protocol, addr)
 
 		b := NewBuilder()
+		b.SetTransportLayer(lis1)
 		n, err := b.Build()
 		assert.Equal(t, nil, err, err)
 
 		assert.Equal(t, nil, err, err)
 		assert.NotEqual(t, nil, lis1)
-		go n.Listen(lis1)
+		go n.Listen()
 		time.Sleep(200 * time.Millisecond)
 
 		switch tt.protocol {
 		case "unix":
 			name := fmt.Sprintf("testsocket-%d", time.Now().UnixNano())
-			ioutil.TempFile("/tmp", name)
-			addr = fmt.Sprintf("/tmp/%s", name)
+			ioutil.TempFile(os.TempDir(), name)
+			addr = fmt.Sprintf("%s/%s", os.TempDir(), name)
 			syscall.Unlink(addr)
 		}
 		lis2, err := net.Listen(tt.protocol, addr)
+		b.SetTransportLayer(lis2)
 		n2, err := b.Build()
 		assert.Equal(t, nil, err, err)
 		assert.NotEqual(t, getListenerAddress(lis1), getListenerAddress(lis2))

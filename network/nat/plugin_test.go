@@ -53,12 +53,11 @@ func TestNatConnect(t *testing.T) {
 		b := network.NewBuilder()
 		port := network.GetRandomUnusedPort()
 		addr := network.FormatAddress("tcp", "localhost", uint16(port))
-		lis, err := network.NewTcpListener(addr)
 		b.SetAddress(addr)
 		RegisterPlugin(b)
 		n, err := b.Build()
 		assert.Equal(t, nil, err, "%+v", err)
-		go n.Listen(lis)
+		go n.Listen()
 
 		assert.Equal(t, nil, err)
 		pInt, ok := n.Plugins.Get(PluginID)
