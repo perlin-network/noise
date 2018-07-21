@@ -75,8 +75,8 @@ func (p *plugin) Startup(n *network.Network) {
 	info.Port = uint16(p.externalPort)
 
 	// Set peer information based off of port mapping info.
-	n.Address = info.String()
-	n.ID = peer.CreateID(n.Address, n.GetKeys().PublicKey)
+	n.ExternalAddress = info.String()
+	n.ID = peer.CreateID(n.ExternalAddress, n.GetKeys().PublicKey)
 
 	glog.Infof("Other peers may connect to you through the address %s.", n.Address)
 }

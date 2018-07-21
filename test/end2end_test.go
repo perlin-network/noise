@@ -194,8 +194,6 @@ func testNodeBroadcast(t *testing.T, e env) {
 		case received := <-te.getMailbox(node).RecvMailbox:
 			if received.Message != expected {
 				t.Errorf("Expected message %s to be received by node %d but got %v\n", expected, i+1, received.Message)
-			} else {
-				t.Logf("Node %d received a message from Node 0.\n", i+1)
 			}
 		case <-time.After(100 * time.Millisecond):
 			// FIXME(jack0): this can trigger sometimes, flaky
@@ -246,8 +244,6 @@ func testNodeBroadcastByIDs(t *testing.T, e env) {
 			case received := <-te.getMailbox(node).RecvMailbox:
 				if received.Message != expected {
 					t.Errorf("Expected message %s to be received by node %d but got %v\n", expected, i+1, received.Message)
-				} else {
-					t.Logf("Node %d received a message from Node 0.\n", i+1)
 				}
 			case <-time.After(500 * time.Millisecond):
 				// FIXME(jack0): this can trigger sometimes, flaky
@@ -306,8 +302,6 @@ func testNodeBroadcastByAddresses(t *testing.T, e env) {
 			case received := <-te.getMailbox(node).RecvMailbox:
 				if received.Message != expected {
 					t.Errorf("Expected message %s to be received by node %d but got %v\n", expected, i+1, received.Message)
-				} else {
-					t.Logf("Node %d received a message from Node 0.\n", i+1)
 				}
 			case <-time.After(500 * time.Millisecond):
 				// FIXME(jack0): this can trigger sometimes, flaky

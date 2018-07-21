@@ -46,6 +46,8 @@ type Network struct {
 
 	// Full address to listen on. `protocol://host:port`
 	Address string
+	// ExternalAddress is set if NAT plugin is enabled
+	ExternalAddress string
 
 	// Map of plugins registered to the network.
 	// map[string]Plugin
@@ -303,16 +305,18 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 
 	var conn net.Conn
 
+	/*glog.Infof("dialing host: %s %+v\n", address, addrInfo)
 	if addrInfo.Host != "127.0.0.1" {
 		host, err := ParseAddress(n.Address)
 		if err != nil {
 			return nil, err
 		}
+		glog.Infof("host: %s myself: %v\n", addrInfo.Host, host.Host)
 		// check if dialing address is same as its own IP
 		if addrInfo.Host == host.Host {
 			addrInfo.Host = "127.0.0.1"
 		}
-	}
+	}*/
 
 	// Choose scheme.
 	if addrInfo.Protocol == "kcp" {

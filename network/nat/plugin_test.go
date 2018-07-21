@@ -3,11 +3,11 @@ package nat
 import (
 	"flag"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/network/discovery"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -31,6 +31,19 @@ func TestRegisterPlugin(t *testing.T) {
 	assert.NotEqual(t, nil, natPlugin)
 }
 
+func getPeers(m *sync.Map) []*network.PeerClient {
+	peers := make([]*network.PeerClient, 0)
+	m.Range(func(key, value interface{}) bool {
+		client := value.(*network.PeerClient)
+
+		peers = append(peers, client)
+
+		return true
+	})
+
+	return peers
+}
+
 func TestNatConnect(t *testing.T) {
 	t.Parallel()
 
@@ -40,11 +53,10 @@ func TestNatConnect(t *testing.T) {
 		b := network.NewBuilder()
 		port := network.GetRandomUnusedPort()
 		addr := network.FormatAddress("tcp", "localhost", uint16(port))
+		lis, err := network.NewTcpListener(addr)
 		b.SetAddress(addr)
 		RegisterPlugin(b)
-		b.AddPlugin(new(discovery.Plugin))
 		n, err := b.Build()
-		lis, err := network.NewTcpListener(addr)
 		assert.Equal(t, nil, err, "%+v", err)
 		go n.Listen(lis)
 
@@ -53,20 +65,17 @@ func TestNatConnect(t *testing.T) {
 		assert.Equal(t, true, ok)
 		p := pInt.(*plugin)
 		assert.NotEqual(t, nil, p)
-		nodes = append(nodes, n)
 		n.BlockUntilListening()
-		time.Sleep(100 * time.Millisecond)
+		nodes = append(nodes, n)
 	}
 
+	time.Sleep(1 * time.Second)
+
 	nodes[1].Bootstrap(nodes[0].Address)
-	pluginInt, ok := nodes[1].Plugin(discovery.PluginID)
-	assert.Equal(t, true, ok)
-	plugin := pluginInt.(*discovery.Plugin)
-	routes := plugin.Routes
-	peers := routes.GetPeers()
+	peers := getPeers(nodes[1].Peers)
 	for len(peers) < numNodes-1 {
-		peers = routes.GetPeers()
-		time.Sleep(50 * time.Millisecond)
+		peers = getPeers(nodes[1].Peers)
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	assert.Equal(t, len(peers), 1)
