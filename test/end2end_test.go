@@ -26,7 +26,7 @@ type env struct {
 var (
 	kcpEnv  = env{name: "kcp-blake2b-ed25519", network: "kcp", hash: blake2b.New(), signature: ed25519.New()}
 	tcpEnv  = env{name: "tcp-blake2b-ed25519", network: "tcp", hash: blake2b.New(), signature: ed25519.New()}
-	allEnvs = []env{kcpEnv, tcpEnv}
+	allEnvs = []env{tcpEnv}
 )
 
 type test struct {
@@ -204,8 +204,6 @@ func testNodeBroadcast(t *testing.T, e env) {
 	}
 }
 
-/*
-FIXME(jack0): something wrong with the sending, might be related to other PR
 func TestNodeBroadcastByIDs(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
@@ -234,14 +232,26 @@ func testNodeBroadcastByIDs(t *testing.T, e env) {
 
 	// Check if message was received by broadcasted peers.
 	for i, node := range te.nodes {
-		numMsgs := len(te.getMailbox(node).RecvMailbox)
-		if i < numPeers {
-			if numMsgs != 1 {
-				t.Errorf("node %d got %d messages, expected 1", i+1, numMsgs)
+		expectingMessages := false
+
+		for _, peer := range peers[:numPeers] {
+			if peer.Address == node.Address {
+				expectingMessages = true
+				break
 			}
-		} else {
-			if numMsgs != 0 {
-				t.Errorf("node %d got %d messages, expected 0", i+1, numMsgs)
+		}
+
+		if expectingMessages {
+			select {
+			case received := <-te.getMailbox(node).RecvMailbox:
+				if received.Message != expected {
+					t.Errorf("Expected message %s to be received by node %d but got %v\n", expected, i+1, received.Message)
+				} else {
+					t.Logf("Node %d received a message from Node 0.\n", i+1)
+				}
+			case <-time.After(500 * time.Millisecond):
+				// FIXME(jack0): this can trigger sometimes, flaky
+				t.Errorf("Timed out attempting to receive message from Node 0.\n")
 			}
 		}
 	}
@@ -280,19 +290,29 @@ func testNodeBroadcastByAddresses(t *testing.T, e env) {
 	}
 	te.bootstrapNode.BroadcastByAddresses(&protobuf.TestMessage{Message: expected}, addresses...)
 
-	// Check if message was received by nodes receiving the broadcast.
+	// Check if message was received by broadcasted peers.
 	for i, node := range te.nodes {
-		numMsgs := len(te.getMailbox(node).RecvMailbox)
-		t.Logf("addresses: %+v address: %s i: %d\n", addresses, node.Address, i+1)
-		for _, address := range addresses {
-			if address == node.Address {
-				if numMsgs != 1 {
-					t.Errorf("node %d got %d messages, expected 1", i+1, numMsgs)
+		expectingMessages := false
+
+		for _, peer := range peers[:numPeers] {
+			if peer.Address == node.Address {
+				expectingMessages = true
+				break
+			}
+		}
+
+		if expectingMessages {
+			select {
+			case received := <-te.getMailbox(node).RecvMailbox:
+				if received.Message != expected {
+					t.Errorf("Expected message %s to be received by node %d but got %v\n", expected, i+1, received.Message)
+				} else {
+					t.Logf("Node %d received a message from Node 0.\n", i+1)
 				}
-			} else if numMsgs != 0 {
-				t.Errorf("node %d got %d messages, expected 0", i+1, numMsgs)
+			case <-time.After(500 * time.Millisecond):
+				// FIXME(jack0): this can trigger sometimes, flaky
+				t.Errorf("Timed out attempting to receive message from Node 0.\n")
 			}
 		}
 	}
 }
-*/
