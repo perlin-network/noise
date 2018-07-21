@@ -38,6 +38,9 @@ func TestListen(t *testing.T) {
 		addr := "localhost:0"
 		switch tt.protocol {
 		case "unix":
+			if _, inTravis := os.LookupEnv("TRAVIS_BUILD_DIR"); inTravis {
+				return
+			}
 			name := fmt.Sprintf("testsocket-%d", time.Now().UnixNano())
 			ioutil.TempFile(os.TempDir(), name)
 			addr = fmt.Sprintf("%s/%s", os.TempDir(), name)
