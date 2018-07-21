@@ -38,23 +38,24 @@ func TestListen(t *testing.T) {
 		addr := "localhost:0"
 		switch tt.protocol {
 		case "unix":
-			if _, inTravis := os.LookupEnv("TRAVIS_BUILD_DIR"); inTravis {
-				return
-			}
 			name := fmt.Sprintf("testsocket-%d", time.Now().UnixNano())
 			ioutil.TempFile(os.TempDir(), name)
 			addr = fmt.Sprintf("%s/%s", os.TempDir(), name)
 			syscall.Unlink(addr)
+		case "tcp6":
+			if _, inTravis := os.LookupEnv("TRAVIS_BUILD_DIR"); inTravis {
+				return
+			}
 		}
 		lis1, err := net.Listen(tt.protocol, addr)
 
 		b := NewBuilder()
 		b.SetTransportLayer(lis1)
 		n, err := b.Build()
-		assert.Equal(t, nil, err, err)
+		assert.Equal(t, nil, err, "%s: %+v", tt.protocol, err)
 
-		assert.Equal(t, nil, err, err)
-		assert.NotEqual(t, nil, lis1)
+		assert.Equal(t, nil, err, "%s: %+v", tt.protocol, err)
+		assert.NotEqual(t, nil, lis1, tt.protocol)
 		go n.Listen()
 		time.Sleep(200 * time.Millisecond)
 
@@ -68,13 +69,11 @@ func TestListen(t *testing.T) {
 		lis2, err := net.Listen(tt.protocol, addr)
 		b.SetTransportLayer(lis2)
 		n2, err := b.Build()
-		assert.Equal(t, nil, err, err)
+		assert.Equal(t, nil, err, "%s: %+v", tt.protocol, err)
 		assert.NotEqual(t, getListenerAddress(lis1), getListenerAddress(lis2))
 
 		n.BlockUntilListening()
 		_, err = n2.Client(getListenerAddress(lis1))
-		if err != nil {
-			t.Errorf("Client() = %+v, expected <nil>", err)
-		}
+		assert.Equal(t, nil, err, "%s: %+v", tt.protocol, err)
 	}
 }
