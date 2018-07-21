@@ -29,7 +29,7 @@ func NewKcpListener(addr string) (net.Listener, error) {
 		return nil, err
 	}
 
-	lis, err := kcp.ListenWithOptions(fmt.Sprintf(":%d", addrInfo.Port), nil, 10, 3)
+	lis, err := kcp.ListenWithOptions(fmt.Sprintf("localhost:%d", addrInfo.Port), nil, 0, 0)
 	if err != nil {
 		return nil, err
 	}

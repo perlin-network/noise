@@ -1,7 +1,7 @@
 package test
 
 import (
-	"fmt"
+	_ "fmt"
 	"net"
 	"testing"
 	"time"
@@ -26,7 +26,7 @@ type env struct {
 var (
 	kcpEnv  = env{name: "kcp-blake2b-ed25519", network: "kcp", hash: blake2b.New(), signature: ed25519.New()}
 	tcpEnv  = env{name: "tcp-blake2b-ed25519", network: "tcp", hash: blake2b.New(), signature: ed25519.New()}
-	allEnvs = []env{tcpEnv}
+	allEnvs = []env{kcpEnv, tcpEnv}
 )
 
 type test struct {
@@ -59,7 +59,6 @@ func (te *test) startBoostrap(numNodes int, plugins ...network.PluginInterface) 
 			te.t.Fatalf("undefined network: %s", te.e.network)
 		}
 
-		addr = fmt.Sprintf("%s://%s", lis.Addr().Network(), lis.Addr().String())
 		te.builder.SetKeys(te.e.signature.RandomKeyPair())
 		te.builder.SetAddress(addr)
 
@@ -163,6 +162,7 @@ func testNodeConnect(t *testing.T, e env) {
 	plugin := pluginInt.(*discovery.Plugin)
 	routes := plugin.Routes
 	peers := routes.GetPeers()
+	t.Logf("peers: %+v\n", peers)
 	if len(peers) != numNodes-1 {
 		t.Errorf("len(peers) = %d, want %d", len(peers), numNodes-1)
 	}
