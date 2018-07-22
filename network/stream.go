@@ -14,7 +14,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var ErrEmptyMsg = errors.New("received an invalid message (either no message, no sender, or no signature) from a peer")
+var errEmptyMsg = errors.New("received an empty message from a peer")
 
 // sendMessage marshals, signs and sends a message over a stream.
 func (n *Network) sendMessage(w io.Writer, message *protobuf.Message, writerMutex *sync.Mutex) error {
@@ -77,7 +77,7 @@ func (n *Network) receiveMessage(conn net.Conn) (*protobuf.Message, error) {
 	size := binary.BigEndian.Uint32(buffer)
 
 	if size == 0 {
-		return nil, ErrEmptyMsg
+		return nil, errEmptyMsg
 	}
 
 	// Message size at most is limited to 4MB. If a big message need be sent,

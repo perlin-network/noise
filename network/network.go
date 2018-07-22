@@ -397,7 +397,7 @@ func (n *Network) Accept(incoming net.Conn) {
 	for {
 		msg, err := n.receiveMessage(incoming)
 		if err != nil {
-			if err != ErrEmptyMsg {
+			if err != errEmptyMsg {
 				glog.Error(err)
 			}
 			break
