@@ -12,7 +12,7 @@ git:
     depth: 1
 
 before_install:
-    - go get -u golang.org/x/vgo
+    - echo $(go get -d golang.org/x/vgo && cd $GOPATH/src/golang.org/x/vgo && git checkout cc75ec08d5ecfc4072bcefc2c696d1c30af692b9 && go get golang.org/x/vgo)
     - vgo mod -vendor
 
 # Skip the install step. Don't `go get` dependencies. Only build with the code in vendor/
