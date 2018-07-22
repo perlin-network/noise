@@ -155,10 +155,8 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 		go func() {
 			// Execute 'on receive message' callback for all plugins.
 			n.Plugins.Each(func(plugin PluginInterface) {
-				err := plugin.Receive(ctx)
-
-				if err != nil {
-					glog.Error(err)
+				if err := plugin.Receive(ctx); err != nil {
+					glog.Errorf("%+v", err)
 				}
 			})
 
@@ -399,7 +397,9 @@ func (n *Network) Accept(incoming net.Conn) {
 	for {
 		msg, err := n.receiveMessage(incoming)
 		if err != nil {
-			glog.Error(err)
+			if err != ErrEmptyMsg {
+				glog.Error(err)
+			}
 			break
 		}
 
