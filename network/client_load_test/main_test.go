@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	"github.com/golang/glog"
@@ -26,8 +27,8 @@ const (
 )
 
 // Usage:
-//  vgo run main.go
-func main() {
+//  vgo test -race .
+func TestClient(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	// send glog to the terminal instead of a file
