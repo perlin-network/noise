@@ -44,8 +44,8 @@
 ```bash
 # install vgo tooling
 go get -u golang.org/x/vgo
-  # at least version: 73a132e9da59e656acec3430d234708509d969d2
-  # to check your version use: echo $(cd $GOPATH/src/golang.org/x/vgo && git rev-parse HEAD)
+  # we test with vgo version: cc75ec08d5ecfc4072bcefc2c696d1c30af692b9
+  # to check your version use: echo $(go get -d golang.org/x/vgo && cd $GOPATH/src/golang.org/x/vgo && git checkout cc75ec08d5ecfc4072bcefc2c696d1c30af692b9 && go get golang.org/x/vgo)
 
 # install protoc-gen-gogofaster
 go get github.com/gogo/protobuf/protoc-gen-gogofaster
