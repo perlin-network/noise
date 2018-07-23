@@ -25,16 +25,17 @@ func NewRecvWindow(size int) *RecvWindow {
 
 // PopWindow pops all the messages out of the receive window
 func (w *RecvWindow) PopWindow() []interface{} {
+	w.Lock()
+	defer w.Unlock()
+
 	ready := make([]interface{}, 0)
 
-	w.Lock()
 	for i := 0; i < w.currSize; i++ {
 		ready = append(ready, w.data[i])
 		w.data[i] = nil
 	}
 
 	w.currSize = 0
-	w.Unlock()
 
 	return ready
 }
