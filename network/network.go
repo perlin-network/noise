@@ -408,7 +408,6 @@ func (n *Network) Accept(incoming net.Conn) {
 			clientInit.Do(func() {
 				client, err = n.Client(msg.Sender.Address)
 				if err != nil {
-					glog.Error(err)
 					return
 				}
 
@@ -426,6 +425,7 @@ func (n *Network) Accept(incoming net.Conn) {
 			})
 
 			if err != nil {
+				glog.Error(err)
 				return
 			}
 
