@@ -19,7 +19,7 @@ before_install:
 install: true
 
 script:
-    - vgo test -coverprofile=coverage.txt -covermode=atomic -bench -race -timeout 120s ./...
+    - vgo test -coverprofile=coverage.txt -covermode=atomic -bench -race -timeout 300s ./...
 
 after_success:
     - bash <(curl -s https://codecov.io/bash)

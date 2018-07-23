@@ -53,7 +53,7 @@ func TestRecvWindowConcurrency(t *testing.T) {
 	t.Parallel()
 	rwSize := 4096
 	batchSize := 33
-	numBatches := 1234
+	numBatches := 123
 
 	rw := NewRecvWindow(rwSize)
 
