@@ -10,19 +10,18 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto/ed25519"
+	"github.com/perlin-network/noise/examples/proxy/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
 	"github.com/perlin-network/noise/network/rpc"
-	pb "github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
 )
 
 const (
 	defaultNumNodes      = 4
-	defaultNumReqPerNode = 50
+	defaultNumReqPerNode = 15
 	host                 = "localhost"
 	startPort            = 21000
-	useLoop              = false
 )
 
 func main() {
@@ -46,41 +45,31 @@ func run() string {
 
 	nets := setupNetworks(host, startPort, numNodes)
 	expectedTotalResp := numReqPerNode * numNodes * (numNodes - 1)
-	var totalResp uint32
+	var totalPos uint32
 
 	startTime := time.Now()
 
-	for r := 0; r < numReqPerNode; r++ {
-		if useLoop {
-			// sending to all nodes sequentially, no errors
-			for n, net := range nets {
-				idx := n + numNodes*r
-				resp := sendMsg(net, idx)
-				atomic.AddUint32(&totalResp, resp)
-			}
-		} else {
-			// sending to all nodes concurrently, there are race conditions
-			wg := &sync.WaitGroup{}
-			for n, nt := range nets {
-				wg.Add(1)
-				go func(net *network.Network, idx int) {
-					defer wg.Done()
-					resp := sendMsg(net, idx)
-					atomic.AddUint32(&totalResp, resp)
-				}(nt, n+numNodes*r)
-			}
-			wg.Wait()
-		}
-		if r%10 == 0 {
-			glog.Infof("Progress %d / %d\n", r, numReqPerNode)
+	wg := &sync.WaitGroup{}
+
+	// sending to all nodes concurrently, there are race conditions
+	for n, nt := range nets {
+		for r := 0; r < numReqPerNode; r++ {
+			wg.Add(1)
+			go func(net *network.Network, idx int) {
+				defer wg.Done()
+				positive := sendMsg(net, idx)
+				atomic.AddUint32(&totalPos, positive)
+			}(nt, n+numNodes*r)
 		}
 	}
 
-	totalTime := time.Since(startTime)
-	reqPerSec := float64(totalResp) / totalTime.Seconds()
+	wg.Wait()
 
-	return fmt.Sprintf("Test completed in %s, num nodes = %d, successful ping pongs = %d / %d, requestsPerSec = %f\n",
-		totalTime, numNodes, totalResp, expectedTotalResp, reqPerSec)
+	totalTime := time.Since(startTime)
+	reqPerSec := float64(totalPos) / totalTime.Seconds()
+
+	return fmt.Sprintf("Test completed in %s, num nodes = %d, successful requests = %d / %d, requestsPerSec = %f\n",
+		totalTime, numNodes, totalPos, expectedTotalResp, reqPerSec)
 }
 
 func setupNetworks(host string, startPort int, numNodes int) []*network.Network {
@@ -92,6 +81,7 @@ func setupNetworks(host string, startPort int, numNodes int) []*network.Network 
 		builder.SetAddress(network.FormatAddress("tcp", host, uint16(startPort+i)))
 
 		builder.AddPlugin(new(discovery.Plugin))
+		builder.AddPlugin(new(loadTestPlugin))
 
 		node, err := builder.Build()
 		if err != nil {
@@ -145,7 +135,7 @@ func sendMsg(net *network.Network, idx int) uint32 {
 
 			request := &rpc.Request{}
 			request.SetTimeout(3 * time.Second)
-			request.SetMessage(&pb.Ping{})
+			request.SetMessage(&messages.ProxyMessage{Message: fmt.Sprintf("%d", idx)})
 
 			client, err := net.Client(address)
 			if err != nil {
@@ -159,7 +149,7 @@ func sendMsg(net *network.Network, idx int) uint32 {
 				return
 			}
 
-			if _, ok := response.(*pb.Pong); ok {
+			if _, ok := response.(*messages.ID); ok {
 				atomic.AddUint32(&positiveResponses, 1)
 			}
 
@@ -182,4 +172,19 @@ func sendMsg(net *network.Network, idx int) uint32 {
 	}
 
 	return atomic.LoadUint32(&positiveResponses)
+}
+
+type loadTestPlugin struct {
+	*network.Plugin
+}
+
+// Receive takes in *messages.ProxyMessage and replies with *messages.ID
+func (p *loadTestPlugin) Receive(ctx *network.PluginContext) error {
+	switch msg := ctx.Message().(type) {
+	case *messages.ProxyMessage:
+		response := &messages.ID{Address: msg.Message}
+		ctx.Reply(response)
+	}
+
+	return nil
 }
