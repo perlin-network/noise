@@ -377,7 +377,7 @@ func (n *Network) Accept(incoming net.Conn) {
 	var client *PeerClient
 	var clientInit sync.Once
 
-	recvWindow := NewRecvWindow(n.opts.recvWindowSize)
+	//recvWindow := NewRecvWindow(n.opts.recvWindowSize)
 
 	// Cleanup connections when we are done with them.
 	defer func() {
@@ -435,16 +435,19 @@ func (n *Network) Accept(incoming net.Conn) {
 				return
 			}
 
-			err = recvWindow.Input(msg.MessageNonce, msg)
-			if err != nil {
-				glog.Error(err)
-				return
-			}
+			/*
+				err = recvWindow.Input(msg.MessageNonce, msg)
+				if err != nil {
+					glog.Error(err)
+					return
+				}
 
-			ready := recvWindow.Update()
-			for _, msg := range ready {
-				client.Submit(func() { n.dispatchMessage(client, msg.(*protobuf.Message)) })
-			}
+				ready := recvWindow.Update()
+				for _, msg := range ready {
+					client.Submit(func() { n.dispatchMessage(client, msg.(*protobuf.Message)) })
+				}
+			*/
+			client.Submit(func() { n.dispatchMessage(client, msg) })
 		}()
 	}
 }

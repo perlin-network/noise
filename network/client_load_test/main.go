@@ -19,7 +19,7 @@ import (
 
 const (
 	defaultNumNodes      = 4
-	defaultNumReqPerNode = 15
+	defaultNumReqPerNode = 25
 	host                 = "localhost"
 	startPort            = 21000
 )
@@ -151,8 +151,9 @@ func sendMsg(net *network.Network, idx int) uint32 {
 
 			if _, ok := response.(*messages.ID); ok {
 				atomic.AddUint32(&positiveResponses, 1)
+			} else {
+				glog.Infof("[Debug] expected messages.ID but got %v\n", response)
 			}
-
 			/*
 				if err := client.Tell(request.Message); err != nil {
 					errs <- errors.Wrapf(err, "request error for req idx %d", idx)
