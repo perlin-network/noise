@@ -51,7 +51,7 @@ func TestRecvWindowBasic(t *testing.T) {
 
 func TestRecvWindowConcurrency(t *testing.T) {
 	t.Parallel()
-	rwSize := 1024
+	rwSize := 4096
 	batchSize := 33
 	numBatches := 1234
 
