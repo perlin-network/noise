@@ -21,7 +21,7 @@ const (
 	defaultNumNodes      = 4
 	defaultNumReqPerNode = 25
 	host                 = "localhost"
-	startPort            = 21000
+	startPort            = 23000
 )
 
 func main() {
