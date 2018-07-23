@@ -10,8 +10,8 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto/ed25519"
-	"github.com/perlin-network/noise/examples/proxy/messages"
 	"github.com/perlin-network/noise/network"
+	"github.com/perlin-network/noise/network/client_load_test/messages"
 	"github.com/perlin-network/noise/network/discovery"
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/pkg/errors"
@@ -135,7 +135,7 @@ func sendMsg(net *network.Network, idx int) uint32 {
 
 			request := &rpc.Request{}
 			request.SetTimeout(3 * time.Second)
-			request.SetMessage(&messages.ProxyMessage{Message: fmt.Sprintf("%d", idx)})
+			request.SetMessage(&messages.LoadRequest{Id: fmt.Sprintf("%d", idx)})
 
 			client, err := net.Client(address)
 			if err != nil {
@@ -149,7 +149,7 @@ func sendMsg(net *network.Network, idx int) uint32 {
 				return
 			}
 
-			if _, ok := response.(*messages.ID); ok {
+			if _, ok := response.(*messages.LoadReply); ok {
 				atomic.AddUint32(&positiveResponses, 1)
 			} else {
 				glog.Infof("[Debug] expected messages.ID but got %v\n", response)
@@ -182,8 +182,8 @@ type loadTestPlugin struct {
 // Receive takes in *messages.ProxyMessage and replies with *messages.ID
 func (p *loadTestPlugin) Receive(ctx *network.PluginContext) error {
 	switch msg := ctx.Message().(type) {
-	case *messages.ProxyMessage:
-		response := &messages.ID{Address: msg.Message}
+	case *messages.LoadRequest:
+		response := &messages.LoadReply{Id: msg.Id}
 		ctx.Reply(response)
 	}
 

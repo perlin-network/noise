@@ -193,6 +193,7 @@ func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
 
 	// Set the nonce.
 	signed.RequestNonce = nonce
+	signed.ReplyFlag = true
 
 	err = c.Network.Write(c.Address, signed)
 	if err != nil {
