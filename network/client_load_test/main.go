@@ -18,22 +18,22 @@ import (
 )
 
 const (
-	defaultNumNodes      = 4
-	defaultNumReqPerNode = 25
+	defaultNumNodes      = 5
+	defaultNumReqPerNode = 50
 	host                 = "localhost"
 	startPort            = 23000
 )
 
 func main() {
+	// send glog to the terminal instead of a file
+	flag.Set("logtostderr", "true")
+
 	fmt.Print(run())
 }
 
 func run() string {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
-
-	// send glog to the terminal instead of a file
-	flag.Set("logtostderr", "true")
 
 	numReqPerNodeFlag := flag.Int("t", defaultNumReqPerNode, "Number of requests per node")
 	numNodesFlag := flag.Int("n", defaultNumNodes, "Number of nodes")
