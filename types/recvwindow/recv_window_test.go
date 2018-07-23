@@ -33,7 +33,7 @@ func TestRecvWindowBasic(t *testing.T) {
 				val: rand.Uint64(),
 			}
 			expected = append(expected, entry)
-			rw.Insert(entry)
+			assert.Equalf(t, nil, rw.Insert(entry), "should not error for entry %d", j+i*batchSize)
 		}
 
 		// get them out and check them
@@ -99,4 +99,16 @@ func TestRecvWindowConcurrency(t *testing.T) {
 
 	// make sure nothing is left
 	assert.Equal(t, 0, len(rw.PopWindow()))
+}
+
+func TestRecvWindowLimit(t *testing.T) {
+	t.Parallel()
+	rwSize := 1024
+
+	rw := NewRecvWindow(rwSize)
+
+	for i := 0; i < rwSize; i++ {
+		assert.Equalf(t, nil, rw.Insert(&Entry{}), "should not error for entry %d", i)
+	}
+	assert.NotEqualf(t, nil, rw.Insert(&Entry{}), "should fail after the limit")
 }
