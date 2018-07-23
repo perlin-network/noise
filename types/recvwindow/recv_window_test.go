@@ -1,4 +1,4 @@
-package network
+package recvwindow
 
 import (
 	"math/rand"
@@ -30,17 +30,18 @@ func TestRecvWindow(t *testing.T) {
 				val: rand.Uint64(),
 			}
 			expected = append(expected, entry)
-			rw.Input(entry)
+			rw.Insert(entry)
 		}
 
 		// get them out and check them
-		ready := rw.Update()
+		ready := rw.PopWindow()
 		assert.Equal(t, batchSize, len(expected))
 		assert.Equal(t, batchSize, len(ready))
 		for j, val := range expected {
-			entry := ready[j].(*Entry)
+			entry, ok := ready[j].(*Entry)
+			assert.Equal(t, true, ok, "should match entry %d", j)
 			assert.Equalf(t, j+i*batchSize, entry.idx, "should match entry %d", j)
-			assert.Equalf(t, val, entry.val, "should match entry %d", j)
+			assert.Equalf(t, val.val, entry.val, "should match entry %d", j)
 		}
 	}
 }
