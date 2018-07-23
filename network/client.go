@@ -20,7 +20,8 @@ type PeerClient struct {
 	ID      *peer.ID
 	Address string
 
-	Requests sync.Map // uint64 -> *RequestState
+	Requests     sync.Map // uint64 -> *RequestState
+	RequestNonce uint64
 
 	stream StreamState
 
@@ -55,8 +56,9 @@ func createPeerClient(network *Network, address string) (*PeerClient, error) {
 	}
 
 	client := &PeerClient{
-		Network: network,
-		Address: address,
+		Network:      network,
+		Address:      address,
+		RequestNonce: 0,
 
 		incomingReady: make(chan struct{}),
 		outgoingReady: make(chan struct{}),
@@ -155,7 +157,7 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 		return nil, err
 	}
 
-	signed.RequestNonce = uint64(time.Now().UnixNano())
+	signed.RequestNonce = atomic.AddUint64(&c.RequestNonce, 1)
 
 	err = c.Network.Write(c.Address, signed)
 	if err != nil {
