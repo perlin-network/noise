@@ -35,7 +35,7 @@ func run() string {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	numReqPerNodeFlag := flag.Int("t", defaultNumReqPerNode, "Number of requests per node")
+	numReqPerNodeFlag := flag.Int("r", defaultNumReqPerNode, "Number of requests per node")
 	numNodesFlag := flag.Int("n", defaultNumNodes, "Number of nodes")
 
 	flag.Parse()
@@ -51,9 +51,9 @@ func run() string {
 
 	wg := &sync.WaitGroup{}
 
-	// sending to all nodes concurrently, there are race conditions
-	for n, nt := range nets {
-		for r := 0; r < numReqPerNode; r++ {
+	// sending to all nodes concurrently
+	for r := 0; r < numReqPerNode; r++ {
+		for n, nt := range nets {
 			wg.Add(1)
 			go func(net *network.Network, idx int) {
 				defer wg.Done()
@@ -62,7 +62,6 @@ func run() string {
 			}(nt, n+numNodes*r)
 		}
 	}
-
 	wg.Wait()
 
 	totalTime := time.Since(startTime)
@@ -152,15 +151,9 @@ func sendMsg(net *network.Network, idx int) uint32 {
 			if _, ok := response.(*messages.LoadReply); ok {
 				atomic.AddUint32(&positiveResponses, 1)
 			} else {
-				glog.Infof("[Debug] expected messages.ID but got %v\n", response)
+				glog.Infof("[Debug] expected messages.LoadReply but got %v\n", response)
 			}
-			/*
-				if err := client.Tell(request.Message); err != nil {
-					errs <- errors.Wrapf(err, "request error for req idx %d", idx)
-					return
-				}
-				atomic.AddUint32(&positiveResponses, 1)
-			*/
+
 		}(address)
 	}
 
