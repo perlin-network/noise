@@ -132,26 +132,31 @@ func sendMsg(net *network.Network, idx int) uint32 {
 		go func(address string) {
 			defer wg.Done()
 
+			expectedID := fmt.Sprintf("%s:%d->%s", net.Address, idx, address)
 			request := &rpc.Request{}
 			request.SetTimeout(3 * time.Second)
-			request.SetMessage(&messages.LoadRequest{Id: fmt.Sprintf("%d", idx)})
+			request.SetMessage(&messages.LoadRequest{Id: expectedID})
 
 			client, err := net.Client(address)
 			if err != nil {
-				errs <- errors.Wrapf(err, "client error for req idx %d", idx)
+				errs <- errors.Wrapf(err, "client error for req id %s", expectedID)
 				return
 			}
 
 			response, err := client.Request(request)
 			if err != nil {
-				errs <- errors.Wrapf(err, "request error for req idx %d", idx)
+				errs <- errors.Wrapf(err, "request error for req id %s", expectedID)
 				return
 			}
 
-			if _, ok := response.(*messages.LoadReply); ok {
-				atomic.AddUint32(&positiveResponses, 1)
+			if reply, ok := response.(*messages.LoadReply); ok {
+				if reply.Id == expectedID {
+					atomic.AddUint32(&positiveResponses, 1)
+				} else {
+					errs <- errors.Errorf("expected ID=%s got %s\n", expectedID, reply.Id)
+				}
 			} else {
-				glog.Infof("[Debug] expected messages.LoadReply but got %v\n", response)
+				errs <- errors.Errorf("expected messages.LoadReply but got %v\n", response)
 			}
 
 		}(address)
