@@ -51,7 +51,7 @@ go get -u golang.org/x/vgo
 vgo mod -vendor
 
 # generate necessary code files
-go get -u github.com/gogo/protobuf/{proto,protoc-gen-gogofaster,gogoproto}
+go get -u github.com/gogo/protobuf/protoc-gen-gogofaster
     # tested with version v1.1.1 (636bf0302bc95575d69441b25a2603156ffdddf1)
 go get -u github.com/golang/mock/mockgen
     # tested with v1.1.1 (c34cdb4725f4c3844d095133c6e40e448b86589b)
