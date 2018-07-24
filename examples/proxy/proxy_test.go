@@ -49,7 +49,10 @@ func (n *ProxyPlugin) Receive(ctx *network.PluginContext) error {
 
 // ProxyBroadcast proxies a message until it reaches a target ID destination.
 func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg *messages.ProxyMessage) error {
-	targetID := peer.ID(*msg.Destination)
+	targetID := peer.ID{
+		PublicKey: msg.Destination.PublicKey,
+		Address:   msg.Destination.Address,
+	}
 
 	// Check if we are the target.
 	if node.ID.Equals(targetID) {
