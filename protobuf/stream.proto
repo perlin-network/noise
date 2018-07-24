@@ -43,6 +43,9 @@ message Message {
 
     // message_nonce is the sequence ID.
     uint64 message_nonce = 5;
+
+    // reply_flag indicates this is a reply to a request
+    bool reply_flag = 6;
 }
 
 message Ping {

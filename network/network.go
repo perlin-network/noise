@@ -138,13 +138,15 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 		return
 	}
 
-	if _state, exists := client.Requests.Load(msg.RequestNonce); exists && msg.RequestNonce > 0 {
-		state := _state.(*RequestState)
-		select {
-		case state.data <- ptr.Message:
-		case <-state.closeSignal:
+	if msg.RequestNonce > 0 && msg.ReplyFlag {
+		if _state, exists := client.Requests.Load(msg.RequestNonce); exists {
+			state := _state.(*RequestState)
+			select {
+			case state.data <- ptr.Message:
+			case <-state.closeSignal:
+			}
+			return
 		}
-		return
 	}
 
 	switch ptr.Message.(type) {
@@ -329,8 +331,6 @@ func (n *Network) Accept(incoming net.Conn) {
 	var client *PeerClient
 	var clientInit sync.Once
 
-	recvWindow := NewRecvWindow(n.opts.recvWindowSize)
-
 	// Cleanup connections when we are done with them.
 	defer func() {
 		if client != nil {
@@ -360,7 +360,6 @@ func (n *Network) Accept(incoming net.Conn) {
 			clientInit.Do(func() {
 				client, err = n.Client(msg.Sender.Address)
 				if err != nil {
-					glog.Error(err)
 					return
 				}
 
@@ -378,6 +377,7 @@ func (n *Network) Accept(incoming net.Conn) {
 			})
 
 			if err != nil {
+				glog.Error(err)
 				return
 			}
 
@@ -387,16 +387,7 @@ func (n *Network) Accept(incoming net.Conn) {
 				return
 			}
 
-			err = recvWindow.Input(msg.MessageNonce, msg)
-			if err != nil {
-				glog.Error(err)
-				return
-			}
-
-			ready := recvWindow.Update()
-			for _, msg := range ready {
-				client.Submit(func() { n.dispatchMessage(client, msg.(*protobuf.Message)) })
-			}
+			client.Submit(func() { n.dispatchMessage(client, msg) })
 		}()
 	}
 }
