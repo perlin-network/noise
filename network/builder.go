@@ -10,6 +10,7 @@ import (
 	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/peer"
+	"github.com/perlin-network/noise/types"
 	"github.com/pkg/errors"
 )
 
@@ -34,8 +35,8 @@ type Builder struct {
 	keys    *crypto.KeyPair
 	address string
 
-	plugins     *PluginList
-	pluginCount int
+	plugins          *PluginList
+	transportPlugins *TransportList
 
 	listener net.Listener
 }
@@ -129,38 +130,33 @@ func NewBuilder() *Builder {
 
 // NewBuilderWithOptions returns a new builder with specified options.
 func NewBuilderWithOptions(opt ...BuilderOption) *Builder {
-	builder := NewBuilder()
+	b := NewBuilder()
 
 	for _, o := range opt {
-		o(&builder.opts)
+		o(&b.opts)
 	}
 
-	return builder
+	return b
 }
 
 // SetKeys pair created from crypto.KeyPair.
-func (builder *Builder) SetKeys(pair *crypto.KeyPair) {
-	builder.keys = pair
+func (b *Builder) SetKeys(pair *crypto.KeyPair) {
+	b.keys = pair
 }
 
 // SetAddress sets the host address for the network.
-func (builder *Builder) SetAddress(address string) {
-	builder.address = address
-}
-
-// SetAddress sets the host address for the network.
-func (builder *Builder) SetTransportLayer(lis net.Listener) {
-	builder.listener = lis
+func (b *Builder) SetAddress(address string) {
+	b.address = address
 }
 
 // AddPluginWithPriority registers a new plugin onto the network with a set priority.
-func (builder *Builder) AddPluginWithPriority(priority int, plugin PluginInterface) error {
+func (b *Builder) AddPluginWithPriority(priority int, plugin PluginInterface) error {
 	// Initialize plugin list if not exist.
-	if builder.plugins == nil {
-		builder.plugins = NewPluginList()
+	if b.plugins == nil {
+		b.plugins = NewPluginList()
 	}
 
-	if !builder.plugins.Put(priority, plugin) {
+	if !b.plugins.Put(priority, plugin) {
 		return errors.Errorf(ErrStrDuplicatePlugin, reflect.TypeOf(plugin).String())
 	}
 
@@ -168,53 +164,95 @@ func (builder *Builder) AddPluginWithPriority(priority int, plugin PluginInterfa
 }
 
 // AddPlugin register a new plugin onto the network.
-func (builder *Builder) AddPlugin(plugin PluginInterface) error {
-	err := builder.AddPluginWithPriority(builder.pluginCount, plugin)
-	if err == nil {
-		builder.pluginCount++
-	}
+func (b *Builder) AddPlugin(plugin PluginInterface) error {
+	err := b.AddPluginWithPriority(plugin.Priority(), plugin)
 	return err
+}
+
+// RegisterTransportLayer registers a new transport layer protocol
+func (b *Builder) RegisterTransportLayer(t TransportInterface) error {
+	// Initialize plugin list if not exist.
+	if b.transportPlugins == nil {
+		b.transportPlugins = NewTransportList()
+	}
+
+	if !b.transportPlugins.Put(0, t) {
+		return errors.Errorf(ErrStrDuplicatePlugin, reflect.TypeOf(t).String())
+	}
+
+	return nil
 }
 
 // Build verifies all parameters of the network and returns either an error due to
 // misconfiguration, or a *Network.
-func (builder *Builder) Build() (*Network, error) {
-	if builder.keys == nil {
+func (b *Builder) Build() (*Network, error) {
+	if b.keys == nil {
 		return nil, errors.New(ErrStrNoKeyPair)
 	}
 
-	if len(builder.address) == 0 {
+	if len(b.address) == 0 {
 		return nil, errors.New(ErrStrNoAddress)
 	}
 
 	// Initialize plugin list if not exist.
-	if builder.plugins == nil {
-		builder.plugins = NewPluginList()
+	if b.plugins == nil {
+		b.plugins = NewPluginList()
 	} else {
-		builder.plugins.SortByPriority()
+		b.plugins.SortByPriority()
 	}
 
-	unifiedAddress, err := ToUnifiedAddress(builder.address)
+	if b.transportPlugins == nil {
+		b.transportPlugins = NewTransportList()
+	} else {
+		b.transportPlugins.SortByPriority()
+	}
+
+	// no transport plugins registered, register one based on address
+	if b.transportPlugins.Len() == 0 {
+		addr, err := types.ParseAddress(b.address)
+		if err != nil {
+			return nil, err
+		}
+
+		switch addr.Protocol {
+		case "tcp":
+			t, err := NewTCPTransport(b.address)
+			if err != nil {
+				return nil, err
+			}
+			b.RegisterTransportLayer(t)
+		case "kcp":
+			t, err := NewKCPTransport(b.address)
+			if err != nil {
+				return nil, err
+			}
+			b.RegisterTransportLayer(t)
+		default:
+			return nil, errors.Errorf("builder: no default protocol found for %s", addr.Network())
+		}
+	}
+
+	unifiedAddress, err := types.ToUnifiedAddress(b.address)
 	if err != nil {
 		return nil, err
 	}
 
-	id := peer.CreateID(unifiedAddress, builder.keys.PublicKey)
+	id := peer.CreateID(unifiedAddress, b.keys.PublicKey)
 
 	net := &Network{
-		opts:    builder.opts,
+		opts:    b.opts,
 		ID:      id,
-		keys:    builder.keys,
+		keys:    b.keys,
 		Address: unifiedAddress,
 
-		Plugins: builder.plugins,
+		Plugins:    b.plugins,
+		Transports: b.transportPlugins,
 
 		Peers: new(sync.Map),
 
 		Connections: new(sync.Map),
 
 		Listening: make(chan struct{}),
-		lis:       builder.listener,
 
 		kill: make(chan struct{}),
 	}

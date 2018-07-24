@@ -12,7 +12,7 @@ import (
 const (
 	defaultPluginInitialDelay = 5 * time.Second
 	defaultPluginMaxAttempts  = 100
-	defaultPluginPriority     = 100
+	defaultPriority           = -1000
 )
 
 // Plugin is the backoff plugin
@@ -24,8 +24,6 @@ type Plugin struct {
 	initialDelay time.Duration
 	// maxAttempts specifies total number of retries
 	maxAttempts int
-	// priority specifies plugin priority
-	priority int
 
 	net      *network.Network
 	backoffs sync.Map
@@ -48,18 +46,10 @@ func WithMaxAttempts(i int) PluginOption {
 	}
 }
 
-// WithPriority specifies plugin priority
-func WithPriority(i int) PluginOption {
-	return func(o *Plugin) {
-		o.priority = i
-	}
-}
-
 func defaultOptions() PluginOption {
 	return func(o *Plugin) {
 		o.initialDelay = defaultPluginInitialDelay
 		o.maxAttempts = defaultPluginMaxAttempts
-		o.priority = defaultPluginPriority
 	}
 }
 
@@ -146,4 +136,9 @@ func (p *Plugin) startBackoff(addr string) {
 func (p *Plugin) checkConnected(addr string) bool {
 	_, connected := p.net.Connections.Load(addr)
 	return connected
+}
+
+// Priority returns the plugin priority (default: -1000).
+func (p *Plugin) Priority() int {
+	return defaultPriority
 }

@@ -5,6 +5,7 @@ import (
 	"net"
 
 	"github.com/perlin-network/noise/protobuf"
+	"github.com/perlin-network/noise/types"
 )
 
 // SerializeMessage compactly packs all bytes of a message together for cryptographic signing purposes.
@@ -46,7 +47,7 @@ func FilterPeers(address string, peers []string) (filtered []string) {
 			continue
 		}
 
-		resolved, err := ToUnifiedAddress(peerAddress)
+		resolved, err := types.ToUnifiedAddress(peerAddress)
 		if err != nil {
 			continue
 		}

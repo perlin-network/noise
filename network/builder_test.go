@@ -92,7 +92,7 @@ func TestDuplicatePlugin(t *testing.T) {
 	_, err := builder.Build()
 
 	assert.Equal(t, nil, err)
-	assert.Equal(t, builder.pluginCount, 0, "should have no plugins")
+	assert.Equal(t, builder.plugins.Len(), 0, "should have no plugins")
 
 	err = builder.AddPluginWithPriority(1, new(MockPlugin))
 	assert.Equal(t, nil, err)

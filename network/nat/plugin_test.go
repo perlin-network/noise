@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/perlin-network/noise/network"
+	"github.com/perlin-network/noise/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -52,7 +53,7 @@ func TestNatConnect(t *testing.T) {
 	for i := 0; i < numNodes; i++ {
 		b := network.NewBuilder()
 		port := network.GetRandomUnusedPort()
-		addr := network.FormatAddress("tcp", "localhost", uint16(port))
+		addr := types.FormatAddress("tcp", "localhost", uint16(port))
 		b.SetAddress(addr)
 		RegisterPlugin(b)
 		n, err := b.Build()

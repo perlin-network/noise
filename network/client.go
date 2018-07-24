@@ -10,6 +10,7 @@ import (
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+	"github.com/perlin-network/noise/types"
 	"github.com/pkg/errors"
 )
 
@@ -51,7 +52,7 @@ type RequestState struct {
 // createPeerClient creates a stub peer client.
 func createPeerClient(network *Network, address string) (*PeerClient, error) {
 	// Ensure the address is valid.
-	if _, err := ParseAddress(address); err != nil {
+	if _, err := types.ParseAddress(address); err != nil {
 		return nil, err
 	}
 
@@ -266,7 +267,7 @@ func (c *PeerClient) Write(data []byte) (int, error) {
 
 // LocalAddr implements net.Conn.
 func (c *PeerClient) LocalAddr() net.Addr {
-	addr, err := ParseAddress(c.Network.Address)
+	addr, err := types.ParseAddress(c.Network.Address)
 	if err != nil {
 		panic(err) // should never happen
 	}
@@ -275,7 +276,7 @@ func (c *PeerClient) LocalAddr() net.Addr {
 
 // RemoteAddr implements net.Conn.
 func (c *PeerClient) RemoteAddr() net.Addr {
-	addr, err := ParseAddress(c.Address)
+	addr, err := types.ParseAddress(c.Address)
 	if err != nil {
 		panic(err) // should never happen
 	}

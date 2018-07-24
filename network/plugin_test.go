@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/perlin-network/noise/crypto/ed25519"
+	"github.com/perlin-network/noise/types"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -13,6 +15,8 @@ var (
 	cleanup        = 0
 	peerConnect    = 0
 	peerDisconnect = 0
+
+	_ PluginInterface = (*MockPlugin)(nil)
 )
 
 type MockPlugin struct {
@@ -40,6 +44,10 @@ func (state *MockPlugin) PeerDisconnect(client *PeerClient) {
 	peerDisconnect++
 }
 
+func (state *MockPlugin) Priority() int {
+	return 0
+}
+
 func TestPluginHooks(t *testing.T) {
 	host := "localhost"
 	var nodes []*Network
@@ -48,9 +56,12 @@ func TestPluginHooks(t *testing.T) {
 	for i := 0; i < nodeCount; i++ {
 		builder := NewBuilder()
 		builder.SetKeys(ed25519.RandomKeyPair())
-		addr := FormatAddress("tcp", host, uint16(GetRandomUnusedPort()))
+		addr := types.FormatAddress("tcp", host, uint16(GetRandomUnusedPort()))
 		builder.SetAddress(addr)
-		builder.AddPlugin(new(MockPlugin))
+		p := new(MockPlugin)
+		builder.AddPlugin(p)
+
+		assert.Equal(t, 0, 0)
 
 		node, err := builder.Build()
 		if err != nil {

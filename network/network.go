@@ -14,6 +14,7 @@ import (
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+	nTypes "github.com/perlin-network/noise/types"
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 )
@@ -53,6 +54,8 @@ type Network struct {
 	// map[string]Plugin
 	Plugins *PluginList
 
+	Transports *TransportList
+
 	// Node's cryptographic ID.
 	ID peer.ID
 
@@ -67,7 +70,6 @@ type Network struct {
 
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
-	lis       net.Listener
 
 	// <-kill will begin the server shutdown process
 	kill chan struct{}
@@ -174,73 +176,32 @@ func (n *Network) Listen() {
 		plugin.Startup(n)
 	})
 
-	// Handle 'network stops listening' callback for plugins.
 	defer func() {
+		// Handle 'network stops listening' callback for plugins.
 		n.Plugins.Each(func(plugin PluginInterface) {
 			plugin.Cleanup(n)
 		})
+
+		// Handle 'network starts listening' callback for plugins.
+		n.Transports.Each(func(t TransportInterface) {
+			t.Cleanup()
+		})
 	}()
 
-	if n.lis == nil {
-		addrInfo, err := ParseAddress(n.Address)
-		if err != nil {
-			glog.Fatal(err)
-		}
-
-		if addrInfo.Protocol == "kcp" {
-			server, err := NewKcpListener(n.Address)
-			if err != nil {
-				glog.Fatal(err)
-			}
-
-			n.lis = server
-		} else if addrInfo.Protocol == "tcp" {
-			server, err := NewTcpListener(n.Address)
-			if err != nil {
-				glog.Fatal(err)
-			}
-
-			n.lis = server
-		} else {
-			glog.Fatal("invalid protocol: " + addrInfo.Protocol)
-		}
-	}
+	// Handle 'Listen' callback for transport protocols.
+	n.Transports.Each(func(t TransportInterface) {
+		t.Listen(n)
+	})
 
 	close(n.Listening)
 
-	glog.Infof("Listening for peers on %s.\n", n.Address)
-
-	// handle server shutdowns
-	go func() {
-		select {
-		case <-n.kill:
-			// cause n.lis.Accept() to stop blocking so it can continue the loop
-			n.lis.Close()
-		}
-	}()
-
-	// Handle new clients.
 	for {
-		if conn, err := n.lis.Accept(); err == nil {
-			go n.Accept(conn)
-		} else {
-			// if the Shutdown flag is set, no need to continue with the for loop
-			select {
-			case <-n.kill:
-				glog.Infof("Shutting down server on %s.\n", n.Address)
-				return
-			default:
-				// without the default case the select will block.
-			}
-
-			glog.Error(err)
-		}
 	}
 }
 
 // Client either creates or returns a cached peer client given its host address.
 func (n *Network) Client(address string) (*PeerClient, error) {
-	address, err := ToUnifiedAddress(address)
+	address, err := nTypes.ToUnifiedAddress(address)
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +277,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 
 // Dial establishes a bidirectional connection to an address, and additionally handshakes with said address.
 func (n *Network) Dial(address string) (net.Conn, error) {
-	addrInfo, err := ParseAddress(address)
+	addrInfo, err := nTypes.ParseAddress(address)
 	if err != nil {
 		return nil, err
 	}

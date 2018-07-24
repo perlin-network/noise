@@ -11,6 +11,7 @@ import (
 	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
+	"github.com/perlin-network/noise/types"
 	"github.com/xtaci/smux"
 )
 
@@ -161,7 +162,7 @@ func main() {
 
 	builder := network.NewBuilder()
 	builder.SetKeys(keys)
-	addr := network.FormatAddress(protocol, host, port)
+	addr := types.FormatAddress(protocol, host, port)
 	builder.SetAddress(addr)
 
 	// Register peer discovery plugin.

@@ -120,7 +120,7 @@ builder.SetAddress(addr)
 
 
 // Alternatively...
-builder.SetAddress(network.FormatAddress("tcp", "localhost", 3000))
+builder.SetAddress(types.FormatAddress("tcp", "localhost", 3000))
 
 // Set the cryptographic keys used for your network.
 builder.SetKeys(keys)
