@@ -17,6 +17,9 @@ type PluginInterface interface {
 
 	// Callback for when a peer disconnects from the network.
 	PeerDisconnect(client *PeerClient)
+
+	// Priority returns the plugin priority
+	Priority() int
 }
 
 // Plugin is an abstract class which all plugins extend.
@@ -38,3 +41,6 @@ func (*Plugin) PeerConnect(client *PeerClient) {}
 
 // PeerDisconnect is called every time a PeerClient connection is closed
 func (*Plugin) PeerDisconnect(client *PeerClient) {}
+
+// Priority returns the plugin priority
+func (*Plugin) Priority() int { return 0 }

@@ -14,10 +14,10 @@ type NetworkInterface interface {
 	// Init starts all network I/O workers.
 	Init()
 
-	// GetKeys() returns the keypair for this network
+	// GetKeys() returns the keypair for this network.
 	GetKeys() *crypto.KeyPair
 
-	// Listen starts listening for peers on a port.
+	// Listen starts listening for peers.
 	Listen()
 
 	// Client either creates or returns a cached peer client given its host address.

@@ -116,10 +116,12 @@ builder := network.NewBuilder()
 // Set the address which noise will listen on and peers will use to connect to you.
 // For example, set the host part to `localhost` if you are testing locally, or your public IP
 // address if you are connected to the internet directly.
-builder.SetAddress("tcp://localhost:3000")
+addr := "tcp://localhost:3000"
+builder.SetAddress(addr)
+
 
 // Alternatively...
-builder.SetAddress(network.FormatAddress("tcp", "localhost", 3000))
+builder.SetAddress(types.FormatAddress("tcp", "localhost", 3000))
 
 // Set the cryptographic keys used for your network.
 builder.SetKeys(keys)

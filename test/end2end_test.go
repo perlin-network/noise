@@ -11,6 +11,7 @@ import (
 	"github.com/perlin-network/noise/network/discovery"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/test/protobuf"
+	"github.com/perlin-network/noise/types"
 	"github.com/pkg/errors"
 )
 
@@ -24,14 +25,13 @@ type env struct {
 var (
 	kcpEnv  = env{name: "kcp-blake2b-ed25519", network: "kcp", hash: blake2b.New(), signature: ed25519.New()}
 	tcpEnv  = env{name: "tcp-blake2b-ed25519", network: "tcp", hash: blake2b.New(), signature: ed25519.New()}
-	allEnvs = []env{kcpEnv, tcpEnv}
+	allEnvs = []env{tcpEnv}
 )
 
 type test struct {
 	t *testing.T
 	e env
 
-	builder       *network.Builder
 	bootstrapNode *network.Network
 	nodes         []*network.Network
 	plugins       []*network.Plugin
@@ -39,17 +39,37 @@ type test struct {
 
 func (te *test) startBoostrap(numNodes int, plugins ...network.PluginInterface) {
 	for i := 0; i < numNodes; i++ {
-		te.builder.SetKeys(te.e.signature.RandomKeyPair())
-		te.builder.SetAddress(network.FormatAddress(te.e.network, "localhost", uint16(network.GetRandomUnusedPort())))
-
-		te.builder.AddPlugin(new(discovery.Plugin))
-		te.builder.AddPlugin(new(MailBoxPlugin))
-
-		for _, plugin := range plugins {
-			te.builder.AddPlugin(plugin)
+		b := network.NewBuilder()
+		addr := types.FormatAddress(te.e.network, "localhost", uint16(network.GetRandomUnusedPort()))
+		var ti network.TransportInterface
+		var err error
+		switch te.e.network {
+		case "tcp":
+			ti, err = network.NewTCPTransport(addr)
+			if err != nil {
+				te.t.Fatalf("NewTCPTransport() = expected no error, got %v", err)
+			}
+		case "kcp":
+			ti, err = network.NewKCPTransport(addr)
+			if err != nil {
+				te.t.Fatalf("NewKCPTransport() = expected no error, got %v", err)
+			}
+		default:
+			te.t.Fatalf("undefined network: %s", te.e.network)
 		}
 
-		node, err := te.builder.Build()
+		b.SetKeys(te.e.signature.RandomKeyPair())
+		b.SetAddress(addr)
+		b.RegisterTransportLayer(ti)
+
+		b.AddPlugin(new(discovery.Plugin))
+		b.AddPlugin(new(MailBoxPlugin))
+
+		for _, plugin := range plugins {
+			b.AddPlugin(plugin)
+		}
+
+		node, err := b.Build()
 		if err != nil {
 			te.t.Fatalf("Build() = expected no error, got %v", err)
 		}
@@ -104,9 +124,8 @@ func (te *test) getMailbox(n *network.Network) *MailBoxPlugin {
 
 func newTest(t *testing.T, e env, opts ...network.BuilderOption) *test {
 	te := &test{
-		t:       t,
-		e:       e,
-		builder: network.NewBuilderWithOptions(opts...),
+		t: t,
+		e: e,
 	}
 	return te
 }
@@ -173,8 +192,6 @@ func testNodeBroadcast(t *testing.T, e env) {
 		case received := <-te.getMailbox(node).RecvMailbox:
 			if received.Message != expected {
 				t.Errorf("Expected message %s to be received by node %d but got %v\n", expected, i+1, received.Message)
-			} else {
-				t.Logf("Node %d received a message from Node 0.\n", i+1)
 			}
 		case <-time.After(100 * time.Millisecond):
 			// FIXME(jack0): this can trigger sometimes, flaky
@@ -183,8 +200,6 @@ func testNodeBroadcast(t *testing.T, e env) {
 	}
 }
 
-/*
-FIXME(jack0): something wrong with the sending, might be related to other PR
 func TestNodeBroadcastByIDs(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
@@ -213,14 +228,24 @@ func testNodeBroadcastByIDs(t *testing.T, e env) {
 
 	// Check if message was received by broadcasted peers.
 	for i, node := range te.nodes {
-		numMsgs := len(te.getMailbox(node).RecvMailbox)
-		if i < numPeers {
-			if numMsgs != 1 {
-				t.Errorf("node %d got %d messages, expected 1", i+1, numMsgs)
+		expectingMessages := false
+
+		for _, peer := range peers[:numPeers] {
+			if peer.Address == node.Address {
+				expectingMessages = true
+				break
 			}
-		} else {
-			if numMsgs != 0 {
-				t.Errorf("node %d got %d messages, expected 0", i+1, numMsgs)
+		}
+
+		if expectingMessages {
+			select {
+			case received := <-te.getMailbox(node).RecvMailbox:
+				if received.Message != expected {
+					t.Errorf("Expected message %s to be received by node %d but got %v\n", expected, i+1, received.Message)
+				}
+			case <-time.After(500 * time.Millisecond):
+				// FIXME(jack0): this can trigger sometimes, flaky
+				t.Errorf("Timed out attempting to receive message from Node 0.\n")
 			}
 		}
 	}
@@ -259,19 +284,27 @@ func testNodeBroadcastByAddresses(t *testing.T, e env) {
 	}
 	te.bootstrapNode.BroadcastByAddresses(&protobuf.TestMessage{Message: expected}, addresses...)
 
-	// Check if message was received by nodes receiving the broadcast.
+	// Check if message was received by broadcasted peers.
 	for i, node := range te.nodes {
-		numMsgs := len(te.getMailbox(node).RecvMailbox)
-		t.Logf("addresses: %+v address: %s i: %d\n", addresses, node.Address, i+1)
-		for _, address := range addresses {
-			if address == node.Address {
-				if numMsgs != 1 {
-					t.Errorf("node %d got %d messages, expected 1", i+1, numMsgs)
+		expectingMessages := false
+
+		for _, peer := range peers[:numPeers] {
+			if peer.Address == node.Address {
+				expectingMessages = true
+				break
+			}
+		}
+
+		if expectingMessages {
+			select {
+			case received := <-te.getMailbox(node).RecvMailbox:
+				if received.Message != expected {
+					t.Errorf("Expected message %s to be received by node %d but got %v\n", expected, i+1, received.Message)
 				}
-			} else if numMsgs != 0 {
-				t.Errorf("node %d got %d messages, expected 0", i+1, numMsgs)
+			case <-time.After(500 * time.Millisecond):
+				// FIXME(jack0): this can trigger sometimes, flaky
+				t.Errorf("Timed out attempting to receive message from Node 0.\n")
 			}
 		}
 	}
 }
-*/

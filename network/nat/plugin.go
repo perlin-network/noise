@@ -8,6 +8,13 @@ import (
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
+	"github.com/perlin-network/noise/types"
+)
+
+const (
+	// the nat plugin is registered with a priority of -999999
+	// and thus is executed first.
+	defaultPriority = -999999
 )
 
 type plugin struct {
@@ -31,13 +38,12 @@ var (
 func (p *plugin) Startup(n *network.Network) {
 	glog.Infof("Setting up NAT traversal for address: %s", n.Address)
 
-	info, err := network.ParseAddress(n.Address)
+	info, err := types.ParseAddress(n.Address)
 	if err != nil {
 		return
 	}
 
 	p.internalPort = int(info.Port)
-
 	gateway, err := nat.DiscoverGateway()
 	if err != nil {
 		glog.Warning("Unable to discover gateway: ", err)
@@ -76,8 +82,8 @@ func (p *plugin) Startup(n *network.Network) {
 	info.Port = uint16(p.externalPort)
 
 	// Set peer information based off of port mapping info.
-	n.Address = info.String()
-	n.ID = peer.CreateID(n.Address, n.GetKeys().PublicKey)
+	n.ExternalAddress = info.String()
+	n.ID = peer.CreateID(n.ExternalAddress, n.GetKeys().PublicKey)
 
 	glog.Infof("Other peers may connect to you through the address %s.", n.Address)
 }
@@ -93,10 +99,13 @@ func (p *plugin) Cleanup(n *network.Network) {
 	}
 }
 
+// Priority returns the plugin priority (default: -999999).
+func (p *plugin) Priority() int {
+	return defaultPriority
+}
+
 // RegisterPlugin registers a plugin that automates port-forwarding of this nodes
 // listening socket through any available UPnP interface.
-//
-// The plugin is registered with a priority of -999999, and thus is executed first.
 func RegisterPlugin(builder *network.Builder) {
-	builder.AddPluginWithPriority(-99999, new(plugin))
+	builder.AddPluginWithPriority(defaultPriority, new(plugin))
 }

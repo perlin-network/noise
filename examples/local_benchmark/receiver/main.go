@@ -62,8 +62,8 @@ func main() {
 	}
 
 	builder := network.NewBuilder()
-	builder.SetAddress("tcp://localhost:3001")
 	builder.SetKeys(ed25519.RandomKeyPair())
+	builder.SetAddress("tcp://localhost:3001")
 
 	state := new(BenchmarkPlugin)
 	builder.AddPlugin(state)

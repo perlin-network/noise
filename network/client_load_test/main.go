@@ -14,6 +14,7 @@ import (
 	"github.com/perlin-network/noise/network/client_load_test/messages"
 	"github.com/perlin-network/noise/network/discovery"
 	"github.com/perlin-network/noise/network/rpc"
+	"github.com/perlin-network/noise/types"
 	"github.com/pkg/errors"
 )
 
@@ -77,7 +78,7 @@ func setupNetworks(host string, startPort int, numNodes int) []*network.Network 
 	for i := 0; i < numNodes; i++ {
 		builder := network.NewBuilder()
 		builder.SetKeys(ed25519.RandomKeyPair())
-		builder.SetAddress(network.FormatAddress("tcp", host, uint16(startPort+i)))
+		builder.SetAddress(types.FormatAddress("tcp", host, uint16(startPort+i)))
 
 		builder.AddPlugin(new(discovery.Plugin))
 		builder.AddPlugin(new(loadTestPlugin))

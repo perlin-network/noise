@@ -10,6 +10,7 @@ import (
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
+	"github.com/perlin-network/noise/types"
 	"github.com/pkg/errors"
 )
 
@@ -76,7 +77,7 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 		idToPort[i] = port
 	}
 	// restore the key if it was created in the past
-	addr := network.FormatAddress(protocol, host, port)
+	addr := types.FormatAddress(protocol, host, port)
 	if _, ok := keys[addr]; !ok {
 		keys[addr] = ed25519.RandomKeyPair()
 	}
@@ -106,7 +107,7 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 
 	// Bootstrap to Node 0
 	if addDiscoveryPlugin && i != 0 {
-		node.Bootstrap(network.FormatAddress(protocol, host, uint16(idToPort[0])))
+		node.Bootstrap(types.FormatAddress(protocol, host, uint16(idToPort[0])))
 	}
 
 	return node, plugin, nil

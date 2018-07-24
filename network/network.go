@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"math/rand"
 	"net"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+	nTypes "github.com/perlin-network/noise/types"
 	"github.com/pkg/errors"
 	"github.com/xtaci/kcp-go"
 )
@@ -47,10 +47,14 @@ type Network struct {
 
 	// Full address to listen on. `protocol://host:port`
 	Address string
+	// ExternalAddress is set if NAT plugin is enabled
+	ExternalAddress string
 
 	// Map of plugins registered to the network.
 	// map[string]Plugin
 	Plugins *PluginList
+
+	Transports *TransportList
 
 	// Node's cryptographic ID.
 	ID peer.ID
@@ -167,88 +171,45 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 	}
 }
 
-// Listen starts listening for peers on a port.
+// Listen starts listening for peers.
 func (n *Network) Listen() {
-
 	// Handle 'network starts listening' callback for plugins.
 	n.Plugins.Each(func(plugin PluginInterface) {
 		plugin.Startup(n)
 	})
 
-	// Handle 'network stops listening' callback for plugins.
 	defer func() {
+		// Handle 'network stops listening' callback for plugins.
 		n.Plugins.Each(func(plugin PluginInterface) {
 			plugin.Cleanup(n)
 		})
+
+		// Handle 'network starts listening' callback for plugins.
+		n.Transports.Each(func(t TransportInterface) {
+			t.Cleanup()
+		})
 	}()
 
-	addrInfo, err := ParseAddress(n.Address)
-	if err != nil {
-		glog.Fatal(err)
-	}
-
-	var listener net.Listener
-
-	if addrInfo.Protocol == "kcp" {
-		server, err := kcp.ListenWithOptions(":"+strconv.Itoa(int(addrInfo.Port)), nil, 0, 0)
-		if err != nil {
-			glog.Fatal(err)
-		}
-
-		listener = server
-	} else if addrInfo.Protocol == "tcp" {
-		server, err := net.Listen("tcp", ":"+strconv.Itoa(int(addrInfo.Port)))
-		if err != nil {
-			glog.Fatal(err)
-		}
-
-		listener = server
-	} else {
-		glog.Fatal("invalid protocol: " + addrInfo.Protocol)
-	}
+	// Handle 'Listen' callback for transport protocols.
+	n.Transports.Each(func(t TransportInterface) {
+		t.Listen(n)
+	})
 
 	close(n.Listening)
 
-	glog.Infof("Listening for peers on %s.\n", n.Address)
-
-	// handle server shutdowns
-	go func() {
-		select {
-		case <-n.kill:
-			// cause listener.Accept() to stop blocking so it can continue the loop
-			listener.Close()
-		}
-	}()
-
-	// Handle new clients.
 	for {
-		if conn, err := listener.Accept(); err == nil {
-			go n.Accept(conn)
-
-		} else {
-			// if the Shutdown flag is set, no need to continue with the for loop
-			select {
-			case <-n.kill:
-				glog.Infof("Shutting down server on %s.\n", n.Address)
-				return
-			default:
-				// without the default case the select will block.
-			}
-
-			glog.Error(err)
-		}
 	}
 }
 
 // Client either creates or returns a cached peer client given its host address.
 func (n *Network) Client(address string) (*PeerClient, error) {
-	address, err := ToUnifiedAddress(address)
+	address, err := nTypes.ToUnifiedAddress(address)
 	if err != nil {
 		return nil, err
 	}
 
 	if address == n.Address {
-		return nil, errors.New("network: peer should not dial itself")
+		return nil, errors.Errorf("network: peer should not dial itself %s", address)
 	}
 
 	client, err := createPeerClient(n, address)
@@ -318,23 +279,12 @@ func (n *Network) Bootstrap(addresses ...string) {
 
 // Dial establishes a bidirectional connection to an address, and additionally handshakes with said address.
 func (n *Network) Dial(address string) (net.Conn, error) {
-	addrInfo, err := ParseAddress(address)
+	addrInfo, err := nTypes.ParseAddress(address)
 	if err != nil {
 		return nil, err
 	}
 
 	var conn net.Conn
-
-	if addrInfo.Host != "127.0.0.1" {
-		host, err := ParseAddress(n.Address)
-		if err != nil {
-			return nil, err
-		}
-		// check if dialing address is same as its own IP
-		if addrInfo.Host == host.Host {
-			addrInfo.Host = "127.0.0.1"
-		}
-	}
 
 	// Choose scheme.
 	if addrInfo.Protocol == "kcp" {
@@ -360,8 +310,10 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 		dialer.SetNoDelay(false)
 
 		conn = dialer
+	} else if addrInfo.Protocol == "unix" {
+		conn, err = net.DialTimeout(addrInfo.Protocol, addrInfo.Host, n.opts.connectionTimeout)
 	} else {
-		err = errors.New("network: invalid protocol " + addrInfo.Protocol)
+		conn, err = net.DialTimeout(addrInfo.Protocol, addrInfo.HostPort(), n.opts.connectionTimeout)
 	}
 
 	// Failed to connect.

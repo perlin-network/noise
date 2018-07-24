@@ -1,6 +1,7 @@
-package network
+package types
 
 import (
+	"fmt"
 	"net"
 	"net/url"
 	"strconv"
@@ -73,11 +74,17 @@ func ParseAddress(address string) (*AddressInfo, error) {
 		return nil, err
 	}
 
+	if urlInfo.Scheme == "unix" {
+		return &AddressInfo{
+			Protocol: urlInfo.Scheme,
+			Host:     urlInfo.EscapedPath(),
+		}, nil
+	}
+
 	host, rawPort, err := net.SplitHostPort(urlInfo.Host)
 	if err != nil {
 		return nil, err
 	}
-
 	port, err := strconv.ParseUint(rawPort, 10, 16)
 	if err != nil {
 		return nil, err
@@ -131,6 +138,10 @@ func ToUnifiedAddress(address string) (string, error) {
 	info, err := ParseAddress(address)
 	if err != nil {
 		return "", err
+	}
+
+	if info.Protocol == "unix" {
+		return fmt.Sprintf("%s://%s", info.Protocol, info.Host), nil
 	}
 
 	info.Host, err = ToUnifiedHost(info.Host)

@@ -10,6 +10,10 @@ import (
 	"github.com/perlin-network/noise/protobuf"
 )
 
+const (
+	defaultPriority = -2000
+)
+
 type Plugin struct {
 	*network.Plugin
 
@@ -25,19 +29,19 @@ var (
 	_        network.PluginInterface = (*Plugin)(nil)
 )
 
-func (state *Plugin) Startup(net *network.Network) {
+func (p *Plugin) Startup(net *network.Network) {
 	// Create routing table.
-	state.Routes = dht.CreateRoutingTable(net.ID)
+	p.Routes = dht.CreateRoutingTable(net.ID)
 }
 
-func (state *Plugin) Receive(ctx *network.PluginContext) error {
+func (p *Plugin) Receive(ctx *network.PluginContext) error {
 	// Update routing for every incoming message.
-	state.Routes.Update(ctx.Sender())
+	p.Routes.Update(ctx.Sender())
 
 	// Handle RPC.
 	switch msg := ctx.Message().(type) {
 	case *protobuf.Ping:
-		if state.DisablePing {
+		if p.DisablePing {
 			break
 		}
 
@@ -48,7 +52,7 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 			return err
 		}
 	case *protobuf.Pong:
-		if state.DisablePong {
+		if p.DisablePong {
 			break
 		}
 
@@ -56,12 +60,12 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 
 		// Update routing table w/ closest peers to self.
 		for _, peerID := range peers {
-			state.Routes.Update(peerID)
+			p.Routes.Update(peerID)
 		}
 
-		glog.Infof("bootstrapped w/ peer(s): %s.", strings.Join(state.Routes.GetPeerAddresses(), ", "))
+		glog.Infof("bootstrapped w/ peer(s): %s.", strings.Join(p.Routes.GetPeerAddresses(), ", "))
 	case *protobuf.LookupNodeRequest:
-		if state.DisableLookup {
+		if p.DisableLookup {
 			break
 		}
 
@@ -69,7 +73,7 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 		response := &protobuf.LookupNodeResponse{}
 
 		// Respond back with closest peers to a provided target.
-		for _, peerID := range state.Routes.FindClosestPeers(peer.ID(*msg.Target), dht.BucketSize) {
+		for _, peerID := range p.Routes.FindClosestPeers(peer.ID(*msg.Target), dht.BucketSize) {
 			id := protobuf.ID(peerID)
 			response.Peers = append(response.Peers, &id)
 		}
@@ -79,23 +83,28 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 			return err
 		}
 
-		glog.Infof("connected peers: %s.", strings.Join(state.Routes.GetPeerAddresses(), ", "))
+		glog.Infof("connected peers: %s.", strings.Join(p.Routes.GetPeerAddresses(), ", "))
 	}
 
 	return nil
 }
 
-func (state *Plugin) Cleanup(net *network.Network) {
+func (p *Plugin) Cleanup(net *network.Network) {
 	// TODO: Save routing table?
 }
 
-func (state *Plugin) PeerDisconnect(client *network.PeerClient) {
+func (p *Plugin) PeerDisconnect(client *network.PeerClient) {
 	// Delete peer if in routing table.
 	if client.ID != nil {
-		if state.Routes.PeerExists(*client.ID) {
-			state.Routes.RemovePeer(*client.ID)
+		if p.Routes.PeerExists(*client.ID) {
+			p.Routes.RemovePeer(*client.ID)
 
 			glog.Infof("Peer %s has disconnected from %s.", client.ID.Address, client.Network.ID.Address)
 		}
 	}
+}
+
+// Priority returns the plugin priority (default: -2000).
+func (p *Plugin) Priority() int {
+	return defaultPriority
 }

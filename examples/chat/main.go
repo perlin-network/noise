@@ -11,6 +11,7 @@ import (
 	"github.com/perlin-network/noise/examples/chat/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
+	"github.com/perlin-network/noise/types"
 )
 
 type ChatPlugin struct{ *network.Plugin }
@@ -47,7 +48,9 @@ func main() {
 
 	builder := network.NewBuilder()
 	builder.SetKeys(keys)
-	builder.SetAddress(network.FormatAddress(protocol, host, port))
+
+	addr := types.FormatAddress(protocol, host, port)
+	builder.SetAddress(addr)
 
 	// Register peer discovery plugin.
 	builder.AddPlugin(new(discovery.Plugin))
