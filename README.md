@@ -47,13 +47,14 @@ go get -u golang.org/x/vgo
   # we test with vgo version: cc75ec08d5ecfc4072bcefc2c696d1c30af692b9
   # to check your version use: echo $(go get -d golang.org/x/vgo && cd $GOPATH/src/golang.org/x/vgo && git checkout cc75ec08d5ecfc4072bcefc2c696d1c30af692b9 && go get golang.org/x/vgo)
 
-# install protoc-gen-gogofaster
-go get github.com/gogo/protobuf/protoc-gen-gogofaster
-
 # download the dependencies to vendor folder
 vgo mod -vendor
 
 # generate necessary code files
+go get -u github.com/gogo/protobuf/protoc-gen-gogofaster
+    # tested with version v1.1.1 (636bf0302bc95575d69441b25a2603156ffdddf1)
+go get -u github.com/golang/mock/mockgen
+    # tested with v1.1.1 (c34cdb4725f4c3844d095133c6e40e448b86589b)
 vgo generate ./...
 
 # run an example
