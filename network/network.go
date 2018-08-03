@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"math/rand"
 	"net"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,7 +15,7 @@ import (
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
-	"github.com/xtaci/kcp-go"
+	"github.com/perlin-network/noise/network/transport"
 )
 
 const (
@@ -35,7 +34,7 @@ var contextPool = sync.Pool{
 }
 
 var (
-	_ (NetworkInterface) = (*Network)(nil)
+	_ NetworkInterface = (*Network)(nil)
 )
 
 // Network represents the current networking state for this node.
@@ -63,6 +62,9 @@ type Network struct {
 
 	// Map of connection addresses (string) <-> *ConnState
 	Connections *sync.Map
+
+	// Map of protocol addresses (string) <-> *transport.Layer
+	Transports *sync.Map
 
 	// <-Listening will block a goroutine until this node is listening for peers.
 	Listening chan struct{}
@@ -189,20 +191,11 @@ func (n *Network) Listen() {
 
 	var listener net.Listener
 
-	if addrInfo.Protocol == "kcp" {
-		server, err := kcp.ListenWithOptions(":"+strconv.Itoa(int(addrInfo.Port)), nil, 0, 0)
+	if t, exists := n.Transports.Load(addrInfo.Protocol); exists {
+		listener, err = t.(transport.Layer).Listen(int(addrInfo.Port))
 		if err != nil {
 			glog.Fatal(err)
 		}
-
-		listener = server
-	} else if addrInfo.Protocol == "tcp" {
-		server, err := net.Listen("tcp", ":"+strconv.Itoa(int(addrInfo.Port)))
-		if err != nil {
-			glog.Fatal(err)
-		}
-
-		listener = server
 	} else {
 		glog.Fatal("invalid protocol: " + addrInfo.Protocol)
 	}
@@ -323,8 +316,6 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 		return nil, err
 	}
 
-	var conn net.Conn
-
 	if addrInfo.Host != "127.0.0.1" {
 		host, err := ParseAddress(n.Address)
 		if err != nil {
@@ -336,32 +327,16 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 		}
 	}
 
+	var conn net.Conn
+
 	// Choose scheme.
-	if addrInfo.Protocol == "kcp" {
-		dialer, err := kcp.DialWithOptions(addrInfo.HostPort(), nil, 0, 0)
-		dialer.SetWindowSize(10000, 10000)
-
+	if t, exists := n.Transports.Load(addrInfo.Protocol); exists {
+		conn, err = t.(transport.Layer).Dial(addrInfo.HostPort())
 		if err != nil {
-			return nil, err
+			glog.Fatal(err)
 		}
-
-		conn = dialer
-	} else if addrInfo.Protocol == "tcp" {
-		address, err := net.ResolveTCPAddr("tcp", addrInfo.HostPort())
-		if err != nil {
-			return nil, err
-		}
-
-		dialer, err := net.DialTCP("tcp", nil, address)
-		if err != nil {
-			return nil, err
-		}
-		dialer.SetWriteBuffer(10000)
-		dialer.SetNoDelay(false)
-
-		conn = dialer
 	} else {
-		err = errors.New("network: invalid protocol " + addrInfo.Protocol)
+		glog.Fatal("invalid protocol: " + addrInfo.Protocol)
 	}
 
 	// Failed to connect.
