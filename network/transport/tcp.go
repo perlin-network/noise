@@ -2,18 +2,20 @@ package transport
 
 import (
 	"net"
-		"strconv"
-	)
+	"strconv"
+)
 
 type TCP struct {
 	WriteBufferSize int
-	NoDelay bool
+	ReadBufferSize  int
+	NoDelay         bool
 }
 
 func NewTCP() *TCP {
 	return &TCP{
 		WriteBufferSize: 10000,
-		NoDelay: false,
+		ReadBufferSize:  10000,
+		NoDelay:         false,
 	}
 }
 
@@ -32,14 +34,14 @@ func (t *TCP) Dial(address string) (net.Conn, error) {
 		return nil, err
 	}
 
-	onn, err := net.DialTCP("tcp", nil, resolved)
+	conn, err := net.DialTCP("tcp", nil, resolved)
 	if err != nil {
 		return nil, err
 	}
 
-	onn.SetWriteBuffer(t.WriteBufferSize)
-	onn.SetNoDelay(t.NoDelay)
+	conn.SetWriteBuffer(t.WriteBufferSize)
+	conn.SetReadBuffer(t.ReadBufferSize)
+	conn.SetNoDelay(t.NoDelay)
 
-	return onn, nil
+	return conn, nil
 }
-

@@ -12,10 +12,10 @@ import (
 	"github.com/gogo/protobuf/types"
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/network/transport"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
 	"github.com/pkg/errors"
-	"github.com/perlin-network/noise/network/transport"
 )
 
 const (

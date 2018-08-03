@@ -1,15 +1,15 @@
 package transport
 
 import (
-	"net"
 	"github.com/xtaci/kcp-go"
+	"net"
 	"strconv"
-	)
+)
 
 // KCP represents the KCP transport protocol alongside its respective configurable options.
 type KCP struct {
-	DataShards int
-	ParityShards int
+	DataShards     int
+	ParityShards   int
 	SendWindowSize int
 	RecvWindowSize int
 }
@@ -17,8 +17,8 @@ type KCP struct {
 // NewKCP instantiates a new instance of the KCP transport protocol.
 func NewKCP() *KCP {
 	return &KCP{
-		DataShards: 0,
-		ParityShards: 0,
+		DataShards:     0,
+		ParityShards:   0,
 		SendWindowSize: 10000,
 		RecvWindowSize: 10000,
 	}
@@ -47,4 +47,3 @@ func (t *KCP) Dial(address string) (net.Conn, error) {
 
 	return conn, nil
 }
-

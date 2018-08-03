@@ -8,9 +8,9 @@ import (
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/crypto/ed25519"
+	"github.com/perlin-network/noise/network/transport"
 	"github.com/perlin-network/noise/peer"
 	"github.com/pkg/errors"
-	"github.com/perlin-network/noise/network/transport"
 )
 
 const (
@@ -121,9 +121,9 @@ func WriteTimeout(d time.Duration) BuilderOption {
 // NewBuilder returns a new builder with default options.
 func NewBuilder() *Builder {
 	builder := &Builder{
-		opts:    defaultBuilderOptions,
-		address: defaultAddress,
-		keys:    ed25519.RandomKeyPair(),
+		opts:       defaultBuilderOptions,
+		address:    defaultAddress,
+		keys:       ed25519.RandomKeyPair(),
 		transports: new(sync.Map),
 	}
 
