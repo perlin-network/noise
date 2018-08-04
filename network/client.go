@@ -6,10 +6,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+
+	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -38,7 +39,7 @@ type StreamState struct {
 	sync.Mutex
 	buffer        []byte
 	buffered      chan struct{}
-	closed        bool
+	isClosed      bool
 	readDeadline  time.Time
 	writeDeadline time.Time
 }
@@ -83,6 +84,7 @@ func (c *PeerClient) Init() {
 	go c.executeJobs()
 }
 
+// Submit adds a job to the execution queue.
 func (c *PeerClient) Submit(job func()) {
 	select {
 	case c.jobs <- job:
@@ -111,7 +113,7 @@ func (c *PeerClient) Close() error {
 	close(c.closeSignal)
 
 	c.stream.Lock()
-	c.stream.closed = true
+	c.stream.isClosed = true
 	c.stream.Unlock()
 
 	// Handle 'on peer disconnect' callback for plugins.
@@ -135,7 +137,7 @@ func (c *PeerClient) Close() error {
 	return nil
 }
 
-// Write asynchronously emit a message to a given peer.
+// Tell will asynchronously emit a message to a given peer.
 func (c *PeerClient) Tell(message proto.Message) error {
 	signed, err := c.Network.PrepareMessage(message)
 	if err != nil {
@@ -181,9 +183,8 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 	case res := <-channel:
 		return res, nil
 	case <-time.After(req.Timeout):
+		return nil, errors.New("request timed out")
 	}
-
-	return nil, errors.New("request timed out")
 }
 
 // Reply is equivalent to Write() with an appended nonce to signal a reply.
@@ -223,27 +224,25 @@ func (c *PeerClient) handleBytes(pkt []byte) {
 func (c *PeerClient) Read(out []byte) (int, error) {
 	for {
 		c.stream.Lock()
-		closed := c.stream.closed
+		isClosed := c.stream.isClosed
 		n := copy(out, c.stream.buffer)
 		c.stream.buffer = c.stream.buffer[n:]
 		readDeadline := c.stream.readDeadline
 		c.stream.Unlock()
 
-		if closed {
+		if isClosed {
 			return n, errors.New("closed")
 		}
-
 		if !readDeadline.IsZero() && time.Now().After(readDeadline) {
 			return n, errors.New("read deadline exceeded")
 		}
 
-		if n == 0 {
-			select {
-			case <-c.stream.buffered:
-			case <-time.After(1 * time.Second):
-			}
-		} else {
+		if n != 0 {
 			return n, nil
+		}
+		select {
+		case <-c.stream.buffered:
+		case <-time.After(1 * time.Second):
 		}
 	}
 }
@@ -308,24 +307,22 @@ func (c *PeerClient) SetWriteDeadline(t time.Time) error {
 	return nil
 }
 
-// IncomingReady returns true should the client have both incoming and outgoing sockets established.
+// IncomingReady returns true if the client has both incoming and outgoing sockets established.
 func (c *PeerClient) IncomingReady() bool {
 	select {
 	case <-c.incomingReady:
+		return true
 	case <-time.After(1 * time.Second):
 		return false
 	}
-
-	return true
 }
 
-// OutgoingReady returns true should the client have an outgoing socket established..
+// OutgoingReady returns true if the client has an outgoing socket established.
 func (c *PeerClient) OutgoingReady() bool {
 	select {
 	case <-c.outgoingReady:
+		return true
 	case <-time.After(1 * time.Second):
 		return false
 	}
-
-	return true
 }

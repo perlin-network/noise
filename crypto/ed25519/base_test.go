@@ -132,7 +132,7 @@ func TestGolden(t *testing.T) {
 		copy(priv[32:], pubKey)
 
 		sig2 := Sign(priv[:], msg)
-		if !bytes.Equal(sig, sig2[:]) {
+		if !bytes.Equal(sig, sig2) {
 			t.Errorf("different signature result on line %d: %x vs %x", lineNo, sig, sig2)
 		}
 

@@ -127,12 +127,14 @@ func TestFindClosestPeers(t *testing.T) {
 
 	nodes := []peer.ID{}
 
-	nodes = append(nodes, peer.CreateID("0000", []byte("12345678901234567890123456789010")))
-	nodes = append(nodes, peer.CreateID("0001", []byte("12345678901234567890123456789011")))
-	nodes = append(nodes, peer.CreateID("0002", []byte("12345678901234567890123456789012")))
-	nodes = append(nodes, peer.CreateID("0003", []byte("12345678901234567890123456789013")))
-	nodes = append(nodes, peer.CreateID("0004", []byte("12345678901234567890123456789014")))
-	nodes = append(nodes, peer.CreateID("0005", []byte("00000000000000000000000000000000")))
+	nodes = append(nodes,
+		peer.CreateID("0000", []byte("12345678901234567890123456789010")),
+		peer.CreateID("0001", []byte("12345678901234567890123456789011")),
+		peer.CreateID("0002", []byte("12345678901234567890123456789012")),
+		peer.CreateID("0003", []byte("12345678901234567890123456789013")),
+		peer.CreateID("0004", []byte("12345678901234567890123456789014")),
+		peer.CreateID("0005", []byte("00000000000000000000000000000000")),
+	)
 	routingTable := CreateRoutingTable(nodes[0])
 	for i := 1; i <= 5; i++ {
 		routingTable.Update(nodes[i])

@@ -6,10 +6,10 @@ type RingBuffer struct {
 	Position int
 }
 
-// NewRingBuffer returns a new ring buffer with a fixed length.
-func NewRingBuffer(len int) *RingBuffer {
+// NewRingBuffer returns a new ring buffer with a fixed size.
+func NewRingBuffer(size int) *RingBuffer {
 	return &RingBuffer{
-		Data:     make([]interface{}, len),
+		Data:     make([]interface{}, size),
 		Position: 0,
 	}
 }
