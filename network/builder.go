@@ -8,6 +8,7 @@ import (
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/crypto/ed25519"
+	"github.com/perlin-network/noise/network/transport"
 	"github.com/perlin-network/noise/peer"
 	"github.com/pkg/errors"
 )
@@ -35,6 +36,8 @@ type Builder struct {
 
 	plugins     *PluginList
 	pluginCount int
+
+	transports *sync.Map
 }
 
 var defaultBuilderOptions = options{
@@ -117,11 +120,18 @@ func WriteTimeout(d time.Duration) BuilderOption {
 
 // NewBuilder returns a new builder with default options.
 func NewBuilder() *Builder {
-	return &Builder{
-		opts:    defaultBuilderOptions,
-		address: defaultAddress,
-		keys:    ed25519.RandomKeyPair(),
+	builder := &Builder{
+		opts:       defaultBuilderOptions,
+		address:    defaultAddress,
+		keys:       ed25519.RandomKeyPair(),
+		transports: new(sync.Map),
 	}
+
+	// Register default transport layers.
+	builder.RegisterTransportLayer("tcp", transport.NewTCP())
+	builder.RegisterTransportLayer("kcp", transport.NewKCP())
+
+	return builder
 }
 
 // NewBuilderWithOptions returns a new builder with specified options.
@@ -168,6 +178,18 @@ func (builder *Builder) AddPlugin(plugin PluginInterface) error {
 	return err
 }
 
+// RegisterTransportLayer registers a transport layer to the network keyed by its name.
+//
+// Example: builder.RegisterTransportLayer("kcp", transport.NewKCP())
+func (builder *Builder) RegisterTransportLayer(name string, layer transport.Layer) {
+	builder.transports.Store(name, layer)
+}
+
+// ClearTransportLayers removes all registered transport layers from the builder.
+func (builder *Builder) ClearTransportLayers() {
+	builder.transports = new(sync.Map)
+}
+
 // Build verifies all parameters of the network and returns either an error due to
 // misconfiguration, or a *Network.
 func (builder *Builder) Build() (*Network, error) {
@@ -200,6 +222,8 @@ func (builder *Builder) Build() (*Network, error) {
 		Address: unifiedAddress,
 
 		Plugins: builder.plugins,
+
+		Transports: builder.transports,
 
 		Peers: new(sync.Map),
 
