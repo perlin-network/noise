@@ -8,13 +8,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
-	"github.com/gogo/protobuf/types"
-	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/network/transport"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protobuf"
+
+	"github.com/gogo/protobuf/proto"
+	"github.com/gogo/protobuf/types"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -147,13 +148,13 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 		}
 	}
 
-	switch ptr.Message.(type) {
+	switch msgRaw := ptr.Message.(type) {
 	case *protobuf.Bytes:
-		client.handleBytes(ptr.Message.(*protobuf.Bytes).Data)
+		client.handleBytes(msgRaw.Data)
 	default:
 		ctx := contextPool.Get().(*PluginContext)
 		ctx.client = client
-		ctx.message = ptr.Message
+		ctx.message = msgRaw
 		ctx.nonce = msg.RequestNonce
 
 		go func() {
@@ -225,10 +226,8 @@ func (n *Network) Listen() {
 				glog.Infof("Shutting down server on %s.\n", n.Address)
 				return
 			default:
-				// without the default case the select will block.
+				glog.Error(err)
 			}
-
-			glog.Error(err)
 		}
 	}
 }
@@ -244,43 +243,42 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		return nil, errors.New("network: peer should not dial itself")
 	}
 
-	client, err := createPeerClient(n, address)
+	clientNew, err := createPeerClient(n, address)
 	if err != nil {
 		return nil, err
 	}
 
-	if client, exists := n.Peers.LoadOrStore(address, client); exists {
-		client := client.(*PeerClient)
+	c, exists := n.Peers.LoadOrStore(address, clientNew)
+	if exists {
+		client := c.(*PeerClient)
 
 		if !client.OutgoingReady() {
 			return nil, errors.New("network: peer failed to connect")
 		}
 
 		return client, nil
-	} else {
-		client := client.(*PeerClient)
-
-		defer func() {
-			close(client.outgoingReady)
-		}()
-
-		conn, err := n.Dial(address)
-
-		if err != nil {
-			n.Peers.Delete(address)
-			return nil, err
-		}
-
-		n.Connections.Store(address, &ConnState{
-			conn:        conn,
-			writer:      bufio.NewWriterSize(conn, n.opts.writeBufferSize),
-			writerMutex: new(sync.Mutex),
-		})
-
-		client.Init()
-
-		return client, nil
 	}
+
+	client := c.(*PeerClient)
+	defer func() {
+		close(client.outgoingReady)
+	}()
+
+	conn, err := n.Dial(address)
+	if err != nil {
+		n.Peers.Delete(address)
+		return nil, err
+	}
+
+	n.Connections.Store(address, &ConnState{
+		conn:        conn,
+		writer:      bufio.NewWriterSize(conn, n.opts.writeBufferSize),
+		writerMutex: new(sync.Mutex),
+	})
+
+	client.Init()
+
+	return client, nil
 }
 
 // BlockUntilListening blocks until this node is listening for new peers.
@@ -327,23 +325,17 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 		}
 	}
 
-	var conn net.Conn
-
 	// Choose scheme.
-	if t, exists := n.Transports.Load(addrInfo.Protocol); exists {
-		conn, err = t.(transport.Layer).Dial(addrInfo.HostPort())
-		if err != nil {
-			glog.Fatal(err)
-		}
-	} else {
+	t, exists := n.Transports.Load(addrInfo.Protocol)
+	if !exists {
 		glog.Fatal("invalid protocol: " + addrInfo.Protocol)
 	}
 
-	// Failed to connect.
+	var conn net.Conn
+	conn, err = t.(transport.Layer).Dial(addrInfo.HostPort())
 	if err != nil {
 		return nil, err
 	}
-
 	return conn, nil
 }
 
@@ -446,21 +438,21 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 		return nil, err
 	}
 
-	msg := &protobuf.Message{}
-	msg.Message = raw
-	msg.Sender = &id
-	msg.Signature = signature
-
+	msg := &protobuf.Message{
+		Message:   raw,
+		Sender:    &id,
+		Signature: signature,
+	}
 	return msg, nil
 }
 
 // Write asynchronously sends a message to a denoted target address.
 func (n *Network) Write(address string, message *protobuf.Message) error {
-	_state, exists := n.Connections.Load(address)
+	s, exists := n.Connections.Load(address)
 	if !exists {
 		return errors.New("network: connection does not exist")
 	}
-	state := _state.(*ConnState)
+	state := s.(*ConnState)
 
 	message.MessageNonce = atomic.AddUint64(&state.messageNonce, 1)
 
@@ -470,7 +462,6 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -480,7 +471,6 @@ func (n *Network) Broadcast(message proto.Message) {
 		client := value.(*PeerClient)
 
 		err := client.Tell(message)
-
 		if err != nil {
 			glog.Warningf("failed to send message to peer %v [err=%s]", client.ID, err)
 		}
