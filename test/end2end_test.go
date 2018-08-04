@@ -31,25 +31,26 @@ type test struct {
 	t *testing.T
 	e env
 
-	builder       *network.Builder
-	bootstrapNode *network.Network
-	nodes         []*network.Network
-	plugins       []*network.Plugin
+	builderOptions []network.BuilderOption
+	bootstrapNode  *network.Network
+	nodes          []*network.Network
+	plugins        []*network.Plugin
 }
 
 func (te *test) startBoostrap(numNodes int, plugins ...network.PluginInterface) {
 	for i := 0; i < numNodes; i++ {
-		te.builder.SetKeys(te.e.signature.RandomKeyPair())
-		te.builder.SetAddress(network.FormatAddress(te.e.network, "localhost", uint16(network.GetRandomUnusedPort())))
+		builder := network.NewBuilderWithOptions(te.builderOptions...)
+		builder.SetKeys(te.e.signature.RandomKeyPair())
+		builder.SetAddress(network.FormatAddress(te.e.network, "localhost", uint16(network.GetRandomUnusedPort())))
 
-		te.builder.AddPlugin(new(discovery.Plugin))
-		te.builder.AddPlugin(new(MailBoxPlugin))
+		builder.AddPlugin(new(discovery.Plugin))
+		builder.AddPlugin(new(MailBoxPlugin))
 
 		for _, plugin := range plugins {
-			te.builder.AddPlugin(plugin)
+			builder.AddPlugin(plugin)
 		}
 
-		node, err := te.builder.Build()
+		node, err := builder.Build()
 		if err != nil {
 			te.t.Fatalf("Build() = expected no error, got %v", err)
 		}
@@ -104,9 +105,9 @@ func (te *test) getMailbox(n *network.Network) *MailBoxPlugin {
 
 func newTest(t *testing.T, e env, opts ...network.BuilderOption) *test {
 	te := &test{
-		t:       t,
-		e:       e,
-		builder: network.NewBuilderWithOptions(opts...),
+		t:              t,
+		e:              e,
+		builderOptions: opts,
 	}
 	return te
 }
