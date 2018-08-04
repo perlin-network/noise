@@ -35,7 +35,7 @@ func (p *Ed25519) PrivateKeySize() int {
 
 // PrivateToPublic returns the public key given the private key.
 func (p *Ed25519) PrivateToPublic(privateKey []byte) ([]byte, error) {
-	return ([]byte)(PrivateKey(privateKey).Public().(PublicKey)), nil
+	return []byte(PrivateKey(privateKey).Public().(PublicKey)), nil
 }
 
 // PublicKeySize returns the public key length.

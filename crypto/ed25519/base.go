@@ -134,7 +134,7 @@ func Sign(privateKey PrivateKey, message []byte) []byte {
 	edwards25519.ScMulAdd(&s, &hramDigestReduced, &expandedSecretKey, &messageDigestReduced)
 
 	signature := make([]byte, SignatureSize)
-	copy(signature[:], encodedR[:])
+	copy(signature, encodedR[:])
 	copy(signature[32:], s[:])
 
 	return signature

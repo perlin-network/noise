@@ -232,25 +232,27 @@ func slide(r *[256]int8, a *[32]byte) {
 	}
 
 	for i := range r {
-		if r[i] != 0 {
-			for b := 1; b <= 6 && i+b < 256; b++ {
-				if r[i+b] != 0 {
-					if r[i]+(r[i+b]<<uint(b)) <= 15 {
-						r[i] += r[i+b] << uint(b)
-						r[i+b] = 0
-					} else if r[i]-(r[i+b]<<uint(b)) >= -15 {
-						r[i] -= r[i+b] << uint(b)
-						for k := i + b; k < 256; k++ {
-							if r[k] == 0 {
-								r[k] = 1
-								break
-							}
-							r[k] = 0
-						}
-					} else {
+		if r[i] == 0 {
+			continue
+		}
+		for b := 1; b <= 6 && i+b < 256; b++ {
+			if r[i+b] == 0 {
+				continue
+			}
+			if r[i]+(r[i+b]<<uint(b)) <= 15 {
+				r[i] += r[i+b] << uint(b)
+				r[i+b] = 0
+			} else if r[i]-(r[i+b]<<uint(b)) >= -15 {
+				r[i] -= r[i+b] << uint(b)
+				for k := i + b; k < 256; k++ {
+					if r[k] == 0 {
+						r[k] = 1
 						break
 					}
+					r[k] = 0
 				}
+			} else {
+				break
 			}
 		}
 	}
