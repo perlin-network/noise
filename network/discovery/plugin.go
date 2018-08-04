@@ -5,9 +5,9 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/perlin-network/noise/dht"
+	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
-	"github.com/perlin-network/noise/protobuf"
 )
 
 type Plugin struct {

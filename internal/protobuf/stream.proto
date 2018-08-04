@@ -15,12 +15,12 @@ option (gogoproto.goproto_stringer_all) = false;
 option (gogoproto.gostring_all) = true;
 option (gogoproto.marshaler_all) = true;
 option (gogoproto.sizer_all) = true;
-option (gogoproto.stringer_all) =  true;
+option (gogoproto.stringer_all) = true;
 option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.verbose_equal_all) = true;
 
 // Test options
-// FIXME(jack0): uncomment when fixed https://github.com/gogo/protobuf/issues/407
+// FIXME: uncomment when fixed https://github.com/gogo/protobuf/issues/407
 // option (gogoproto.populate_all) = true;
 // option (gogoproto.testgen_all) = true;
 
@@ -50,11 +50,14 @@ message Message {
 
 message Ping {
 }
+
 message Pong {
 }
+
 message LookupNodeRequest {
     ID target = 1;
 }
+
 message LookupNodeResponse {
     repeated ID peers = 1;
 }

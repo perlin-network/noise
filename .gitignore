@@ -1,15 +1,14 @@
 .idea/
 .vscode/
 
+vendor/
+coverage.txt
+
 *.exe
+*.test
+
 noise
 chat
 debug
-vendor
+
 go.sum
-
-*.test
-coverage.txt
-
-vendor/
-yes/
