@@ -6,9 +6,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
-	"github.com/perlin-network/noise/protobuf"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"

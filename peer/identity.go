@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"math/bits"
 
-	"github.com/perlin-network/noise/protobuf"
+	"github.com/perlin-network/noise/internal/protobuf"
 )
 
 // ID is an identity of nodes, using its public key and network address.

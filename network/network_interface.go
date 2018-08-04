@@ -5,8 +5,8 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/peer"
-	"github.com/perlin-network/noise/protobuf"
 )
 
 type NetworkInterface interface {

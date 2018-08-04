@@ -1,8 +1,8 @@
 package test
 
 import (
+	"github.com/perlin-network/noise/internal/test/protobuf"
 	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/test/protobuf"
 )
 
 var (
