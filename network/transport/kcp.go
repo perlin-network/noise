@@ -39,11 +39,12 @@ func (t *KCP) Listen(port int) (net.Listener, error) {
 // send/receive window size configurations.
 func (t *KCP) Dial(address string) (net.Conn, error) {
 	conn, err := kcp.DialWithOptions(address, nil, t.DataShards, t.ParityShards)
-	conn.SetWindowSize(t.SendWindowSize, t.RecvWindowSize)
 
 	if err != nil {
 		return nil, err
 	}
+
+	conn.SetWindowSize(t.SendWindowSize, t.RecvWindowSize)
 
 	return conn, nil
 }
