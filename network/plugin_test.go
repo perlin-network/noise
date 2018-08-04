@@ -5,39 +5,39 @@ import (
 	"testing"
 
 	"github.com/perlin-network/noise/crypto/ed25519"
-)
 
-var (
-	startup        = 0
-	receive        = 0
-	cleanup        = 0
-	peerConnect    = 0
-	peerDisconnect = 0
+	"github.com/uber-go/atomic"
 )
 
 type MockPlugin struct {
 	*Plugin
+
+	startup        atomic.Int32
+	receive        atomic.Int32
+	cleanup        atomic.Int32
+	peerConnect    atomic.Int32
+	peerDisconnect atomic.Int32
 }
 
-func (state *MockPlugin) Startup(net *Network) {
-	startup++
+func (p *MockPlugin) Startup(net *Network) {
+	p.startup.Inc()
 }
 
-func (state *MockPlugin) Receive(ctx *PluginContext) error {
-	receive++
+func (p *MockPlugin) Receive(ctx *PluginContext) error {
+	p.receive.Inc()
 	return nil
 }
 
-func (state *MockPlugin) Cleanup(net *Network) {
-	cleanup++
+func (p *MockPlugin) Cleanup(net *Network) {
+	p.cleanup.Inc()
 }
 
-func (state *MockPlugin) PeerConnect(client *PeerClient) {
-	peerConnect++
+func (p *MockPlugin) PeerConnect(client *PeerClient) {
+	p.peerConnect.Inc()
 }
 
-func (state *MockPlugin) PeerDisconnect(client *PeerClient) {
-	peerDisconnect++
+func (p *MockPlugin) PeerDisconnect(client *PeerClient) {
+	p.peerDisconnect.Inc()
 }
 
 func TestPluginHooks(t *testing.T) {
