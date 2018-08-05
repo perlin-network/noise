@@ -37,6 +37,13 @@ func (w *RecvWindow) Push(nonce uint64, value interface{}) {
 
 // Pop returns a slice of values from last till not yet received nonce.
 func (w *RecvWindow) Pop() []interface{} {
+	return w.Range(func(nonce uint64, v interface{}) bool {
+		return v != nil
+	})
+}
+
+// Range will return items from the queue while `fn` returns true.
+func (w *RecvWindow) Range(fn func(uint64, interface{}) bool) []interface{} {
 	res := make([]interface{}, 0)
 
 	w.Lock()
@@ -45,7 +52,7 @@ func (w *RecvWindow) Pop() []interface{} {
 	for {
 		idx := w.idx(id)
 		val := w.buf[idx]
-		if val == nil {
+		if !fn(id, val) {
 			w.lastNonce = idx
 			break
 		}
