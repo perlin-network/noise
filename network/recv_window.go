@@ -9,7 +9,7 @@ type RecvWindow struct {
 	sync.Mutex
 	size      int
 	lastNonce uint64
-	data      map[uint64]interface{}
+	buf       []interface{}
 }
 
 // NewRecvWindow creates a new receive buffer window with a specific buffer size.
@@ -17,7 +17,7 @@ func NewRecvWindow(size int) *RecvWindow {
 	return &RecvWindow{
 		size:      size,
 		lastNonce: 1,
-		data:      make(map[uint64]interface{}, 0),
+		buf:       make([]interface{}, size),
 	}
 }
 
@@ -31,7 +31,7 @@ func (w *RecvWindow) SetLocalNonce(nonce uint64) {
 // Push adds value with a given nonce to the window.
 func (w *RecvWindow) Push(nonce uint64, value interface{}) {
 	w.Lock()
-	w.data[nonce] = value
+	w.buf[nonce%uint64(w.size)] = value
 	w.Unlock()
 }
 
@@ -40,18 +40,24 @@ func (w *RecvWindow) Pop() []interface{} {
 	res := make([]interface{}, 0)
 
 	w.Lock()
-	defer w.Unlock()
 
 	id := w.lastNonce
 	for {
-		val, ok := w.data[id]
-		if !ok {
-			w.lastNonce = id
+		idx := w.idx(id)
+		val := w.buf[idx]
+		if val == nil {
+			w.lastNonce = idx
 			break
 		}
 		res = append(res, val)
-		delete(w.data, id)
+		w.buf[idx] = nil
 		id++
 	}
+
+	w.Unlock()
 	return res
+}
+
+func (w *RecvWindow) idx(id uint64) uint64 {
+	return id % uint64(w.size)
 }
