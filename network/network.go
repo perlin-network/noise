@@ -346,6 +346,8 @@ func (n *Network) Accept(incoming net.Conn) {
 	var client *PeerClient
 	var clientInit sync.Once
 
+	recvWindow := NewRecvWindow(n.opts.recvWindowSize)
+
 	// Cleanup connections when we are done with them.
 	defer func() {
 		if client != nil {
@@ -402,7 +404,15 @@ func (n *Network) Accept(incoming net.Conn) {
 				return
 			}
 
-			client.Submit(func() { n.dispatchMessage(client, msg) })
+			recvWindow.Push(msg.MessageNonce, msg)
+
+			ready := recvWindow.Pop()
+			for _, msg := range ready {
+				msg := msg
+				client.Submit(func() {
+					n.dispatchMessage(client, msg.(*protobuf.Message))
+				})
+			}
 		}()
 	}
 }
