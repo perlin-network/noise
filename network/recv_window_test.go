@@ -66,3 +66,20 @@ func TestRecvWindowRange(t *testing.T) {
 		}
 	}
 }
+
+func TestRecvWindowDummyRange(t *testing.T) {
+	r := NewRecvWindow(5)
+
+	r.Push(1, "London")
+	r.Push(2, "Berlin")
+	r.Push(3, "Paris")
+	r.Push(5, "Rome")
+
+	vals := r.Range(func(nonce uint64, v interface{}) bool {
+		return true
+	})
+
+	if len(vals) != 5 {
+		t.Fatalf("expected 5, got %v", len(vals))
+	}
+}

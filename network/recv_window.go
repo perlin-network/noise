@@ -43,22 +43,25 @@ func (w *RecvWindow) Pop() []interface{} {
 }
 
 // Range will return items from the queue while `fn` returns true.
+// If `fn` never return false, the result will be a full buffer.
 func (w *RecvWindow) Range(fn func(uint64, interface{}) bool) []interface{} {
 	res := make([]interface{}, 0)
 
 	w.Lock()
 
+	i := 0
 	id := w.lastNonce
 	for {
 		idx := w.idx(id)
 		val := w.buf[idx]
-		if !fn(id, val) {
+		if i == w.size || !fn(id, val) {
 			w.lastNonce = idx
 			break
 		}
 		res = append(res, val)
 		w.buf[idx] = nil
 		id++
+		i++
 	}
 
 	w.Unlock()
