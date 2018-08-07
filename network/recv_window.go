@@ -7,17 +7,17 @@ import (
 // RecvWindow represents a window that buffers and cuts off messages based on their priority.
 type RecvWindow struct {
 	sync.Mutex
-	size      int
 	lastNonce uint64
+	size      int
 	buf       []interface{}
+	once      sync.Once
 }
 
 // NewRecvWindow creates a new receive buffer window with a specific buffer size.
 func NewRecvWindow(size int) *RecvWindow {
 	return &RecvWindow{
-		size:      size,
-		lastNonce: 1,
-		buf:       make([]interface{}, size),
+		size: size,
+		buf:  make([]interface{}, size),
 	}
 }
 
@@ -28,9 +28,20 @@ func (w *RecvWindow) SetLocalNonce(nonce uint64) {
 	w.Unlock()
 }
 
+// LocalNonce gets last nonce.
+func (w *RecvWindow) LocalNonce() uint64 {
+	w.Lock()
+	nonce := w.lastNonce
+	w.Unlock()
+	return nonce
+}
+
 // Push adds value with a given nonce to the window.
 func (w *RecvWindow) Push(nonce uint64, value interface{}) {
 	w.Lock()
+	w.once.Do(func() {
+		w.lastNonce = nonce
+	})
 	w.buf[nonce%uint64(w.size)] = value
 	w.Unlock()
 }
@@ -49,19 +60,17 @@ func (w *RecvWindow) Range(fn func(uint64, interface{}) bool) []interface{} {
 
 	w.Lock()
 
-	i := 0
 	id := w.lastNonce
-	for {
+	for i := 0; i < w.size; i++ {
 		idx := w.idx(id)
 		val := w.buf[idx]
-		if i == w.size || !fn(id, val) {
+		if !fn(id, val) {
 			w.lastNonce = idx
 			break
 		}
 		res = append(res, val)
 		w.buf[idx] = nil
 		id++
-		i++
 	}
 
 	w.Unlock()
