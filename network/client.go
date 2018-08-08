@@ -78,7 +78,7 @@ func createPeerClient(network *Network, address string) (*PeerClient, error) {
 
 func (c *PeerClient) Init() {
 	// Execute 'peer connect' callback for all registered plugins.
-	c.Network.Plugins.Each(func(plugin PluginInterface) {
+	c.Network.plugins.Each(func(plugin PluginInterface) {
 		plugin.PeerConnect(c)
 	})
 	go c.executeJobs()
@@ -117,21 +117,19 @@ func (c *PeerClient) Close() error {
 	c.stream.Unlock()
 
 	// Handle 'on peer disconnect' callback for plugins.
-	c.Network.Plugins.Each(func(plugin PluginInterface) {
+	c.Network.plugins.Each(func(plugin PluginInterface) {
 		plugin.PeerDisconnect(c)
 	})
 
 	// Remove entries from node's network.
 	if c.ID != nil {
 		// close out connections
-		if conn, ok := c.Network.Connections.Load(c.ID.Address); ok {
-			if state, ok := conn.(*ConnState); ok && state != nil {
-				state.conn.Close()
-			}
+		if state, ok := c.Network.getState(c.ID.Address); ok {
+			state.conn.Close()
 		}
 
-		c.Network.Peers.Delete(c.ID.Address)
-		c.Network.Connections.Delete(c.ID.Address)
+		c.Network.peers.Delete(c.ID.Address)
+		c.Network.connections.Delete(c.ID.Address)
 	}
 
 	return nil

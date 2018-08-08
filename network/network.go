@@ -50,22 +50,22 @@ type Network struct {
 
 	// Map of plugins registered to the network.
 	// map[string]Plugin
-	Plugins *PluginList
+	plugins *PluginList
 
 	// Node's cryptographic ID.
 	ID peer.ID
 
 	// Map of connection addresses (string) <-> *network.PeerClient
 	// so that the Network doesn't dial multiple times to the same ip
-	Peers *sync.Map
+	peers *sync.Map
 
 	//RecvQueue chan *protobuf.Message
 
 	// Map of connection addresses (string) <-> *ConnState
-	Connections *sync.Map
+	connections *sync.Map
 
 	// Map of protocol addresses (string) <-> *transport.Layer
-	Transports *sync.Map
+	transports *sync.Map
 
 	// listeningCh will block a goroutine until this node is listening for peers.
 	listeningCh chan struct{}
@@ -107,7 +107,7 @@ func (n *Network) flushLoop() {
 		case <-n.kill:
 			return
 		case <-t.C:
-			n.Connections.Range(func(key, value interface{}) bool {
+			n.connections.Range(func(key, value interface{}) bool {
 				if state, ok := value.(*ConnState); ok {
 					state.writerMutex.Lock()
 					if err := state.writer.Flush(); err != nil {
@@ -158,7 +158,7 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 
 		go func() {
 			// Execute 'on receive message' callback for all plugins.
-			n.Plugins.Each(func(plugin PluginInterface) {
+			n.plugins.Each(func(plugin PluginInterface) {
 				if err := plugin.Receive(ctx); err != nil {
 					glog.Errorf("%+v", err)
 				}
@@ -173,13 +173,13 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 func (n *Network) Listen() {
 
 	// Handle 'network starts listening' callback for plugins.
-	n.Plugins.Each(func(plugin PluginInterface) {
+	n.plugins.Each(func(plugin PluginInterface) {
 		plugin.Startup(n)
 	})
 
 	// Handle 'network stops listening' callback for plugins.
 	defer func() {
-		n.Plugins.Each(func(plugin PluginInterface) {
+		n.plugins.Each(func(plugin PluginInterface) {
 			plugin.Cleanup(n)
 		})
 	}()
@@ -191,7 +191,7 @@ func (n *Network) Listen() {
 
 	var listener net.Listener
 
-	if t, exists := n.Transports.Load(addrInfo.Protocol); exists {
+	if t, exists := n.transports.Load(addrInfo.Protocol); exists {
 		listener, err = t.(transport.Layer).Listen(int(addrInfo.Port))
 		if err != nil {
 			glog.Fatal(err)
@@ -247,7 +247,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		return nil, err
 	}
 
-	c, exists := n.Peers.LoadOrStore(address, clientNew)
+	c, exists := n.peers.LoadOrStore(address, clientNew)
 	if exists {
 		client := c.(*PeerClient)
 
@@ -265,11 +265,11 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 
 	conn, err := n.Dial(address)
 	if err != nil {
-		n.Peers.Delete(address)
+		n.peers.Delete(address)
 		return nil, err
 	}
 
-	n.Connections.Store(address, &ConnState{
+	n.connections.Store(address, &ConnState{
 		conn:        conn,
 		writer:      bufio.NewWriterSize(conn, n.opts.writeBufferSize),
 		writerMutex: new(sync.Mutex),
@@ -278,6 +278,20 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 	client.Init()
 
 	return client, nil
+}
+
+// HasConnection returns true if network has a connection on a given address.
+func (n *Network) HasConnection(address string) bool {
+	_, ok := n.connections.Load(address)
+	return ok
+}
+
+func (n *Network) getState(address string) (*ConnState, bool) {
+	conn, ok := n.connections.Load(address)
+	if !ok {
+		return nil, false
+	}
+	return conn.(*ConnState), true
 }
 
 // startListening will start node for listening for new peers.
@@ -330,7 +344,7 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 	}
 
 	// Choose scheme.
-	t, exists := n.Transports.Load(addrInfo.Protocol)
+	t, exists := n.transports.Load(addrInfo.Protocol)
 	if !exists {
 		glog.Fatal("invalid protocol: " + addrInfo.Protocol)
 	}
@@ -381,8 +395,7 @@ func (n *Network) Accept(incoming net.Conn) {
 
 			client.ID = (*peer.ID)(msg.Sender)
 
-			// Load an outgoing connection.
-			if _, established := n.Connections.Load(client.ID.Address); !established {
+			if !n.HasConnection(client.ID.Address) {
 				err = errors.New("network: failed to load session")
 			}
 
@@ -419,7 +432,7 @@ func (n *Network) Accept(incoming net.Conn) {
 //
 // Example: network.Plugin((*Plugin)(nil))
 func (n *Network) Plugin(key interface{}) (PluginInterface, bool) {
-	return n.Plugins.Get(key)
+	return n.plugins.Get(key)
 }
 
 // PrepareMessage marshals a message into a *protobuf.Message and signs it with this
@@ -455,11 +468,10 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 
 // Write asynchronously sends a message to a denoted target address.
 func (n *Network) Write(address string, message *protobuf.Message) error {
-	s, exists := n.Connections.Load(address)
-	if !exists {
+	state, ok := n.getState(address)
+	if !ok {
 		return errors.New("network: connection does not exist")
 	}
-	state := s.(*ConnState)
 
 	message.MessageNonce = atomic.AddUint64(&state.messageNonce, 1)
 
@@ -474,14 +486,11 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 
 // Broadcast asynchronously broadcasts a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
-	n.Peers.Range(func(key, value interface{}) bool {
-		client := value.(*PeerClient)
-
+	n.eachPeer(func(client *PeerClient) bool {
 		err := client.Tell(message)
 		if err != nil {
 			glog.Warningf("failed to send message to peer %v [err=%s]", client.ID, err)
 		}
-
 		return true
 	})
 }
@@ -515,9 +524,7 @@ func (n *Network) BroadcastByIDs(message proto.Message, ids ...peer.ID) {
 func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 	var addresses []string
 
-	n.Peers.Range(func(key, value interface{}) bool {
-		client := value.(*PeerClient)
-
+	n.eachPeer(func(client *PeerClient) bool {
 		addresses = append(addresses, client.Address)
 
 		// Limit total amount of addresses in case we have a lot of peers.
@@ -538,12 +545,17 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 
 // Close shuts down the entire network.
 func (n *Network) Close() {
-	// Kill the listener.
 	close(n.kill)
 
-	// Clean out client connections.
-	n.Peers.Range(func(key, value interface{}) bool {
-		value.(*PeerClient).Close()
+	n.eachPeer(func(client *PeerClient) bool {
+		client.Close()
 		return true
+	})
+}
+
+func (n *Network) eachPeer(fn func(client *PeerClient) bool) {
+	n.peers.Range(func(_, value interface{}) bool {
+		client := value.(*PeerClient)
+		return fn(client)
 	})
 }
