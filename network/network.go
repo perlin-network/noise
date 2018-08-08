@@ -280,13 +280,14 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 	return client, nil
 }
 
-// HasConnection returns true if network has a connection on a given address.
-func (n *Network) HasConnection(address string) bool {
+// ConnectionStateExists returns true if network has a connection on a given address.
+func (n *Network) ConnectionStateExists(address string) bool {
 	_, ok := n.connections.Load(address)
 	return ok
 }
 
-func (n *Network) getState(address string) (*ConnState, bool) {
+// ConnectionState returns a connections state for current address.
+func (n *Network) ConnectionState(address string) (*ConnState, bool) {
 	conn, ok := n.connections.Load(address)
 	if !ok {
 		return nil, false
@@ -395,7 +396,7 @@ func (n *Network) Accept(incoming net.Conn) {
 
 			client.ID = (*peer.ID)(msg.Sender)
 
-			if !n.HasConnection(client.ID.Address) {
+			if !n.ConnectionStateExists(client.ID.Address) {
 				err = errors.New("network: failed to load session")
 			}
 
@@ -468,7 +469,7 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 
 // Write asynchronously sends a message to a denoted target address.
 func (n *Network) Write(address string, message *protobuf.Message) error {
-	state, ok := n.getState(address)
+	state, ok := n.ConnectionState(address)
 	if !ok {
 		return errors.New("network: connection does not exist")
 	}

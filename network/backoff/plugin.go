@@ -119,7 +119,7 @@ func (p *Plugin) startBackoff(addr string) {
 		d := b.NextDuration()
 		glog.Infof("backoff reconnecting to %s in %s iteration %d", addr, d, i+1)
 		time.Sleep(d)
-		if p.net.HasConnection(addr) {
+		if p.net.ConnectionStateExists(addr) {
 			// check that the connection is still empty before dialing
 			break
 		}
@@ -128,7 +128,7 @@ func (p *Plugin) startBackoff(addr string) {
 		if err != nil {
 			continue
 		}
-		if !p.net.HasConnection(addr) {
+		if !p.net.ConnectionStateExists(addr) {
 			// check if successfully connected
 			continue
 		}

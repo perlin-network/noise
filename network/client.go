@@ -124,7 +124,7 @@ func (c *PeerClient) Close() error {
 	// Remove entries from node's network.
 	if c.ID != nil {
 		// close out connections
-		if state, ok := c.Network.getState(c.ID.Address); ok {
+		if state, ok := c.Network.ConnectionState(c.ID.Address); ok {
 			state.conn.Close()
 		}
 
