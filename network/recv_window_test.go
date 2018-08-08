@@ -5,10 +5,10 @@ import "testing"
 func TestRecvWindow(t *testing.T) {
 	r := NewRecvWindow(5)
 
-	r.Push(1, "London")
-	r.Push(2, "Berlin")
-	r.Push(3, "Paris")
-	r.Push(5, "Rome")
+	r.Push(0, "London")
+	r.Push(1, "Berlin")
+	r.Push(2, "Paris")
+	r.Push(4, "Rome")
 
 	vals := r.Pop()
 	if len(vals) != 3 {
@@ -20,7 +20,7 @@ func TestRecvWindow(t *testing.T) {
 		}
 	}
 
-	r.Push(4, "Madrid")
+	r.Push(3, "Madrid")
 	vals = r.Pop()
 
 	if len(vals) != 2 {
@@ -36,13 +36,13 @@ func TestRecvWindow(t *testing.T) {
 func TestRecvWindowRange(t *testing.T) {
 	r := NewRecvWindow(5)
 
-	r.Push(1, "London")
-	r.Push(2, "Berlin")
-	r.Push(3, "Paris")
-	r.Push(5, "Rome")
+	r.Push(0, "London")
+	r.Push(1, "Berlin")
+	r.Push(2, "Paris")
+	r.Push(4, "Rome")
 
 	vals := r.Range(func(nonce uint64, v interface{}) bool {
-		return nonce <= 3
+		return nonce <= 2
 	})
 
 	if len(vals) != 3 {
@@ -54,7 +54,7 @@ func TestRecvWindowRange(t *testing.T) {
 		}
 	}
 
-	r.Push(4, "Madrid")
+	r.Push(3, "Madrid")
 	vals = r.Pop()
 
 	if len(vals) != 2 {
@@ -70,10 +70,10 @@ func TestRecvWindowRange(t *testing.T) {
 func TestRecvWindowDummyRange(t *testing.T) {
 	r := NewRecvWindow(5)
 
-	r.Push(1, "London")
-	r.Push(2, "Berlin")
-	r.Push(3, "Paris")
-	r.Push(5, "Rome")
+	r.Push(0, "London")
+	r.Push(1, "Berlin")
+	r.Push(2, "Paris")
+	r.Push(4, "Rome")
 
 	vals := r.Range(func(nonce uint64, v interface{}) bool {
 		return true
