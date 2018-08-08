@@ -27,6 +27,7 @@ option (gogoproto.verbose_equal_all) = true;
 message ID {
     bytes public_key = 1;
     string address = 2;
+    bytes public_key_hash = 3;
 }
 
 message Message {
