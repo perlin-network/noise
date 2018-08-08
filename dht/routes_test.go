@@ -54,8 +54,8 @@ func TestSelf(t *testing.T) {
 	if routingTable.Self().Address != "0000" {
 		t.Fatalf("wrong address: %s", routingTable.Self().Address)
 	}
-	if !bytes.Equal(routingTable.Self().PublicKeyHash, blake2b.New().HashBytes(publicKey)) {
-		t.Fatalf("wrong public key: %v", routingTable.Self().PublicKeyHash)
+	if !bytes.Equal(routingTable.Self().Id, blake2b.New().HashBytes(publicKey)) {
+		t.Fatalf("wrong public key: %v", routingTable.Self().Id)
 	}
 }
 
@@ -129,12 +129,12 @@ func TestFindClosestPeers(t *testing.T) {
 	nodes := []peer.ID{}
 
 	nodes = append(nodes,
-		peer.ID{Address: "0000", PublicKeyHash: []byte("12345678901234567890123456789010")},
-		peer.ID{Address: "0001", PublicKeyHash: []byte("12345678901234567890123456789011")},
-		peer.ID{Address: "0002", PublicKeyHash: []byte("12345678901234567890123456789012")},
-		peer.ID{Address: "0003", PublicKeyHash: []byte("12345678901234567890123456789013")},
-		peer.ID{Address: "0004", PublicKeyHash: []byte("12345678901234567890123456789014")},
-		peer.ID{Address: "0005", PublicKeyHash: []byte("00000000000000000000000000000000")},
+		peer.ID{Address: "0000", Id: []byte("12345678901234567890123456789010")},
+		peer.ID{Address: "0001", Id: []byte("12345678901234567890123456789011")},
+		peer.ID{Address: "0002", Id: []byte("12345678901234567890123456789012")},
+		peer.ID{Address: "0003", Id: []byte("12345678901234567890123456789013")},
+		peer.ID{Address: "0004", Id: []byte("12345678901234567890123456789014")},
+		peer.ID{Address: "0005", Id: []byte("00000000000000000000000000000000")},
 	)
 	routingTable := CreateRoutingTable(nodes[0])
 	for i := 1; i <= 5; i++ {
@@ -150,7 +150,7 @@ func TestFindClosestPeers(t *testing.T) {
 	answerKeys := []int{5, 2, 3}
 	for i := 0; i <= 2; i++ {
 		_answer := nodes[answerKeys[i]]
-		if testee[i].Address != _answer.Address || !bytes.Equal(testee[i].PublicKeyHash, _answer.PublicKeyHash) {
+		if testee[i].Address != _answer.Address || !bytes.Equal(testee[i].Id, _answer.Id) {
 			t.Fatalf("first findclosestpeers(), %d th closest peer is wrong, expected %v, found %v", i, _answer, testee[i])
 		}
 	}
@@ -165,7 +165,7 @@ func TestFindClosestPeers(t *testing.T) {
 	answerKeys = []int{4, 2}
 	for i := 0; i <= 1; i++ {
 		_answer := nodes[answerKeys[i]]
-		if testee[i].Address != _answer.Address || !bytes.Equal(testee[i].PublicKeyHash, _answer.PublicKeyHash) {
+		if testee[i].Address != _answer.Address || !bytes.Equal(testee[i].Id, _answer.Id) {
 			t.Fatalf("first findclosestpeers(), %d th closest peer is wrong, expected %v, found %v", i, _answer, testee[i])
 		}
 	}
