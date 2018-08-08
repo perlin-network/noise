@@ -307,13 +307,13 @@ func (c *PeerClient) SetWriteDeadline(t time.Time) error {
 	return nil
 }
 
-// SetIncomingReady sets a client state to ready for the incomming requests.
-func (c *PeerClient) SetIncomingReady() {
+// setIncomingReady sets a client state to ready for the incomming requests.
+func (c *PeerClient) setIncomingReady() {
 	close(c.incomingReady)
 }
 
-// SetOutgoingReady sets a client state to ready for the outgoing requests.
-func (c *PeerClient) SetOutgoingReady() {
+// setOutgoingReady sets a client state to ready for the outgoing requests.
+func (c *PeerClient) setOutgoingReady() {
 	close(c.outgoingReady)
 }
 

@@ -67,8 +67,8 @@ type Network struct {
 	// Map of protocol addresses (string) <-> *transport.Layer
 	Transports *sync.Map
 
-	// <-Listening will block a goroutine until this node is listening for peers.
-	Listening chan struct{}
+	// listeningCh will block a goroutine until this node is listening for peers.
+	listeningCh chan struct{}
 
 	// <-kill will begin the server shutdown process
 	kill chan struct{}
@@ -200,7 +200,7 @@ func (n *Network) Listen() {
 		glog.Fatal("invalid protocol: " + addrInfo.Protocol)
 	}
 
-	close(n.Listening)
+	n.startListening()
 
 	glog.Infof("Listening for peers on %s.\n", n.Address)
 
@@ -260,7 +260,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 
 	client := c.(*PeerClient)
 	defer func() {
-		client.SetOutgoingReady()
+		client.setOutgoingReady()
 	}()
 
 	conn, err := n.Dial(address)
@@ -280,9 +280,14 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 	return client, nil
 }
 
+// startListening will start node for listening for new peers.
+func (n *Network) startListening() {
+	close(n.listeningCh)
+}
+
 // BlockUntilListening blocks until this node is listening for new peers.
 func (n *Network) BlockUntilListening() {
-	<-n.Listening
+	<-n.listeningCh
 }
 
 // Bootstrap with a number of peers and commence a handshake.
@@ -381,7 +386,7 @@ func (n *Network) Accept(incoming net.Conn) {
 				err = errors.New("network: failed to load session")
 			}
 
-			client.SetIncomingReady()
+			client.setIncomingReady()
 		})
 
 		if err != nil {
