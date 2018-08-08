@@ -67,8 +67,8 @@ type Network struct {
 	// Map of protocol addresses (string) <-> *transport.Layer
 	Transports *sync.Map
 
-	// <-Listening will block a goroutine until this node is listening for peers.
-	Listening chan struct{}
+	// listeningCh will block a goroutine until this node is listening for peers.
+	listeningCh chan struct{}
 
 	// <-kill will begin the server shutdown process
 	kill chan struct{}
@@ -127,8 +127,7 @@ func (n *Network) GetKeys() *crypto.KeyPair {
 }
 
 func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
-	// Check if the client is ready.
-	if !client.IncomingReady() {
+	if !client.IsIncomingReady() {
 		return
 	}
 	var ptr types.DynamicAny
@@ -201,7 +200,7 @@ func (n *Network) Listen() {
 		glog.Fatal("invalid protocol: " + addrInfo.Protocol)
 	}
 
-	close(n.Listening)
+	n.startListening()
 
 	glog.Infof("Listening for peers on %s.\n", n.Address)
 
@@ -252,7 +251,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 	if exists {
 		client := c.(*PeerClient)
 
-		if !client.OutgoingReady() {
+		if !client.IsOutgoingReady() {
 			return nil, errors.New("network: peer failed to connect")
 		}
 
@@ -261,7 +260,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 
 	client := c.(*PeerClient)
 	defer func() {
-		close(client.outgoingReady)
+		client.setOutgoingReady()
 	}()
 
 	conn, err := n.Dial(address)
@@ -281,9 +280,14 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 	return client, nil
 }
 
+// startListening will start node for listening for new peers.
+func (n *Network) startListening() {
+	close(n.listeningCh)
+}
+
 // BlockUntilListening blocks until this node is listening for new peers.
 func (n *Network) BlockUntilListening() {
-	<-n.Listening
+	<-n.listeningCh
 }
 
 // Bootstrap with a number of peers and commence a handshake.
@@ -341,8 +345,6 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 
 // Accept handles peer registration and processes incoming message streams.
 func (n *Network) Accept(incoming net.Conn) {
-	var outgoing net.Conn
-
 	var client *PeerClient
 	var clientInit sync.Once
 
@@ -350,16 +352,14 @@ func (n *Network) Accept(incoming net.Conn) {
 
 	// Cleanup connections when we are done with them.
 	defer func() {
+		time.Sleep(1 * time.Second)
+
 		if client != nil {
 			client.Close()
 		}
 
 		if incoming != nil {
 			incoming.Close()
-		}
-
-		if outgoing != nil {
-			outgoing.Close()
 		}
 	}()
 
@@ -372,32 +372,29 @@ func (n *Network) Accept(incoming net.Conn) {
 			break
 		}
 
-		go func() {
-			// Initialize client if not exists.
-			clientInit.Do(func() {
-				client, err = n.Client(msg.Sender.Address)
-				if err != nil {
-					return
-				}
-
-				client.ID = (*peer.ID)(msg.Sender)
-
-				// Load an outgoing connection.
-				if state, established := n.Connections.Load(client.ID.Address); established {
-					outgoing = state.(*ConnState).conn
-				} else {
-					err = errors.New("network: failed to load session")
-				}
-
-				// Signal that the client is ready.
-				close(client.incomingReady)
-			})
-
+		// Initialize client if not exists.
+		clientInit.Do(func() {
+			client, err = n.Client(msg.Sender.Address)
 			if err != nil {
-				glog.Error(err)
 				return
 			}
 
+			client.ID = (*peer.ID)(msg.Sender)
+
+			// Load an outgoing connection.
+			if _, established := n.Connections.Load(client.ID.Address); !established {
+				err = errors.New("network: failed to load session")
+			}
+
+			client.setIncomingReady()
+		})
+
+		if err != nil {
+			glog.Error(err)
+			return
+		}
+
+		go func() {
 			// Peer sent message with a completely different ID. Disconnect.
 			if !client.ID.Equals(peer.ID(*msg.Sender)) {
 				glog.Errorf("message signed by peer %s but client is %s", peer.ID(*msg.Sender), client.ID.Address)

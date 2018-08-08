@@ -307,8 +307,18 @@ func (c *PeerClient) SetWriteDeadline(t time.Time) error {
 	return nil
 }
 
-// IncomingReady returns true if the client has both incoming and outgoing sockets established.
-func (c *PeerClient) IncomingReady() bool {
+// setIncomingReady sets a client state to ready for the incomming requests.
+func (c *PeerClient) setIncomingReady() {
+	close(c.incomingReady)
+}
+
+// setOutgoingReady sets a client state to ready for the outgoing requests.
+func (c *PeerClient) setOutgoingReady() {
+	close(c.outgoingReady)
+}
+
+// IsIncomingReady returns true if the client has both incoming and outgoing sockets established.
+func (c *PeerClient) IsIncomingReady() bool {
 	select {
 	case <-c.incomingReady:
 		return true
@@ -317,8 +327,8 @@ func (c *PeerClient) IncomingReady() bool {
 	}
 }
 
-// OutgoingReady returns true if the client has an outgoing socket established.
-func (c *PeerClient) OutgoingReady() bool {
+// IsOutgoingReady returns true if the client has an outgoing socket established.
+func (c *PeerClient) IsOutgoingReady() bool {
 	select {
 	case <-c.outgoingReady:
 		return true

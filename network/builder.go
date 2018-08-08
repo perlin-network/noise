@@ -221,17 +221,14 @@ func (builder *Builder) Build() (*Network, error) {
 		keys:    builder.keys,
 		Address: unifiedAddress,
 
-		Plugins: builder.plugins,
-
+		Plugins:    builder.plugins,
 		Transports: builder.transports,
 
-		Peers: new(sync.Map),
-
+		Peers:       new(sync.Map),
 		Connections: new(sync.Map),
 
-		Listening: make(chan struct{}),
-
-		kill: make(chan struct{}),
+		listeningCh: make(chan struct{}),
+		kill:        make(chan struct{}),
 	}
 
 	net.Init()
