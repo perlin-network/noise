@@ -4,9 +4,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/network"
+
+	"github.com/golang/glog"
 )
 
 const (
@@ -118,7 +119,7 @@ func (p *Plugin) startBackoff(addr string) {
 		d := b.NextDuration()
 		glog.Infof("backoff reconnecting to %s in %s iteration %d", addr, d, i+1)
 		time.Sleep(d)
-		if p.checkConnected(addr) {
+		if p.net.ConnectionStateExists(addr) {
 			// check that the connection is still empty before dialing
 			break
 		}
@@ -127,7 +128,7 @@ func (p *Plugin) startBackoff(addr string) {
 		if err != nil {
 			continue
 		}
-		if !p.checkConnected(addr) {
+		if !p.net.ConnectionStateExists(addr) {
 			// check if successfully connected
 			continue
 		}
@@ -140,10 +141,4 @@ func (p *Plugin) startBackoff(addr string) {
 	}
 	// clean up this backoff
 	p.backoffs.Delete(addr)
-}
-
-// checkConnected is a helper function to check if the address is connected to the node
-func (p *Plugin) checkConnected(addr string) bool {
-	_, connected := p.net.Connections.Load(addr)
-	return connected
 }

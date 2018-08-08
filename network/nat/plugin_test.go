@@ -6,21 +6,9 @@ import (
 
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
+
 	"github.com/stretchr/testify/assert"
 )
-
-func TestRegisterPlugin(t *testing.T) {
-	t.Parallel()
-
-	b := network.NewBuilder()
-	RegisterPlugin(b)
-	n, err := b.Build()
-	assert.Equal(t, nil, err)
-	p, ok := n.Plugins.Get(PluginID)
-	assert.Equal(t, true, ok)
-	natPlugin := p.(*plugin)
-	assert.NotEqual(t, nil, natPlugin)
-}
 
 func TestNatConnect(t *testing.T) {
 	t.Parallel()
@@ -37,10 +25,6 @@ func TestNatConnect(t *testing.T) {
 		go n.Listen()
 
 		assert.Equal(t, nil, err)
-		pInt, ok := n.Plugins.Get(PluginID)
-		assert.Equal(t, true, ok)
-		p := pInt.(*plugin)
-		assert.NotEqual(t, nil, p)
 		nodes = append(nodes, n)
 		n.BlockUntilListening()
 	}
