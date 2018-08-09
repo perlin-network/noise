@@ -166,3 +166,12 @@ func isIn(address string, ids ...peer.ID) bool {
 	}
 	return false
 }
+
+func isInAddress(address string, addresses ...string) bool {
+	for _, a := range addresses {
+		if a == address {
+			return true
+		}
+	}
+	return false
+}
