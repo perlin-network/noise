@@ -25,8 +25,12 @@ option (gogoproto.verbose_equal_all) = true;
 // option (gogoproto.testgen_all) = true;
 
 message ID {
+    // public_key of the peer (we no longer use the public key as the peer ID, but use it to verify messages)
     bytes public_key = 1;
+    // address is the network address of the peer
     string address = 2;
+    // id is the computed hash of the public key
+    bytes id = 3;
 }
 
 message Message {
