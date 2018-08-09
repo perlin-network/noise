@@ -50,8 +50,8 @@ func (n *ProxyPlugin) Receive(ctx *network.PluginContext) error {
 // ProxyBroadcast proxies a message until it reaches a target ID destination.
 func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg *messages.ProxyMessage) error {
 	targetID := peer.ID{
-		PublicKey: msg.Destination.PublicKey,
-		Address:   msg.Destination.Address,
+		Id:      msg.Destination.Id,
+		Address: msg.Destination.Address,
 	}
 
 	// Check if we are the target.
@@ -158,8 +158,8 @@ func ExampleProxyPlugin() {
 	expected := &messages.ProxyMessage{
 		Message: fmt.Sprintf("This is a proxy message from Node %d", sender),
 		Destination: &messages.ID{
-			Address:   nodes[target].ID.Address,
-			PublicKey: nodes[target].ID.PublicKey,
+			Address: nodes[target].ID.Address,
+			Id:      nodes[target].ID.Id,
 		},
 	}
 	plugins[sender].ProxyBroadcast(nodes[sender], nodes[sender].ID, expected)
