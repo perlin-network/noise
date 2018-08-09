@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/perlin-network/noise/crypto/ed25519"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/uber-go/atomic"
 )
@@ -98,4 +99,22 @@ func TestPluginHooks(t *testing.T) {
 	//if peerDisconnect < nodeCount*2 {
 	//	t.Fatalf("disconnect hooks error, got: %d, expected at least: %d", peerDisconnect, nodeCount*2)
 	//}
+}
+
+func TestRegisterPlugin(t *testing.T) {
+	t.Parallel()
+
+	PluginID := (*Plugin)(nil)
+
+	b := NewBuilder()
+	b.AddPluginWithPriority(-99999, new(Plugin))
+
+	n, err := b.Build()
+	assert.Equal(t, nil, err)
+
+	p, ok := n.plugins.Get(PluginID)
+	assert.Equal(t, true, ok)
+
+	plugin := p.(*Plugin)
+	assert.NotEqual(t, nil, plugin)
 }

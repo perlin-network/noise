@@ -221,11 +221,11 @@ func (builder *Builder) Build() (*Network, error) {
 		keys:    builder.keys,
 		Address: unifiedAddress,
 
-		Plugins:    builder.plugins,
-		Transports: builder.transports,
+		plugins:    builder.plugins,
+		transports: builder.transports,
 
-		Peers:       new(sync.Map),
-		Connections: new(sync.Map),
+		peers:       new(sync.Map),
+		connections: new(sync.Map),
 
 		listeningCh: make(chan struct{}),
 		kill:        make(chan struct{}),
