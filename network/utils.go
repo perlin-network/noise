@@ -5,7 +5,6 @@ import (
 	"net"
 
 	"github.com/perlin-network/noise/internal/protobuf"
-	"github.com/perlin-network/noise/peer"
 )
 
 // SerializeMessage compactly packs all bytes of a message together for cryptographic signing purposes.
@@ -64,13 +63,4 @@ func GetRandomUnusedPort() int {
 	listener, _ := net.Listen("tcp", ":0")
 	defer listener.Close()
 	return listener.Addr().(*net.TCPAddr).Port
-}
-
-func isIn(address string, ids ...peer.ID) bool {
-	for _, a := range ids {
-		if a.Address == address {
-			return true
-		}
-	}
-	return false
 }

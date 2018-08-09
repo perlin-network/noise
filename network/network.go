@@ -510,20 +510,14 @@ func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...strin
 
 // BroadcastByIDs broadcasts a message to a set of peer clients denoted by their peer IDs.
 func (n *Network) BroadcastByIDs(message proto.Message, ids ...peer.ID) {
-	n.Peers.Range(func(key, value interface{}) bool {
-		client := value.(*PeerClient)
+	signed, err := n.PrepareMessage(message)
+	if err != nil {
+		return
+	}
 
-		if !isIn(client.Address, ids...) {
-			return true
-		}
-
-		err := client.Tell(message)
-		if err != nil {
-			glog.Warningf("failed to send message to peer %v [err=%s]", client.ID, err)
-		}
-
-		return true
-	})
+	for _, id := range ids {
+		n.Write(id.Address, signed)
+	}
 }
 
 // BroadcastRandomly asynchronously broadcasts a message to random selected K peers.
