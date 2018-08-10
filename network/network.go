@@ -86,6 +86,7 @@ type options struct {
 	writeTimeout      time.Duration
 }
 
+// ConnState represents a connection.
 type ConnState struct {
 	conn         net.Conn
 	writer       *bufio.Writer
