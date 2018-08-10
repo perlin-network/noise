@@ -35,6 +35,7 @@ type PeerClient struct {
 	closeSignal chan struct{}
 }
 
+// StreamState represents a stream.
 type StreamState struct {
 	sync.Mutex
 	buffer        []byte
@@ -44,6 +45,7 @@ type StreamState struct {
 	writeDeadline time.Time
 }
 
+// RequestState represents a state of a request.
 type RequestState struct {
 	data        chan proto.Message
 	closeSignal chan struct{}
@@ -76,20 +78,12 @@ func createPeerClient(network *Network, address string) (*PeerClient, error) {
 	return client, nil
 }
 
+// Init initialize a client's pluging and starts executing a jobs.
 func (c *PeerClient) Init() {
-	// Execute 'peer connect' callback for all registered plugins.
 	c.Network.plugins.Each(func(plugin PluginInterface) {
 		plugin.PeerConnect(c)
 	})
 	go c.executeJobs()
-}
-
-// Submit adds a job to the execution queue.
-func (c *PeerClient) Submit(job func()) {
-	select {
-	case c.jobs <- job:
-	case <-c.closeSignal:
-	}
 }
 
 func (c *PeerClient) executeJobs() {
@@ -103,8 +97,15 @@ func (c *PeerClient) executeJobs() {
 	}
 }
 
-// Close stops all sessions/streams and cleans up the nodes
-// routing table. Errors if session fails to close.
+// Submit adds a job to the execution queue.
+func (c *PeerClient) Submit(job func()) {
+	select {
+	case c.jobs <- job:
+	case <-c.closeSignal:
+	}
+}
+
+// Close stops all sessions/streams and cleans up the nodes in routing table.
 func (c *PeerClient) Close() error {
 	if atomic.SwapUint32(&c.closed, 1) == 1 {
 		return nil
@@ -116,7 +117,6 @@ func (c *PeerClient) Close() error {
 	c.stream.isClosed = true
 	c.stream.Unlock()
 
-	// Handle 'on peer disconnect' callback for plugins.
 	c.Network.plugins.Each(func(plugin PluginInterface) {
 		plugin.PeerDisconnect(c)
 	})
