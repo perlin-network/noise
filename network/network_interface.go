@@ -3,12 +3,14 @@ package network
 import (
 	"net"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/peer"
+
+	"github.com/gogo/protobuf/proto"
 )
 
+// NetworkInterface represents a node in the network.
 type NetworkInterface interface {
 
 	// Init starts all network I/O workers.
