@@ -1,4 +1,3 @@
-
 # Noise
 
 [![GoDoc][1]][2] [![Discord][7]][8] [![Powered][3]][4] [![MIT licensed][5]][6] [![Build Status][9]][10] [![Go Report Card][11]][12] [![Coverage Statusd][13]][14]
@@ -21,18 +20,25 @@
 
 <img align="right" width=400 src="media/chat.gif">
 
-**noise** is an opinionated, easy-to-use P2P network stack for *decentralized applications, and cryptographic protocols* written in [Go](https://golang.org/) by Perlin Network.
+**noise** is an opinionated, easy-to-use P2P network stack for
+*decentralized applications, and cryptographic protocols* written in
+[Go](https://golang.org/) by Perlin Network.
 
-**noise** is made to be robust, developer-friendly, performant, secure, and cross-platform across multitudes of devices by making use of well-tested, production-grade dependencies.
+**noise** is made to be robust, developer-friendly, performant, secure, and
+cross-platform across multitudes of devices by making use of well-tested,
+production-grade dependencies.
 
 ## Features
 
-- Real-time, bidirectional streaming between peers via. [KCP](https://github.com/xtaci/kcp-go)/TCP and [Protobufs](https://developers.google.com/protocol-buffers/).
+- Real-time, bidirectional streaming between peers via
+  [KCP](https://github.com/xtaci/kcp-go)/TCP and
+  [Protobufs](https://developers.google.com/protocol-buffers/).
 - NAT traversal/automated port forwarding (NAT-PMP, UPnP).
-- [NaCL/Ed25519](https://tweetnacl.cr.yp.to/) scheme for peer identities and signatures.
+- [NaCL/Ed25519](https://tweetnacl.cr.yp.to/) scheme for peer identities and
+  signatures.
 - Kademlia DHT-inspired peer discovery.
 - Request/Response and Messaging RPC.
-- Logging via. [glog](https://github.com/golang/glog).
+- Logging via [glog](https://github.com/golang/glog).
 - Plugin system.
 
 ## Setup
@@ -44,17 +50,17 @@
 ```bash
 # install vgo tooling
 go get -u golang.org/x/vgo
-  # we test with vgo version: cc75ec08d5ecfc4072bcefc2c696d1c30af692b9
-  # to check your version use: echo $(go get -d golang.org/x/vgo && cd $GOPATH/src/golang.org/x/vgo && git checkout cc75ec08d5ecfc4072bcefc2c696d1c30af692b9 && go get golang.org/x/vgo)
+# we test with vgo version: cc75ec08d5ecfc4072bcefc2c696d1c30af692b9
+# to check your version use: echo $(go get -d golang.org/x/vgo && cd $GOPATH/src/golang.org/x/vgo && git checkout cc75ec08d5ecfc4072bcefc2c696d1c30af692b9 && go get golang.org/x/vgo)
 
 # download the dependencies to vendor folder
 vgo mod -vendor
 
 # generate necessary code files
 go get -u github.com/gogo/protobuf/protoc-gen-gogofaster
-    # tested with version v1.1.1 (636bf0302bc95575d69441b25a2603156ffdddf1)
+# tested with version v1.1.1 (636bf0302bc95575d69441b25a2603156ffdddf1)
 go get -u github.com/golang/mock/mockgen
-    # tested with v1.1.1 (c34cdb4725f4c3844d095133c6e40e448b86589b)
+# tested with v1.1.1 (c34cdb4725f4c3844d095133c6e40e448b86589b)
 vgo generate ./...
 
 # run an example
@@ -69,10 +75,10 @@ vgo test -v -count=1 -race ./...
 vgo test -v -count=1 -race -short ./...
 ```
 
-
 ## Usage
 
-A peer's cryptographic public/private keys are randomly generated/loaded with 1 LoC in mind.
+A peer's cryptographic public/private keys are randomly generated/loaded with
+1 LoC in mind.
 
 ```go
 // Randomly generate a Ed25519 keypair.
@@ -89,7 +95,8 @@ glog.Info("Private Key: ", keys.PrivateKeyHex())
 glog.Info("Public Key: ", keys.PublicKeyHex())
 ```
 
-You may use the loaded keys to sign/verify messages that are loaded as byte arrays.
+You may use the loaded keys to sign/verify messages that are loaded as byte
+arrays.
 
 ```go
 msg := []byte{ ... }
@@ -108,14 +115,16 @@ verified := crypto.Verify(ed25519.New(), blake2b.New(), keys.PublicKey, msg, sig
 glog.Info("Is the signature valid? ", verified)
 ```
 
-Now that you have your keys, we can start listening and handling messages from incoming peers.
+Now that you have your keys, we can start listening and handling messages from
+incoming peers.
 
 ```go
 builder := network.NewBuilder()
 
-// Set the address which noise will listen on and peers will use to connect to you.
-// For example, set the host part to `localhost` if you are testing locally, or your public IP
-// address if you are connected to the internet directly.
+// Set the address which noise will listen on and peers will use to connect to
+// you. For example, set the host part to `localhost` if you are testing
+// locally, or your public IP address if you are connected to the internet
+// directly.
 builder.SetAddress("tcp://localhost:3000")
 
 // Alternatively...
@@ -135,20 +144,23 @@ if err != nil {
 // Have the server start listening for peers.
 go net.Listen()
 
-// Connect to some peers and form a peer cluster automatically with built-in peer discovery.
+// Connect to some peers and form a peer cluster automatically with built-in
+// peer discovery.
 net.Bootstrap("tcp://localhost:3000", "tcp://localhost:3001")
 
 // Alternatively..
 net.Bootstrap([]string{"tcp://localhost:3000", "tcp://localhost:3001"}...)
 ```
 
-If you have any code you want to execute which should only be executed once the node is ready to listen for peers, just run:
+If you have any code you want to execute only once the node is ready to listen
+for peers, just run:
 
 ```go
 net.BlockUntilListening()
 ```
 
-... in any goroutine you desire. The goroutine will block until the server is ready to start listening.
+... in any goroutine you desire. The goroutine will block until the server is
+ready to start listening.
 
 See `examples/getting_started` for a full working example to get started with.
 
@@ -178,29 +190,38 @@ builder := network.NewBuilder()
 builder.AddPlugin(new(YourAwesomePlugin))
 ```
 
-**noise** comes with three plugins: `discovery.Plugin`, `backoff.Plugin` and `nat.Plugin`.
+**noise** comes with three plugins: `discovery.Plugin`, `backoff.Plugin` and
+`nat.Plugin`.
 
 ```go
-// Enables peer discovery through the network. Check documentation for more info.
+// Enables peer discovery through the network.
+// Check documentation for more info.
 builder.AddPlugin(new(discovery.Plugin))
 
-// Enables exponential backoff upon peer disconnection. Check documentation for more info.
+// Enables exponential backoff upon peer disconnection.
+// Check documentation for more info.
 builder.AddPlugin(new(backoff.Plugin))
 
-// Enables automated NAT traversal/port forwarding for your node. Check documentation for more info.
+// Enables automated NAT traversal/port forwarding for your node.
+// Check documentation for more info.
 nat.RegisterPlugin(builder)
 ```
 
-Make sure to register `discovery.Plugin` if you want to make use of automatic peer discovery within your application.
+Make sure to register `discovery.Plugin` if you want to make use of automatic
+peer discovery within your application.
 
 ## Handling Messages
 
-All messages that pass through **noise** are serialized/deserialized as [protobufs](https://developers.google.com/protocol-buffers/).
+All messages that pass through **noise** are serialized/deserialized as
+[protobufs](https://developers.google.com/protocol-buffers/).
 
-On a spawned `us-east1-b` Google Cloud (GCP) cluster comprised of 8 `n1-standard-1` (1 vCPU, 3.75GB memory) instances, **noise** is able to
-sign, send, receive, verify, and process a total of ~10,000 messages per second.
+On a spawned `us-east1-b` Google Cloud (GCP) cluster comprised of 8
+`n1-standard-1` (1 vCPU, 3.75GB memory) instances, **noise** is able to sign,
+send, receive, verify, and process a total of ~10,000 messages per second.
 
-Once you have modeled your messages as protobufs, you may process and receive them over the network by creating a plugin and overriding the `Receive(ctx *PluginContext)` method to process specific incoming message types.
+Once you have modeled your messages as protobufs, you may process and receive
+them over the network by creating a plugin and overriding the
+`Receive(ctx *PluginContext)` method to process specific incoming message types.
 
 Here's a simple example:
 
@@ -220,7 +241,9 @@ func (state *ChatPlugin) Receive(ctx *network.PluginContext) error {
 builder.AddPlugin(new(ChatPlugin))
 ```
 
-Through a `ctx *network.PluginContext`, you can access flexible methods to customize how you handle/interact with your peer network. All messages are signed and verified with one's cryptographic keys.
+Through a `ctx *network.PluginContext`, you can access flexible methods to
+customize how you handle/interact with your peer network. All messages are
+signed and verified with one's cryptographic keys.
 
 ```go
 // Reply with a message should the incoming message be a request.
@@ -242,19 +265,27 @@ client := ctx.Client()
 net := ctx.Network()
 ```
 
-Check out our documentation and look into the `examples/` directory to find out more.
+Check out our documentation and look into the `examples/` directory to find out
+more.
 
 ## Contributions
 
-We at Perlin love reaching out to the open-source community and are open to accepting issues and pull-requests.
+We at Perlin love reaching out to the open-source community and are open to
+accepting issues and pull-requests.
 
-For all code contributions, please ensure they adhere as close as possible to the following guidelines:
+For all code contributions, please ensure they adhere as close as possible to
+the following guidelines:
 
-1. **Strictly** follows the formatting and styling rules denoted [here](https://github.com/golang/go/wiki/CodeReviewComments).
-2. Commit messages are in the format `module_name: Change typed down as a sentence.` This allows our maintainers and everyone else to know what specific code changes you wish to address.
+1. **Strictly** follows the formatting and styling rules denoted
+   [here](https://github.com/golang/go/wiki/CodeReviewComments).
+2. Commit messages are in the format `module_name: Change typed down as a sentence.`
+   This allows our maintainers and everyone else to know what specific code
+   changes you wish to address.
     - `network: Added in message broadcasting methods.`
     - `builders/network: Added in new option to address PoW in generating peer IDs.`
-3. Consider backwards compatibility. New methods are perfectly fine, though changing the `network.Builder` pattern radically for example should only be done should there be a good reason.
+3. Consider backwards compatibility. New methods are perfectly fine, though
+   changing the `network.Builder` pattern radically for example should only be
+   done should there be a good reason.
 
 If you...
 
@@ -265,4 +296,3 @@ If you...
 ... **we're hiring**.
 
 To grab our attention, just make a PR and start contributing.
-
