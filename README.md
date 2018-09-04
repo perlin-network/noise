@@ -46,22 +46,21 @@ production-grade dependencies.
 ### Dependencies
 
  - [Protobuf compiler](https://github.com/google/protobuf/releases) (protoc)
+ - [Go 1.11](https://golang.org/dl/) (go)
 
 ```bash
-# install vgo tooling
-go get -u golang.org/x/vgo
-# we test with vgo version: cc75ec08d5ecfc4072bcefc2c696d1c30af692b9
-# to check your version use: echo $(go get -d golang.org/x/vgo && cd $GOPATH/src/golang.org/x/vgo && git checkout cc75ec08d5ecfc4072bcefc2c696d1c30af692b9 && go get golang.org/x/vgo)
+# enable go modules: https://github.com/golang/go/wiki/Modules
+export GO111MODULE=on
 
-# download the dependencies to vendor folder
-vgo mod -vendor
+# download the dependencies to vendor folder for tools
+go mod vendor
 
 # generate necessary code files
 go get -u github.com/gogo/protobuf/protoc-gen-gogofaster
 # tested with version v1.1.1 (636bf0302bc95575d69441b25a2603156ffdddf1)
 go get -u github.com/golang/mock/mockgen
 # tested with v1.1.1 (c34cdb4725f4c3844d095133c6e40e448b86589b)
-vgo generate ./...
+go generate ./...
 
 # run an example
 [terminal 1] vgo run examples/chat/main.go -port 3000
