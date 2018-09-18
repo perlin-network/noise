@@ -14,7 +14,6 @@ import (
 	"github.com/perlin-network/noise/examples/request_benchmark/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
-	"github.com/perlin-network/noise/network/rpc"
 	"github.com/pkg/errors"
 )
 
@@ -134,8 +133,6 @@ func sendMsg(net *network.Network, idx int) uint32 {
 			defer wg.Done()
 
 			expectedID := fmt.Sprintf("%s:%d->%s", net.Address, idx, address)
-			request := &rpc.Request{}
-			request.SetMessage(&messages.LoadRequest{Id: expectedID})
 
 			client, err := net.Client(address)
 			if err != nil {
@@ -145,7 +142,7 @@ func sendMsg(net *network.Network, idx int) uint32 {
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
-			response, err := client.RequestWithContext(ctx, request)
+			response, err := client.Request(ctx, &messages.LoadRequest{Id: expectedID})
 			if err != nil {
 				errs <- errors.Wrapf(err, "request error for req id %s", expectedID)
 				return

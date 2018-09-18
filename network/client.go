@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/perlin-network/noise/internal/protobuf"
-	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 
 	"github.com/gogo/protobuf/proto"
@@ -156,14 +155,7 @@ func (c *PeerClient) Tell(message proto.Message) error {
 }
 
 // Request requests for a response for a request sent to a given peer.
-func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultRequestTimeout)
-	defer cancel()
-	return c.RequestWithContext(ctx, req)
-}
-
-// RequestWithContext requests for a response for a request sent to a given peer.
-func (c *PeerClient) RequestWithContext(ctx context.Context, req *rpc.Request) (proto.Message, error) {
+func (c *PeerClient) Request(ctx context.Context, req proto.Message) (proto.Message, error) {
 	if ctx == nil {
 		return nil, errors.New("network: invalid context")
 	}
@@ -172,7 +164,7 @@ func (c *PeerClient) RequestWithContext(ctx context.Context, req *rpc.Request) (
 		return nil, ctx.Err()
 	}
 
-	signed, err := c.Network.PrepareMessage(req.Message)
+	signed, err := c.Network.PrepareMessage(req)
 	if err != nil {
 		return nil, err
 	}

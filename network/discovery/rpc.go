@@ -1,13 +1,13 @@
 package discovery
 
 import (
+	"context"
 	"sort"
 	"sync"
 
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 )
 
@@ -20,10 +20,8 @@ func queryPeerByID(net *network.Network, peerID peer.ID, targetID peer.ID, respo
 
 	targetProtoID := protobuf.ID(targetID)
 
-	request := new(rpc.Request)
-	request.SetMessage(&protobuf.LookupNodeRequest{Target: &targetProtoID})
-
-	response, err := client.Request(request)
+	msg := &protobuf.LookupNodeRequest{Target: &targetProtoID}
+	response, err := client.Request(context.Background(), msg)
 
 	if err != nil {
 		responses <- []*protobuf.ID{}

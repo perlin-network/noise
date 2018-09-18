@@ -7,7 +7,6 @@ import (
 
 	"github.com/perlin-network/noise/internal/test/protobuf"
 	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/network/rpc"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -162,22 +161,20 @@ func testClientRequest(t *testing.T, e env, numNodes int) {
 		Message:  msgStr,
 		Duration: 1,
 	}
-	req := &rpc.Request{}
-	req.SetMessage(msg)
-	response, err := client.Request(req)
+	response, err := client.Request(context.Background(), msg)
 	resp, ok := response.(*protobuf.TestMessage)
 	assert.Equal(t, true, ok, "expected response to be cast successfully")
 	assert.Equal(t, msgStr, resp.Message, "expected reply message to be '%s', got '%s'", msgStr, resp.Message)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	response, err = client.RequestWithContext(ctx, req)
+	response, err = client.Request(ctx, msg)
 	assert.Equal(t, nil, response, "expected response to be nil")
 	assert.Equal(t, "context deadline exceeded", err.Error(), "expected error to be context deadline exceeded")
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	go func(ctx context.Context) {
-		_, err := client.RequestWithContext(ctx, req)
+		_, err := client.Request(ctx, msg)
 		assert.Equal(t, "context canceled", err.Error(), "expected context canceled error")
 	}(ctx)
 	cancel()
