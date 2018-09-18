@@ -43,9 +43,12 @@ var _ = math.Inf
 const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 
 type ID struct {
+	// public_key of the peer (we no longer use the public key as the peer ID, but use it to verify messages)
 	PublicKey []byte `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
-	Address   string `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
-	Id        []byte `protobuf:"bytes,3,opt,name=id,proto3" json:"id,omitempty"`
+	// address is the network address of the peer
+	Address string `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	// id is the computed hash of the public key
+	Id []byte `protobuf:"bytes,3,opt,name=id,proto3" json:"id,omitempty"`
 }
 
 func (m *ID) Reset()                    { *m = ID{} }
