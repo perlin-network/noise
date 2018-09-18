@@ -9,12 +9,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/examples/request_benchmark/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -25,9 +25,6 @@ const (
 )
 
 func main() {
-	// send glog to the terminal instead of a file
-	flag.Set("logtostderr", "true")
-
 	fmt.Print(run())
 }
 
@@ -152,10 +149,10 @@ func sendMsg(net *network.Network, idx int) uint32 {
 				if reply.Id == expectedID {
 					atomic.AddUint32(&positiveResponses, 1)
 				} else {
-					errs <- errors.Errorf("expected ID=%s got %s\n", expectedID, reply.Id)
+					errs <- errors.Errorf("expected ID=%s got %s", expectedID, reply.Id)
 				}
 			} else {
-				errs <- errors.Errorf("expected messages.LoadReply but got %v\n", response)
+				errs <- errors.Errorf("expected messages.LoadReply but got %v", response)
 			}
 
 		}(address)
@@ -166,7 +163,7 @@ func sendMsg(net *network.Network, idx int) uint32 {
 	close(errs)
 
 	for err := range errs {
-		glog.Error(err)
+		log.Error().Err(err)
 	}
 
 	return atomic.LoadUint32(&positiveResponses)

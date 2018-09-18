@@ -56,10 +56,10 @@ func broadcastAndCheck(nodes []*network.Network, plugins []*mockPlugin) error {
 		select {
 		case received := <-plugins[i].Mailbox:
 			if received.Message != expected {
-				return errors.Errorf("Expected message %s to be received by node %d but got %v\n", expected, i, received.Message)
+				return errors.Errorf("Expected message %s to be received by node %d but got %v", expected, i, received.Message)
 			}
 		case <-time.After(2 * time.Second):
-			return errors.Errorf("Timed out attempting to receive message from Node 0.\n")
+			return errors.Errorf("Timed out attempting to receive message from Node 0.")
 		}
 	}
 

@@ -9,12 +9,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/examples/cluster_benchmark/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/backoff"
 	"github.com/perlin-network/noise/network/discovery"
+	"github.com/rs/zerolog/log"
 )
 
 const MESSAGE_THRESHOLD uint64 = 2000
@@ -70,15 +70,12 @@ func setupPPROF(port int) {
 	r.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
 	r.Handle("/debug/pprof/block", pprof.Handler("block"))
 
-	glog.Infof("Pprof listening on port %d.\n", port+500)
+	log.Info().Msgf("Pprof listening on port %d.\n", port+500)
 	http.ListenAndServe(fmt.Sprintf(":%d", port+500), r)
 }
 
 func main() {
-	// glog defaults to logging to a file, override this flag to log to console for testing
-	flag.Set("logtostderr", "true")
-
-	// process other flags
+	// process flags
 	portFlag := flag.Int("port", 3000, "port to listen to")
 	hostFlag := flag.String("host", "localhost", "host to listen to")
 	protocolFlag := flag.String("protocol", "tcp", "protocol to use (kcp/tcp)")
@@ -94,8 +91,8 @@ func main() {
 
 	go setupPPROF(*portFlag)
 
-	glog.Infof("Private Key: %s", keys.PrivateKeyHex())
-	glog.Infof("Public Key: %s", keys.PublicKeyHex())
+	log.Info().Msgf("Private Key: %s", keys.PrivateKeyHex())
+	log.Info().Msgf("Public Key: %s", keys.PublicKeyHex())
 
 	builder := network.NewBuilder()
 	builder.SetKeys(keys)
@@ -112,7 +109,7 @@ func main() {
 
 	net, err := builder.Build()
 	if err != nil {
-		glog.Fatal(err)
+		log.Fatal().Err(err)
 		return
 	}
 
@@ -127,7 +124,7 @@ func main() {
 	go func() {
 		for range time.Tick(1 * time.Second) {
 			currentNumMessages := atomic.SwapUint64(&numMessages, 0)
-			glog.Infof("Got %d messages, %d peers", currentNumMessages, atomic.LoadInt64(&numPeers))
+			log.Info().Msgf("Got %d messages, %d peers", currentNumMessages, atomic.LoadInt64(&numPeers))
 		}
 	}()
 

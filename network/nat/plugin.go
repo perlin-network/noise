@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/fd/go-nat"
-	"github.com/golang/glog"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
+	"github.com/rs/zerolog/log"
 )
 
 type plugin struct {
@@ -29,7 +29,7 @@ var (
 )
 
 func (p *plugin) Startup(n *network.Network) {
-	glog.Infof("Setting up NAT traversal for address: %s", n.Address)
+	log.Info().Msgf("Setting up NAT traversal for address: %s", n.Address)
 
 	info, err := network.ParseAddress(n.Address)
 	if err != nil {
@@ -40,35 +40,35 @@ func (p *plugin) Startup(n *network.Network) {
 
 	gateway, err := nat.DiscoverGateway()
 	if err != nil {
-		glog.Warning("Unable to discover gateway: ", err)
+		log.Warn().Err(err).Msg("Unable to discover gateway")
 		return
 	}
 
 	p.internalIP, err = gateway.GetInternalAddress()
 	if err != nil {
-		glog.Warning("Unable to fetch internal IP: ", err)
+		log.Warn().Err(err).Msg("Unable to fetch internal IP")
 		return
 	}
 
 	p.externalIP, err = gateway.GetExternalAddress()
 	if err != nil {
-		glog.Warning("Unable to fetch external IP: ", err)
+		log.Warn().Err(err).Msg("Unable to fetch external IP")
 		return
 	}
 
-	glog.Infof("Discovered gateway following the protocol %s.", gateway.Type())
+	log.Info().Msgf("Discovered gateway following the protocol %s.", gateway.Type())
 
-	glog.Info("Internal IP: ", p.internalIP.String())
-	glog.Info("External IP: ", p.externalIP.String())
+	log.Info().Msgf("Internal IP: %s", p.internalIP.String())
+	log.Info().Msgf("External IP: %s", p.externalIP.String())
 
 	p.externalPort, err = gateway.AddPortMapping("tcp", p.internalPort, "noise", 1*time.Second)
 
 	if err != nil {
-		glog.Warning("Cannot setup port mapping: ", err)
+		log.Warn().Err(err).Msg("Cannot setup port mapping")
 		return
 	}
 
-	glog.Infof("External port %d now forwards to your local port %d.", p.externalPort, p.internalPort)
+	log.Info().Msgf("External port %d now forwards to your local port %d.", p.externalPort, p.internalPort)
 
 	p.gateway = gateway
 
@@ -79,16 +79,16 @@ func (p *plugin) Startup(n *network.Network) {
 	n.Address = info.String()
 	n.ID = peer.CreateID(n.Address, n.GetKeys().PublicKey)
 
-	glog.Infof("Other peers may connect to you through the address %s.", n.Address)
+	log.Info().Msgf("Other peers may connect to you through the address %s.", n.Address)
 }
 
 func (p *plugin) Cleanup(n *network.Network) {
 	if p.gateway != nil {
-		glog.Info("Removing port binding...")
+		log.Info().Msg("Removing port binding...")
 
 		err := p.gateway.DeletePortMapping("tcp", p.internalPort)
 		if err != nil {
-			glog.Error(err)
+			log.Error().Err(err)
 		}
 	}
 }
