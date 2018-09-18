@@ -1,11 +1,13 @@
 package network_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/perlin-network/noise/internal/test/protobuf"
 	"github.com/perlin-network/noise/network"
+	"github.com/perlin-network/noise/network/rpc"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -133,4 +135,50 @@ func testNodeBroadcastByAddresses(t *testing.T, e env, numNodes, numPeers int) {
 			assert.Equalf(t, numMsgs, 0, "node [%v] got %d messages, expected 0", node.Address, numMsgs)
 		}
 	}
+}
+
+func TestClientRequest(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("skipping %s in short mode", t.Name())
+	}
+
+	numNodes := 2
+	for _, e := range allEnvs {
+		testClientRequest(t, e, numNodes)
+	}
+}
+
+func testClientRequest(t *testing.T, e env, numNodes int) {
+	te := newTest(t, e, network.WriteTimeout(1*time.Second))
+	plugin := new(clientTestPlugin)
+	te.startBoostrap(numNodes, plugin)
+	defer te.tearDown()
+
+	msgStr := "test message"
+	address := te.nodes[0].Address
+	client, err := te.bootstrapNode.Client(address)
+	assert.Equal(t, nil, err, "expected client error to be nil")
+	msg := &protobuf.TestMessage{
+		Message:  msgStr,
+		Duration: 1,
+	}
+	req := &rpc.Request{}
+	req.SetMessage(msg)
+	response, err := client.Request(req)
+	resp, ok := response.(*protobuf.TestMessage)
+	assert.Equal(t, true, ok, "expected response to be cast successfully")
+	assert.Equal(t, msgStr, resp.Message, "expected reply message to be '%s', got '%s'", msgStr, resp.Message)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	response, err = client.RequestWithContext(ctx, req)
+	assert.Equal(t, nil, response, "expected response to be nil")
+	assert.Equal(t, "context deadline exceeded", err.Error(), "expected error to be context deadline exceeded")
+
+	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
+	go func(ctx context.Context) {
+		_, err := client.RequestWithContext(ctx, req)
+		assert.Equal(t, "context canceled", err.Error(), "expected context canceled error")
+	}(ctx)
+	cancel()
 }
