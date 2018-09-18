@@ -15,8 +15,8 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -112,7 +112,7 @@ func (n *Network) flushLoop() {
 				if state, ok := value.(*ConnState); ok {
 					state.writerMutex.Lock()
 					if err := state.writer.Flush(); err != nil {
-						glog.Warning(err)
+						log.Warn().Err(err)
 					}
 					state.writerMutex.Unlock()
 				}
@@ -133,7 +133,7 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 	}
 	var ptr types.DynamicAny
 	if err := types.UnmarshalAny(msg.Message, &ptr); err != nil {
-		glog.Error(err)
+		log.Error().Err(err)
 		return
 	}
 
@@ -161,7 +161,7 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 			// Execute 'on receive message' callback for all plugins.
 			n.plugins.Each(func(plugin PluginInterface) {
 				if err := plugin.Receive(ctx); err != nil {
-					glog.Errorf("%+v", err)
+					log.Error().Err(err)
 				}
 			})
 
@@ -187,7 +187,7 @@ func (n *Network) Listen() {
 
 	addrInfo, err := ParseAddress(n.Address)
 	if err != nil {
-		glog.Fatal(err)
+		log.Fatal().Err(err)
 	}
 
 	var listener net.Listener
@@ -195,15 +195,16 @@ func (n *Network) Listen() {
 	if t, exists := n.transports.Load(addrInfo.Protocol); exists {
 		listener, err = t.(transport.Layer).Listen(int(addrInfo.Port))
 		if err != nil {
-			glog.Fatal(err)
+			log.Fatal().Err(err)
 		}
 	} else {
-		glog.Fatal("invalid protocol: " + addrInfo.Protocol)
+		err := errors.New("invalid protocol: " + addrInfo.Protocol)
+		log.Fatal().Err(err)
 	}
 
 	n.startListening()
 
-	glog.Infof("Listening for peers on %s.\n", n.Address)
+	log.Info().Msgf("Listening for peers on %s.", n.Address)
 
 	// handle server shutdowns
 	go func() {
@@ -223,10 +224,10 @@ func (n *Network) Listen() {
 			// if the Shutdown flag is set, no need to continue with the for loop
 			select {
 			case <-n.kill:
-				glog.Infof("Shutting down server on %s.\n", n.Address)
+				log.Info().Msgf("Shutting down server on %s.", n.Address)
 				return
 			default:
-				glog.Error(err)
+				log.Error().Err(err)
 			}
 		}
 	}
@@ -316,7 +317,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 		client, err := n.Client(address)
 
 		if err != nil {
-			glog.Error(err)
+			log.Error().Err(err)
 			continue
 		}
 
@@ -348,7 +349,8 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 	// Choose scheme.
 	t, exists := n.transports.Load(addrInfo.Protocol)
 	if !exists {
-		glog.Fatal("invalid protocol: " + addrInfo.Protocol)
+		err := errors.New("invalid protocol: " + addrInfo.Protocol)
+		log.Fatal().Err(err)
 	}
 
 	var conn net.Conn
@@ -383,7 +385,7 @@ func (n *Network) Accept(incoming net.Conn) {
 		msg, err := n.receiveMessage(incoming)
 		if err != nil {
 			if err != errEmptyMsg {
-				glog.Error(err)
+				log.Error().Err(err)
 			}
 			break
 		}
@@ -405,14 +407,14 @@ func (n *Network) Accept(incoming net.Conn) {
 		})
 
 		if err != nil {
-			glog.Error(err)
+			log.Error().Err(err)
 			return
 		}
 
 		go func() {
 			// Peer sent message with a completely different ID. Disconnect.
 			if !client.ID.Equals(peer.ID(*msg.Sender)) {
-				glog.Errorf("message signed by peer %s but client is %s", peer.ID(*msg.Sender), client.ID.Address)
+				log.Error().Msgf("message signed by peer %s but client is %s", peer.ID(*msg.Sender), client.ID.Address)
 				return
 			}
 
@@ -491,7 +493,7 @@ func (n *Network) Broadcast(message proto.Message) {
 	n.eachPeer(func(client *PeerClient) bool {
 		err := client.Tell(message)
 		if err != nil {
-			glog.Warningf("failed to send message to peer %v [err=%s]", client.ID, err)
+			log.Warn().Msgf("failed to send message to peer %v [err=%s]", client.ID, err)
 		}
 		return true
 	})
