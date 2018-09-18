@@ -3,7 +3,6 @@ package discovery
 import (
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/internal/protobuf"
@@ -23,7 +22,6 @@ func queryPeerByID(net *network.Network, peerID peer.ID, targetID peer.ID, respo
 
 	request := new(rpc.Request)
 	request.SetMessage(&protobuf.LookupNodeRequest{Target: &targetProtoID})
-	request.SetTimeout(3 * time.Second)
 
 	response, err := client.Request(request)
 

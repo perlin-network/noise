@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"runtime"
@@ -134,7 +135,6 @@ func sendMsg(net *network.Network, idx int) uint32 {
 
 			expectedID := fmt.Sprintf("%s:%d->%s", net.Address, idx, address)
 			request := &rpc.Request{}
-			request.SetTimeout(3 * time.Second)
 			request.SetMessage(&messages.LoadRequest{Id: expectedID})
 
 			client, err := net.Client(address)
@@ -143,7 +143,9 @@ func sendMsg(net *network.Network, idx int) uint32 {
 				return
 			}
 
-			response, err := client.Request(request)
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			defer cancel()
+			response, err := client.RequestWithContext(ctx, request)
 			if err != nil {
 				errs <- errors.Wrapf(err, "request error for req id %s", expectedID)
 				return

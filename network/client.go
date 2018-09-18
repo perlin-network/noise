@@ -1,6 +1,7 @@
 package network
 
 import (
+	"context"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -12,6 +13,10 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
+)
+
+const (
+	defaultRequestTimeout = 5 * time.Second
 )
 
 // PeerClient represents a single incoming peers client.
@@ -152,6 +157,21 @@ func (c *PeerClient) Tell(message proto.Message) error {
 
 // Request requests for a response for a request sent to a given peer.
 func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultRequestTimeout)
+	defer cancel()
+	return c.RequestWithContext(ctx, req)
+}
+
+// RequestWithContext requests for a response for a request sent to a given peer.
+func (c *PeerClient) RequestWithContext(ctx context.Context, req *rpc.Request) (proto.Message, error) {
+	if ctx == nil {
+		return nil, errors.New("network: invalid context")
+	}
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
 	signed, err := c.Network.PrepareMessage(req.Message)
 	if err != nil {
 		return nil, err
@@ -180,8 +200,8 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 	select {
 	case res := <-channel:
 		return res, nil
-	case <-time.After(req.Timeout):
-		return nil, errors.New("request timed out")
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
