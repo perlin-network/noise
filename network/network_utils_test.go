@@ -64,6 +64,10 @@ func (te *testSuite) startBoostrap(numNodes int, plugins ...network.PluginInterf
 			te.t.Fatalf("Build() = expected no error, got %v", err)
 		}
 
+		if node == nil {
+			te.t.Fatalf("Build() expected node to be not nil")
+		}
+
 		go node.Listen()
 
 		if i == 0 {
