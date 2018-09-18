@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/internal/protobuf"
@@ -21,7 +22,9 @@ func queryPeerByID(net *network.Network, peerID peer.ID, targetID peer.ID, respo
 	targetProtoID := protobuf.ID(targetID)
 
 	msg := &protobuf.LookupNodeRequest{Target: &targetProtoID}
-	response, err := client.Request(context.Background(), msg)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	response, err := client.Request(ctx, msg)
 
 	if err != nil {
 		responses <- []*protobuf.ID{}
