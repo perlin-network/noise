@@ -8,7 +8,7 @@
 [4]: https://github.com/skywind3000/kcp
 [5]: https://img.shields.io/badge/license-MIT-blue.svg
 [6]: LICENSE
-[7]: https://shields.dougley.com/discord/458332417909063682.svg
+[7]: https://img.shields.io/discord/102860784329052160.svg
 [8]: https://discord.gg/dMYfDPM
 [9]: https://travis-ci.org/perlin-network/noise.svg?branch=master
 [10]: https://travis-ci.org/perlin-network/noise
