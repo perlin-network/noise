@@ -7,11 +7,12 @@ import (
 	"net"
 	"sync"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/internal/protobuf"
+	"github.com/perlin-network/noise/log"
+
+	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 )
 
 var errEmptyMsg = errors.New("received an empty message from a peer")

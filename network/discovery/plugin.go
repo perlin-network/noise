@@ -3,9 +3,9 @@ package discovery
 import (
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/internal/protobuf"
+	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
-	"github.com/rs/zerolog/log"
 )
 
 type Plugin struct {

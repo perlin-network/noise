@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"github.com/perlin-network/noise/crypto/ed25519"
+	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
-	"github.com/rs/zerolog/log"
+
 	"github.com/xtaci/smux"
 )
 
