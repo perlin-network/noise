@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"math/rand"
 	"net"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,7 +17,9 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 const (
@@ -40,6 +43,10 @@ var (
 
 func init() {
 	log.Logger = log.With().Caller().Logger()
+	// prettify if terminal is a console
+	if terminal.IsTerminal(int(os.Stdout.Fd())) {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	}
 }
 
 // Network represents the current networking state for this node.

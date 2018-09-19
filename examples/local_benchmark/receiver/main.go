@@ -75,11 +75,11 @@ func main() {
 
 	go net.Listen()
 
-	log.Info().Msg("Waiting for sender on tcp://localhost:3001.")
+	log.Info().Msg("waiting for sender on tcp://localhost:3001.")
 
 	// Run loop every 1 second.
 	for range time.Tick(1 * time.Second) {
-		log.Info().Int("num_messages", state.counter).Msg("")
+		log.Info().Int("num_messages", state.counter).Msg("received messages")
 
 		state.counter = 0
 	}
