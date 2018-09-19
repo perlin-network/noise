@@ -5,9 +5,8 @@ import (
 	"time"
 
 	"github.com/perlin-network/noise/internal/protobuf"
+	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
-
-	"github.com/golang/glog"
 )
 
 const (
@@ -98,7 +97,9 @@ func (p *Plugin) startBackoff(addr string) {
 
 	if _, exists := p.backoffs.Load(addr); exists {
 		// don't activate if backoff is already active
-		glog.Infof("backoff skipped for addr %s, already active\n", addr)
+		log.Info().
+			Str("address", addr).
+			Msg("backoff skipped, already active")
 		return
 	}
 	// reset the backoff counter
@@ -112,12 +113,18 @@ func (p *Plugin) startBackoff(addr string) {
 		b := s.(*Backoff)
 		if b.TimeoutExceeded() {
 			// check if the backoff expired
-			glog.Infof("backoff ended for addr %s, timed out after %s\n", addr, time.Now().Sub(startTime))
+			log.Info().
+				Str("address", addr).
+				Dur("timeout", time.Now().Sub(startTime)).
+				Msg("backoff ended, timed out")
 			break
 		}
 		// sleep for a bit before connecting
 		d := b.NextDuration()
-		glog.Infof("backoff reconnecting to %s in %s iteration %d", addr, d, i+1)
+		log.Info().
+			Str("address", addr).
+			Int("iteration", i+1).
+			Msg("backoff reconnecting")
 		time.Sleep(d)
 		if p.net.ConnectionStateExists(addr) {
 			// check that the connection is still empty before dialing

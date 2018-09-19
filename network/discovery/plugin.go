@@ -1,11 +1,9 @@
 package discovery
 
 import (
-	"strings"
-
-	"github.com/golang/glog"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/internal/protobuf"
+	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
 )
@@ -59,7 +57,9 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 			state.Routes.Update(peerID)
 		}
 
-		glog.Infof("bootstrapped w/ peer(s): %s.", strings.Join(state.Routes.GetPeerAddresses(), ", "))
+		log.Info().
+			Strs("peers", state.Routes.GetPeerAddresses()).
+			Msg("bootstrapped w/ peer(s)")
 	case *protobuf.LookupNodeRequest:
 		if state.DisableLookup {
 			break
@@ -79,7 +79,9 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 			return err
 		}
 
-		glog.Infof("connected peers: %s.", strings.Join(state.Routes.GetPeerAddresses(), ", "))
+		log.Info().
+			Strs("peers", state.Routes.GetPeerAddresses()).
+			Msg("connected to peer(s)")
 	}
 
 	return nil
@@ -95,7 +97,10 @@ func (state *Plugin) PeerDisconnect(client *network.PeerClient) {
 		if state.Routes.PeerExists(*client.ID) {
 			state.Routes.RemovePeer(*client.ID)
 
-			glog.Infof("Peer %s has disconnected from %s.", client.ID.Address, client.Network.ID.Address)
+			log.Info().
+				Str("address", client.Network.ID.Address).
+				Str("peer_address", client.ID.Address).
+				Msg("peer has disconnected")
 		}
 	}
 }

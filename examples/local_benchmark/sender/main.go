@@ -1,21 +1,20 @@
 package main
 
-import _ "net/http/pprof"
-
 import (
 	"flag"
-	"fmt"
-	"github.com/perlin-network/noise/crypto/ed25519"
-	"github.com/perlin-network/noise/examples/local_benchmark/messages"
-	"github.com/perlin-network/noise/network"
-	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
 	"runtime/pprof"
 	"strconv"
 	"time"
+
+	"github.com/perlin-network/noise/crypto/ed25519"
+	"github.com/perlin-network/noise/examples/local_benchmark/messages"
+	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/network"
 )
 
 var profile = flag.String("profile", "", "write cpu profile to file")
@@ -26,7 +25,7 @@ func main() {
 	flag.Set("logtostderr", "true")
 
 	go func() {
-		log.Println(http.ListenAndServe("localhost:7070", nil))
+		log.Info().Err(http.ListenAndServe("localhost:7070", nil))
 	}()
 
 	flag.Parse()
@@ -45,7 +44,7 @@ func main() {
 	if *profile != "" {
 		f, err := os.Create(*profile)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msg("")
 		}
 		pprof.StartCPUProfile(f)
 	}
@@ -64,7 +63,7 @@ func main() {
 
 	time.Sleep(500 * time.Millisecond)
 
-	fmt.Printf("Spamming messages to %s...\n", receiver)
+	log.Info().Msgf("Spamming messages to %s...", receiver)
 
 	client, err := net.Client(receiver)
 	if err != nil {

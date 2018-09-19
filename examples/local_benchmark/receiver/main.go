@@ -1,20 +1,19 @@
 package main
 
-import _ "net/http/pprof"
-
 import (
 	"flag"
-	"fmt"
-	"github.com/perlin-network/noise/crypto/ed25519"
-	"github.com/perlin-network/noise/examples/local_benchmark/messages"
-	"github.com/perlin-network/noise/network"
-	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
 	"runtime/pprof"
 	"time"
+
+	"github.com/perlin-network/noise/crypto/ed25519"
+	"github.com/perlin-network/noise/examples/local_benchmark/messages"
+	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/network"
 )
 
 type BenchmarkPlugin struct {
@@ -37,7 +36,7 @@ func main() {
 	flag.Set("logtostderr", "true")
 
 	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
+		log.Info().Err(http.ListenAndServe("localhost:6060", nil))
 	}()
 
 	flag.Parse()
@@ -56,7 +55,7 @@ func main() {
 	if *profile != "" {
 		f, err := os.Create(*profile)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msg("")
 		}
 		pprof.StartCPUProfile(f)
 	}
@@ -75,11 +74,11 @@ func main() {
 
 	go net.Listen()
 
-	fmt.Println("Waiting for sender on tcp://localhost:3001.")
+	log.Info().Msg("waiting for sender on tcp://localhost:3001.")
 
 	// Run loop every 1 second.
 	for range time.Tick(1 * time.Second) {
-		fmt.Printf("Got %d messages.\n", state.counter)
+		log.Info().Int("num_messages", state.counter).Msg("received messages")
 
 		state.counter = 0
 	}

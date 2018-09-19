@@ -10,12 +10,12 @@ import (
 
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/internal/protobuf"
+	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network/transport"
 	"github.com/perlin-network/noise/peer"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -112,7 +112,7 @@ func (n *Network) flushLoop() {
 				if state, ok := value.(*ConnState); ok {
 					state.writerMutex.Lock()
 					if err := state.writer.Flush(); err != nil {
-						glog.Warning(err)
+						log.Warn().Err(err).Msg("")
 					}
 					state.writerMutex.Unlock()
 				}
@@ -133,7 +133,7 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 	}
 	var ptr types.DynamicAny
 	if err := types.UnmarshalAny(msg.Message, &ptr); err != nil {
-		glog.Error(err)
+		log.Error().Err(err).Msg("")
 		return
 	}
 
@@ -161,7 +161,7 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 			// Execute 'on receive message' callback for all plugins.
 			n.plugins.Each(func(plugin PluginInterface) {
 				if err := plugin.Receive(ctx); err != nil {
-					glog.Errorf("%+v", err)
+					log.Error().Err(err).Msg("")
 				}
 			})
 
@@ -187,7 +187,7 @@ func (n *Network) Listen() {
 
 	addrInfo, err := ParseAddress(n.Address)
 	if err != nil {
-		glog.Fatal(err)
+		log.Fatal().Err(err).Msg("")
 	}
 
 	var listener net.Listener
@@ -195,15 +195,18 @@ func (n *Network) Listen() {
 	if t, exists := n.transports.Load(addrInfo.Protocol); exists {
 		listener, err = t.(transport.Layer).Listen(int(addrInfo.Port))
 		if err != nil {
-			glog.Fatal(err)
+			log.Fatal().Err(err).Msg("")
 		}
 	} else {
-		glog.Fatal("invalid protocol: " + addrInfo.Protocol)
+		err := errors.New("network: invalid protocol " + addrInfo.Protocol)
+		log.Fatal().Err(err).Msg("")
 	}
 
 	n.startListening()
 
-	glog.Infof("Listening for peers on %s.\n", n.Address)
+	log.Info().
+		Str("address", n.Address).
+		Msg("listening for peers")
 
 	// handle server shutdowns
 	go func() {
@@ -223,10 +226,10 @@ func (n *Network) Listen() {
 			// if the Shutdown flag is set, no need to continue with the for loop
 			select {
 			case <-n.kill:
-				glog.Infof("Shutting down server on %s.\n", n.Address)
+				log.Info().Msgf("shutting down server on %s.", n.Address)
 				return
 			default:
-				glog.Error(err)
+				log.Error().Err(err).Msg("")
 			}
 		}
 	}
@@ -316,7 +319,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 		client, err := n.Client(address)
 
 		if err != nil {
-			glog.Error(err)
+			log.Error().Err(err).Msg("")
 			continue
 		}
 
@@ -348,7 +351,8 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 	// Choose scheme.
 	t, exists := n.transports.Load(addrInfo.Protocol)
 	if !exists {
-		glog.Fatal("invalid protocol: " + addrInfo.Protocol)
+		err := errors.New("network: invalid protocol " + addrInfo.Protocol)
+		log.Fatal().Err(err).Msg("")
 	}
 
 	var conn net.Conn
@@ -383,7 +387,7 @@ func (n *Network) Accept(incoming net.Conn) {
 		msg, err := n.receiveMessage(incoming)
 		if err != nil {
 			if err != errEmptyMsg {
-				glog.Error(err)
+				log.Error().Err(err).Msg("")
 			}
 			break
 		}
@@ -405,14 +409,17 @@ func (n *Network) Accept(incoming net.Conn) {
 		})
 
 		if err != nil {
-			glog.Error(err)
+			log.Error().Err(err).Msg("")
 			return
 		}
 
 		go func() {
 			// Peer sent message with a completely different ID. Disconnect.
 			if !client.ID.Equals(peer.ID(*msg.Sender)) {
-				glog.Errorf("message signed by peer %s but client is %s", peer.ID(*msg.Sender), client.ID.Address)
+				log.Error().
+					Interface("peer_id", peer.ID(*msg.Sender)).
+					Interface("client_id", client.ID).
+					Msg("message signed by peer does not match client ID")
 				return
 			}
 
@@ -491,7 +498,10 @@ func (n *Network) Broadcast(message proto.Message) {
 	n.eachPeer(func(client *PeerClient) bool {
 		err := client.Tell(message)
 		if err != nil {
-			glog.Warningf("failed to send message to peer %v [err=%s]", client.ID, err)
+			log.Warn().
+				Err(err).
+				Interface("peer_id", client.ID).
+				Msg("failed to send message to peer")
 		}
 		return true
 	})

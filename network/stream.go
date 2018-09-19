@@ -7,10 +7,11 @@ import (
 	"net"
 	"sync"
 
-	"github.com/gogo/protobuf/proto"
-	"github.com/golang/glog"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/internal/protobuf"
+	"github.com/perlin-network/noise/log"
+
+	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -45,7 +46,7 @@ func (n *Network) sendMessage(w io.Writer, message *protobuf.Message, writerMute
 	for totalBytesWritten < len(buffer) && err == nil {
 		bytesWritten, err = w.Write(buffer[totalBytesWritten:])
 		if err != nil {
-			glog.Errorf("stream: failed to write entire buffer, err: %+v\n", err)
+			log.Error().Err(err).Msg("stream: failed to write entire buffer")
 		}
 		totalBytesWritten += bytesWritten
 	}

@@ -8,7 +8,7 @@
 [4]: https://github.com/skywind3000/kcp
 [5]: https://img.shields.io/badge/license-MIT-blue.svg
 [6]: LICENSE
-[7]: https://shields.dougley.com/discord/458332417909063682.svg
+[7]: https://img.shields.io/discord/458332417909063682.svg
 [8]: https://discord.gg/dMYfDPM
 [9]: https://travis-ci.org/perlin-network/noise.svg?branch=master
 [10]: https://travis-ci.org/perlin-network/noise
@@ -38,7 +38,7 @@ production-grade dependencies.
   signatures.
 - Kademlia DHT-inspired peer discovery.
 - Request/Response and Messaging RPC.
-- Logging via [glog](https://github.com/golang/glog).
+- Logging via [zerolog](https://github.com/rs/zerolog/log).
 - Plugin system.
 
 ## Setup
@@ -90,8 +90,12 @@ keys := crypto.FromPrivateKey(ed25519.New(), "4d5333a68e3a96d0ad935cb6546b97bbb0
 keys := crypto.FromPrivateKeyBytes(ed25519.New(), []byte{ ...}...)
 
 // Print out loaded public/private keys.
-glog.Info("Private Key: ", keys.PrivateKeyHex())
-glog.Info("Public Key: ", keys.PublicKeyHex())
+log.Info().
+    Str("private_key", keys.PrivateKeyHex()).
+    Msg("")
+log.Info().
+    Str("public_key", keys.PublicKeyHex()).
+    Msg("")
 ```
 
 You may use the loaded keys to sign/verify messages that are loaded as byte
@@ -106,12 +110,14 @@ if err != nil {
     panic(err)
 }
 
-glog.Info("Signature: ", hex.EncodeToString(signature))
+log.Info().
+    Str("signature", hex.EncodeToString(signature)).
+    Msg("")
 
 // Verify a signature.
 verified := crypto.Verify(ed25519.New(), blake2b.New(), keys.PublicKey, msg, signature)
 
-glog.Info("Is the signature valid? ", verified)
+log.Info().Msgf("Is the signature valid? %b", verified)
 ```
 
 Now that you have your keys, we can start listening and handling messages from
@@ -231,7 +237,7 @@ type ChatPlugin struct{ *network.Plugin }
 func (state *ChatPlugin) Receive(ctx *network.PluginContext) error {
     switch msg := ctx.Message().(type) {
         case *messages.ChatMessage:
-            glog.Infof("<%s> %s", ctx.Client().ID.Address, msg.Message)
+            log.Info().Msgf("<%s> %s", ctx.Client().ID.Address, msg.Message)
     }
     return nil
 }
