@@ -175,3 +175,20 @@ func isInAddress(address string, addresses ...string) bool {
 	}
 	return false
 }
+
+// Plugin for client test
+type clientTestPlugin struct {
+	*network.Plugin
+}
+
+// Receive takes in *messages.ProxyMessage and replies with *messages.ID
+func (p *clientTestPlugin) Receive(ctx *network.PluginContext) error {
+	switch msg := ctx.Message().(type) {
+	case *protobuf.TestMessage:
+		response := &protobuf.TestMessage{Message: msg.Message}
+		time.Sleep(time.Duration(msg.Duration) * time.Second)
+		ctx.Reply(response)
+	}
+
+	return nil
+}

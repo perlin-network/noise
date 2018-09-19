@@ -1,17 +1,21 @@
 package network
 
 import (
+	"context"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/perlin-network/noise/internal/protobuf"
-	"github.com/perlin-network/noise/network/rpc"
 	"github.com/perlin-network/noise/peer"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
+)
+
+const (
+	defaultRequestTimeout = 5 * time.Second
 )
 
 // PeerClient represents a single incoming peers client.
@@ -151,8 +155,16 @@ func (c *PeerClient) Tell(message proto.Message) error {
 }
 
 // Request requests for a response for a request sent to a given peer.
-func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
-	signed, err := c.Network.PrepareMessage(req.Message)
+func (c *PeerClient) Request(ctx context.Context, req proto.Message) (proto.Message, error) {
+	if ctx == nil {
+		return nil, errors.New("network: invalid context")
+	}
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	signed, err := c.Network.PrepareMessage(req)
 	if err != nil {
 		return nil, err
 	}
@@ -180,8 +192,8 @@ func (c *PeerClient) Request(req *rpc.Request) (proto.Message, error) {
 	select {
 	case res := <-channel:
 		return res, nil
-	case <-time.After(req.Timeout):
-		return nil, errors.New("request timed out")
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 

@@ -19,4 +19,5 @@ option (gogoproto.testgen_all) = true;
 
 message TestMessage {
     string message = 1;
+    int32 duration = 2;
 }
