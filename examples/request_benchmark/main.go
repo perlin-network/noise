@@ -163,7 +163,7 @@ func sendMsg(net *network.Network, idx int) uint32 {
 	close(errs)
 
 	for err := range errs {
-		log.Error().Err(err)
+		log.Error().Err(err).Msg("")
 	}
 
 	return atomic.LoadUint32(&positiveResponses)

@@ -46,7 +46,7 @@ type ExampleServerPlugin struct {
 }
 
 func (state *ExampleServerPlugin) PeerConnect(client *network.PeerClient) {
-	log.Info().Msgf("New connection from %s.", client.Address)
+	log.Info().Msgf("new connection from %s.", client.Address)
 
 	go state.handleClient(client)
 }
@@ -54,23 +54,23 @@ func (state *ExampleServerPlugin) PeerConnect(client *network.PeerClient) {
 func (state *ExampleServerPlugin) handleClient(client *network.PeerClient) {
 	session, err := smux.Server(client, muxStreamConfig())
 	if err != nil {
-		log.Fatal().Err(err)
+		log.Fatal().Err(err).Msg("")
 	}
 	for {
 		stream, err := session.AcceptStream()
 		if err != nil {
-			log.Error().Err(err)
+			log.Error().Err(err).Msg("")
 			break
 		}
 
-		log.Info().Msgf("New incoming stream from %s.", client.Address)
+		log.Info().Msgf("new incoming stream from %s.", client.Address)
 
 		go func() {
 			defer stream.Close()
 
 			remote, err := net.Dial("tcp", state.remoteAddress)
 			if err != nil {
-				log.Error().Err(err)
+				log.Error().Err(err).Msg("")
 				return
 			}
 			defer remote.Close()
@@ -81,7 +81,7 @@ func (state *ExampleServerPlugin) handleClient(client *network.PeerClient) {
 }
 
 func (state *ExampleServerPlugin) PeerDisconnect(client *network.PeerClient) {
-	log.Info().Msgf("Lost connection with %s.", client.Address)
+	log.Info().Msgf("lost connection with %s.", client.Address)
 }
 
 type ProxyServerPlugin struct {
@@ -90,7 +90,9 @@ type ProxyServerPlugin struct {
 }
 
 func (state *ProxyServerPlugin) PeerConnect(client *network.PeerClient) {
-	log.Info().Msgf("Connected to proxy destination %s.", client.Address)
+	log.Info().
+		Str("address", client.Address).
+		Msgf("connected to proxy destination")
 
 	go state.startProxying(client)
 }
@@ -98,30 +100,33 @@ func (state *ProxyServerPlugin) PeerConnect(client *network.PeerClient) {
 func (state *ProxyServerPlugin) startProxying(client *network.PeerClient) {
 	session, err := smux.Client(client, muxStreamConfig())
 	if err != nil {
-		log.Fatal().Err(err)
+		log.Fatal().Err(err).Msg("")
 	}
 
 	// Open proxy server.
 	listener, err := net.Listen("tcp", state.listenAddress)
 	if err != nil {
-		log.Fatal().Err(err)
+		log.Fatal().Err(err).Msg("")
 	}
 	defer listener.Close()
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Fatal().Err(err)
+			log.Fatal().Err(err).Msg("")
 		}
 
-		log.Info().Msgf("Proxying data from %s to %s.", conn.RemoteAddr().String(), client.Address)
+		log.Info().
+			Str("address", client.Address).
+			Str("remote_address", conn.RemoteAddr().String()).
+			Msg("proxying data from remote address")
 
 		go func() {
 			defer conn.Close()
 
 			remote, err := session.OpenStream()
 			if err != nil {
-				log.Error().Err(err)
+				log.Error().Err(err).Msg("")
 				return
 			}
 			defer remote.Close()
@@ -156,8 +161,8 @@ func main() {
 
 	keys := ed25519.RandomKeyPair()
 
-	log.Info().Msgf("Private Key: %s", keys.PrivateKeyHex())
-	log.Info().Msgf("Public Key: %s", keys.PublicKeyHex())
+	log.Info().Str("private_key", keys.PrivateKeyHex()).Msg("")
+	log.Info().Str("public_key", keys.PublicKeyHex()).Msg("")
 
 	builder := network.NewBuilder()
 	builder.SetKeys(keys)
@@ -175,7 +180,7 @@ func main() {
 
 	net, err := builder.Build()
 	if err != nil {
-		log.Fatal().Err(err)
+		log.Fatal().Err(err).Msg("")
 		return
 	}
 

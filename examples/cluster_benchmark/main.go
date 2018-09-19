@@ -70,7 +70,7 @@ func setupPPROF(port int) {
 	r.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
 	r.Handle("/debug/pprof/block", pprof.Handler("block"))
 
-	log.Info().Msgf("Pprof listening on port %d.\n", port+500)
+	log.Info().Int("pprof_port", port+500)
 	http.ListenAndServe(fmt.Sprintf(":%d", port+500), r)
 }
 
@@ -91,8 +91,8 @@ func main() {
 
 	go setupPPROF(*portFlag)
 
-	log.Info().Msgf("Private Key: %s", keys.PrivateKeyHex())
-	log.Info().Msgf("Public Key: %s", keys.PublicKeyHex())
+	log.Info().Str("private_key", keys.PrivateKeyHex()).Msg("")
+	log.Info().Str("public_key", keys.PublicKeyHex()).Msg("")
 
 	builder := network.NewBuilder()
 	builder.SetKeys(keys)
@@ -109,7 +109,7 @@ func main() {
 
 	net, err := builder.Build()
 	if err != nil {
-		log.Fatal().Err(err)
+		log.Fatal().Err(err).Msg("")
 		return
 	}
 
@@ -124,7 +124,7 @@ func main() {
 	go func() {
 		for range time.Tick(1 * time.Second) {
 			currentNumMessages := atomic.SwapUint64(&numMessages, 0)
-			log.Info().Msgf("Got %d messages, %d peers", currentNumMessages, atomic.LoadInt64(&numPeers))
+			log.Info().Uint64("num_messages", currentNumMessages).Int64("num_peers", atomic.LoadInt64(&numPeers)).Msg("")
 		}
 	}()
 

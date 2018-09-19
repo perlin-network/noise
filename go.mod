@@ -10,7 +10,7 @@ require (
 	github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1
 	github.com/pkg/errors v0.8.0
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/rs/zerolog v1.8.0
+	github.com/rs/zerolog v1.9.0
 	github.com/stretchr/testify v1.2.2
 	github.com/templexxx/cpufeat v0.0.0-20180714071118-e85c4911a733 // indirect
 	github.com/templexxx/xor v0.0.0-20170926022130-0af8e873c554 // indirect

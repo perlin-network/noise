@@ -31,8 +31,8 @@ func main() {
 
 	keys := ed25519.RandomKeyPair()
 
-	log.Info().Msgf("Private Key: %s", keys.PrivateKeyHex())
-	log.Info().Msgf("Public Key: %s", keys.PublicKeyHex())
+	log.Info().Str("private_key", keys.PrivateKeyHex()).Msg("")
+	log.Info().Str("public_key", keys.PublicKeyHex()).Msg("")
 
 	builder := network.NewBuilder()
 	builder.SetKeys(keys)
@@ -53,7 +53,7 @@ func main() {
 
 	net, err := builder.Build()
 	if err != nil {
-		log.Fatal().Err(err)
+		log.Fatal().Err(err).Msg("")
 		return
 	}
 

@@ -90,8 +90,12 @@ keys := crypto.FromPrivateKey(ed25519.New(), "4d5333a68e3a96d0ad935cb6546b97bbb0
 keys := crypto.FromPrivateKeyBytes(ed25519.New(), []byte{ ...}...)
 
 // Print out loaded public/private keys.
-log.Info().Msgf("Private Key: %s", keys.PrivateKeyHex())
-log.Info().Msgf("Public Key: %s", keys.PublicKeyHex())
+log.Info().
+    Str("private_key", keys.PrivateKeyHex()).
+    Msg("")
+log.Info().
+    Str("public_key", keys.PublicKeyHex()).
+    Msg("")
 ```
 
 You may use the loaded keys to sign/verify messages that are loaded as byte
@@ -106,7 +110,9 @@ if err != nil {
     panic(err)
 }
 
-log.Info().Msgf("Signature: %s", hex.EncodeToString(signature))
+log.Info().
+    Str("signature", hex.EncodeToString(signature)).
+    Msg("")
 
 // Verify a signature.
 verified := crypto.Verify(ed25519.New(), blake2b.New(), keys.PublicKey, msg, signature)
