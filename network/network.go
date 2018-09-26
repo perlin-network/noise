@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"math/rand"
 	"net"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network/transport"
 	"github.com/perlin-network/noise/peer"
+	"github.com/perlin-network/noise/types"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
@@ -450,6 +452,13 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 		return nil, errors.New("network: message is null")
 	}
 
+	opcode, err := types.GetOpcode(reflect.TypeOf(message))
+	if err != nil {
+		return nil, err
+	}
+
+	log.Info().Msgf("prepare message opcode: %+v %+v", opcode, reflect.TypeOf(message))
+
 	raw, err := proto.Marshal(message)
 	if err != nil {
 		return nil, err
@@ -468,6 +477,7 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 
 	msg := &protobuf.Message{
 		Message:   raw,
+		Opcode:    uint32(*opcode),
 		Sender:    &id,
 		Signature: signature,
 	}
@@ -496,6 +506,7 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 func (n *Network) Broadcast(message proto.Message) {
 	signed, err := n.PrepareMessage(message)
 	if err != nil {
+		log.Error().Err(err).Msg("network: failed to broadcast message")
 		return
 	}
 
