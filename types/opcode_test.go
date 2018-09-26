@@ -43,7 +43,7 @@ func TestGetMessageType(t *testing.T) {
 	}
 
 	msg := &pb.Ping{}
-	msgType, err := GetMessageType(Opcode(1000))
+	msgType, err := GetMessageType(Opcode(9999))
 	assert.NotEqual(t, nil, err, "there should be an error, opcode does not exist")
 	assert.NotEqual(t, reflect.TypeOf(msg), reflect.TypeOf(msgType), "message types should not be equal")
 
