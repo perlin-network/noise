@@ -37,9 +37,17 @@ func TestGetMessageType(t *testing.T) {
 	}
 
 	for _, tt := range testCases {
-		assert.Equal(t, reflect.TypeOf(tt.msg), reflect.TypeOf(GetMessageType(tt.opcode)), "message types should be equal")
+		msgType, err := GetMessageType(tt.opcode)
+		assert.Equal(t, nil, err, "opcode should be found")
+		assert.Equal(t, reflect.TypeOf(tt.msg), reflect.TypeOf(msgType), "message types should be equal")
 	}
 
 	msg := &pb.Ping{}
-	assert.NotEqual(t, reflect.TypeOf(msg), reflect.TypeOf(GetMessageType(PongCode)), "message types should not be equal")
+	msgType, err := GetMessageType(Opcode(1000))
+	assert.NotEqual(t, nil, err, "there should be an error, opcode does not exist")
+	assert.NotEqual(t, reflect.TypeOf(msg), reflect.TypeOf(msgType), "message types should not be equal")
+
+	msgType, err = GetMessageType(PongCode)
+	assert.Equal(t, nil, err, "opcode should be found")
+	assert.NotEqual(t, reflect.TypeOf(msg), reflect.TypeOf(msgType), "message types should not be equal")
 }

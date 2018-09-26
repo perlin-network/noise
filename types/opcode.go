@@ -1,6 +1,7 @@
 package types
 
 import (
+	"reflect"
 	"sync"
 
 	"github.com/perlin-network/noise/internal/protobuf"
@@ -26,6 +27,13 @@ var (
 		LookupNodeResponseCode: &protobuf.LookupNodeResponse{},
 	}
 
+	msgTable = map[reflect.Type]Opcode{
+		reflect.TypeOf(protobuf.Ping{}):               PingCode,
+		reflect.TypeOf(protobuf.Pong{}):               PongCode,
+		reflect.TypeOf(protobuf.LookupNodeRequest{}):  LookupNodeRequestCode,
+		reflect.TypeOf(protobuf.LookupNodeResponse{}): LookupNodeResponseCode,
+	}
+
 	mu = sync.RWMutex{}
 )
 
@@ -37,14 +45,23 @@ func RegisterMessageType(opcode Opcode, msg proto.Message) error {
 		return errors.New("types: opcode already exists, choose a different opcode")
 	} else {
 		opcodeTable[opcode] = msg
+		msgTable[reflect.TypeOf(msg)] = opcode
 	}
 	return nil
 }
 
 // GetMessageType returns the corresponding proto message type given an opcode
-func GetMessageType(code Opcode) proto.Message {
+func GetMessageType(code Opcode) (proto.Message, error) {
 	if i, ok := opcodeTable[code]; ok {
-		return i
+		return i, nil
 	}
-	return nil
+	return nil, errors.New("opcode not found, did you register it?")
+}
+
+// GetMessageType returns the corresponding proto message type given an opcode
+func GetOpcode(t reflect.Type) (*Opcode, error) {
+	if i, ok := msgTable[t]; ok {
+		return &i, nil
+	}
+	return nil, errors.New("message type not found, did you register it?")
 }
