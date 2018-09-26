@@ -34,7 +34,7 @@ message ID {
 }
 
 message Message {
-    google.protobuf.Any message = 1;
+    bytes message = 1;
 
     // Sender's address and public key.
     ID sender = 2;
@@ -50,6 +50,9 @@ message Message {
 
     // reply_flag indicates this is a reply to a request
     bool reply_flag = 6;
+
+    // opcode specifies the message type
+    uint32 opcode = 7;
 }
 
 message Ping {
