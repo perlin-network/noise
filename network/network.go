@@ -15,7 +15,6 @@ import (
 	"github.com/perlin-network/noise/peer"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/gogo/protobuf/types"
 	"github.com/pkg/errors"
 )
 
@@ -131,8 +130,8 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 	if !client.IsIncomingReady() {
 		return
 	}
-	var ptr types.DynamicAny
-	if err := types.UnmarshalAny(msg.Message, &ptr); err != nil {
+	var ptr proto.Message
+	if err := proto.Unmarshal(msg.Message, ptr); err != nil {
 		log.Error().Err(err).Msg("")
 		return
 	}
@@ -141,14 +140,14 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 		if _state, exists := client.Requests.Load(msg.RequestNonce); exists {
 			state := _state.(*RequestState)
 			select {
-			case state.data <- ptr.Message:
+			case state.data <- ptr:
 			case <-state.closeSignal:
 			}
 			return
 		}
 	}
 
-	switch msgRaw := ptr.Message.(type) {
+	switch msgRaw := ptr.(type) {
 	case *protobuf.Bytes:
 		client.handleBytes(msgRaw.Data)
 	default:
@@ -451,7 +450,7 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 		return nil, errors.New("network: message is null")
 	}
 
-	raw, err := types.MarshalAny(message)
+	raw, err := proto.Marshal(message)
 	if err != nil {
 		return nil, err
 	}
@@ -461,7 +460,7 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 	signature, err := n.keys.Sign(
 		n.opts.signaturePolicy,
 		n.opts.hashPolicy,
-		SerializeMessage(&id, raw.Value),
+		SerializeMessage(&id, raw),
 	)
 	if err != nil {
 		return nil, err
@@ -495,8 +494,13 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 
 // Broadcast asynchronously broadcasts a message to all peer clients.
 func (n *Network) Broadcast(message proto.Message) {
+	signed, err := n.PrepareMessage(message)
+	if err != nil {
+		return
+	}
+
 	n.eachPeer(func(client *PeerClient) bool {
-		err := client.Tell(message)
+		err := n.Write(client.Address, signed)
 		if err != nil {
 			log.Warn().
 				Err(err).
