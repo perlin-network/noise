@@ -408,6 +408,11 @@ func (n *Network) Accept(incoming net.Conn) {
 			client.setIncomingReady()
 		})
 
+		if client == nil {
+			log.Error().Msg("client initialization failed, ignoring new message from peer")
+			return
+		}
+
 		if err != nil {
 			log.Error().Err(err).Msg("")
 			return
