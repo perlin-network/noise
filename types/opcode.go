@@ -10,39 +10,48 @@ import (
 	"github.com/pkg/errors"
 )
 
+func init() {
+	msgOpcodePairs := []struct {
+		msg    proto.Message
+		opcode Opcode
+	}{
+		{&protobuf.Ping{}, PingCode},
+		{&protobuf.Pong{}, PongCode},
+		{&protobuf.LookupNodeRequest{}, LookupNodeRequestCode},
+		{&protobuf.LookupNodeResponse{}, LookupNodeResponseCode},
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	for _, pair := range msgOpcodePairs {
+		opcodeTable[pair.opcode] = pair.msg
+		t := reflect.TypeOf(pair.msg)
+		msgTable[t] = pair.opcode
+	}
+}
+
 type Opcode uint16
 
 const (
-	PingCode               Opcode = 0
-	PongCode               Opcode = 1
-	LookupNodeRequestCode  Opcode = 2
-	LookupNodeResponseCode Opcode = 3
+	PingCode               Opcode = 0x0000 // 0
+	PongCode               Opcode = 0x0001 // 1
+	LookupNodeRequestCode  Opcode = 0x0002 // 2
+	LookupNodeResponseCode Opcode = 0x0003 // 3
 )
 
 var (
-	opcodeTable = map[Opcode]proto.Message{
-		PingCode:               &protobuf.Ping{},
-		PongCode:               &protobuf.Pong{},
-		LookupNodeRequestCode:  &protobuf.LookupNodeRequest{},
-		LookupNodeResponseCode: &protobuf.LookupNodeResponse{},
-	}
-
-	msgTable = map[reflect.Type]Opcode{
-		reflect.TypeOf(protobuf.Ping{}):               PingCode,
-		reflect.TypeOf(protobuf.Pong{}):               PongCode,
-		reflect.TypeOf(protobuf.LookupNodeRequest{}):  LookupNodeRequestCode,
-		reflect.TypeOf(protobuf.LookupNodeResponse{}): LookupNodeResponseCode,
-	}
+	opcodeTable = make(map[Opcode]proto.Message, 0)
+	msgTable    = make(map[reflect.Type]Opcode, 0)
 
 	mu = sync.RWMutex{}
 )
 
-// RegisterMessageType adds a new proto message with a corresponding opcode
+// RegisterMessageType registers a new proto message to the given opcode
 func RegisterMessageType(opcode Opcode, msg proto.Message) error {
 	mu.Lock()
 	defer mu.Unlock()
 	if _, ok := opcodeTable[opcode]; ok {
-		return errors.New("types: opcode already exists, choose a different opcode")
+		return errors.New("types: opcode already registered, choose a different opcode")
 	} else {
 		opcodeTable[opcode] = msg
 		msgTable[reflect.TypeOf(msg)] = opcode
@@ -55,13 +64,14 @@ func GetMessageType(code Opcode) (proto.Message, error) {
 	if i, ok := opcodeTable[code]; ok {
 		return i, nil
 	}
-	return nil, errors.New("opcode not found, did you register it?")
+	return nil, errors.New("types: opcode not found, did you register it?")
 }
 
-// GetMessageType returns the corresponding proto message type given an opcode
-func GetOpcode(t reflect.Type) (*Opcode, error) {
+// GetOpcode returns the corresponding opcode given a proto message
+func GetOpcode(msg proto.Message) (*Opcode, error) {
+	t := reflect.TypeOf(msg)
 	if i, ok := msgTable[t]; ok {
 		return &i, nil
 	}
-	return nil, errors.New("message type not found, did you register it?")
+	return nil, errors.New("types: message type not found, did you register it?")
 }
