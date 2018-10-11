@@ -18,6 +18,10 @@ func TestRegisterMessageType(t *testing.T) {
 	msg := protobuf.TestMessage{}
 	err := RegisterMessageType(msgOpcode, &msg)
 	assert.NotEqual(t, nil, err, "expecting an error")
+
+	err = RegisterMessageType(Opcode(999), &msg)
+	assert.NotEqual(t, nil, err, "expecting an error")
+
 	msgOpcode = Opcode(1000)
 	err = RegisterMessageType(msgOpcode, &msg)
 	assert.Equal(t, nil, err, "not expecting an error")

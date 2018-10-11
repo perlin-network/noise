@@ -49,6 +49,10 @@ var (
 
 // RegisterMessageType registers a new proto message to the given opcode
 func RegisterMessageType(opcode Opcode, msg proto.Message) error {
+	// reserve first 1000 opcodes
+	if opcode < 1000 {
+		return errors.New("types: opcode must be 1000 or greater")
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	if _, ok := opcodeTable[opcode]; ok {
