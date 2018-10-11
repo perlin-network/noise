@@ -10,6 +10,8 @@ import (
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
+	"github.com/perlin-network/noise/types"
+
 	"github.com/pkg/errors"
 )
 
@@ -123,6 +125,8 @@ func TestPlugin(t *testing.T) {
 
 	var nodes []*network.Network
 	var plugins []*mockPlugin
+
+	types.RegisterMessageType(types.Opcode(1000), &messages.BasicMessage{})
 
 	for i := 0; i < numNodes; i++ {
 		node, plugin, err := newNode(i, true, i == 0)

@@ -14,6 +14,7 @@ import (
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
+	"github.com/perlin-network/noise/types"
 
 	"github.com/pkg/errors"
 )
@@ -40,6 +41,9 @@ func run() string {
 
 	numNodes := *numNodesFlag
 	numReqPerNode := *numReqPerNodeFlag
+
+	types.RegisterMessageType(types.Opcode(1000), &messages.LoadRequest{})
+	types.RegisterMessageType(types.Opcode(1001), &messages.LoadReply{})
 
 	nets := setupNetworks(host, startPort, numNodes)
 	expectedTotalResp := numReqPerNode * numNodes * (numNodes - 1)
