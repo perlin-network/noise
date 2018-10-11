@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"math/rand"
 	"net"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
