@@ -26,6 +26,11 @@ const (
 	startPort            = 23000
 )
 
+func init() {
+	types.RegisterMessageType(types.Opcode(1000), &messages.LoadRequest{})
+	types.RegisterMessageType(types.Opcode(1001), &messages.LoadReply{})
+}
+
 func main() {
 	fmt.Print(run())
 }
@@ -41,9 +46,6 @@ func run() string {
 
 	numNodes := *numNodesFlag
 	numReqPerNode := *numReqPerNodeFlag
-
-	types.RegisterMessageType(types.Opcode(1000), &messages.LoadRequest{})
-	types.RegisterMessageType(types.Opcode(1001), &messages.LoadReply{})
 
 	nets := setupNetworks(host, startPort, numNodes)
 	expectedTotalResp := numReqPerNode * numNodes * (numNodes - 1)
