@@ -133,9 +133,30 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 		return
 	}
 	var ptr proto.Message
-	if err := proto.Unmarshal(msg.Message, ptr); err != nil {
-		log.Error().Err(err).Msg("")
-		return
+	// unmarshal message based on specified opcode
+	switch types.Opcode(msg.Opcode) {
+	case types.PingCode:
+		ptr = &protobuf.Ping{}
+	case types.PongCode:
+		ptr = &protobuf.Pong{}
+	case types.LookupNodeRequestCode:
+		ptr = &protobuf.LookupNodeRequest{}
+	case types.LookupNodeResponseCode:
+		ptr = &protobuf.LookupNodeResponse{}
+	default:
+		opcode := types.Opcode(msg.Opcode)
+		var err error
+		ptr, err = types.GetMessageType(opcode)
+		if err != nil {
+			log.Error().Err(err).Msg("network: received message opcode is not registered")
+			return
+		}
+	}
+	if len(msg.Message) > 0 {
+		if err := proto.Unmarshal(msg.Message, ptr); err != nil {
+			log.Error().Err(err).Msg("")
+			return
+		}
 	}
 
 	if msg.RequestNonce > 0 && msg.ReplyFlag {
@@ -457,8 +478,6 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 		return nil, err
 	}
 
-	log.Info().Msgf("prepare message opcode: %+v %+v", opcode, reflect.TypeOf(message))
-
 	raw, err := proto.Marshal(message)
 	if err != nil {
 		return nil, err
@@ -477,7 +496,7 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 
 	msg := &protobuf.Message{
 		Message:   raw,
-		Opcode:    uint16(opcode),
+		Opcode:    uint32(opcode),
 		Sender:    &id,
 		Signature: signature,
 	}
