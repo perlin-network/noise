@@ -14,7 +14,7 @@ import (
 func TestRegisterMessageType(t *testing.T) {
 	t.Parallel()
 
-	msgOpcode := Opcode(0)
+	msgOpcode := Opcode(1)
 	msg := protobuf.TestMessage{}
 	err := RegisterMessageType(msgOpcode, &msg)
 	assert.NotEqual(t, nil, err, "expecting an error")
@@ -50,4 +50,24 @@ func TestGetMessageType(t *testing.T) {
 	msgType, err = GetMessageType(PongCode)
 	assert.Equal(t, nil, err, "opcode should be found")
 	assert.NotEqual(t, reflect.TypeOf(msg), reflect.TypeOf(msgType), "message types should not be equal")
+}
+
+func TestGetOpcode(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		msg    proto.Message
+		opcode Opcode
+	}{
+		{&pb.Ping{}, PingCode},
+		{&pb.Pong{}, PongCode},
+		{&pb.LookupNodeRequest{}, LookupNodeRequestCode},
+		{&pb.LookupNodeResponse{}, LookupNodeResponseCode},
+	}
+
+	for _, tt := range testCases {
+		opcode, err := GetOpcode(tt.msg)
+		assert.Equal(t, nil, err, "message type should be found")
+		assert.Equal(t, tt.opcode, opcode, "opcodes should be equal")
+	}
 }

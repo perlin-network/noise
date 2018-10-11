@@ -33,10 +33,11 @@ func init() {
 type Opcode uint16
 
 const (
-	PingCode               Opcode = 0x0000 // 0
-	PongCode               Opcode = 0x0001 // 1
-	LookupNodeRequestCode  Opcode = 0x0002 // 2
-	LookupNodeResponseCode Opcode = 0x0003 // 3
+	UnregisteredCode       Opcode = 0x0000 // 0
+	PingCode               Opcode = 0x0001 // 1
+	PongCode               Opcode = 0x0002 // 2
+	LookupNodeRequestCode  Opcode = 0x0003 // 3
+	LookupNodeResponseCode Opcode = 0x0004 // 4
 )
 
 var (
@@ -51,7 +52,7 @@ func RegisterMessageType(opcode Opcode, msg proto.Message) error {
 	mu.Lock()
 	defer mu.Unlock()
 	if _, ok := opcodeTable[opcode]; ok {
-		return errors.New("types: opcode already registered, choose a different opcode")
+		return errors.New("types: opcode already exists, choose a different opcode")
 	} else {
 		opcodeTable[opcode] = msg
 		msgTable[reflect.TypeOf(msg)] = opcode
@@ -68,10 +69,10 @@ func GetMessageType(code Opcode) (proto.Message, error) {
 }
 
 // GetOpcode returns the corresponding opcode given a proto message
-func GetOpcode(msg proto.Message) (*Opcode, error) {
+func GetOpcode(msg proto.Message) (Opcode, error) {
 	t := reflect.TypeOf(msg)
 	if i, ok := msgTable[t]; ok {
-		return &i, nil
+		return i, nil
 	}
-	return nil, errors.New("types: message type not found, did you register it?")
+	return UnregisteredCode, errors.New("types: message type not found, did you register it?")
 }
