@@ -235,8 +235,9 @@ func (n *Network) Listen() {
 	}
 }
 
-// Client either creates or returns a cached peer client given a net.Conn.
-func (n *Network) initClientFromConn(address string, conn net.Conn) (*PeerClient, error) {
+// initClient either returns a cached peer client or creates a new one given a net.Conn
+// or dials the client if no net.Conn is provided.
+func (n *Network) initClient(address string, conn net.Conn) (*PeerClient, error) {
 	address, err := ToUnifiedAddress(address)
 	if err != nil {
 		return nil, err
@@ -286,7 +287,7 @@ func (n *Network) initClientFromConn(address string, conn net.Conn) (*PeerClient
 
 // Client either creates or returns a cached peer client given its host address.
 func (n *Network) Client(address string) (*PeerClient, error) {
-	return n.initClientFromConn(address, nil)
+	return n.initClient(address, nil)
 }
 
 // ConnectionStateExists returns true if network has a connection on a given address.
@@ -402,7 +403,7 @@ func (n *Network) Accept(incoming net.Conn) {
 
 		// Initialize client if not exists.
 		clientInit.Do(func() {
-			client, err = n.initClientFromConn(msg.Sender.Address, incoming)
+			client, err = n.initClient(msg.Sender.Address, incoming)
 			if err != nil {
 				return
 			}
