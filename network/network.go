@@ -452,7 +452,7 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 		return nil, errors.New("network: message is null")
 	}
 
-	opcode, err := types.GetOpcode(reflect.TypeOf(message))
+	opcode, err := types.GetOpcode(message)
 	if err != nil {
 		return nil, err
 	}
@@ -477,7 +477,7 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 
 	msg := &protobuf.Message{
 		Message:   raw,
-		Opcode:    uint32(*opcode),
+		Opcode:    uint16(opcode),
 		Sender:    &id,
 		Signature: signature,
 	}

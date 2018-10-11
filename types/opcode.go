@@ -30,14 +30,14 @@ func init() {
 	}
 }
 
-type Opcode uint16
+type Opcode uint32
 
 const (
-	UnregisteredCode       Opcode = 0x0000 // 0
-	PingCode               Opcode = 0x0001 // 1
-	PongCode               Opcode = 0x0002 // 2
-	LookupNodeRequestCode  Opcode = 0x0003 // 3
-	LookupNodeResponseCode Opcode = 0x0004 // 4
+	UnregisteredCode       Opcode = 0x00000 // 0
+	PingCode               Opcode = 0x00001 // 1
+	PongCode               Opcode = 0x00002 // 2
+	LookupNodeRequestCode  Opcode = 0x00003 // 3
+	LookupNodeResponseCode Opcode = 0x00004 // 4
 )
 
 var (
