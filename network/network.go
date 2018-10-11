@@ -264,7 +264,9 @@ func (n *Network) initClient(address string, conn net.Conn) (*PeerClient, error)
 	}
 
 	client := c.(*PeerClient)
-	defer client.setOutgoingReady()
+	defer func() {
+		client.setOutgoingReady()
+	}()
 
 	if conn == nil {
 		conn, err = n.Dial(address)
