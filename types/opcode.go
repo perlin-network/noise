@@ -22,12 +22,10 @@ func init() {
 		{&protobuf.LookupNodeResponse{}, LookupNodeResponseCode},
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
 	for _, pair := range msgOpcodePairs {
-		opcodeTable[pair.opcode] = pair.msg
+		opcodeTbl.Store(pair.opcode, pair.msg)
 		t := reflect.TypeOf(pair.msg)
-		msgTable[t] = pair.opcode
+		msgTbl.Store(t, pair.opcode)
 	}
 }
 
@@ -43,10 +41,10 @@ const (
 )
 
 var (
-	opcodeTable = make(map[Opcode]proto.Message, 0)
-	msgTable    = make(map[reflect.Type]Opcode, 0)
-
-	mu = sync.RWMutex{}
+	// opcodeTbl is a map of <Opcode, proto.Message> pairs
+	opcodeTbl = sync.Map{}
+	// msgTbl is a map of <reflect.Type, Opcode> pairs
+	msgTbl = sync.Map{}
 )
 
 // RegisterMessageType registers a new proto message to the given opcode
@@ -62,21 +60,19 @@ func RegisterMessageType(opcode Opcode, msg proto.Message) error {
 	if len(raw) != 0 {
 		return errors.New("types: must provide an empty protobuf message")
 	}
-	mu.Lock()
-	defer mu.Unlock()
-	if _, ok := opcodeTable[opcode]; ok {
+	if _, ok := opcodeTbl.Load(opcode); ok {
 		return errors.New("types: opcode already exists, choose a different opcode")
 	} else {
-		opcodeTable[opcode] = msg
-		msgTable[reflect.TypeOf(msg)] = opcode
+		opcodeTbl.Store(opcode, msg)
+		msgTbl.Store(reflect.TypeOf(msg), opcode)
 	}
 	return nil
 }
 
 // GetMessageType returns the corresponding proto message type given an opcode
 func GetMessageType(code Opcode) (proto.Message, error) {
-	if i, ok := opcodeTable[code]; ok {
-		return proto.Clone(i), nil
+	if i, ok := opcodeTbl.Load(code); ok {
+		return proto.Clone(i.(proto.Message)), nil
 	}
 	return nil, errors.New("types: opcode not found, did you register it?")
 }
@@ -84,8 +80,8 @@ func GetMessageType(code Opcode) (proto.Message, error) {
 // GetOpcode returns the corresponding opcode given a proto message
 func GetOpcode(msg proto.Message) (Opcode, error) {
 	t := reflect.TypeOf(msg)
-	if i, ok := msgTable[t]; ok {
-		return i, nil
+	if i, ok := msgTbl.Load(t); ok {
+		return i.(Opcode), nil
 	}
 	return UnregisteredCode, errors.New("types: message type not found, did you register it?")
 }
