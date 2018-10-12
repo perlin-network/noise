@@ -2,6 +2,7 @@ package network
 
 import (
 	"bufio"
+	"fmt"
 	"math/rand"
 	"net"
 	"sync"
@@ -245,6 +246,23 @@ func (n *Network) getOrSetPeerClient(address string, conn net.Conn) (*PeerClient
 
 	if address == n.Address {
 		return nil, errors.New("network: peer should not dial itself")
+	}
+
+	// if conn is not nil, check that the sender host matches the net.Conn remote host address
+	if conn != nil {
+		addrInfo, err := ParseAddress(address)
+		if err != nil {
+			return nil, err
+		}
+
+		remoteAddrInfo, err := ParseAddress(fmt.Sprintf("%s://%s", conn.RemoteAddr().Network(), conn.RemoteAddr().String()))
+		if err != nil {
+			return nil, err
+		}
+
+		if addrInfo.Host != remoteAddrInfo.Host {
+			return nil, errors.New("network: sender address did not match connection remote address")
+		}
 	}
 
 	clientNew, err := createPeerClient(n, address)
