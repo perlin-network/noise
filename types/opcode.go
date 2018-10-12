@@ -55,6 +55,13 @@ func RegisterMessageType(opcode Opcode, msg proto.Message) error {
 	if opcode < 1000 {
 		return errors.New("types: opcode must be 1000 or greater")
 	}
+	raw, err := proto.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	if len(raw) != 0 {
+		return errors.New("types: must provide an empty protobuf message")
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	if _, ok := opcodeTable[opcode]; ok {
