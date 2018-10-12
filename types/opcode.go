@@ -69,7 +69,7 @@ func RegisterMessageType(opcode Opcode, msg proto.Message) error {
 // GetMessageType returns the corresponding proto message type given an opcode
 func GetMessageType(code Opcode) (proto.Message, error) {
 	if i, ok := opcodeTable[code]; ok {
-		return i, nil
+		return proto.Clone(i), nil
 	}
 	return nil, errors.New("types: opcode not found, did you register it?")
 }

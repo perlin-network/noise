@@ -176,10 +176,8 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 
 	switch msgRaw := ptr.(type) {
 	case *protobuf.Bytes:
-		log.Debug().Msg("handling bytes")
 		client.handleBytes(msgRaw.Data)
 	default:
-		log.Debug().Msg("handling non-bytes")
 		ctx := contextPool.Get().(*PluginContext)
 		ctx.client = client
 		ctx.message = msgRaw
