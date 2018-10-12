@@ -133,7 +133,10 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 	}
 	var ptr proto.Message
 	// unmarshal message based on specified opcode
-	switch types.Opcode(msg.Opcode) {
+	opcode := types.Opcode(msg.Opcode)
+	switch opcode {
+	case types.BytesCode:
+		ptr = &protobuf.Bytes{}
 	case types.PingCode:
 		ptr = &protobuf.Ping{}
 	case types.PongCode:
@@ -142,8 +145,10 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 		ptr = &protobuf.LookupNodeRequest{}
 	case types.LookupNodeResponseCode:
 		ptr = &protobuf.LookupNodeResponse{}
+	case types.UnregisteredCode:
+		log.Error().Msg("network: message received had no opcode")
+		return
 	default:
-		opcode := types.Opcode(msg.Opcode)
 		var err error
 		ptr, err = types.GetMessageType(opcode)
 		if err != nil {
@@ -171,8 +176,10 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 
 	switch msgRaw := ptr.(type) {
 	case *protobuf.Bytes:
+		log.Debug().Msg("handling bytes")
 		client.handleBytes(msgRaw.Data)
 	default:
+		log.Debug().Msg("handling non-bytes")
 		ctx := contextPool.Get().(*PluginContext)
 		ctx.client = client
 		ctx.message = msgRaw
