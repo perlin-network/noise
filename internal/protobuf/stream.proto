@@ -6,8 +6,6 @@ option java_multiple_files = true;
 option java_package = "org.perlin.noise.proto";
 option java_outer_classname = "NoiseProto";
 
-import "google/protobuf/any.proto";
-
 import "gogo/protobuf/gogoproto/gogo.proto";
 
 option (gogoproto.equal_all) = true;
