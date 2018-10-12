@@ -15,6 +15,7 @@ func init() {
 		msg    proto.Message
 		opcode Opcode
 	}{
+		{&protobuf.Bytes{}, BytesCode},
 		{&protobuf.Ping{}, PingCode},
 		{&protobuf.Pong{}, PongCode},
 		{&protobuf.LookupNodeRequest{}, LookupNodeRequestCode},
@@ -34,10 +35,11 @@ type Opcode uint32
 
 const (
 	UnregisteredCode       Opcode = 0x00000 // 0
-	PingCode               Opcode = 0x00001 // 1
-	PongCode               Opcode = 0x00002 // 2
-	LookupNodeRequestCode  Opcode = 0x00003 // 3
-	LookupNodeResponseCode Opcode = 0x00004 // 4
+	BytesCode              Opcode = 0x00001 // 1
+	PingCode               Opcode = 0x0000a // 10
+	PongCode               Opcode = 0x0000b // 11
+	LookupNodeRequestCode  Opcode = 0x0000c // 12
+	LookupNodeResponseCode Opcode = 0x0000d // 13
 )
 
 var (

@@ -34,6 +34,7 @@ func TestGetMessageType(t *testing.T) {
 		msg    proto.Message
 		opcode Opcode
 	}{
+		{&pb.Bytes{}, BytesCode},
 		{&pb.Ping{}, PingCode},
 		{&pb.Pong{}, PongCode},
 		{&pb.LookupNodeRequest{}, LookupNodeRequestCode},
@@ -63,6 +64,7 @@ func TestGetOpcode(t *testing.T) {
 		msg    proto.Message
 		opcode Opcode
 	}{
+		{&pb.Bytes{}, BytesCode},
 		{&pb.Ping{}, PingCode},
 		{&pb.Pong{}, PongCode},
 		{&pb.LookupNodeRequest{}, LookupNodeRequestCode},
