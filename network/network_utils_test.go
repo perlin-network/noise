@@ -11,11 +11,11 @@ import (
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
 	"github.com/perlin-network/noise/peer"
-	"github.com/perlin-network/noise/types"
+	"github.com/perlin-network/noise/types/opcode"
 )
 
 func init() {
-	types.RegisterMessageType(types.Opcode(1000), &protobuf.TestMessage{})
+	opcode.RegisterMessageType(opcode.Opcode(1000), &protobuf.TestMessage{})
 }
 
 type env struct {

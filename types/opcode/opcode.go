@@ -1,4 +1,4 @@
-package types
+package opcode
 
 import (
 	"reflect"
@@ -60,10 +60,9 @@ func RegisterMessageType(opcode Opcode, msg proto.Message) error {
 	if len(raw) != 0 {
 		return errors.New("types: must provide an empty protobuf message")
 	}
-	if _, ok := opcodeTbl.Load(opcode); ok {
+	if _, loaded := opcodeTbl.LoadOrStore(opcode, msg); loaded {
 		return errors.New("types: opcode already exists, choose a different opcode")
 	} else {
-		opcodeTbl.Store(opcode, msg)
 		msgTbl.Store(reflect.TypeOf(msg), opcode)
 	}
 	return nil

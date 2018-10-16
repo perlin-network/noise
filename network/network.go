@@ -13,7 +13,7 @@ import (
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network/transport"
 	"github.com/perlin-network/noise/peer"
-	"github.com/perlin-network/noise/types"
+	"github.com/perlin-network/noise/types/opcode"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
@@ -133,24 +133,24 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 	}
 	var ptr proto.Message
 	// unmarshal message based on specified opcode
-	opcode := types.Opcode(msg.Opcode)
-	switch opcode {
-	case types.BytesCode:
+	code := opcode.Opcode(msg.Opcode)
+	switch code {
+	case opcode.BytesCode:
 		ptr = &protobuf.Bytes{}
-	case types.PingCode:
+	case opcode.PingCode:
 		ptr = &protobuf.Ping{}
-	case types.PongCode:
+	case opcode.PongCode:
 		ptr = &protobuf.Pong{}
-	case types.LookupNodeRequestCode:
+	case opcode.LookupNodeRequestCode:
 		ptr = &protobuf.LookupNodeRequest{}
-	case types.LookupNodeResponseCode:
+	case opcode.LookupNodeResponseCode:
 		ptr = &protobuf.LookupNodeResponse{}
-	case types.UnregisteredCode:
+	case opcode.UnregisteredCode:
 		log.Error().Msg("network: message received had no opcode")
 		return
 	default:
 		var err error
-		ptr, err = types.GetMessageType(opcode)
+		ptr, err = opcode.GetMessageType(code)
 		if err != nil {
 			log.Error().Err(err).Msg("network: received message opcode is not registered")
 			return
@@ -477,7 +477,7 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 		return nil, errors.New("network: message is null")
 	}
 
-	opcode, err := types.GetOpcode(message)
+	opcode, err := opcode.GetOpcode(message)
 	if err != nil {
 		return nil, err
 	}

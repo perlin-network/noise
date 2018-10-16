@@ -7,13 +7,13 @@ import (
 
 	"github.com/perlin-network/noise/internal/test/protobuf"
 	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/types"
+	"github.com/perlin-network/noise/types/opcode"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func init() {
-	types.RegisterMessageType(types.Opcode(1000), &protobuf.TestMessage{})
+	opcode.RegisterMessageType(opcode.Opcode(1000), &protobuf.TestMessage{})
 }
 
 func TestNodeConnect(t *testing.T) {

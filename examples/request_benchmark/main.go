@@ -14,7 +14,7 @@ import (
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
-	"github.com/perlin-network/noise/types"
+	"github.com/perlin-network/noise/types/opcode"
 
 	"github.com/pkg/errors"
 )
@@ -27,8 +27,8 @@ const (
 )
 
 func init() {
-	types.RegisterMessageType(types.Opcode(1000), &messages.LoadRequest{})
-	types.RegisterMessageType(types.Opcode(1001), &messages.LoadReply{})
+	opcode.RegisterMessageType(opcode.Opcode(1000), &messages.LoadRequest{})
+	opcode.RegisterMessageType(opcode.Opcode(1001), &messages.LoadReply{})
 }
 
 func main() {

@@ -223,7 +223,7 @@ use a new message type for your application, you must first register your
 message type.
 
 ```go
-types.RegisterMessageType(types.Opcode(1000), &MyNewProtobufMessage{})
+opcode.RegisterMessageType(opcode.Opcode(1000), &MyNewProtobufMessage{})
 ```
 
 On a spawned `us-east1-b` Google Cloud (GCP) cluster comprised of 8
