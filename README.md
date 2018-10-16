@@ -218,7 +218,13 @@ peer discovery within your application.
 ## Handling Messages
 
 All messages that pass through **noise** are serialized/deserialized as
-[protobufs](https://developers.google.com/protocol-buffers/).
+[protobufs](https://developers.google.com/protocol-buffers/). If you want to
+use a new message type for your application, you must first register your
+message type.
+
+```go
+opcode.RegisterMessageType(opcode.Opcode(1000), &MyNewProtobufMessage{})
+```
 
 On a spawned `us-east1-b` Google Cloud (GCP) cluster comprised of 8
 `n1-standard-1` (1 vCPU, 3.75GB memory) instances, **noise** is able to sign,

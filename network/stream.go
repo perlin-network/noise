@@ -106,8 +106,8 @@ func (n *Network) receiveMessage(conn net.Conn) (*protobuf.Message, error) {
 	}
 
 	// Check if any of the message headers are invalid or null.
-	if msg.Message == nil || msg.Sender == nil || msg.Sender.PublicKey == nil || len(msg.Sender.Address) == 0 || msg.Signature == nil {
-		return nil, errors.New("received an invalid message (either no message, no sender, or no signature) from a peer")
+	if msg.Opcode == 0 || msg.Sender == nil || msg.Sender.PublicKey == nil || len(msg.Sender.Address) == 0 || msg.Signature == nil {
+		return nil, errors.New("received an invalid message (either no opcode, no sender, or no signature) from a peer")
 	}
 
 	// Verify signature of message.
@@ -115,7 +115,7 @@ func (n *Network) receiveMessage(conn net.Conn) (*protobuf.Message, error) {
 		n.opts.signaturePolicy,
 		n.opts.hashPolicy,
 		msg.Sender.PublicKey,
-		SerializeMessage(msg.Sender, msg.Message.Value),
+		SerializeMessage(msg.Sender, msg.Message),
 		msg.Signature,
 	) {
 		return nil, errors.New("received message had an malformed signature")

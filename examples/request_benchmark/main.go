@@ -14,6 +14,7 @@ import (
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
+	"github.com/perlin-network/noise/types/opcode"
 
 	"github.com/pkg/errors"
 )
@@ -24,6 +25,11 @@ const (
 	host                 = "localhost"
 	startPort            = 23000
 )
+
+func init() {
+	opcode.RegisterMessageType(opcode.Opcode(1000), &messages.LoadRequest{})
+	opcode.RegisterMessageType(opcode.Opcode(1001), &messages.LoadReply{})
+}
 
 func main() {
 	fmt.Print(run())

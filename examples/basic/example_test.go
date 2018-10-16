@@ -9,6 +9,7 @@ import (
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
+	"github.com/perlin-network/noise/types/opcode"
 )
 
 // BasicPlugin buffers all messages into a mailbox for this test.
@@ -74,6 +75,8 @@ func ExampleBasicPlugin() {
 			node.Bootstrap(nodes[0].Address)
 		}
 	}
+
+	opcode.RegisterMessageType(opcode.Opcode(1000), &messages.BasicMessage{})
 
 	// Wait for all nodes to finish discovering other peers.
 	time.Sleep(1 * time.Second)
