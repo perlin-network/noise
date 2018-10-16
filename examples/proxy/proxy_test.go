@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -70,7 +71,7 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 
 	// If the target is in our routing table, directly proxy the message to them.
 	if routes.PeerExists(targetID) {
-		node.BroadcastByAddresses(msg, targetID.Address)
+		node.BroadcastByAddresses(context.Background(), msg, targetID.Address)
 		return nil
 	}
 
@@ -91,7 +92,7 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 	}
 
 	// Propagate message to the closest peer.
-	node.BroadcastByAddresses(msg, closestPeers[0].Address)
+	node.BroadcastByAddresses(context.Background(), msg, closestPeers[0].Address)
 	return nil
 }
 

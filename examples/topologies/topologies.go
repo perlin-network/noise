@@ -1,6 +1,7 @@
 package topologies
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -237,7 +238,7 @@ func broadcastTest(t *testing.T, nodes []*network.Network, processors []*MockPlu
 
 	// Broadcast is an asynchronous call to send a message to other nodes
 	expected := fmt.Sprintf("This is a broadcasted message from Node %d", sender)
-	nodes[sender].Broadcast(&messages.BasicMessage{Message: expected})
+	nodes[sender].Broadcast(context.Background(), &messages.BasicMessage{Message: expected})
 
 	// check the messages
 	for i := 0; i < len(nodes); i++ {

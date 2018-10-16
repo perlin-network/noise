@@ -1,6 +1,7 @@
 package basic
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"time"
@@ -83,7 +84,7 @@ func ExampleBasicPlugin() {
 
 	// Broadcast out a message from Node 0.
 	expected := "This is a broadcasted message from Node 0."
-	nodes[0].Broadcast(&messages.BasicMessage{Message: expected})
+	nodes[0].Broadcast(context.Background(), &messages.BasicMessage{Message: expected})
 
 	fmt.Println("Node 0 sent out a message.")
 

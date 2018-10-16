@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"os"
 	"strings"
@@ -75,7 +76,8 @@ func main() {
 
 		log.Info().Msgf("<%s> %s", net.Address, input)
 
-		net.Broadcast(&messages.ChatMessage{Message: input})
+		ctx := network.WithSignMessage(context.Background(), true)
+		net.Broadcast(ctx, &messages.ChatMessage{Message: input})
 	}
 
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"net/http"
 	_ "net/http/pprof"
@@ -71,7 +72,7 @@ func main() {
 	}
 
 	for {
-		err = client.Tell(&messages.BasicMessage{})
+		err = client.Tell(context.Background(), &messages.BasicMessage{})
 		if err != nil {
 			panic(err)
 		}

@@ -1,6 +1,8 @@
 package network
 
 import (
+	"context"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/peer"
 )
@@ -14,8 +16,8 @@ type PluginContext struct {
 }
 
 // Reply sends back a message to an incoming message's incoming stream.
-func (ctx *PluginContext) Reply(message proto.Message) error {
-	return ctx.client.Reply(ctx.nonce, message)
+func (ctx *PluginContext) Reply(gCtx context.Context, message proto.Message) error {
+	return ctx.client.Reply(gCtx, ctx.nonce, message)
 }
 
 // Message returns the decoded protobuf message.

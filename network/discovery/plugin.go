@@ -1,6 +1,8 @@
 package discovery
 
 import (
+	"context"
+
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
@@ -31,6 +33,7 @@ func (state *Plugin) Startup(net *network.Network) {
 func (state *Plugin) Receive(ctx *network.PluginContext) error {
 	// Update routing for every incoming message.
 	state.Routes.Update(ctx.Sender())
+	gCtx := network.WithSignMessage(context.Background(), true)
 
 	// Handle RPC.
 	switch msg := ctx.Message().(type) {
@@ -40,7 +43,7 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 		}
 
 		// Send pong to peer.
-		err := ctx.Reply(&protobuf.Pong{})
+		err := ctx.Reply(gCtx, &protobuf.Pong{})
 
 		if err != nil {
 			return err
@@ -74,7 +77,7 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 			response.Peers = append(response.Peers, &id)
 		}
 
-		err := ctx.Reply(response)
+		err := ctx.Reply(gCtx, response)
 		if err != nil {
 			return err
 		}

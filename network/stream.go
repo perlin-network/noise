@@ -106,12 +106,12 @@ func (n *Network) receiveMessage(conn net.Conn) (*protobuf.Message, error) {
 	}
 
 	// Check if any of the message headers are invalid or null.
-	if msg.Opcode == 0 || msg.Sender == nil || msg.Sender.PublicKey == nil || len(msg.Sender.Address) == 0 || msg.Signature == nil {
+	if msg.Opcode == 0 || msg.Sender == nil || msg.Sender.PublicKey == nil || len(msg.Sender.Address) == 0 {
 		return nil, errors.New("received an invalid message (either no opcode, no sender, or no signature) from a peer")
 	}
 
 	// Verify signature of message.
-	if !crypto.Verify(
+	if msg.Signature != nil && !crypto.Verify(
 		n.opts.signaturePolicy,
 		n.opts.hashPolicy,
 		msg.Sender.PublicKey,
