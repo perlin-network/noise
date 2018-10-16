@@ -12,6 +12,7 @@ import (
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
+	"github.com/perlin-network/noise/types/opcode"
 )
 
 type ChatPlugin struct{ *network.Plugin }
@@ -43,6 +44,7 @@ func main() {
 	log.Info().Msgf("Private Key: %s", keys.PrivateKeyHex())
 	log.Info().Msgf("Public Key: %s", keys.PublicKeyHex())
 
+	opcode.RegisterMessageType(opcode.Opcode(1000), &messages.ChatMessage{})
 	builder := network.NewBuilder()
 	builder.SetKeys(keys)
 	builder.SetAddress(network.FormatAddress(protocol, host, port))
