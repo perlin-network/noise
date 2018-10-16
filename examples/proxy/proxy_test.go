@@ -9,6 +9,8 @@ import (
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
 	"github.com/perlin-network/noise/peer"
+	"github.com/perlin-network/noise/types/opcode"
+
 	"github.com/pkg/errors"
 )
 
@@ -104,6 +106,8 @@ func ExampleProxyPlugin() {
 
 	var nodes []*network.Network
 	var plugins []*ProxyPlugin
+
+	opcode.RegisterMessageType(opcode.Opcode(1000), &messages.ProxyMessage{})
 
 	for i := 0; i < numNodes; i++ {
 		addr := fmt.Sprintf("tcp://%s:%d", host, startPort+i)
