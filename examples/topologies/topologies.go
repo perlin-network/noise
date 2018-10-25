@@ -8,6 +8,7 @@ import (
 	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/examples/topologies/messages"
 	"github.com/perlin-network/noise/network"
+	"github.com/perlin-network/noise/types/opcode"
 )
 
 const host = "127.0.0.1"
@@ -181,6 +182,7 @@ func setupTreeNodes(startPort int) ([]int, map[string]map[string]struct{}) {
 func setupNodes(ports []int) ([]*network.Network, []*MockPlugin, error) {
 	var nodes []*network.Network
 	var plugins []*MockPlugin
+	opcode.RegisterMessageType(opcode.Opcode(1000), &messages.BasicMessage{})
 
 	for i, port := range ports {
 		builder := network.NewBuilder()
