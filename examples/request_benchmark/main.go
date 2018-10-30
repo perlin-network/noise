@@ -185,7 +185,7 @@ func (p *loadTestPlugin) Receive(ctx *network.PluginContext) error {
 	switch msg := ctx.Message().(type) {
 	case *messages.LoadRequest:
 		response := &messages.LoadReply{Id: msg.Id}
-		ctx.Reply(response)
+		ctx.Reply(context.Background(), response)
 	}
 
 	return nil

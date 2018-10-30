@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/backoff"
 	"github.com/perlin-network/noise/network/discovery"
+	"github.com/perlin-network/noise/types/opcode"
 )
 
 const MESSAGE_THRESHOLD uint64 = 2000
@@ -43,8 +45,9 @@ func sendBroadcast(n *network.Network) {
 		return
 	}
 
+	ctx := network.WithSignMessage(context.Background(), true)
 	targetNumPeers := atomic.LoadInt64(&numPeers)/2 + 1
-	n.BroadcastRandomly(&messages.Empty{}, int(targetNumPeers))
+	n.BroadcastRandomly(ctx, &messages.Empty{}, int(targetNumPeers))
 }
 
 func setupPPROF(port int) {
@@ -94,6 +97,7 @@ func main() {
 	log.Info().Str("private_key", keys.PrivateKeyHex()).Msg("")
 	log.Info().Str("public_key", keys.PublicKeyHex()).Msg("")
 
+	opcode.RegisterMessageType(opcode.Opcode(1000), &messages.Empty{})
 	builder := network.NewBuilder()
 	builder.SetKeys(keys)
 	builder.SetAddress(network.FormatAddress(protocol, host, port))

@@ -1,6 +1,7 @@
 package network
 
 import (
+	"context"
 	"net"
 
 	"github.com/perlin-network/noise/crypto"
@@ -45,23 +46,23 @@ type NetworkInterface interface {
 
 	// PrepareMessage marshals a message into a *protobuf.Message and signs it with this
 	// nodes private key. Errors if the message is null.
-	PrepareMessage(message proto.Message) (*protobuf.Message, error)
+	PrepareMessage(ctx context.Context, message proto.Message) (*protobuf.Message, error)
 
 	// Write asynchronously sends a message to a denoted target address.
 	Write(address string, message *protobuf.Message) error
 
 	// Broadcast asynchronously broadcasts a message to all peer clients.
-	Broadcast(message proto.Message)
+	Broadcast(ctx context.Context, message proto.Message)
 
 	// BroadcastByAddresses broadcasts a message to a set of peer clients denoted by their addresses.
-	BroadcastByAddresses(message proto.Message, addresses ...string)
+	BroadcastByAddresses(ctx context.Context, message proto.Message, addresses ...string)
 
 	// BroadcastByIDs broadcasts a message to a set of peer clients denoted by their peer IDs.
-	BroadcastByIDs(message proto.Message, ids ...peer.ID)
+	BroadcastByIDs(ctx context.Context, message proto.Message, ids ...peer.ID)
 
 	// BroadcastRandomly asynchronously broadcasts a message to random selected K peers.
 	// Does not guarantee broadcasting to exactly K peers.
-	BroadcastRandomly(message proto.Message, K int)
+	BroadcastRandomly(ctx context.Context, message proto.Message, K int)
 
 	// Close shuts down the entire network.
 	Close()

@@ -2,6 +2,7 @@ package network
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"math/rand"
 	"net"
@@ -375,7 +376,7 @@ func (n *Network) Bootstrap(addresses ...string) {
 			continue
 		}
 
-		err = client.Tell(&protobuf.Ping{})
+		err = client.Tell(context.Background(), &protobuf.Ping{})
 		if err != nil {
 			continue
 		}
@@ -502,7 +503,7 @@ func (n *Network) Plugin(key interface{}) (PluginInterface, bool) {
 
 // PrepareMessage marshals a message into a *protobuf.Message and signs it with this
 // nodes private key. Errors if the message is null.
-func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, error) {
+func (n *Network) PrepareMessage(ctx context.Context, message proto.Message) (*protobuf.Message, error) {
 	if message == nil {
 		return nil, errors.New("network: message is null")
 	}
@@ -519,21 +520,24 @@ func (n *Network) PrepareMessage(message proto.Message) (*protobuf.Message, erro
 
 	id := protobuf.ID(n.ID)
 
-	signature, err := n.keys.Sign(
-		n.opts.signaturePolicy,
-		n.opts.hashPolicy,
-		SerializeMessage(&id, raw),
-	)
-	if err != nil {
-		return nil, err
+	msg := &protobuf.Message{
+		Message: raw,
+		Opcode:  uint32(opcode),
+		Sender:  &id,
 	}
 
-	msg := &protobuf.Message{
-		Message:   raw,
-		Opcode:    uint32(opcode),
-		Sender:    &id,
-		Signature: signature,
+	if GetSignMessage(ctx) {
+		signature, err := n.keys.Sign(
+			n.opts.signaturePolicy,
+			n.opts.hashPolicy,
+			SerializeMessage(&id, raw),
+		)
+		if err != nil {
+			return nil, err
+		}
+		msg.Signature = signature
 	}
+
 	return msg, nil
 }
 
@@ -556,8 +560,8 @@ func (n *Network) Write(address string, message *protobuf.Message) error {
 }
 
 // Broadcast asynchronously broadcasts a message to all peer clients.
-func (n *Network) Broadcast(message proto.Message) {
-	signed, err := n.PrepareMessage(message)
+func (n *Network) Broadcast(ctx context.Context, message proto.Message) {
+	signed, err := n.PrepareMessage(ctx, message)
 	if err != nil {
 		log.Error().Err(err).Msg("network: failed to broadcast message")
 		return
@@ -576,8 +580,8 @@ func (n *Network) Broadcast(message proto.Message) {
 }
 
 // BroadcastByAddresses broadcasts a message to a set of peer clients denoted by their addresses.
-func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...string) {
-	signed, err := n.PrepareMessage(message)
+func (n *Network) BroadcastByAddresses(ctx context.Context, message proto.Message, addresses ...string) {
+	signed, err := n.PrepareMessage(ctx, message)
 	if err != nil {
 		return
 	}
@@ -588,8 +592,8 @@ func (n *Network) BroadcastByAddresses(message proto.Message, addresses ...strin
 }
 
 // BroadcastByIDs broadcasts a message to a set of peer clients denoted by their peer IDs.
-func (n *Network) BroadcastByIDs(message proto.Message, ids ...peer.ID) {
-	signed, err := n.PrepareMessage(message)
+func (n *Network) BroadcastByIDs(ctx context.Context, message proto.Message, ids ...peer.ID) {
+	signed, err := n.PrepareMessage(ctx, message)
 	if err != nil {
 		return
 	}
@@ -601,7 +605,7 @@ func (n *Network) BroadcastByIDs(message proto.Message, ids ...peer.ID) {
 
 // BroadcastRandomly asynchronously broadcasts a message to random selected K peers.
 // Does not guarantee broadcasting to exactly K peers.
-func (n *Network) BroadcastRandomly(message proto.Message, K int) {
+func (n *Network) BroadcastRandomly(ctx context.Context, message proto.Message, K int) {
 	var addresses []string
 
 	n.eachPeer(func(client *PeerClient) bool {
@@ -620,7 +624,7 @@ func (n *Network) BroadcastRandomly(message proto.Message, K int) {
 		K = len(addresses)
 	}
 
-	n.BroadcastByAddresses(message, addresses[:K]...)
+	n.BroadcastByAddresses(ctx, message, addresses[:K]...)
 }
 
 // Close shuts down the entire network.

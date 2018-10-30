@@ -14,6 +14,7 @@ import (
 	"github.com/perlin-network/noise/examples/local_benchmark/messages"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
+	"github.com/perlin-network/noise/types/opcode"
 )
 
 type BenchmarkPlugin struct {
@@ -42,6 +43,7 @@ func main() {
 	flag.Parse()
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
+	opcode.RegisterMessageType(opcode.Opcode(1000), &messages.BasicMessage{})
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)

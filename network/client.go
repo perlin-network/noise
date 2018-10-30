@@ -140,8 +140,8 @@ func (c *PeerClient) Close() error {
 }
 
 // Tell will asynchronously emit a message to a given peer.
-func (c *PeerClient) Tell(message proto.Message) error {
-	signed, err := c.Network.PrepareMessage(message)
+func (c *PeerClient) Tell(ctx context.Context, message proto.Message) error {
+	signed, err := c.Network.PrepareMessage(ctx, message)
 	if err != nil {
 		return errors.Wrap(err, "failed to sign message")
 	}
@@ -164,7 +164,7 @@ func (c *PeerClient) Request(ctx context.Context, req proto.Message) (proto.Mess
 		return nil, ctx.Err()
 	}
 
-	signed, err := c.Network.PrepareMessage(req)
+	signed, err := c.Network.PrepareMessage(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -198,17 +198,17 @@ func (c *PeerClient) Request(ctx context.Context, req proto.Message) (proto.Mess
 }
 
 // Reply is equivalent to Write() with an appended nonce to signal a reply.
-func (c *PeerClient) Reply(nonce uint64, message proto.Message) error {
-	signed, err := c.Network.PrepareMessage(message)
+func (c *PeerClient) Reply(ctx context.Context, nonce uint64, message proto.Message) error {
+	msg, err := c.Network.PrepareMessage(ctx, message)
 	if err != nil {
 		return err
 	}
 
 	// Set the nonce.
-	signed.RequestNonce = nonce
-	signed.ReplyFlag = true
+	msg.RequestNonce = nonce
+	msg.ReplyFlag = true
 
-	err = c.Network.Write(c.Address, signed)
+	err = c.Network.Write(c.Address, msg)
 	if err != nil {
 		return err
 	}
@@ -267,7 +267,8 @@ func (c *PeerClient) Write(data []byte) (int, error) {
 		return 0, errors.New("write deadline exceeded")
 	}
 
-	err := c.Tell(&protobuf.Bytes{Data: data})
+	ctx := WithSignMessage(context.Background(), true)
+	err := c.Tell(ctx, &protobuf.Bytes{Data: data})
 	if err != nil {
 		return 0, err
 	}

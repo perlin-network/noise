@@ -1,6 +1,7 @@
 package network_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -196,7 +197,7 @@ func (p *clientTestPlugin) Receive(ctx *network.PluginContext) error {
 	case *protobuf.TestMessage:
 		response := &protobuf.TestMessage{Message: msg.Message}
 		time.Sleep(time.Duration(msg.Duration) * time.Second)
-		ctx.Reply(response)
+		ctx.Reply(context.Background(), response)
 	}
 
 	return nil

@@ -1,6 +1,7 @@
 package backoff
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -139,7 +140,7 @@ func (p *Plugin) startBackoff(addr string) {
 			// check if successfully connected
 			continue
 		}
-		if err := c.Tell(&protobuf.Ping{}); err != nil {
+		if err := c.Tell(context.Background(), &protobuf.Ping{}); err != nil {
 			// ping failed, not really connected
 			continue
 		}

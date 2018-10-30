@@ -54,7 +54,7 @@ func testNodeBroadcast(t *testing.T, e env, numNodes int) {
 	defer te.tearDown()
 
 	expected := "test message"
-	te.bootstrapNode.Broadcast(&protobuf.TestMessage{Message: expected})
+	te.bootstrapNode.Broadcast(context.Background(), &protobuf.TestMessage{Message: expected})
 
 	for i, node := range te.nodes {
 		select {
@@ -87,7 +87,7 @@ func testNodeBroadcastByIDs(t *testing.T, e env, numNodes, numPeers int) {
 	peers := te.getPeers(te.bootstrapNode)
 	selectedPeers := peers[:numPeers]
 
-	te.bootstrapNode.BroadcastByIDs(&protobuf.TestMessage{Message: expected}, selectedPeers...)
+	te.bootstrapNode.BroadcastByIDs(context.Background(), &protobuf.TestMessage{Message: expected}, selectedPeers...)
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -126,7 +126,7 @@ func testNodeBroadcastByAddresses(t *testing.T, e env, numNodes, numPeers int) {
 	for i := range selectedPeers {
 		addresses[i] = peers[i].Address
 	}
-	te.bootstrapNode.BroadcastByAddresses(&protobuf.TestMessage{Message: expected}, addresses...)
+	te.bootstrapNode.BroadcastByAddresses(context.Background(), &protobuf.TestMessage{Message: expected}, addresses...)
 
 	time.Sleep(50 * time.Millisecond)
 

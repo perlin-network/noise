@@ -1,6 +1,7 @@
 package backoff
 
 import (
+	"context"
 	"flag"
 	"testing"
 	"time"
@@ -51,7 +52,7 @@ func (state *mockPlugin) Receive(ctx *network.PluginContext) error {
 func broadcastAndCheck(nodes []*network.Network, plugins []*mockPlugin) error {
 	// Broadcast out a message from Node 0.
 	expected := "This is a broadcasted message from Node 0."
-	nodes[0].Broadcast(&messages.BasicMessage{Message: expected})
+	nodes[0].Broadcast(context.Background(), &messages.BasicMessage{Message: expected})
 
 	// Check if message was received by other nodes.
 	for i := 1; i < len(nodes); i++ {

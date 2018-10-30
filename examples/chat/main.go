@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"os"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
+	"github.com/perlin-network/noise/types/opcode"
 )
 
 type ChatPlugin struct{ *network.Plugin }
@@ -42,6 +44,7 @@ func main() {
 	log.Info().Msgf("Private Key: %s", keys.PrivateKeyHex())
 	log.Info().Msgf("Public Key: %s", keys.PublicKeyHex())
 
+	opcode.RegisterMessageType(opcode.Opcode(1000), &messages.ChatMessage{})
 	builder := network.NewBuilder()
 	builder.SetKeys(keys)
 	builder.SetAddress(network.FormatAddress(protocol, host, port))
@@ -75,7 +78,8 @@ func main() {
 
 		log.Info().Msgf("<%s> %s", net.Address, input)
 
-		net.Broadcast(&messages.ChatMessage{Message: input})
+		ctx := network.WithSignMessage(context.Background(), true)
+		net.Broadcast(ctx, &messages.ChatMessage{Message: input})
 	}
 
 }
