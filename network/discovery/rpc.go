@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
@@ -147,9 +146,9 @@ func FindNode(net *network.Network, targetID peer.ID, alpha int, disjointPaths i
 	})
 
 	// Cut off list of results to only have the routing table focus on the
-	// #dht.BucketSize closest peers to the current node.
-	if len(results) > dht.BucketSize {
-		results = results[:dht.BucketSize]
+	// #BucketSize closest peers to the current node.
+	if len(results) > BucketSize {
+		results = results[:BucketSize]
 	}
 
 	return

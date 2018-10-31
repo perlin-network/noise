@@ -1,4 +1,4 @@
-package dht
+package discovery
 
 import (
 	"container/list"

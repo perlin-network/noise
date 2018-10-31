@@ -3,7 +3,6 @@ package discovery
 import (
 	"context"
 
-	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
@@ -17,7 +16,7 @@ type Plugin struct {
 	DisablePong   bool
 	DisableLookup bool
 
-	Routes *dht.RoutingTable
+	Routes *RoutingTable
 }
 
 var (
@@ -27,7 +26,7 @@ var (
 
 func (state *Plugin) Startup(net *network.Network) {
 	// Create routing table.
-	state.Routes = dht.CreateRoutingTable(net.ID)
+	state.Routes = CreateRoutingTable(net.ID)
 }
 
 func (state *Plugin) Receive(ctx *network.PluginContext) error {
@@ -53,7 +52,7 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 			break
 		}
 
-		peers := FindNode(ctx.Network(), ctx.Sender(), dht.BucketSize, 8)
+		peers := FindNode(ctx.Network(), ctx.Sender(), BucketSize, 8)
 
 		// Update routing table w/ closest peers to self.
 		for _, peerID := range peers {
@@ -72,7 +71,7 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 		response := &protobuf.LookupNodeResponse{}
 
 		// Respond back with closest peers to a provided target.
-		for _, peerID := range state.Routes.FindClosestPeers(peer.ID(*msg.Target), dht.BucketSize) {
+		for _, peerID := range state.Routes.FindClosestPeers(peer.ID(*msg.Target), BucketSize) {
 			id := protobuf.ID(peerID)
 			response.Peers = append(response.Peers, &id)
 		}
