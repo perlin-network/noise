@@ -7,6 +7,8 @@ import (
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/peer"
+
+	"github.com/pkg/errors"
 )
 
 type Plugin struct {
@@ -15,6 +17,9 @@ type Plugin struct {
 	DisablePing   bool
 	DisablePong   bool
 	DisableLookup bool
+
+	// EnforceSkademliaNodeIDs checks whether node IDs satisfy S/Kademlia cryptopuzzles
+	EnforceSkademliaNodeIDs bool
 
 	Routes *RoutingTable
 }
@@ -30,8 +35,12 @@ func (state *Plugin) Startup(net *network.Network) {
 }
 
 func (state *Plugin) Receive(ctx *network.PluginContext) error {
+	sender := ctx.Sender()
+	if state.EnforceSkademliaNodeIDs && !IsPeerValid(sender) {
+		return errors.Errorf("Sender %v is not a valid node ID", sender)
+	}
 	// Update routing for every incoming message.
-	state.Routes.Update(ctx.Sender())
+	state.Routes.Update(sender)
 	gCtx := network.WithSignMessage(context.Background(), true)
 
 	// Handle RPC.

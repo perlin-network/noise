@@ -3,7 +3,6 @@ package discovery
 import (
 	"bytes"
 	"crypto/rand"
-	"fmt"
 
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/crypto/blake2b"
@@ -79,6 +78,5 @@ func checkDynamicPuzzle(nodeID, x []byte, c int) bool {
 func IsPeerValid(id peer.ID) bool {
 	// check if static puzzle and dynamic puzzle is solved
 	b := blake2b.New()
-	fmt.Printf("%t %t %t\n", bytes.Equal(b.HashBytes(id.PublicKey), id.Id), checkHashedBytesPrefixLen(id.Id, c1), checkDynamicPuzzle(id.Id, id.X, c2))
 	return bytes.Equal(b.HashBytes(id.PublicKey), id.Id) && checkHashedBytesPrefixLen(id.Id, c1) && checkDynamicPuzzle(id.Id, id.X, c2)
 }

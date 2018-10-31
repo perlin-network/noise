@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
@@ -47,10 +46,16 @@ func ExampleBasicPlugin() {
 
 	for i := 0; i < numNodes; i++ {
 		builder := network.NewBuilder()
-		builder.SetKeys(ed25519.RandomKeyPair())
-		builder.SetAddress(network.FormatAddress("tcp", host, uint16(startPort+i)))
+		address := network.FormatAddress("tcp", host, uint16(startPort+i))
+		kp, id := discovery.GenerateKeyPairAndID(address)
+		builder.SetKeys(kp)
+		builder.SetAddress(address)
+		builder.SetDynamicPuzzle(id.X)
 
-		builder.AddPlugin(new(discovery.Plugin))
+		// enforce S/Kademlia node IDs
+		builder.AddPlugin(&discovery.Plugin{
+			EnforceSkademliaNodeIDs: true,
+		})
 
 		plugins = append(plugins, new(BasicPlugin))
 		builder.AddPlugin(plugins[i])

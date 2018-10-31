@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/examples/proxy/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
@@ -111,16 +110,19 @@ func ExampleProxyPlugin() {
 	opcode.RegisterMessageType(opcode.Opcode(1000), &messages.ProxyMessage{})
 
 	for i := 0; i < numNodes; i++ {
-		addr := fmt.Sprintf("tcp://%s:%d", host, startPort+i)
-		ids[addr] = i
+		address := fmt.Sprintf("tcp://%s:%d", host, startPort+i)
+		ids[address] = i
 
 		builder := network.NewBuilder()
-		builder.SetKeys(ed25519.RandomKeyPair())
-		builder.SetAddress(addr)
+		kp, id := discovery.GenerateKeyPairAndID(address)
+		builder.SetKeys(kp)
+		builder.SetAddress(address)
+		builder.SetDynamicPuzzle(id.X)
 
-		// DisablePong will preserve the line topology
+		// DisablePong will preserve the line topology also enforce S/Kademlia node IDs
 		builder.AddPlugin(&discovery.Plugin{
-			DisablePong: true,
+			DisablePong:             true,
+			EnforceSkademliaNodeIDs: true,
 		})
 
 		plugins = append(plugins, new(ProxyPlugin))
