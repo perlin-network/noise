@@ -1,7 +1,9 @@
 package discovery
 
 import (
+	"bytes"
 	"crypto/rand"
+	"fmt"
 
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/crypto/blake2b"
@@ -22,9 +24,8 @@ const (
 func GenerateKeyPairAndID(address string) (*crypto.KeyPair, peer.ID) {
 	for {
 		kp := ed25519.RandomKeyPair()
-		if checkHashedBytesPrefixLen(kp.PublicKey, c1) {
-			id := peer.CreateID(address, kp.PublicKey)
-
+		id := peer.CreateID(address, kp.PublicKey)
+		if checkHashedBytesPrefixLen(id.Id, c1) {
 			x := generateDynamicPuzzleX(id.Id, c2)
 			id.X = x
 
@@ -36,8 +37,7 @@ func GenerateKeyPairAndID(address string) (*crypto.KeyPair, peer.ID) {
 // checkHashedBytesPrefixLen checks if the hashed bytes has prefix length of c
 func checkHashedBytesPrefixLen(a []byte, c int) bool {
 	b := blake2b.New()
-	nodeID := b.HashBytes(a)
-	P := b.HashBytes(nodeID)
+	P := b.HashBytes(a)
 	return peer.PrefixLen(P) >= c
 }
 
@@ -73,4 +73,12 @@ func generateDynamicPuzzleX(nodeID []byte, c int) []byte {
 func checkDynamicPuzzle(nodeID, x []byte, c int) bool {
 	xored := peer.Xor(nodeID, x)
 	return checkHashedBytesPrefixLen(xored, c)
+}
+
+// IsPeerValid checks whether an ID is a valid S/Kademlia node ID
+func IsPeerValid(id peer.ID) bool {
+	// check if static puzzle and dynamic puzzle is solved
+	b := blake2b.New()
+	fmt.Printf("%t %t %t\n", bytes.Equal(b.HashBytes(id.PublicKey), id.Id), checkHashedBytesPrefixLen(id.Id, c1), checkDynamicPuzzle(id.Id, id.X, c2))
+	return bytes.Equal(b.HashBytes(id.PublicKey), id.Id) && checkHashedBytesPrefixLen(id.Id, c1) && checkDynamicPuzzle(id.Id, id.X, c2)
 }
