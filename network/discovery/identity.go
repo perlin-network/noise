@@ -24,6 +24,10 @@ func GenerateKeyPairAndID(address string) (*crypto.KeyPair, peer.ID) {
 		kp := ed25519.RandomKeyPair()
 		if checkHashedBytesPrefixLen(kp.PublicKey, c1) {
 			id := peer.CreateID(address, kp.PublicKey)
+
+			x := generateDynamicPuzzleX(id.Id, c2)
+			id.X = x
+
 			return kp, id
 		}
 	}
@@ -50,23 +54,23 @@ func randomBytes(len int) ([]byte, error) {
 	return randBytes, nil
 }
 
-// GenerateDynamicPuzzleX returns random bytes X which satisfies that the hash of the nodeID xored with X
+// generateDynamicPuzzleX returns random bytes X which satisfies that the hash of the nodeID xored with X
 // has at least a prefix length of c
-func GenerateDynamicPuzzleX(nodeID []byte, c int) []byte {
+func generateDynamicPuzzleX(nodeID []byte, c int) []byte {
 	len := len(nodeID)
 	for {
 		x, err := randomBytes(len)
 		if err != nil {
 			continue
 		}
-		if CheckDynamicPuzzle(nodeID, x, c) {
+		if checkDynamicPuzzle(nodeID, x, c) {
 			return x
 		}
 	}
 }
 
-// CheckDynamicPuzzle checks whether the nodeID and bytes x solves the S/Kademlia dynamic puzzle for c prefix length
-func CheckDynamicPuzzle(nodeID, x []byte, c int) bool {
+// checkDynamicPuzzle checks whether the nodeID and bytes x solves the S/Kademlia dynamic puzzle for c prefix length
+func checkDynamicPuzzle(nodeID, x []byte, c int) bool {
 	xored := peer.Xor(nodeID, x)
 	return checkHashedBytesPrefixLen(xored, c)
 }
