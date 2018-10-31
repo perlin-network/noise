@@ -6,17 +6,8 @@ import (
 	"fmt"
 	"math/bits"
 
-	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/crypto/blake2b"
-	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/internal/protobuf"
-)
-
-const (
-	// number of preceding bits of 0 in the H(H(key_public)) for NodeID generation
-	c1 = 16
-	// number of preceding bits of 0 in the H(NodeID xor X) for checking if dynamic cryptopuzzle is solved
-	c2 = 16
 )
 
 // ID is an identity of nodes, using its public key hash and network address.
@@ -72,34 +63,15 @@ func (id ID) XorID(other ID) ID {
 
 // PrefixLen returns the number of prefixed zeros in a peer ID.
 func (id ID) PrefixLen() int {
-	return prefixLen(id.Id)
+	return PrefixLen(id.Id)
 }
 
-// prefixLen returns the number of prefixed zeroes in a byte slice
-func prefixLen(bytes []byte) int {
+// PrefixLen returns the number of prefixed zeroes in a byte slice
+func PrefixLen(bytes []byte) int {
 	for i, b := range bytes {
 		if b != 0 {
 			return i*8 + bits.LeadingZeros8(uint8(b))
 		}
 	}
 	return len(bytes)*8 - 1
-}
-
-// GenerateKeyPairAndID generates an S/Kademlia keypair and node ID
-func GenerateKeyPairAndID(address string) (*crypto.KeyPair, ID) {
-	for {
-		kp := ed25519.RandomKeyPair()
-		if isValidKeyPair(kp.PublicKey, c1) {
-			id := CreateID(address, kp.PublicKey)
-			return kp, id
-		}
-	}
-}
-
-// isValidKeyPair checks if the S/Kademlia static cryptopuzzle generates a valid node ID
-func isValidKeyPair(publicKey []byte, c1 int) bool {
-	b := blake2b.New()
-	nodeID := b.HashBytes(publicKey)
-	P := b.HashBytes(nodeID)
-	return prefixLen(P) >= c1
 }
