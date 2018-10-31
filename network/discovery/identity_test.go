@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"encoding/hex"
 	"testing"
 
 	"github.com/perlin-network/noise/crypto"
@@ -15,7 +16,7 @@ func TestGenerateKeyPairAndID(t *testing.T) {
 	t.Logf("%s %v", kp.PrivateKeyHex(), id)
 }
 
-func TestIsValidKeyPair(t *testing.T) {
+func TestCheckHashedBytesPrefixLen(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
@@ -34,8 +35,46 @@ func TestIsValidKeyPair(t *testing.T) {
 		if err != nil {
 			t.Errorf("FromPrivateKey() expected no error, got: %v", err)
 		}
-		if tt.valid != isValidKeyPair(kp.PublicKey, tt.c1) {
+		if tt.valid != checkHashedBytesPrefixLen(kp.PublicKey, tt.c1) {
 			t.Errorf("isValidKeyPair expected %t, got: %t", tt.valid, !tt.valid)
 		}
+	}
+}
+
+func TestRandomBytes(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		length int
+	}{
+		{8},
+		{16},
+		{24},
+		{32},
+	}
+	for _, tt := range testCases {
+		randBytes, err := randomBytes(tt.length)
+		if err != nil {
+			t.Errorf("randomBytes() expected no error, got: %v", err)
+		}
+		if len(randBytes) != tt.length {
+			t.Errorf("randomBytes() expected length to be %d, got: %d", tt.length, len(randBytes))
+		}
+	}
+}
+
+func TestSolveDynamicPuzzle(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		privateKeyHex string
+		encodedX      string
+		prefixLength  int
+	}{
+		{"2b56bb7556eaa58d2253d33b34d7ce869c54bb3c946164f6b73adc378cb9eccab37a3bf66608246c5791ebd19bd25169f6b243a6668c6635b0b4bc43474b6dbd", "4e68c698a810ab040232299591c4a902c15245efaae2ebeae34f45f9ca65f1b2", 8},
+		{"88b0fcebc02d4f61927ab466e32a67872e2f474dfd7ca5a2286e43c30fc65c9165a8020be000cd7d4697487759b320f8711ea84b29af7f98faecc3490b2a73d6", "20d906ea8a8c6bae5dabecc9815ff826cdf2d73991ff731b8b9ddb90564b523b", 16},
+		{"692116c1f969108bf48d6ea05cf08906da8ec1e4a832000f931204048d3d08c95e0ae842174bf34eddd8afbee04005751704f05a27893e15727a4d77de4eff9e", "b4369f03cfd2ac977f5d941e1459896d90cbaf979f243ed7eb24058e450d36d7", 24},
+	}
+	for _, tt := range testCases {
+		t.Logf("%v", tt)
 	}
 }

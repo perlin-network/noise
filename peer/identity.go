@@ -43,21 +43,15 @@ func (id ID) PublicKeyHex() string {
 
 // Xor performs XOR (^) over another peer ID's public key.
 func (id ID) Xor(other ID) ID {
-	result := make([]byte, len(id.PublicKey))
+	result := Xor(id.PublicKey, other.PublicKey)
 
-	for i := 0; i < len(id.PublicKey) && i < len(other.PublicKey); i++ {
-		result[i] = id.PublicKey[i] ^ other.PublicKey[i]
-	}
 	return ID{Address: id.Address, PublicKey: result}
 }
 
 // XorID performs XOR (^) over another peer ID's public key hash.
 func (id ID) XorID(other ID) ID {
-	result := make([]byte, len(id.Id))
+	result := Xor(id.Id, other.Id)
 
-	for i := 0; i < len(id.Id) && i < len(other.Id); i++ {
-		result[i] = id.Id[i] ^ other.Id[i]
-	}
 	return ID{Address: id.Address, Id: result}
 }
 
@@ -74,4 +68,18 @@ func PrefixLen(bytes []byte) int {
 		}
 	}
 	return len(bytes)*8 - 1
+}
+
+// Xor performs an xor operation on two byte slices
+func Xor(a, b []byte) []byte {
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+
+	dst := make([]byte, n)
+	for i := 0; i < n; i++ {
+		dst[i] = a[i] ^ b[i]
+	}
+	return dst
 }
