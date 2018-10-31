@@ -68,7 +68,7 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 			state.Routes.Update(peerID)
 		}
 
-		log.Info().
+		log.Debug().
 			Strs("peers", state.Routes.GetPeerAddresses()).
 			Msg("bootstrapped w/ peer(s)")
 	case *protobuf.LookupNodeRequest:
@@ -90,7 +90,7 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 			return err
 		}
 
-		log.Info().
+		log.Debug().
 			Strs("peers", state.Routes.GetPeerAddresses()).
 			Msg("connected to peer(s)")
 	}
@@ -108,7 +108,7 @@ func (state *Plugin) PeerDisconnect(client *network.PeerClient) {
 		if state.Routes.PeerExists(*client.ID) {
 			state.Routes.RemovePeer(*client.ID)
 
-			log.Info().
+			log.Debug().
 				Str("address", client.Network.ID.Address).
 				Str("peer_address", client.ID.Address).
 				Msg("peer has disconnected")
