@@ -84,7 +84,7 @@ func TestXorId(t *testing.T) {
 		newID[i] = b ^ publicKey3Hash[i]
 	}
 
-	xor := protoID{
+	xor := ID{
 		Address: address,
 		Id:      newID,
 	}
@@ -99,7 +99,7 @@ func TestXorId(t *testing.T) {
 func TestXor(t *testing.T) {
 	t.Parallel()
 
-	xor := protoID{
+	xor := ID{
 		Address:   address,
 		PublicKey: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
 	}
@@ -129,7 +129,7 @@ func TestPrefixLen(t *testing.T) {
 	for _, tt := range testCases {
 		publicKey := make([]byte, 4)
 		binary.LittleEndian.PutUint32(publicKey, tt.publicKeyHash)
-		id := protoID{Address: address, Id: publicKey}
+		id := ID{Address: address, Id: publicKey}
 		if id.PrefixLen() != tt.expected {
 			t.Errorf("PrefixLen() expected: %d, value: %d", tt.expected, id.PrefixLen())
 		}

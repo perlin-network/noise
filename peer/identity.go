@@ -11,45 +11,29 @@ import (
 )
 
 const (
-	keyNonce = "signMessage"
+	keyNonce = "nonce"
 )
 
 // ID is an identity of nodes, using its public key hash and network address.
-type ID interface {
-	Equals(other ID) bool
-	GetAddress() string
-	GetID() []byte
-	GetPublicKey() []byte
-	Less(other interface{}) bool
-	PrefixLen() int
-	PublicKeyHex() string
-	String() string
-	Value(key string) interface{}
-	WithValue(key string, val []byte) ID
-	Xor(other ID) ID
-	XorID(other ID) ID
-}
-
-// protoID is a protobuf struct that implements the ID interface.
-type protoID protobuf.ID
+type ID protobuf.ID
 
 // CreateID is a factory function creating ID.
 func CreateID(address string, publicKey []byte) ID {
-	return protoID{Address: address, PublicKey: publicKey, Id: blake2b.New().HashBytes(publicKey)}
+	return ID{Address: address, PublicKey: publicKey, Id: blake2b.New().HashBytes(publicKey)}
 }
 
 // String returns the identity address and public key.
-func (id protoID) String() string {
+func (id ID) String() string {
 	return fmt.Sprintf("ID{Address: %v, Id: %v}", id.Address, id.Id)
 }
 
 // Equals determines if two peer IDs are equal to each other based on the node IDs.
-func (id protoID) Equals(other ID) bool {
+func (id ID) Equals(other ID) bool {
 	return bytes.Equal(id.Id, other.GetID())
 }
 
 // Less determines if this peer ID's node ID is less than other ID's node ID.
-func (id protoID) Less(other interface{}) bool {
+func (id ID) Less(other interface{}) bool {
 	if other, is := other.(ID); is {
 		return bytes.Compare(id.Id, other.GetID()) == -1
 	}
@@ -57,27 +41,27 @@ func (id protoID) Less(other interface{}) bool {
 }
 
 // GetAddress returns the ID's address.
-func (id protoID) GetAddress() string {
+func (id ID) GetAddress() string {
 	return id.Address
 }
 
 // GetID returns the ID's node ID.
-func (id protoID) GetID() []byte {
+func (id ID) GetID() []byte {
 	return id.Id
 }
 
 // GetPublicKey returns the ID's public key.
-func (id protoID) GetPublicKey() []byte {
+func (id ID) GetPublicKey() []byte {
 	return id.PublicKey
 }
 
 // PublicKeyHex generates a hex-encoded string of public key hash of this given peer ID.
-func (id protoID) PublicKeyHex() string {
+func (id ID) PublicKeyHex() string {
 	return hex.EncodeToString(id.PublicKey)
 }
 
 // Value returns the metadata value associated with the key if it exists.
-func (id protoID) Value(key string) interface{} {
+func (id ID) Value(key string) interface{} {
 	if val, ok := id.Metadata[key]; ok {
 		return val
 	}
@@ -85,7 +69,7 @@ func (id protoID) Value(key string) interface{} {
 }
 
 // withValue returns a copy of parent in which the value associated with key is val.
-func (id protoID) WithValue(key string, val []byte) ID {
+func (id ID) WithValue(key string, val []byte) ID {
 	if &key == nil || key == "" {
 		panic("nil key")
 	}
@@ -98,21 +82,21 @@ func (id protoID) WithValue(key string, val []byte) ID {
 }
 
 // Xor performs XOR (^) over another peer ID's public key.
-func (id protoID) Xor(other ID) ID {
+func (id ID) Xor(other ID) ID {
 	result := Xor(id.PublicKey, other.GetPublicKey())
 
-	return protoID{Address: id.Address, PublicKey: result}
+	return ID{Address: id.Address, PublicKey: result}
 }
 
 // XorID performs XOR (^) over another peer ID's public key hash.
-func (id protoID) XorID(other ID) ID {
+func (id ID) XorID(other ID) ID {
 	result := Xor(id.Id, other.GetID())
 
-	return protoID{Address: id.Address, Id: result}
+	return ID{Address: id.Address, Id: result}
 }
 
 // PrefixLen returns the number of prefixed zeros in a peer ID.
-func (id protoID) PrefixLen() int {
+func (id ID) PrefixLen() int {
 	return PrefixLen(id.Id)
 }
 
