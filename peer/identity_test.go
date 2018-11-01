@@ -3,6 +3,7 @@ package peer
 import (
 	"bytes"
 	"encoding/binary"
+	"github.com/stretchr/testify/assert"
 	"testing"
 
 	"github.com/perlin-network/noise/crypto/blake2b"
@@ -22,11 +23,11 @@ var (
 func TestCreateID(t *testing.T) {
 	t.Parallel()
 
-	if !bytes.Equal(id1.Id, blake2b.New().HashBytes(publicKey1)) {
-		t.Errorf("PublicKey = %s, want %s", id1.Id, publicKey1)
+	if !bytes.Equal(id1.GetID(), blake2b.New().HashBytes(publicKey1)) {
+		t.Errorf("PublicKey = %s, want %s", id1.GetID(), publicKey1)
 	}
-	if id1.Address != address {
-		t.Errorf("Address = %s, want %s", id1.Address, address)
+	if id1.GetAddress() != address {
+		t.Errorf("Address = %s, want %s", id1.GetAddress(), address)
 	}
 }
 
@@ -78,14 +79,14 @@ func TestXorId(t *testing.T) {
 
 	publicKey1Hash := blake2b.New().HashBytes(publicKey1)
 	publicKey3Hash := blake2b.New().HashBytes(publicKey3)
-	newId := make([]byte, len(publicKey3Hash))
+	newID := make([]byte, len(publicKey3Hash))
 	for i, b := range publicKey1Hash {
-		newId[i] = b ^ publicKey3Hash[i]
+		newID[i] = b ^ publicKey3Hash[i]
 	}
 
-	xor := ID{
+	xor := protoID{
 		Address: address,
-		Id:      newId,
+		Id:      newID,
 	}
 
 	result := id1.XorID(id3)
@@ -98,7 +99,7 @@ func TestXorId(t *testing.T) {
 func TestXor(t *testing.T) {
 	t.Parallel()
 
-	xor := ID{
+	xor := protoID{
 		Address:   address,
 		PublicKey: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
 	}
@@ -128,9 +129,51 @@ func TestPrefixLen(t *testing.T) {
 	for _, tt := range testCases {
 		publicKey := make([]byte, 4)
 		binary.LittleEndian.PutUint32(publicKey, tt.publicKeyHash)
-		id := ID{Address: address, Id: publicKey}
+		id := protoID{Address: address, Id: publicKey}
 		if id.PrefixLen() != tt.expected {
 			t.Errorf("PrefixLen() expected: %d, value: %d", tt.expected, id.PrefixLen())
 		}
 	}
+}
+
+func TestWtihValue(t *testing.T) {
+	t.Parallel()
+	key := "test"
+	value := []byte("testvalue")
+
+	val := id1.Value(key)
+	if val != nil {
+		t.Errorf("Value(\"%s\") expected to be nil, got %v", key, val)
+	}
+
+	id1Val := id1.WithValue(key, value)
+	// id1Val should be a copy of id1 with new metadata
+	val = id1Val.Value(key)
+	if !bytes.Equal(val.([]byte), value) {
+		t.Errorf("Value(\"%s\") expected to be %v, got %v", key, value, val)
+	}
+	val = id1.Value(key)
+	if val != nil {
+		t.Errorf("Value(\"%s\") expected to be nil, got %v", key, val)
+	}
+
+	assert.Panics(t, func() {
+		id1.WithValue("", value)
+	}, "empty string should panic")
+
+	assert.Panics(t, func() {
+		var nilString string
+		id1.WithValue(nilString, value)
+	}, "nil string should panic")
+}
+
+func TestNonce(t *testing.T) {
+	t.Parallel()
+
+	expected := []byte("mynoncevalue")
+	idWithNonce := WithNonce(id1, expected)
+	val := GetNonce(id1)
+	assert.NotEqual(t, nil, val, "expected nil nonce")
+	val = GetNonce(idWithNonce)
+	assert.Equal(t, expected, val, "expected nonce to be found and equal")
 }
