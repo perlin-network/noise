@@ -169,7 +169,6 @@ func TestWtihValue(t *testing.T) {
 
 func TestNonce(t *testing.T) {
 	t.Parallel()
-
 	expected := []byte("mynoncevalue")
 	idWithNonce := WithNonce(id1, expected)
 	val := GetNonce(id1)

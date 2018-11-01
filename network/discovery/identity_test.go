@@ -112,7 +112,7 @@ func TestVerifyPuzzle(t *testing.T) {
 		if err != nil {
 			t.Errorf("DecodeString() expected no error, got: %v", err)
 		}
-		id.Nonce = nonce
+		id = peer.WithNonce(id, nonce)
 		ok := VerifyPuzzle(id)
 		if ok != tt.valid {
 			t.Errorf("VerifyPuzzle() expected to be %t, got %t", tt.valid, ok)

@@ -31,9 +31,9 @@ var (
 type Builder struct {
 	opts options
 
-	keys            *crypto.KeyPair
-	address         string
-	dynamicPuzzleID []byte
+	keys        *crypto.KeyPair
+	address     string
+	NodeIDNonce []byte
 
 	plugins     *PluginList
 	pluginCount int
@@ -156,9 +156,9 @@ func (builder *Builder) SetAddress(address string) {
 	builder.address = address
 }
 
-// SetDynamicPuzzle sets the node ID dynamic puzzle.
-func (builder *Builder) SetDynamicPuzzle(nonce []byte) {
-	builder.dynamicPuzzleID = nonce
+// SetNodeIDNonce sets the node ID's nonce.
+func (builder *Builder) SetNodeIDNonce(nonce []byte) {
+	builder.NodeIDNonce = nonce
 }
 
 // AddPluginWithPriority registers a new plugin onto the network with a set priority.
@@ -220,8 +220,8 @@ func (builder *Builder) Build() (*Network, error) {
 	}
 
 	id := peer.CreateID(unifiedAddress, builder.keys.PublicKey)
-	if len(builder.dynamicPuzzleID) != 0 {
-		id.Nonce = builder.dynamicPuzzleID
+	if len(builder.NodeIDNonce) != 0 {
+		id = peer.WithNonce(id, builder.NodeIDNonce)
 	}
 
 	net := &Network{

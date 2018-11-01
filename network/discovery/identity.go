@@ -25,8 +25,8 @@ func GenerateKeyPairAndID(address string) (*crypto.KeyPair, peer.ID) {
 		kp := ed25519.RandomKeyPair()
 		id := peer.CreateID(address, kp.PublicKey)
 		if checkHashedBytesPrefixLen(id.Id, c1) {
-			x := generateDynamicPuzzleX(id.Id, c2)
-			id.Nonce = x
+			nonce := getNonce(id.Id, c2)
+			id = peer.WithNonce(id, nonce)
 
 			return kp, id
 		}
@@ -53,9 +53,9 @@ func randomBytes(len int) ([]byte, error) {
 	return randBytes, nil
 }
 
-// generateDynamicPuzzleX returns random bytes X which satisfies that the hash of the nodeID xored with X
+// getNonce returns random bytes X which satisfies that the hash of the nodeID xored with X
 // has at least a prefix length of c
-func generateDynamicPuzzleX(nodeID []byte, c int) []byte {
+func getNonce(nodeID []byte, c int) []byte {
 	len := len(nodeID)
 	for {
 		x, err := randomBytes(len)
@@ -78,5 +78,6 @@ func checkDynamicPuzzle(nodeID, x []byte, c int) bool {
 func VerifyPuzzle(id peer.ID) bool {
 	// check if static puzzle and dynamic puzzle is solved
 	b := blake2b.New()
-	return bytes.Equal(b.HashBytes(id.PublicKey), id.Id) && checkHashedBytesPrefixLen(id.Id, c1) && checkDynamicPuzzle(id.Id, id.Nonce, c2)
+	nonce := peer.GetNonce(id)
+	return bytes.Equal(b.HashBytes(id.PublicKey), id.Id) && checkHashedBytesPrefixLen(id.Id, c1) && checkDynamicPuzzle(id.Id, nonce, c2)
 }
