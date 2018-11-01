@@ -45,7 +45,7 @@ func sendBroadcast(n *network.Network) {
 		return
 	}
 
-	ctx := network.WithSignMessage(context.Background(), true)
+	ctx := network.WithStrongSignature(context.Background(), true)
 	targetNumPeers := atomic.LoadInt64(&numPeers)/2 + 1
 	n.BroadcastRandomly(ctx, &messages.Empty{}, int(targetNumPeers))
 }

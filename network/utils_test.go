@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/peer"
@@ -48,6 +49,27 @@ func TestSerializeMessageInfoForSigning(t *testing.T) {
 				t.Fatal("Different inputs produced the same output")
 			}
 		}
+	}
+}
+
+func TestPrepareWeakSignature(t *testing.T) {
+	id1 := protobuf.ID(peer.CreateID("tcp://127.0.0.1:3001", []byte("12341234123412341234123412341234")))
+	id2 := protobuf.ID(peer.CreateID("tcp://127.0.0.1:3001", []byte("43214321432143214321432143214321")))
+	id3 := protobuf.ID(peer.CreateID("tcp://127.0.0.1:3002", []byte("43214321432143214321432143214321")))
+
+	now := time.Now()
+
+	expiration1 := now.Add(60 * time.Second)
+	expiration2 := now.Add(1 * time.Minute)
+	b1 := PrepareWeakSignature(&id1, &expiration1)
+	b2 := PrepareWeakSignature(&id2, &expiration2)
+	b3 := PrepareWeakSignature(&id3, &expiration2)
+
+	if !bytes.Equal(b1, b2) {
+		t.Errorf("Equal() expected to be true")
+	}
+	if bytes.Equal(b2, b3) {
+		t.Errorf("Equal() expected to be false")
 	}
 }
 

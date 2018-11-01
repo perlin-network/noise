@@ -78,7 +78,7 @@ func main() {
 
 		log.Info().Msgf("<%s> %s", net.Address, input)
 
-		ctx := network.WithSignMessage(context.Background(), true)
+		ctx := network.WithStrongSignature(context.Background(), true)
 		net.Broadcast(ctx, &messages.ChatMessage{Message: input})
 	}
 

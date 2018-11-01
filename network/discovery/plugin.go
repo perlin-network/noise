@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"context"
+	"time"
 
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
@@ -24,6 +25,10 @@ type Plugin struct {
 	Routes *RoutingTable
 }
 
+const (
+	weakSignatureExpiration = 30 * time.Second
+)
+
 var (
 	PluginID                         = (*Plugin)(nil)
 	_        network.PluginInterface = (*Plugin)(nil)
@@ -34,24 +39,26 @@ func (state *Plugin) Startup(net *network.Network) {
 	state.Routes = CreateRoutingTable(net.ID)
 }
 
-func (state *Plugin) Receive(ctx *network.PluginContext) error {
-	sender := ctx.Sender()
+func (state *Plugin) Receive(pctx *network.PluginContext) error {
+	sender := pctx.Sender()
 	if state.EnforceSkademliaNodeIDs && !VerifyPuzzle(sender) {
 		return errors.Errorf("Sender %v is not a valid node ID", sender)
 	}
 	// Update routing for every incoming message.
 	state.Routes.Update(sender)
-	gCtx := network.WithSignMessage(context.Background(), true)
+	// expire signature after 30 seconds
+	expiration := time.Now().Add(weakSignatureExpiration)
+	ctx := network.WithWeakSignature(context.Background(), true, &expiration)
 
 	// Handle RPC.
-	switch msg := ctx.Message().(type) {
+	switch msg := pctx.Message().(type) {
 	case *protobuf.Ping:
 		if state.DisablePing {
 			break
 		}
 
 		// Send pong to peer.
-		err := ctx.Reply(gCtx, &protobuf.Pong{})
+		err := pctx.Reply(ctx, &protobuf.Pong{})
 
 		if err != nil {
 			return err
@@ -61,7 +68,7 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 			break
 		}
 
-		peers := FindNode(ctx.Network(), ctx.Sender(), BucketSize, 8)
+		peers := FindNode(pctx.Network(), pctx.Sender(), BucketSize, 8)
 
 		// Update routing table w/ closest peers to self.
 		for _, peerID := range peers {
@@ -85,7 +92,7 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 			response.Peers = append(response.Peers, &id)
 		}
 
-		err := ctx.Reply(gCtx, response)
+		err := pctx.Reply(ctx, response)
 		if err != nil {
 			return err
 		}

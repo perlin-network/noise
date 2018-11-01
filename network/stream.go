@@ -10,6 +10,7 @@ import (
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/types/opcode"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
@@ -111,14 +112,18 @@ func (n *Network) receiveMessage(conn net.Conn) (*protobuf.Message, error) {
 	}
 
 	// Verify signature of message.
-	if msg.Signature != nil && !crypto.Verify(
-		n.opts.signaturePolicy,
-		n.opts.hashPolicy,
-		msg.Sender.PublicKey,
-		SerializeMessage(msg.Sender, msg.Message),
-		msg.Signature,
-	) {
-		return nil, errors.New("received message had an malformed signature")
+	if msg.Signature != nil {
+		code := opcode.Opcode(msg.Opcode)
+		if code == opcode.PingCode || code == opcode.PongCode || code == opcode.LookupNodeRequestCode || code == opcode.LookupNodeResponseCode {
+			// TODO: verify weak message
+		} else if !crypto.Verify(
+			n.opts.signaturePolicy,
+			n.opts.hashPolicy,
+			msg.Sender.PublicKey,
+			SerializeMessage(msg.Sender, msg.Message),
+			msg.Signature) {
+			return nil, errors.New("received message had an malformed signature")
+		}
 	}
 
 	return msg, nil

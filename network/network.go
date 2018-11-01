@@ -526,7 +526,7 @@ func (n *Network) PrepareMessage(ctx context.Context, message proto.Message) (*p
 		Sender:  &id,
 	}
 
-	if GetSignMessage(ctx) {
+	if GetStrongSignature(ctx) {
 		signature, err := n.keys.Sign(
 			n.opts.signaturePolicy,
 			n.opts.hashPolicy,
@@ -536,6 +536,19 @@ func (n *Network) PrepareMessage(ctx context.Context, message proto.Message) (*p
 			return nil, err
 		}
 		msg.Signature = signature
+	} else {
+		if ok, expiration := GetWeakSignature(ctx); ok {
+			b := PrepareWeakSignature(&id, expiration)
+			signature, err := n.keys.Sign(
+				n.opts.signaturePolicy,
+				n.opts.hashPolicy,
+				b,
+			)
+			if err != nil {
+				return nil, err
+			}
+			msg.Signature = signature
+		}
 	}
 
 	return msg, nil
