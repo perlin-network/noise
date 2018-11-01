@@ -13,7 +13,7 @@ func TestGenerateKeyPairAndID(t *testing.T) {
 	t.Parallel()
 
 	_, id := GenerateKeyPairAndID("tcp://127.0.0.1:8000")
-	if !IsPeerValid(id) {
+	if !VerifyPuzzle(id) {
 		t.Errorf("GenerateKeyPairAndID() expected ID to be valid")
 	}
 }
@@ -93,7 +93,7 @@ func TestCheckDynamicPuzzle(t *testing.T) {
 	}
 }
 
-func TestIsPeerValid(t *testing.T) {
+func TestVerifyPuzzle(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
@@ -113,9 +113,9 @@ func TestIsPeerValid(t *testing.T) {
 			t.Errorf("DecodeString() expected no error, got: %v", err)
 		}
 		id.X = x
-		ok := IsPeerValid(id)
+		ok := VerifyPuzzle(id)
 		if ok != tt.valid {
-			t.Errorf("IsPeerValid() expected to be %t, got %t", tt.valid, ok)
+			t.Errorf("VerifyPuzzle() expected to be %t, got %t", tt.valid, ok)
 		}
 	}
 }

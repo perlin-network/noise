@@ -157,8 +157,8 @@ func (builder *Builder) SetAddress(address string) {
 }
 
 // SetDynamicPuzzle sets the node ID dynamic puzzle.
-func (builder *Builder) SetDynamicPuzzle(x []byte) {
-	builder.dynamicPuzzleID = x
+func (builder *Builder) SetDynamicPuzzle(nonce []byte) {
+	builder.dynamicPuzzleID = nonce
 }
 
 // AddPluginWithPriority registers a new plugin onto the network with a set priority.

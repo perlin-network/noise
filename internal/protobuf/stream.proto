@@ -29,8 +29,8 @@ message ID {
     string address = 2;
     // id is the computed hash of the public key
     bytes id = 3;
-    // x are bytes that solve the dynamic S/Kademlia cryptopuzzle
-    bytes x = 4;
+    // nonce solves the dynamic S/Kademlia cryptopuzzle associated with the public key
+    bytes nonce = 4;
 }
 
 message Message {

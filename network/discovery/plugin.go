@@ -36,7 +36,7 @@ func (state *Plugin) Startup(net *network.Network) {
 
 func (state *Plugin) Receive(ctx *network.PluginContext) error {
 	sender := ctx.Sender()
-	if state.EnforceSkademliaNodeIDs && !IsPeerValid(sender) {
+	if state.EnforceSkademliaNodeIDs && !VerifyPuzzle(sender) {
 		return errors.Errorf("Sender %v is not a valid node ID", sender)
 	}
 	// Update routing for every incoming message.

@@ -117,7 +117,7 @@ func ExampleProxyPlugin() {
 		kp, id := discovery.GenerateKeyPairAndID(address)
 		builder.SetKeys(kp)
 		builder.SetAddress(address)
-		builder.SetDynamicPuzzle(id.X)
+		builder.SetDynamicPuzzle(id.Nonce)
 
 		// DisablePong will preserve the line topology also enforce S/Kademlia node IDs
 		builder.AddPlugin(&discovery.Plugin{

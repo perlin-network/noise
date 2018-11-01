@@ -74,8 +74,8 @@ func checkDynamicPuzzle(nodeID, x []byte, c int) bool {
 	return checkHashedBytesPrefixLen(xored, c)
 }
 
-// IsPeerValid checks whether an ID is a valid S/Kademlia node ID
-func IsPeerValid(id peer.ID) bool {
+// VerifyPuzzle checks whether an ID is a valid S/Kademlia node ID
+func VerifyPuzzle(id peer.ID) bool {
 	// check if static puzzle and dynamic puzzle is solved
 	b := blake2b.New()
 	return bytes.Equal(b.HashBytes(id.PublicKey), id.Id) && checkHashedBytesPrefixLen(id.Id, c1) && checkDynamicPuzzle(id.Id, id.X, c2)
