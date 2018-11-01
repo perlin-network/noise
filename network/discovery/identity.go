@@ -26,7 +26,7 @@ func GenerateKeyPairAndID(address string) (*crypto.KeyPair, peer.ID) {
 		id := peer.CreateID(address, kp.PublicKey)
 		if checkHashedBytesPrefixLen(id.Id, c1) {
 			x := generateDynamicPuzzleX(id.Id, c2)
-			id.X = x
+			id.Nonce = x
 
 			return kp, id
 		}
@@ -78,5 +78,5 @@ func checkDynamicPuzzle(nodeID, x []byte, c int) bool {
 func VerifyPuzzle(id peer.ID) bool {
 	// check if static puzzle and dynamic puzzle is solved
 	b := blake2b.New()
-	return bytes.Equal(b.HashBytes(id.PublicKey), id.Id) && checkHashedBytesPrefixLen(id.Id, c1) && checkDynamicPuzzle(id.Id, id.X, c2)
+	return bytes.Equal(b.HashBytes(id.PublicKey), id.Id) && checkHashedBytesPrefixLen(id.Id, c1) && checkDynamicPuzzle(id.Id, id.Nonce, c2)
 }

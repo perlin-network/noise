@@ -108,11 +108,11 @@ func TestVerifyPuzzle(t *testing.T) {
 		sp := ed25519.New()
 		kp, err := crypto.FromPrivateKey(sp, tt.privateKeyHex)
 		id := peer.CreateID("tcp://localhost:8000", kp.PublicKey)
-		x, err := hex.DecodeString(tt.encodedX)
+		nonce, err := hex.DecodeString(tt.encodedX)
 		if err != nil {
 			t.Errorf("DecodeString() expected no error, got: %v", err)
 		}
-		id.X = x
+		id.Nonce = nonce
 		ok := VerifyPuzzle(id)
 		if ok != tt.valid {
 			t.Errorf("VerifyPuzzle() expected to be %t, got %t", tt.valid, ok)

@@ -221,7 +221,7 @@ func (builder *Builder) Build() (*Network, error) {
 
 	id := peer.CreateID(unifiedAddress, builder.keys.PublicKey)
 	if len(builder.dynamicPuzzleID) != 0 {
-		id.X = builder.dynamicPuzzleID
+		id.Nonce = builder.dynamicPuzzleID
 	}
 
 	net := &Network{
