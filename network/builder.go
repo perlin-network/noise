@@ -10,6 +10,7 @@ import (
 	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/network/transport"
 	"github.com/perlin-network/noise/peer"
+
 	"github.com/pkg/errors"
 )
 
@@ -31,9 +32,9 @@ var (
 type Builder struct {
 	opts options
 
-	keys        *crypto.KeyPair
-	address     string
-	NodeIDNonce []byte
+	keys    *crypto.KeyPair
+	address string
+	id      *peer.ID
 
 	plugins     *PluginList
 	pluginCount int
@@ -153,12 +154,19 @@ func (builder *Builder) SetKeys(pair *crypto.KeyPair) {
 
 // SetAddress sets the host address for the network.
 func (builder *Builder) SetAddress(address string) {
+	if builder.id != nil {
+		panic("cannot use SetAddress with SetID")
+	}
 	builder.address = address
 }
 
-// SetNodeIDNonce sets the node ID's nonce.
-func (builder *Builder) SetNodeIDNonce(nonce []byte) {
-	builder.NodeIDNonce = nonce
+// SetID sets the peer id of the network. Using this will override SetAddress.
+func (builder *Builder) SetID(id peer.ID) {
+	if builder.address != "" && builder.address != defaultAddress {
+		panic("cannot use SetID with SetAddress")
+	}
+	builder.id = &id
+	builder.address = id.Address
 }
 
 // AddPluginWithPriority registers a new plugin onto the network with a set priority.
@@ -219,14 +227,16 @@ func (builder *Builder) Build() (*Network, error) {
 		return nil, err
 	}
 
-	id := peer.CreateID(unifiedAddress, builder.keys.PublicKey)
-	if len(builder.NodeIDNonce) != 0 {
-		id = peer.WithNonce(id, builder.NodeIDNonce)
+	if builder.id == nil {
+		id := peer.CreateID(unifiedAddress, builder.keys.PublicKey)
+		builder.id = &id
+	} else {
+		builder.id.Address = unifiedAddress
 	}
 
 	net := &Network{
 		opts:    builder.opts,
-		ID:      id,
+		ID:      *builder.id,
 		keys:    builder.keys,
 		Address: unifiedAddress,
 

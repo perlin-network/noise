@@ -8,6 +8,8 @@ import (
 
 	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/crypto/ed25519"
+	"github.com/perlin-network/noise/peer"
+
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
@@ -79,9 +81,38 @@ func TestBuilderAddress(t *testing.T) {
 
 	errMissingPort := errors.New("missing port in address")
 	builder.SetAddress("localhost")
+	assert.Panics(t, func() {
+		id := peer.CreateID("localhost", keys.PublicKey)
+		builder.SetID(id)
+	}, "cannot use SetID with SetAddress")
 	_, err = builder.Build()
 	if err == nil {
 		t.Errorf("Build() = %+v, expected %+v", err, errMissingPort)
+	}
+}
+
+func TestSetID(t *testing.T) {
+	t.Parallel()
+	addr1 := "tcp://127.0.0.1:8000"
+	addr2 := "tcp://127.0.0.1:8001"
+
+	builder := NewBuilder()
+	id := peer.CreateID(addr1, keys.PublicKey)
+	builder.SetID(id)
+	assert.Panics(t, func() {
+		builder.SetAddress(addr2)
+	}, "cannot use SetAddress with SetID")
+	n, err := builder.Build()
+	if err != nil {
+		t.Errorf("Build() = %+v, expected nil", err)
+	}
+
+	if !n.ID.Equals(id) {
+		t.Errorf("Equals() expected to be true")
+	}
+
+	if n.Address != addr1 {
+		t.Errorf("Address is %s, expected %s", n.Address, addr1)
 	}
 }
 

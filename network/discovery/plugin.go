@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
@@ -12,15 +13,32 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	defaultDisablePing   = false
+	defaultDisablePong   = false
+	defaultDisableLookup = false
+	defaultEnforcePuzzle = false
+	DefaultC1            = 16
+	DefaultC2            = 16
+)
+
+var (
+	defaultPeerID *peer.ID
+)
+
 type Plugin struct {
 	*network.Plugin
 
-	DisablePing   bool
-	DisablePong   bool
-	DisableLookup bool
-
-	// EnforceSkademliaNodeIDs checks whether node IDs satisfy S/Kademlia cryptopuzzles
-	EnforceSkademliaNodeIDs bool
+	// Plugin options
+	disablePing   bool
+	disablePong   bool
+	disableLookup bool
+	// enforcePuzzle checks whether node IDs satisfy S/Kademlia cryptopuzzles
+	enforcePuzzle bool
+	// c1 is the number of preceding bits of 0 in the H(H(key_public)) for NodeID generation
+	c1 int
+	// c2 is the number of preceding bits of 0 in the H(NodeID xor X) for checking if dynamic cryptopuzzle is solved
+	c2 int
 
 	Routes *RoutingTable
 }
@@ -34,14 +52,81 @@ var (
 	_        network.PluginInterface = (*Plugin)(nil)
 )
 
+// PluginOption are configurable options for the discovery plugin
+type PluginOption func(*Plugin)
+
+// WithPuzzleEnabled sets the plugin to enforce S/Kademlia peer node IDs for c1 and c2
+func WithPuzzleEnabled(c1, c2 int) PluginOption {
+	return func(o *Plugin) {
+		o.c1 = c1
+		o.c2 = c2
+	}
+}
+
+// WithDisablePing sets whether to reply to ping messages
+func WithDisablePing(v bool) PluginOption {
+	return func(o *Plugin) {
+		o.disablePing = v
+	}
+}
+
+// WithDisablePong sets whether to reply to pong messages
+func WithDisablePong(v bool) PluginOption {
+	return func(o *Plugin) {
+		o.disablePong = v
+	}
+}
+
+// WithDisableLookup sets whether to reply to node lookup messages
+func WithDisableLookup(v bool) PluginOption {
+	return func(o *Plugin) {
+		o.disableLookup = v
+	}
+}
+
+func defaultOptions() PluginOption {
+	return func(o *Plugin) {
+		o.disablePing = defaultDisablePing
+		o.disablePong = defaultDisablePong
+		o.disableLookup = defaultDisableLookup
+		o.enforcePuzzle = defaultEnforcePuzzle
+		o.c1 = DefaultC1
+		o.c2 = DefaultC2
+	}
+}
+
+// New returns a new discovery plugin with specified options.
+func New(opts ...PluginOption) *Plugin {
+	p := new(Plugin)
+	defaultOptions()(p)
+
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
+}
+
+// PerformPuzzle returns an S/Kademlia compatible keypair and node ID nonce
+func (state *Plugin) PerformPuzzle() (*crypto.KeyPair, []byte) {
+	return generateKeyPairAndNonce(state.c1, state.c2)
+}
+
 func (state *Plugin) Startup(net *network.Network) {
+	if state.enforcePuzzle {
+		// verify the provided nonce is valid
+		if !VerifyPuzzle(net.ID, state.c1, state.c2) {
+			log.Fatal().Msg("discovery: provided node ID nonce does not solve the cryptopuzzle.")
+		}
+	}
+
 	// Create routing table.
 	state.Routes = CreateRoutingTable(net.ID)
 }
 
 func (state *Plugin) Receive(pctx *network.PluginContext) error {
 	sender := pctx.Sender()
-	if state.EnforceSkademliaNodeIDs && !VerifyPuzzle(sender) {
+	if state.enforcePuzzle && !VerifyPuzzle(sender, state.c1, state.c2) {
 		return errors.Errorf("Sender %v is not a valid node ID", sender)
 	}
 	// Update routing for every incoming message.
@@ -53,7 +138,7 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 	// Handle RPC.
 	switch msg := pctx.Message().(type) {
 	case *protobuf.Ping:
-		if state.DisablePing {
+		if state.disablePing {
 			break
 		}
 
@@ -64,7 +149,7 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 			return err
 		}
 	case *protobuf.Pong:
-		if state.DisablePong {
+		if state.disablePong {
 			break
 		}
 
@@ -79,7 +164,7 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 			Strs("peers", state.Routes.GetPeerAddresses()).
 			Msg("bootstrapped w/ peer(s)")
 	case *protobuf.LookupNodeRequest:
-		if state.DisableLookup {
+		if state.disableLookup {
 			break
 		}
 

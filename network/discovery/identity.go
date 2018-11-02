@@ -12,23 +12,15 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
-	// number of preceding bits of 0 in the H(H(key_public)) for NodeID generation
-	c1 = 16
-	// number of preceding bits of 0 in the H(NodeID xor X) for checking if dynamic cryptopuzzle is solved
-	c2 = 16
-)
-
-// GenerateKeyPairAndID generates an S/Kademlia keypair and node ID
-func GenerateKeyPairAndID(address string) (*crypto.KeyPair, peer.ID) {
+// generateKeyPairAndNonce generates an S/Kademlia keypair and nonce with cryptopuzzle prefix matching constants c1
+// and c2
+func generateKeyPairAndNonce(c1, c2 int) (*crypto.KeyPair, []byte) {
+	b := blake2b.New()
 	for {
 		kp := ed25519.RandomKeyPair()
-		id := peer.CreateID(address, kp.PublicKey)
-		if checkHashedBytesPrefixLen(id.Id, c1) {
-			nonce := getNonce(id.Id, c2)
-			id = peer.WithNonce(id, nonce)
-
-			return kp, id
+		nodeID := b.HashBytes(kp.PublicKey)
+		if checkHashedBytesPrefixLen(nodeID, c1) {
+			return kp, getNonce(nodeID, c2)
 		}
 	}
 }
@@ -74,8 +66,8 @@ func checkDynamicPuzzle(nodeID, x []byte, c int) bool {
 	return checkHashedBytesPrefixLen(xored, c)
 }
 
-// VerifyPuzzle checks whether an ID is a valid S/Kademlia node ID
-func VerifyPuzzle(id peer.ID) bool {
+// VerifyPuzzle checks whether an ID is a valid S/Kademlia node ID with cryptopuzzle constants c1 and c2
+func VerifyPuzzle(id peer.ID, c1, c2 int) bool {
 	// check if static puzzle and dynamic puzzle is solved
 	b := blake2b.New()
 	nonce := peer.GetNonce(id)
