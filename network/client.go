@@ -267,8 +267,7 @@ func (c *PeerClient) Write(data []byte) (int, error) {
 		return 0, errors.New("write deadline exceeded")
 	}
 
-	ctx := WithStrongSignature(context.Background(), true)
-	err := c.Tell(ctx, &protobuf.Bytes{Data: data})
+	err := c.Tell(context.Background(), &protobuf.Bytes{Data: data})
 	if err != nil {
 		return 0, err
 	}

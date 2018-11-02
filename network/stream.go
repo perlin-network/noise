@@ -7,10 +7,8 @@ import (
 	"net"
 	"sync"
 
-	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/types/opcode"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
@@ -109,21 +107,6 @@ func (n *Network) receiveMessage(conn net.Conn) (*protobuf.Message, error) {
 	// Check if any of the message headers are invalid or null.
 	if msg.Opcode == 0 || msg.Sender == nil || msg.Sender.PublicKey == nil || len(msg.Sender.Address) == 0 {
 		return nil, errors.New("received an invalid message (either no opcode, no sender, or no signature) from a peer")
-	}
-
-	// Verify signature of message.
-	if msg.Signature != nil {
-		code := opcode.Opcode(msg.Opcode)
-		if code == opcode.PingCode || code == opcode.PongCode || code == opcode.LookupNodeRequestCode || code == opcode.LookupNodeResponseCode {
-			// TODO: verify weak message
-		} else if !crypto.Verify(
-			n.opts.signaturePolicy,
-			n.opts.hashPolicy,
-			msg.Sender.PublicKey,
-			SerializeMessage(msg.Sender, msg.Message),
-			msg.Signature) {
-			return nil, errors.New("received message had an malformed signature")
-		}
 	}
 
 	return msg, nil

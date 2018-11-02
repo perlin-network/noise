@@ -133,7 +133,7 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 	state.Routes.Update(sender)
 	// expire signature after 30 seconds
 	expiration := time.Now().Add(weakSignatureExpiration)
-	ctx := network.WithWeakSignature(context.Background(), true, &expiration)
+	ctx := WithWeakSignature(context.Background(), true, &expiration)
 
 	// Handle RPC.
 	switch msg := pctx.Message().(type) {

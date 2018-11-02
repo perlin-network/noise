@@ -489,8 +489,7 @@ func (n *Network) Plugin(key interface{}) (PluginInterface, bool) {
 	return n.plugins.Get(key)
 }
 
-// PrepareMessage marshals a message into a *protobuf.Message and signs it with this
-// nodes private key. Errors if the message is null.
+// PrepareMessage marshals a message into a *protobuf.Message. Errors if the message is null.
 func (n *Network) PrepareMessage(ctx context.Context, message proto.Message) (*protobuf.Message, error) {
 	if message == nil {
 		return nil, errors.New("network: message is null")
@@ -512,31 +511,6 @@ func (n *Network) PrepareMessage(ctx context.Context, message proto.Message) (*p
 		Message: raw,
 		Opcode:  uint32(opcode),
 		Sender:  &id,
-	}
-
-	if GetStrongSignature(ctx) {
-		signature, err := n.keys.Sign(
-			n.opts.signaturePolicy,
-			n.opts.hashPolicy,
-			SerializeMessage(&id, raw),
-		)
-		if err != nil {
-			return nil, err
-		}
-		msg.Signature = signature
-	} else {
-		if ok, expiration := GetWeakSignature(ctx); ok {
-			b := PrepareWeakSignature(&id, expiration)
-			signature, err := n.keys.Sign(
-				n.opts.signaturePolicy,
-				n.opts.hashPolicy,
-				b,
-			)
-			if err != nil {
-				return nil, err
-			}
-			msg.Signature = signature
-		}
 	}
 
 	return msg, nil
