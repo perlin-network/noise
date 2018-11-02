@@ -114,17 +114,20 @@ func ExampleProxyPlugin() {
 		ids[address] = i
 
 		builder := network.NewBuilder()
-		kp, id := discovery.GenerateKeyPairAndID(address, 16, 16)
-		builder.SetKeys(kp)
-		builder.SetAddress(address)
 
-		// DisablePong will preserve the line topology also enforce S/Kademlia node IDs
-		p := discovery.New(
-			discovery.WithEnforcePuzzle(true),
-			discovery.WithPuzzleNonce(peer.GetNonce(id)),
+		// enforce S/Kademlia node IDs
+		plugin := discovery.New(
+			discovery.WithPuzzleEnabled(discovery.DefaultC1, discovery.DefaultC2),
 			discovery.WithDisablePong(true),
 		)
-		builder.AddPlugin(p)
+		kp, nonce := plugin.PerformPuzzle()
+
+		builder.SetKeys(kp)
+		id := peer.CreateID(address, kp.PublicKey)
+		id = peer.WithNonce(id, nonce)
+		builder.SetID(id)
+
+		builder.AddPlugin(plugin)
 
 		plugins = append(plugins, new(ProxyPlugin))
 		builder.AddPlugin(plugins[i])

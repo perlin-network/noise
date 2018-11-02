@@ -12,8 +12,10 @@ import (
 func TestGenerateKeyPairAndID(t *testing.T) {
 	t.Parallel()
 
-	_, id := GenerateKeyPairAndID("tcp://127.0.0.1:8000", 16, 16)
-	if !VerifyPuzzle(id, 16, 16) {
+	kp, nonce := generateKeyPairAndNonce(DefaultC1, DefaultC2)
+	id := peer.CreateID("tcp://localhost:8000", kp.PublicKey)
+	id = peer.WithNonce(id, nonce)
+	if !VerifyPuzzle(id, DefaultC1, DefaultC2) {
 		t.Errorf("GenerateKeyPairAndID() expected ID to be valid")
 	}
 }

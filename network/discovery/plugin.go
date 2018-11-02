@@ -3,6 +3,7 @@ package discovery
 import (
 	"context"
 
+	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
@@ -16,8 +17,8 @@ const (
 	defaultDisablePong   = false
 	defaultDisableLookup = false
 	defaultEnforcePuzzle = false
-	defaultC1            = 16
-	defaultC2            = 16
+	DefaultC1            = 16
+	DefaultC2            = 16
 )
 
 var (
@@ -33,8 +34,6 @@ type Plugin struct {
 	disableLookup bool
 	// enforcePuzzle checks whether node IDs satisfy S/Kademlia cryptopuzzles
 	enforcePuzzle bool
-	// nonce is an S/Kademlia puzzle nonce
-	nonce []byte
 	// c1 is the number of preceding bits of 0 in the H(H(key_public)) for NodeID generation
 	c1 int
 	// c2 is the number of preceding bits of 0 in the H(NodeID xor X) for checking if dynamic cryptopuzzle is solved
@@ -51,30 +50,10 @@ var (
 // PluginOption are configurable options for the discovery plugin
 type PluginOption func(*Plugin)
 
-// WithEnforcePuzzle sets the plugin to enforce S/Kademlia peer node IDs
-func WithEnforcePuzzle(v bool) PluginOption {
-	return func(o *Plugin) {
-		o.enforcePuzzle = v
-	}
-}
-
-// WithPuzzleNonce sets the current node ID's puzzle nonce
-func WithPuzzleNonce(nonce []byte) PluginOption {
-	return func(o *Plugin) {
-		o.nonce = nonce
-	}
-}
-
-// WithC1 sets the prefix matching length for the static S/Kademlia cryptopuzzle
-func WithC1(c1 int) PluginOption {
+// WithPuzzleEnabled sets the plugin to enforce S/Kademlia peer node IDs for c1 and c2
+func WithPuzzleEnabled(c1, c2 int) PluginOption {
 	return func(o *Plugin) {
 		o.c1 = c1
-	}
-}
-
-// WithC2 sets the prefix matching length for the static S/Kademlia cryptopuzzle
-func WithC2(c2 int) PluginOption {
-	return func(o *Plugin) {
 		o.c2 = c2
 	}
 }
@@ -106,8 +85,8 @@ func defaultOptions() PluginOption {
 		o.disablePong = defaultDisablePong
 		o.disableLookup = defaultDisableLookup
 		o.enforcePuzzle = defaultEnforcePuzzle
-		o.c1 = defaultC1
-		o.c2 = defaultC2
+		o.c1 = DefaultC1
+		o.c2 = DefaultC2
 	}
 }
 
@@ -123,9 +102,13 @@ func New(opts ...PluginOption) *Plugin {
 	return p
 }
 
+// PerformPuzzle returns an S/Kademlia compatible keypair and node ID nonce
+func (state *Plugin) PerformPuzzle() (*crypto.KeyPair, []byte) {
+	return generateKeyPairAndNonce(state.c1, state.c2)
+}
+
 func (state *Plugin) Startup(net *network.Network) {
-	if state.nonce != nil {
-		net.ID = peer.WithNonce(net.ID, state.nonce)
+	if state.enforcePuzzle {
 		// verify the provided nonce is valid
 		if !VerifyPuzzle(net.ID, state.c1, state.c2) {
 			log.Fatal().Msg("discovery: provided node ID nonce does not solve the cryptopuzzle.")

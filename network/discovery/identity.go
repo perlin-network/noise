@@ -12,17 +12,15 @@ import (
 	"github.com/pkg/errors"
 )
 
-// GenerateKeyPairAndID generates an S/Kademlia keypair and node ID with cryptopuzzle prefix matching constants c1
+// generateKeyPairAndNonce generates an S/Kademlia keypair and nonce with cryptopuzzle prefix matching constants c1
 // and c2
-func GenerateKeyPairAndID(address string, c1, c2 int) (*crypto.KeyPair, peer.ID) {
+func generateKeyPairAndNonce(c1, c2 int) (*crypto.KeyPair, []byte) {
+	b := blake2b.New()
 	for {
 		kp := ed25519.RandomKeyPair()
-		id := peer.CreateID(address, kp.PublicKey)
-		if checkHashedBytesPrefixLen(id.Id, c1) {
-			nonce := getNonce(id.Id, c2)
-			id = peer.WithNonce(id, nonce)
-
-			return kp, id
+		nodeID := b.HashBytes(kp.PublicKey)
+		if checkHashedBytesPrefixLen(nodeID, c1) {
+			return kp, getNonce(nodeID, c2)
 		}
 	}
 }

@@ -48,17 +48,19 @@ func ExampleBasicPlugin() {
 	for i := 0; i < numNodes; i++ {
 		builder := network.NewBuilder()
 		address := network.FormatAddress("tcp", host, uint16(startPort+i))
-		kp, id := discovery.GenerateKeyPairAndID(address, 16, 16)
-		builder.SetKeys(kp)
-		builder.SetAddress(address)
 
 		// enforce S/Kademlia node IDs
-		p := discovery.New(
-			discovery.WithEnforcePuzzle(true),
-			discovery.WithPuzzleNonce(peer.GetNonce(id)),
+		plugin := discovery.New(
+			discovery.WithPuzzleEnabled(discovery.DefaultC1, discovery.DefaultC2),
 		)
-		builder.AddPlugin(p)
+		kp, nonce := plugin.PerformPuzzle()
 
+		builder.SetKeys(kp)
+		id := peer.CreateID(address, kp.PublicKey)
+		id = peer.WithNonce(id, nonce)
+		builder.SetID(id)
+
+		builder.AddPlugin(plugin)
 		plugins = append(plugins, new(BasicPlugin))
 		builder.AddPlugin(plugins[i])
 
