@@ -11,15 +11,34 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	defaultDisablePing             = false
+	defaultDisablePong             = false
+	defaultDisableLookup           = false
+	defaultEnforceSKademliaNodeIDs = false
+	defaultC1                      = 16
+	defaultC2                      = 16
+)
+
+var (
+	defaultPeerID *peer.ID
+)
+
 type Plugin struct {
 	*network.Plugin
 
-	DisablePing   bool
-	DisablePong   bool
-	DisableLookup bool
-
-	// EnforceSkademliaNodeIDs checks whether node IDs satisfy S/Kademlia cryptopuzzles
-	EnforceSkademliaNodeIDs bool
+	// Plugin options
+	disablePing   bool
+	disablePong   bool
+	disableLookup bool
+	//eEnforceSkademliaNodeIDs checks whether node IDs satisfy S/Kademlia cryptopuzzles
+	enforceSkademliaNodeIDs bool
+	// id is an S/Kademlia-compatible ID
+	id *peer.ID
+	// c1 is the number of preceding bits of 0 in the H(H(key_public)) for NodeID generation
+	c1 int
+	// c2 is the number of preceding bits of 0 in the H(NodeID xor X) for checking if dynamic cryptopuzzle is solved
+	c2 int
 
 	Routes *RoutingTable
 }
@@ -29,14 +48,91 @@ var (
 	_        network.PluginInterface = (*Plugin)(nil)
 )
 
+// PluginOption are configurable options for the discovery plugin
+type PluginOption func(*Plugin)
+
+// WithEnforceSKademliaNodeIDs sets the plugin to enforce S/Kademlia peer node IDs
+func WithEnforceSKademliaNodeIDs(v bool) PluginOption {
+	return func(o *Plugin) {
+		o.enforceSkademliaNodeIDs = v
+	}
+}
+
+// WithSKademliaID sets the current node ID to a S/Kademlia-compatible node ID
+func WithSKademliaID(id *peer.ID) PluginOption {
+	return func(o *Plugin) {
+		o.id = id
+	}
+}
+
+// WithStaticPuzzleConstant sets the prefix matching length for the static S/Kademlia cryptopuzzle
+func WithStaticPuzzleConstant(c1 int) PluginOption {
+	return func(o *Plugin) {
+		o.c1 = c1
+	}
+}
+
+// WithDynamicPuzzleConstant sets the prefix matching length for the static S/Kademlia cryptopuzzle
+func WithDynamicPuzzleConstant(c2 int) PluginOption {
+	return func(o *Plugin) {
+		o.c2 = c2
+	}
+}
+
+func WithDisablePing(v bool) PluginOption {
+	return func(o *Plugin) {
+		o.disablePing = v
+	}
+}
+
+func WithDisablePong(v bool) PluginOption {
+	return func(o *Plugin) {
+		o.disablePong = v
+	}
+}
+
+func WithDisableLookup(v bool) PluginOption {
+	return func(o *Plugin) {
+		o.disableLookup = v
+	}
+}
+
+func defaultOptions() PluginOption {
+	return func(o *Plugin) {
+		o.disablePing = defaultDisablePing
+		o.disablePong = defaultDisablePong
+		o.disableLookup = defaultDisableLookup
+		o.enforceSkademliaNodeIDs = defaultEnforceSKademliaNodeIDs
+		o.id = defaultPeerID
+		o.c1 = defaultC1
+		o.c2 = defaultC2
+	}
+}
+
+// New returns a new discovery plugin with specified options.
+func New(opts ...PluginOption) *Plugin {
+	p := new(Plugin)
+	defaultOptions()(p)
+
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
+}
+
 func (state *Plugin) Startup(net *network.Network) {
+	if state.id != nil {
+		net.ID = *state.id
+	}
+
 	// Create routing table.
 	state.Routes = CreateRoutingTable(net.ID)
 }
 
 func (state *Plugin) Receive(ctx *network.PluginContext) error {
 	sender := ctx.Sender()
-	if state.EnforceSkademliaNodeIDs && !VerifyPuzzle(sender) {
+	if state.enforceSkademliaNodeIDs && !VerifyPuzzle(sender, state.c1, state.c2) {
 		return errors.Errorf("Sender %v is not a valid node ID", sender)
 	}
 	// Update routing for every incoming message.
@@ -46,7 +142,7 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 	// Handle RPC.
 	switch msg := ctx.Message().(type) {
 	case *protobuf.Ping:
-		if state.DisablePing {
+		if state.disablePing {
 			break
 		}
 
@@ -57,7 +153,7 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 			return err
 		}
 	case *protobuf.Pong:
-		if state.DisablePong {
+		if state.disablePong {
 			break
 		}
 
@@ -72,7 +168,7 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 			Strs("peers", state.Routes.GetPeerAddresses()).
 			Msg("bootstrapped w/ peer(s)")
 	case *protobuf.LookupNodeRequest:
-		if state.DisableLookup {
+		if state.disableLookup {
 			break
 		}
 

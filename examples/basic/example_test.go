@@ -9,7 +9,6 @@ import (
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/network/discovery"
-	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/types/opcode"
 )
 
@@ -48,15 +47,16 @@ func ExampleBasicPlugin() {
 	for i := 0; i < numNodes; i++ {
 		builder := network.NewBuilder()
 		address := network.FormatAddress("tcp", host, uint16(startPort+i))
-		kp, id := discovery.GenerateKeyPairAndID(address)
+		kp, id := discovery.GenerateKeyPairAndID(address, 16, 16)
 		builder.SetKeys(kp)
 		builder.SetAddress(address)
-		builder.SetNodeIDNonce(peer.GetNonce(id))
 
 		// enforce S/Kademlia node IDs
-		builder.AddPlugin(&discovery.Plugin{
-			EnforceSkademliaNodeIDs: true,
-		})
+		p := discovery.New(
+			discovery.WithEnforceSKademliaNodeIDs(true),
+			discovery.WithSKademliaID(&id),
+		)
+		builder.AddPlugin(p)
 
 		plugins = append(plugins, new(BasicPlugin))
 		builder.AddPlugin(plugins[i])

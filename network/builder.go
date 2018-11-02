@@ -31,9 +31,8 @@ var (
 type Builder struct {
 	opts options
 
-	keys        *crypto.KeyPair
-	address     string
-	NodeIDNonce []byte
+	keys    *crypto.KeyPair
+	address string
 
 	plugins     *PluginList
 	pluginCount int
@@ -156,11 +155,6 @@ func (builder *Builder) SetAddress(address string) {
 	builder.address = address
 }
 
-// SetNodeIDNonce sets the node ID's nonce.
-func (builder *Builder) SetNodeIDNonce(nonce []byte) {
-	builder.NodeIDNonce = nonce
-}
-
 // AddPluginWithPriority registers a new plugin onto the network with a set priority.
 func (builder *Builder) AddPluginWithPriority(priority int, plugin PluginInterface) error {
 	// Initialize plugin list if not exist.
@@ -220,9 +214,6 @@ func (builder *Builder) Build() (*Network, error) {
 	}
 
 	id := peer.CreateID(unifiedAddress, builder.keys.PublicKey)
-	if len(builder.NodeIDNonce) != 0 {
-		id = peer.WithNonce(id, builder.NodeIDNonce)
-	}
 
 	net := &Network{
 		opts:    builder.opts,
