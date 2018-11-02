@@ -424,6 +424,7 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 func (n *Network) Accept(incoming net.Conn) {
 	var client *PeerClient
 	var clientInit sync.Once
+	var clientAddr string
 
 	recvWindow := NewRecvWindow(n.opts.recvWindowSize)
 
@@ -457,9 +458,11 @@ func (n *Network) Accept(incoming net.Conn) {
 			}
 
 			client.ID = (*peer.ID)(msg.Sender)
+			// resolves hostnames
+			clientAddr, err = ToUnifiedAddress(client.ID.Address)
 
-			if !n.ConnectionStateExists(client.ID.Address) {
-				err = errors.New("network: failed to load session")
+			if !n.ConnectionStateExists(clientAddr) {
+				err = errors.Errorf("network: failed to load session for %s", clientAddr)
 			}
 
 			client.setIncomingReady()
