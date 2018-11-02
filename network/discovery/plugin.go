@@ -12,12 +12,12 @@ import (
 )
 
 const (
-	defaultDisablePing             = false
-	defaultDisablePong             = false
-	defaultDisableLookup           = false
-	defaultEnforceSKademliaNodeIDs = false
-	defaultC1                      = 16
-	defaultC2                      = 16
+	defaultDisablePing   = false
+	defaultDisablePong   = false
+	defaultDisableLookup = false
+	defaultEnforcePuzzle = false
+	defaultC1            = 16
+	defaultC2            = 16
 )
 
 var (
@@ -31,10 +31,10 @@ type Plugin struct {
 	disablePing   bool
 	disablePong   bool
 	disableLookup bool
-	//eEnforceSkademliaNodeIDs checks whether node IDs satisfy S/Kademlia cryptopuzzles
-	enforceSkademliaNodeIDs bool
-	// id is an S/Kademlia-compatible ID
-	id *peer.ID
+	// enforcePuzzle checks whether node IDs satisfy S/Kademlia cryptopuzzles
+	enforcePuzzle bool
+	// nonce is an S/Kademlia puzzle nonce
+	nonce []byte
 	// c1 is the number of preceding bits of 0 in the H(H(key_public)) for NodeID generation
 	c1 int
 	// c2 is the number of preceding bits of 0 in the H(NodeID xor X) for checking if dynamic cryptopuzzle is solved
@@ -51,46 +51,49 @@ var (
 // PluginOption are configurable options for the discovery plugin
 type PluginOption func(*Plugin)
 
-// WithEnforceSKademliaNodeIDs sets the plugin to enforce S/Kademlia peer node IDs
-func WithEnforceSKademliaNodeIDs(v bool) PluginOption {
+// WithEnforcePuzzle sets the plugin to enforce S/Kademlia peer node IDs
+func WithEnforcePuzzle(v bool) PluginOption {
 	return func(o *Plugin) {
-		o.enforceSkademliaNodeIDs = v
+		o.enforcePuzzle = v
 	}
 }
 
-// WithSKademliaID sets the current node ID to a S/Kademlia-compatible node ID
-func WithSKademliaID(id *peer.ID) PluginOption {
+// WithPuzzleNonce sets the current node ID's puzzle nonce
+func WithPuzzleNonce(nonce []byte) PluginOption {
 	return func(o *Plugin) {
-		o.id = id
+		o.nonce = nonce
 	}
 }
 
-// WithStaticPuzzleConstant sets the prefix matching length for the static S/Kademlia cryptopuzzle
-func WithStaticPuzzleConstant(c1 int) PluginOption {
+// WithC1 sets the prefix matching length for the static S/Kademlia cryptopuzzle
+func WithC1(c1 int) PluginOption {
 	return func(o *Plugin) {
 		o.c1 = c1
 	}
 }
 
-// WithDynamicPuzzleConstant sets the prefix matching length for the static S/Kademlia cryptopuzzle
-func WithDynamicPuzzleConstant(c2 int) PluginOption {
+// WithC2 sets the prefix matching length for the static S/Kademlia cryptopuzzle
+func WithC2(c2 int) PluginOption {
 	return func(o *Plugin) {
 		o.c2 = c2
 	}
 }
 
+// WithDisablePing sets whether to reply to ping messages
 func WithDisablePing(v bool) PluginOption {
 	return func(o *Plugin) {
 		o.disablePing = v
 	}
 }
 
+// WithDisablePong sets whether to reply to pong messages
 func WithDisablePong(v bool) PluginOption {
 	return func(o *Plugin) {
 		o.disablePong = v
 	}
 }
 
+// WithDisableLookup sets whether to reply to node lookup messages
 func WithDisableLookup(v bool) PluginOption {
 	return func(o *Plugin) {
 		o.disableLookup = v
@@ -102,8 +105,7 @@ func defaultOptions() PluginOption {
 		o.disablePing = defaultDisablePing
 		o.disablePong = defaultDisablePong
 		o.disableLookup = defaultDisableLookup
-		o.enforceSkademliaNodeIDs = defaultEnforceSKademliaNodeIDs
-		o.id = defaultPeerID
+		o.enforcePuzzle = defaultEnforcePuzzle
 		o.c1 = defaultC1
 		o.c2 = defaultC2
 	}
@@ -122,8 +124,12 @@ func New(opts ...PluginOption) *Plugin {
 }
 
 func (state *Plugin) Startup(net *network.Network) {
-	if state.id != nil {
-		net.ID = *state.id
+	if state.nonce != nil {
+		net.ID = peer.WithNonce(net.ID, state.nonce)
+		// verify the provided nonce is valid
+		if !VerifyPuzzle(net.ID, state.c1, state.c2) {
+			log.Fatal().Msg("discovery: provided node ID nonce does not solve the cryptopuzzle.")
+		}
 	}
 
 	// Create routing table.
@@ -132,7 +138,7 @@ func (state *Plugin) Startup(net *network.Network) {
 
 func (state *Plugin) Receive(ctx *network.PluginContext) error {
 	sender := ctx.Sender()
-	if state.enforceSkademliaNodeIDs && !VerifyPuzzle(sender, state.c1, state.c2) {
+	if state.enforcePuzzle && !VerifyPuzzle(sender, state.c1, state.c2) {
 		return errors.Errorf("Sender %v is not a valid node ID", sender)
 	}
 	// Update routing for every incoming message.

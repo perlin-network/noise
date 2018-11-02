@@ -120,8 +120,8 @@ func ExampleProxyPlugin() {
 
 		// DisablePong will preserve the line topology also enforce S/Kademlia node IDs
 		p := discovery.New(
-			discovery.WithEnforceSKademliaNodeIDs(true),
-			discovery.WithSKademliaID(&id),
+			discovery.WithEnforcePuzzle(true),
+			discovery.WithPuzzleNonce(peer.GetNonce(id)),
 			discovery.WithDisablePong(true),
 		)
 		builder.AddPlugin(p)
