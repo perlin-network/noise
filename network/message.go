@@ -17,6 +17,7 @@ type Message struct {
 type MessageBody struct {
 	Sender    []byte
 	Recipient []byte
+	Service   uint16
 	Payload   []byte
 }
 
@@ -30,6 +31,7 @@ func (b *MessageBody) Serialize() []byte {
 	buf = append(buf, b.Sender...)
 	buf = append(buf, byte(len(b.Recipient)))
 	buf = append(buf, b.Recipient...)
+	writeUint16(&buf, b.Service)
 	writeUvarint(&buf, uint64(len(b.Payload)))
 	buf = append(buf, b.Payload...)
 	return buf
@@ -50,6 +52,7 @@ func (m *Message) Serialize() []byte {
 func DeserializeMessageBody(reader *bufio.Reader) (*MessageBody, error) {
 	ret := &MessageBody{}
 	byteBuf := make([]byte, 1)
+	shortBuf := make([]byte, 2)
 
 	_, err := io.ReadFull(reader, byteBuf)
 	if err != nil {
@@ -72,6 +75,13 @@ func DeserializeMessageBody(reader *bufio.Reader) (*MessageBody, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	_, err = io.ReadFull(reader, shortBuf)
+	if err != nil {
+		return nil, err
+	}
+
+	ret.Service = binary.LittleEndian.Uint16(shortBuf)
 
 	payloadLen, err := binary.ReadUvarint(reader)
 	if err != nil {
