@@ -13,6 +13,7 @@ type Node struct {
 	connAdapter ConnectionAdapter
 	idAdapter   IdentityAdapter
 	peers       sync.Map // string -> *PendingPeer | MessageAdapter
+	services    map[uint16]Service
 }
 
 type PendingPeer struct {
@@ -25,12 +26,37 @@ func NewNode(c *Controller, ca ConnectionAdapter, id IdentityAdapter) *Node {
 		controller:  c,
 		connAdapter: ca,
 		idAdapter:   id,
+		services:    make(map[uint16]Service),
+	}
+}
+
+func (n *Node) AddService(id uint16, s Service) {
+	n.services[id] = s
+}
+
+func (n *Node) dispatchIncomingMessage(raw []byte) {
+	msg, err := DeserializeMessage(bufio.NewReader(bytes.NewReader(raw)))
+	if err != nil {
+		log.Error().Err(err).Msg("unable to deserialize message")
+		return
+	}
+
+	bodySerialized := msg.Body.Serialize() // FIXME: body is serialized unnecessarily
+
+	if n.idAdapter.Verify(msg.Body.Sender, bodySerialized, msg.Signature) {
+		if svc, ok := n.services[msg.Body.Service]; ok {
+			svc.HandleMessage(msg.Body)
+		} else {
+			log.Debug().Msgf("message to unknown service %d dropped", msg.Body.Service)
+		}
+	} else {
+		log.Error().Err(err).Msg("unable to verify message")
 	}
 }
 
 func (n *Node) Start() {
 	go func() {
-		for adapter := range n.connAdapter.EstablishPassively(n.controller) {
+		for adapter := range n.connAdapter.EstablishPassively(n.controller, n.dispatchIncomingMessage) {
 			n.peers.Store(adapter.RemoteEndpoint(), adapter)
 		}
 	}()
@@ -54,7 +80,7 @@ func (n *Node) getMessageAdapter(remote []byte) (MessageAdapter, error) {
 			}
 		} else {
 			var err error
-			msgAdapter, err = n.connAdapter.EstablishActively(n.controller, remote)
+			msgAdapter, err = n.connAdapter.EstablishActively(n.controller, remote, n.dispatchIncomingMessage)
 			if err != nil {
 				log.Error().Err(err).Msg("unable to establish connection actively")
 				msgAdapter = nil
@@ -101,30 +127,4 @@ func (n *Node) Send(body *MessageBody) error {
 	}
 
 	return nil
-}
-
-func (n *Node) Recv(remote []byte) (*MessageBody, error) {
-	msgAdapter, err := n.getMessageAdapter(remote)
-	if err != nil {
-		return nil, err
-	}
-
-	raw, err := msgAdapter.RecvMessage(n.controller)
-	if err != nil {
-		n.peers.Delete(remote)
-		return nil, err
-	}
-
-	msg, err := DeserializeMessage(bufio.NewReader(bytes.NewReader(raw)))
-	if err != nil {
-		return nil, err
-	}
-
-	bodySerialized := msg.Body.Serialize() // FIXME: body is serialized unnecessarily
-
-	if n.idAdapter.Verify(remote, bodySerialized, msg.Signature) {
-		return msg.Body, nil
-	} else {
-		return nil, errors.New("cannot validate remote identity")
-	}
 }
