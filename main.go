@@ -8,6 +8,8 @@ import (
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"os"
+	"sync/atomic"
+	"time"
 )
 
 func main() {
@@ -26,8 +28,16 @@ func main() {
 	)
 	node.Start()
 
+	var msgCount uint64
+
 	node.AddService(42, func(message *protocol.Message) {
-		log.Info().Msgf("received payload from %s: %s", hex.EncodeToString(message.Sender), string(message.Body.Payload))
+		atomic.AddUint64(&msgCount, 1)
+		//log.Info().Msgf("received payload from %s: %s", hex.EncodeToString(message.Sender), string(message.Body.Payload))
+		/*node.Send(&protocol.Message {
+			Sender: kp.PublicKey,
+			Recipient: message.Sender,
+			Body: message.Body,
+		})*/
 	})
 
 	log.Info().Msgf("started, pubkey = %s", kp.PublicKeyHex())
@@ -40,14 +50,21 @@ func main() {
 		remoteAddr := os.Args[4]
 		connAdapter.MapIDToAddress(peerID, remoteAddr)
 
-		node.Send(&protocol.Message{
-			Sender:    kp.PublicKey,
-			Recipient: peerID,
-			Body: &protocol.MessageBody{
-				Service: 42,
-				Payload: []byte("Hello world!"),
-			},
-		})
+		for {
+			node.Send(&protocol.Message{
+				Sender:    kp.PublicKey,
+				Recipient: peerID,
+				Body: &protocol.MessageBody{
+					Service: 42,
+					Payload: []byte("Hello world!"),
+				},
+			})
+		}
+	}
+
+	for range time.Tick(10 * time.Second) {
+		count := atomic.SwapUint64(&msgCount, 0)
+		log.Info().Msgf("message count = %d", count)
 	}
 
 	select {}
