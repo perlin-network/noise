@@ -155,7 +155,7 @@ func (c *PeerClient) Tell(ctx context.Context, message proto.Message) error {
 }
 
 // Request requests for a response for a request sent to a given peer.
-func (c *PeerClient) Request(ctx context.Context, req proto.Message) (proto.Message, error) {
+func (c *PeerClient) Request(ctx context.Context, req proto.Message, opts ...RequestOption) (proto.Message, error) {
 	if ctx == nil {
 		return nil, errors.New("network: invalid context")
 	}
@@ -164,14 +164,19 @@ func (c *PeerClient) Request(ctx context.Context, req proto.Message) (proto.Mess
 		return nil, ctx.Err()
 	}
 
-	signed, err := c.Network.PrepareMessage(ctx, req)
+	msg, err := c.Network.PrepareMessage(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	signed.RequestNonce = atomic.AddUint64(&c.RequestNonce, 1)
+	msg.RequestNonce = atomic.AddUint64(&c.RequestNonce, 1)
 
-	err = c.Network.Write(c.Address, signed)
+	// Set request message fields through options.
+	for _, opt := range opts {
+		opt(msg)
+	}
+
+	err = c.Network.Write(c.Address, msg)
 	if err != nil {
 		return nil, err
 	}
@@ -180,14 +185,14 @@ func (c *PeerClient) Request(ctx context.Context, req proto.Message) (proto.Mess
 	channel := make(chan proto.Message, 1)
 	closeSignal := make(chan struct{})
 
-	c.Requests.Store(signed.RequestNonce, &RequestState{
+	c.Requests.Store(msg.RequestNonce, &RequestState{
 		data:        channel,
 		closeSignal: closeSignal,
 	})
 
 	// Stop tracking the request.
 	defer close(closeSignal)
-	defer c.Requests.Delete(signed.RequestNonce)
+	defer c.Requests.Delete(msg.RequestNonce)
 
 	select {
 	case res := <-channel:
@@ -198,15 +203,19 @@ func (c *PeerClient) Request(ctx context.Context, req proto.Message) (proto.Mess
 }
 
 // Reply is equivalent to Write() with an appended nonce to signal a reply.
-func (c *PeerClient) Reply(ctx context.Context, nonce uint64, message proto.Message) error {
+func (c *PeerClient) Reply(ctx context.Context, message proto.Message, opts ...ReplyOption) error {
 	msg, err := c.Network.PrepareMessage(ctx, message)
 	if err != nil {
 		return err
 	}
 
-	// Set the nonce.
-	msg.RequestNonce = nonce
+	// Set the reply flag.
 	msg.ReplyFlag = true
+
+	// Set additional message fields through options.
+	for _, opt := range opts {
+		opt(msg)
+	}
 
 	err = c.Network.Write(c.Address, msg)
 	if err != nil {
@@ -344,5 +353,32 @@ func (c *PeerClient) IsOutgoingReady() bool {
 		return true
 	case <-time.After(1 * time.Second):
 		return false
+	}
+}
+
+// RequestOption sets options for a request message.
+type RequestOption func(*protobuf.Message)
+
+// WithRequestSignature sets the signature of the request message.
+func WithRequestSignature(signature []byte) RequestOption {
+	return func(msg *protobuf.Message) {
+		msg.Signature = signature
+	}
+}
+
+// ReplyOption sets options for how to reply to the message.
+type ReplyOption func(*protobuf.Message)
+
+// WithRequestNonce sets the request nonce of the reply message.
+func WithRequestNonce(nonce uint64) ReplyOption {
+	return func(msg *protobuf.Message) {
+		msg.MessageNonce = nonce
+	}
+}
+
+// WithReplySignature sets the signature of the reply message.
+func WithReplySignature(signature []byte) ReplyOption {
+	return func(msg *protobuf.Message) {
+		msg.Signature = signature
 	}
 }

@@ -4,11 +4,11 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/perlin-network/noise/internal/protobuf"
+	"github.com/perlin-network/noise/peer"
 )
 
 // serializeMessage compactly packs all bytes of a message together for cryptographic signing purposes.
-func serializeMessage(id *protobuf.ID, message []byte) []byte {
+func serializeMessage(id *peer.ID, message []byte) []byte {
 	const uint32Size = 4
 
 	serialized := make([]byte, uint32Size+len(id.Address)+uint32Size+len(id.Id)+len(message))
@@ -39,7 +39,7 @@ func serializeMessage(id *protobuf.ID, message []byte) []byte {
 // serializePeerIDAndExpiration compacts the peer ID's address, port and signature expiration
 // for cryptographic signing purposes. Weak signatures are used where the integrity of the entire
 // message can be disregarded (e.g., ping/pong and node lookup messages)
-func serializePeerIDAndExpiration(id *protobuf.ID, expiration *time.Time) []byte {
+func serializePeerIDAndExpiration(id *peer.ID, expiration *time.Time) []byte {
 	const uint32Size = 4
 	const uint64Size = 8
 

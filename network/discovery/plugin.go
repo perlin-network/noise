@@ -1,10 +1,14 @@
 package discovery
 
 import (
+	"bytes"
 	"context"
+	"github.com/gogo/protobuf/proto"
 	"time"
 
 	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/blake2b"
+	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/network"
@@ -42,8 +46,14 @@ type Plugin struct {
 	c1 int
 	// c2 is the number of preceding bits of 0 in the H(NodeID xor X) for checking if dynamic cryptopuzzle is solved.
 	c2 int
+	// signaturePolicy for signing messages
+	signaturePolicy crypto.SignaturePolicy
+	// hashPolicy for hashing messages
+	hashPolicy crypto.HashPolicy
 
 	Routes *RoutingTable
+	id     peer.ID
+	kp     *crypto.KeyPair
 }
 
 const (
@@ -87,6 +97,20 @@ func WithDisableLookup(v bool) PluginOption {
 	}
 }
 
+// WithSignaturePolicy sets the signature policy for signing messages.
+func WithSignaturePolicy(sp crypto.SignaturePolicy) PluginOption {
+	return func(o *Plugin) {
+		o.signaturePolicy = sp
+	}
+}
+
+// WithHashPolicy sets the signature policy for signing messages.
+func WithHashPolicy(hp crypto.HashPolicy) PluginOption {
+	return func(o *Plugin) {
+		o.hashPolicy = hp
+	}
+}
+
 func defaultOptions() PluginOption {
 	return func(o *Plugin) {
 		o.disablePing = defaultDisablePing
@@ -95,6 +119,8 @@ func defaultOptions() PluginOption {
 		o.enforcePuzzle = defaultEnforcePuzzle
 		o.c1 = DefaultC1
 		o.c2 = DefaultC2
+		o.signaturePolicy = ed25519.New()
+		o.hashPolicy = blake2b.New()
 	}
 }
 
@@ -110,9 +136,20 @@ func New(opts ...PluginOption) *Plugin {
 	return p
 }
 
-// PerformPuzzle returns an S/Kademlia compatible keypair and node ID nonce
+// PerformPuzzle returns an S/Kademlia compatible keypair and node ID nonce and sets it in the plugin.
 func (state *Plugin) PerformPuzzle() (*crypto.KeyPair, []byte) {
-	return generateKeyPairAndNonce(state.c1, state.c2)
+	kp, nonce := generateKeyPairAndNonce(state.c1, state.c2)
+	state.kp = kp
+	return kp, nonce
+}
+
+// SetKeyPair sets the plugin's keypair for signing messages.
+func (state *Plugin) SetKeyPair(kp *crypto.KeyPair) error {
+	if kp == nil {
+		return errors.New("discovery: keypair cannot be nil")
+	}
+	state.kp = kp
+	return nil
 }
 
 func (state *Plugin) Startup(net *network.Network) {
@@ -121,10 +158,15 @@ func (state *Plugin) Startup(net *network.Network) {
 		if !VerifyPuzzle(net.ID, state.c1, state.c2) {
 			log.Fatal().Msg("discovery: provided node ID nonce does not solve the cryptopuzzle.")
 		}
+		// verify that the keypair set matches net.ID publicy key
+		if state.kp == nil || !bytes.Equal(state.kp.PublicKey, net.ID.PublicKey) {
+			log.Fatal().Msg("discovery: keypair is not set or does not match public key of node ID")
+		}
 	}
 
 	// Create routing table.
 	state.Routes = CreateRoutingTable(net.ID)
+	state.id = net.ID
 }
 
 func (state *Plugin) Receive(pctx *network.PluginContext) error {
@@ -135,8 +177,9 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 	// Update routing for every incoming message.
 	state.Routes.Update(sender)
 	// expire signature after 30 seconds
+	ctx := context.Background()
 	expiration := time.Now().Add(weakSignatureExpiration)
-	ctx := WithWeakSignature(context.Background(), true, &expiration)
+	signature := serializePeerIDAndExpiration(&state.id, &expiration)
 
 	// Handle RPC.
 	switch msg := pctx.Message().(type) {
@@ -146,7 +189,7 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 		}
 
 		// Send pong to peer.
-		err := pctx.Reply(ctx, &protobuf.Pong{})
+		err := pctx.Reply(ctx, &protobuf.Pong{}, network.WithReplySignature(signature))
 
 		if err != nil {
 			return err
@@ -180,7 +223,7 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 			response.Peers = append(response.Peers, &id)
 		}
 
-		err := pctx.Reply(ctx, response)
+		err := pctx.Reply(ctx, response, network.WithReplySignature(signature))
 		if err != nil {
 			return err
 		}
@@ -209,4 +252,13 @@ func (state *Plugin) PeerDisconnect(client *network.PeerClient) {
 				Msg("peer has disconnected")
 		}
 	}
+}
+
+// GetStrongSignature generates the strong signature of the message.
+func (state Plugin) GetStrongSignature(msg *protobuf.Message) ([]byte, error) {
+	raw, err := proto.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+	return state.kp.Sign(state.signaturePolicy, state.hashPolicy, serializeMessage(&state.id, raw))
 }

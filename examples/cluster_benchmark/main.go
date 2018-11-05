@@ -45,9 +45,8 @@ func sendBroadcast(n *network.Network) {
 		return
 	}
 
-	ctx := discovery.WithStrongSignature(context.Background(), true)
 	targetNumPeers := atomic.LoadInt64(&numPeers)/2 + 1
-	n.BroadcastRandomly(ctx, &messages.Empty{}, int(targetNumPeers))
+	n.BroadcastRandomly(context.Background(), &messages.Empty{}, int(targetNumPeers))
 }
 
 func setupPPROF(port int) {

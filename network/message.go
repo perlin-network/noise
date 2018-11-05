@@ -16,8 +16,9 @@ type PluginContext struct {
 }
 
 // Reply sends back a message to an incoming message's incoming stream.
-func (pctx *PluginContext) Reply(ctx context.Context, message proto.Message) error {
-	return pctx.client.Reply(ctx, pctx.nonce, message)
+func (pctx *PluginContext) Reply(ctx context.Context, message proto.Message, opts ...ReplyOption) error {
+	opts = append(opts, WithRequestNonce(pctx.nonce))
+	return pctx.client.Reply(ctx, message, opts...)
 }
 
 // Message returns the decoded protobuf message.
