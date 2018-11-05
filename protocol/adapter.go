@@ -1,4 +1,4 @@
-package network
+package protocol
 
 type ConnectionAdapter interface {
 	EstablishPassively(c *Controller, onRecvMessage func(message []byte)) chan MessageAdapter
