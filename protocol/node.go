@@ -1,7 +1,6 @@
 package protocol
 
 import (
-	"bufio"
 	"bytes"
 	"github.com/perlin-network/noise/log"
 	"github.com/pkg/errors"
@@ -14,13 +13,8 @@ type Node struct {
 	controller  *Controller
 	connAdapter ConnectionAdapter
 	idAdapter   IdentityAdapter
-	peers       sync.Map // string -> *PendingPeer | MessageAdapter
+	peers       sync.Map // string -> *PendingPeer | *EstablishedPeer
 	services    map[uint16]Service
-}
-
-type PendingPeer struct {
-	Done    chan struct{}
-	Adapter MessageAdapter
 }
 
 func NewNode(c *Controller, ca ConnectionAdapter, id IdentityAdapter) *Node {
@@ -36,36 +30,52 @@ func (n *Node) AddService(id uint16, s Service) {
 	n.services[id] = s
 }
 
-func (n *Node) dispatchIncomingMessage(raw []byte) {
-	msg, err := DeserializeMessage(bufio.NewReader(bytes.NewReader(raw)))
-	if err != nil {
-		log.Error().Err(err).Msg("unable to deserialize message")
+func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) {
+	if peer.kxState != KeyExchange_Done {
+		err := peer.continueKeyExchange(n.controller, n.idAdapter, raw)
+		if err != nil {
+			log.Error().Err(err).Msg("cannot continue key exchange")
+			n.peers.Delete(peer.RemoteEndpoint())
+		}
 		return
 	}
 
-	bodySerialized := msg.Body.Serialize() // FIXME: body is serialized unnecessarily
+	_body, err := peer.UnwrapMessage(n.controller, raw)
+	if err != nil {
+		log.Error().Err(err).Msg("cannot unwrap message")
+	}
 
-	if n.idAdapter.Verify(msg.Body.Sender, bodySerialized, msg.Signature) {
-		if svc, ok := n.services[msg.Body.Service]; ok {
-			svc(msg.Body)
-		} else {
-			log.Debug().Msgf("message to unknown service %d dropped", msg.Body.Service)
-		}
+	body, err := DeserializeMessageBody(bytes.NewReader(_body))
+	if err != nil {
+		log.Error().Err(err).Msg("cannot deserialize message body")
+	}
+
+	if svc, ok := n.services[body.Service]; ok {
+		svc(body)
 	} else {
-		log.Error().Err(err).Msg("unable to verify message")
+		log.Debug().Msgf("message to unknown service %d dropped", body.Service)
 	}
 }
 
 func (n *Node) Start() {
 	go func() {
-		for adapter := range n.connAdapter.EstablishPassively(n.controller, n.dispatchIncomingMessage) {
-			n.peers.Store(adapter.RemoteEndpoint(), adapter)
+		for adapter := range n.connAdapter.EstablishPassively(n.controller, n.idAdapter.MyIdentity()) {
+			peer, err := EstablishPeerWithMessageAdapter(n.controller, n.idAdapter, adapter, true)
+			if err != nil {
+				log.Error().Err(err).Msg("cannot establish peer")
+				continue
+			}
+
+			n.peers.Store(adapter.RemoteEndpoint(), peer)
+			adapter.StartRecvMessage(n.controller, func(message []byte) {
+				n.dispatchIncomingMessage(peer, message)
+			})
 		}
 	}()
 }
 
-func (n *Node) getMessageAdapter(remote []byte) (MessageAdapter, error) {
-	var msgAdapter MessageAdapter
+func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
+	var established *EstablishedPeer
 
 	peer, loaded := n.peers.LoadOrStore(remote, &PendingPeer{Done: make(chan struct{})})
 	switch peer := peer.(type) {
@@ -73,58 +83,65 @@ func (n *Node) getMessageAdapter(remote []byte) (MessageAdapter, error) {
 		if loaded {
 			select {
 			case <-peer.Done:
-				msgAdapter = peer.Adapter
-				if msgAdapter == nil {
+				established = peer.Established
+				if established == nil {
 					return nil, errors.New("cannot establish connection")
 				}
 			case <-n.controller.Cancellation:
 				return nil, errors.New("cancelled")
 			}
 		} else {
-			var err error
-			msgAdapter, err = n.connAdapter.EstablishActively(n.controller, remote, n.dispatchIncomingMessage)
+			msgAdapter, err := n.connAdapter.EstablishActively(n.controller, n.idAdapter.MyIdentity(), remote)
 			if err != nil {
 				log.Error().Err(err).Msg("unable to establish connection actively")
 				msgAdapter = nil
 			}
 
 			if msgAdapter != nil {
-				n.peers.Store(remote, msgAdapter)
+				established, err = EstablishPeerWithMessageAdapter(n.controller, n.idAdapter, msgAdapter, false)
+				if err != nil {
+					established = nil
+					msgAdapter = nil
+					n.peers.Delete(remote)
+					log.Error().Err(err).Msg("cannot establish peer")
+				} else {
+					n.peers.Store(remote, established)
+					msgAdapter.StartRecvMessage(n.controller, func(message []byte) {
+						n.dispatchIncomingMessage(established, message)
+					})
+				}
 			} else {
 				n.peers.Delete(remote)
 			}
 
-			peer.Adapter = msgAdapter
 			close(peer.Done)
 
 			if msgAdapter == nil {
 				return nil, errors.New("cannot establish connection")
 			}
 		}
-	case MessageAdapter:
-		msgAdapter = peer
+	case *EstablishedPeer:
+		established = peer
 	default:
 		panic("unexpected peer type")
 	}
 
-	return msgAdapter, nil
+	return established, nil
 }
 
-func (n *Node) Send(body *MessageBody) error {
-	msg := &Message{
-		Signature: n.idAdapter.Sign(body.Serialize()), // FIXME: body is serialized twice
-		Body:      body,
+func (n *Node) Send(message *Message) error {
+	if !bytes.Equal(message.Sender, n.idAdapter.MyIdentity()) {
+		return errors.New("sender mismatch")
 	}
-	serialized := msg.Serialize()
 
-	msgAdapter, err := n.getMessageAdapter(body.Recipient)
+	peer, err := n.getPeer(message.Recipient)
 	if err != nil {
 		return err
 	}
 
-	err = msgAdapter.SendMessage(n.controller, serialized)
+	err = peer.SendMessage(n.controller, message.Body.Serialize())
 	if err != nil {
-		n.peers.Delete(body.Recipient)
+		n.peers.Delete(message.Recipient)
 		return err
 	}
 
