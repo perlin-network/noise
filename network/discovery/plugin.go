@@ -30,6 +30,18 @@ const (
 
 var (
 	defaultPeerID *peer.ID
+
+	// package errors
+	// ErrInvalidKeyPair returns if the provided plugin keypair is not valid
+	ErrInvalidKeyPair = errors.New("discovery: keypair is not set or does not match public key of node ID")
+	// ErrInvalidNodeID occurs if puzzle enforcement is set and the sender node ID is invalid
+	ErrInvalidNodeID = errors.New("discovery: invalid sender node ID")
+	// ErrSignatureInvalid occurs when the message signature is invalid
+	ErrSignatureInvalid = errors.New("discovery: invalid signature")
+	// ErrSignatureExpired occurs when the message signature is verified but has expired
+	ErrSignatureExpired = errors.New("discovery: signature has expired")
+	// ErrSignatureNoSender returns if the message has no sender or sender public key
+	ErrSignatureNoSender = errors.New("discovery: no sender or sender public key")
 )
 
 // Plugin defines the discovery plugin struct.
@@ -160,7 +172,7 @@ func (state *Plugin) Startup(net *network.Network) {
 		}
 		// verify that the keypair set matches net.ID publicy key
 		if state.kp == nil || !bytes.Equal(state.kp.PublicKey, net.ID.PublicKey) {
-			log.Fatal().Msg("discovery: keypair is not set or does not match public key of node ID")
+			log.Fatal().Err(ErrInvalidKeyPair).Msg("")
 		}
 	}
 
@@ -172,7 +184,7 @@ func (state *Plugin) Startup(net *network.Network) {
 func (state *Plugin) Receive(pctx *network.PluginContext) error {
 	sender := pctx.Sender()
 	if state.enforcePuzzle && !VerifyPuzzle(sender, state.c1, state.c2) {
-		return errors.Errorf("Sender %v is not a valid node ID", sender)
+		return errors.Wrapf(ErrInvalidNodeID, "sender %v is not a valid node ID", sender)
 	}
 	// Update routing for every incoming message.
 	state.Routes.Update(sender)
@@ -263,4 +275,34 @@ func (state Plugin) GetStrongSignature(msg *protobuf.Message) ([]byte, error) {
 		return nil, err
 	}
 	return state.kp.Sign(state.signaturePolicy, state.hashPolicy, serializeMessage(&state.id, raw))
+}
+
+// GetWeakSignature generates the weak signature of the message.
+func (state Plugin) GetWeakSignature(expiration time.Time) ([]byte, error) {
+	return state.kp.Sign(state.signaturePolicy, state.hashPolicy, serializePeerIDAndExpiration(&state.id, &expiration))
+}
+
+func (state Plugin) verifyWeakSignature(msg *protobuf.Message) (bool, error) {
+	if len(msg.Signature) == 0 {
+		return false, errors.Wrapf(ErrSignatureInvalid, "no message signature provided")
+	}
+	if msg.Sender == nil || msg.Sender.PublicKey == nil {
+		return false, ErrSignatureNoSender
+	}
+
+	id := (*peer.ID)(msg.GetSender())
+	expiration := time.Unix(0, msg.GetExpiration())
+
+	if crypto.Verify(state.signaturePolicy,
+		state.hashPolicy,
+		id.PublicKey,
+		serializePeerIDAndExpiration(id, &expiration),
+		msg.Signature,
+	) {
+		if time.Now().Before(expiration) {
+			return true, nil
+		}
+		return false, ErrSignatureExpired
+	}
+	return false, ErrSignatureInvalid
 }

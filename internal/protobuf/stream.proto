@@ -55,7 +55,7 @@ message Message {
     uint32 opcode = 7;
 
     // message expiration as Unix timestamp
-    uint64 expiration = 8;
+    int64 expiration = 8;
 }
 
 message Ping {
