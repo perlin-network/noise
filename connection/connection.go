@@ -4,12 +4,14 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
 	"io"
 	"net"
 	"runtime"
+	"sync"
 	"time"
 )
 
@@ -19,6 +21,7 @@ type TCPConnectionAdapter struct {
 	listener    net.Listener
 	listenAddr  string
 	dialTimeout time.Duration
+	idToAddress sync.Map
 }
 
 // No outside references to TCPMessageAdapter should be kept. Otherwise, a resource leak will happen
@@ -46,8 +49,16 @@ func StartTCPConnectionAdapter(
 	}, nil
 }
 
+func (a *TCPConnectionAdapter) MapIDToAddress(id []byte, addr string) {
+	a.idToAddress.Store(string(id), addr)
+}
+
 func (a *TCPConnectionAdapter) lookupAddressByID(id []byte) (string, error) {
-	return "", errors.New("not implemented")
+	if v, ok := a.idToAddress.Load(string(id)); ok {
+		return v.(string), nil
+	} else {
+		return "", errors.New("not found")
+	}
 }
 
 func (a *TCPConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
@@ -126,7 +137,7 @@ func startTCPMessageAdapter(conn net.Conn, local, remote []byte, passive bool) (
 		}
 		if !bytes.Equal(recvRemote, remote) {
 			conn.Close()
-			return nil, errors.New("inconsistent remotes")
+			return nil, errors.Errorf("inconsistent remotes %s and %s", hex.EncodeToString(recvRemote), hex.EncodeToString(remote))
 		}
 	}
 

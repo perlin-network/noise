@@ -3,6 +3,7 @@ package protocol
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/sha256"
 	"encoding/binary"
 	"github.com/monnand/dhkx"
 	"github.com/pkg/errors"
@@ -16,6 +17,7 @@ type PendingPeer struct {
 type EstablishedPeer struct {
 	adapter     MessageAdapter
 	kxState     KeyExchangeState
+	kxDone      chan struct{}
 	dhGroup     *dhkx.DHGroup
 	dhKeypair   *dhkx.DHKey
 	aead        cipher.AEAD
@@ -54,6 +56,7 @@ func EstablishPeerWithMessageAdapter(c *Controller, idAdapter IdentityAdapter, a
 
 	peer := &EstablishedPeer{
 		adapter:   adapter,
+		kxDone:    make(chan struct{}),
 		dhGroup:   g,
 		dhKeypair: privKey,
 	}
@@ -76,6 +79,8 @@ func (p *EstablishedPeer) continueKeyExchange(c *Controller, idAdapter IdentityA
 		sig := raw[:idAdapter.SignatureSize()]
 		rawPubKey := raw[idAdapter.SignatureSize():]
 		if idAdapter.Verify(p.adapter.RemoteEndpoint(), rawPubKey, sig) == false {
+			p.kxState = KeyExchange_Failed
+			close(p.kxDone)
 			return errors.New("signature verification failed")
 		}
 
@@ -83,6 +88,7 @@ func (p *EstablishedPeer) continueKeyExchange(c *Controller, idAdapter IdentityA
 		sharedKey, err := p.dhGroup.ComputeKey(peerPubKey, p.dhKeypair)
 		if err != nil {
 			p.kxState = KeyExchange_Failed
+			close(p.kxDone)
 			return err
 		}
 
@@ -92,18 +98,22 @@ func (p *EstablishedPeer) continueKeyExchange(c *Controller, idAdapter IdentityA
 
 		p.dhGroup = nil
 		p.dhKeypair = nil
-		aesCipher, err := aes.NewCipher(sharedKey.Bytes())
+		aesKey := sha256.Sum256(sharedKey.Bytes())
+		aesCipher, err := aes.NewCipher(aesKey[:])
 		if err != nil {
 			p.kxState = KeyExchange_Failed
+			close(p.kxDone)
 			return err
 		}
 		aead, err := cipher.NewGCM(aesCipher) // FIXME
 		if err != nil {
 			p.kxState = KeyExchange_Failed
+			close(p.kxDone)
 			return err
 		}
 		p.aead = aead
 		p.kxState = KeyExchange_Done
+		close(p.kxDone)
 		return nil
 	case KeyExchange_Failed:
 		return errors.New("failed previously")

@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-type Service func(message *MessageBody)
+type Service func(message *Message)
 
 type Node struct {
 	controller  *Controller
@@ -35,7 +35,7 @@ func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) {
 		err := peer.continueKeyExchange(n.controller, n.idAdapter, raw)
 		if err != nil {
 			log.Error().Err(err).Msg("cannot continue key exchange")
-			n.peers.Delete(peer.RemoteEndpoint())
+			n.peers.Delete(string(peer.RemoteEndpoint()))
 		}
 		return
 	}
@@ -51,7 +51,11 @@ func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) {
 	}
 
 	if svc, ok := n.services[body.Service]; ok {
-		svc(body)
+		svc(&Message{
+			Sender:    peer.adapter.RemoteEndpoint(),
+			Recipient: n.idAdapter.MyIdentity(),
+			Body:      body,
+		})
 	} else {
 		log.Debug().Msgf("message to unknown service %d dropped", body.Service)
 	}
@@ -66,7 +70,7 @@ func (n *Node) Start() {
 				continue
 			}
 
-			n.peers.Store(adapter.RemoteEndpoint(), peer)
+			n.peers.Store(string(adapter.RemoteEndpoint()), peer)
 			adapter.StartRecvMessage(n.controller, func(message []byte) {
 				n.dispatchIncomingMessage(peer, message)
 			})
@@ -77,7 +81,7 @@ func (n *Node) Start() {
 func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 	var established *EstablishedPeer
 
-	peer, loaded := n.peers.LoadOrStore(remote, &PendingPeer{Done: make(chan struct{})})
+	peer, loaded := n.peers.LoadOrStore(string(remote), &PendingPeer{Done: make(chan struct{})})
 	switch peer := peer.(type) {
 	case *PendingPeer:
 		if loaded {
@@ -102,16 +106,16 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 				if err != nil {
 					established = nil
 					msgAdapter = nil
-					n.peers.Delete(remote)
+					n.peers.Delete(string(remote))
 					log.Error().Err(err).Msg("cannot establish peer")
 				} else {
-					n.peers.Store(remote, established)
+					n.peers.Store(string(remote), established)
 					msgAdapter.StartRecvMessage(n.controller, func(message []byte) {
 						n.dispatchIncomingMessage(established, message)
 					})
 				}
 			} else {
-				n.peers.Delete(remote)
+				n.peers.Delete(string(remote))
 			}
 
 			close(peer.Done)
@@ -126,7 +130,14 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 		panic("unexpected peer type")
 	}
 
-	return established, nil
+	<-established.kxDone
+	if established.kxState == KeyExchange_Failed {
+		return nil, errors.New("key exchange failed")
+	} else if established.kxState == KeyExchange_Done {
+		return established, nil
+	} else {
+		panic("invalid kxState")
+	}
 }
 
 func (n *Node) Send(message *Message) error {
@@ -141,7 +152,7 @@ func (n *Node) Send(message *Message) error {
 
 	err = peer.SendMessage(n.controller, message.Body.Serialize())
 	if err != nil {
-		n.peers.Delete(message.Recipient)
+		n.peers.Delete(string(message.Recipient))
 		return err
 	}
 
