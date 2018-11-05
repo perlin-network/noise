@@ -372,7 +372,7 @@ type ReplyOption func(*protobuf.Message)
 // WithRequestNonce sets the request nonce of the reply message.
 func WithRequestNonce(nonce uint64) ReplyOption {
 	return func(msg *protobuf.Message) {
-		msg.MessageNonce = nonce
+		msg.RequestNonce = nonce
 	}
 }
 
