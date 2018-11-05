@@ -53,6 +53,9 @@ message Message {
 
     // opcode specifies the message type
     uint32 opcode = 7;
+
+    // message expiration as Unix timestamp
+    uint64 expiration = 8;
 }
 
 message Ping {

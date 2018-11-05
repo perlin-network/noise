@@ -178,8 +178,8 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 	state.Routes.Update(sender)
 	// expire signature after 30 seconds
 	ctx := context.Background()
-	expiration := time.Now().Add(weakSignatureExpiration)
-	signature := serializePeerIDAndExpiration(&state.id, &expiration)
+	/*expiration := time.Now().Add(weakSignatureExpiration)
+	signature := serializePeerIDAndExpiration(&state.id, &expiration)*/
 
 	// Handle RPC.
 	switch msg := pctx.Message().(type) {
@@ -188,8 +188,10 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 			break
 		}
 
+		// Verify weak signature
+
 		// Send pong to peer.
-		err := pctx.Reply(ctx, &protobuf.Pong{}, network.WithReplySignature(signature))
+		err := pctx.Reply(ctx, &protobuf.Pong{})
 
 		if err != nil {
 			return err
@@ -223,7 +225,7 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 			response.Peers = append(response.Peers, &id)
 		}
 
-		err := pctx.Reply(ctx, response, network.WithReplySignature(signature))
+		err := pctx.Reply(ctx, response)
 		if err != nil {
 			return err
 		}
