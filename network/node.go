@@ -8,6 +8,8 @@ import (
 	"sync"
 )
 
+type Service func(message *MessageBody)
+
 type Node struct {
 	controller  *Controller
 	connAdapter ConnectionAdapter
@@ -45,7 +47,7 @@ func (n *Node) dispatchIncomingMessage(raw []byte) {
 
 	if n.idAdapter.Verify(msg.Body.Sender, bodySerialized, msg.Signature) {
 		if svc, ok := n.services[msg.Body.Service]; ok {
-			svc.HandleMessage(msg.Body)
+			svc(msg.Body)
 		} else {
 			log.Debug().Msgf("message to unknown service %d dropped", msg.Body.Service)
 		}
