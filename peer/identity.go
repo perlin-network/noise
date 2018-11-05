@@ -18,8 +18,14 @@ const (
 type ID protobuf.ID
 
 // CreateID is a factory function creating ID.
-func CreateID(address string, publicKey []byte) ID {
-	return ID{Address: address, PublicKey: publicKey, Id: blake2b.New().HashBytes(publicKey)}
+func CreateID(address string, publicKey []byte, opts ...IDOption) ID {
+	id := ID{Address: address, PublicKey: publicKey, Id: blake2b.New().HashBytes(publicKey)}
+
+	for _, opt := range opts {
+		id = opt(&id)
+	}
+
+	return id
 }
 
 // String returns the identity address and public key.
@@ -124,9 +130,14 @@ func Xor(a, b []byte) []byte {
 	return dst
 }
 
+// IDOption are configurable options when creating the identity.
+type IDOption func(*ID) ID
+
 // WithNonce sets the ID's nonce metadata.
-func WithNonce(id ID, nonce []byte) ID {
-	return id.WithValue(keyNonce, nonce)
+func WithNonce(nonce []byte) IDOption {
+	return func(id *ID) ID {
+		return id.WithValue(keyNonce, nonce)
+	}
 }
 
 // GetNonce returns the ID's nonce if it exists.

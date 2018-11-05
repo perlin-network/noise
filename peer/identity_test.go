@@ -170,7 +170,7 @@ func TestWtihValue(t *testing.T) {
 func TestNonce(t *testing.T) {
 	t.Parallel()
 	expected := []byte("mynoncevalue")
-	idWithNonce := WithNonce(id1, expected)
+	idWithNonce := CreateID(address, publicKey1, WithNonce(expected))
 	val := GetNonce(id1)
 	assert.NotEqual(t, nil, val, "expected nil nonce")
 	val = GetNonce(idWithNonce)

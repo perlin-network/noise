@@ -56,9 +56,7 @@ func ExampleBasicPlugin() {
 		kp, nonce := plugin.PerformPuzzle()
 
 		builder.SetKeys(kp)
-		id := peer.CreateID(address, kp.PublicKey)
-		id = peer.WithNonce(id, nonce)
-		builder.SetID(id)
+		builder.SetID(peer.CreateID(address, kp.PublicKey, peer.WithNonce(nonce)))
 
 		builder.AddPlugin(plugin)
 		plugins = append(plugins, new(BasicPlugin))
