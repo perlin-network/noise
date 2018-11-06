@@ -45,12 +45,22 @@ func (n *Node) AddService(id uint16, s Service) {
 	n.services[id] = s
 }
 
+func (n *Node) removePeer(id []byte) {
+	peer, ok := n.peers.Load(string(id))
+	if ok {
+		if peer, ok := peer.(*EstablishedPeer); ok {
+			peer.Close()
+		}
+		n.peers.Delete(string(id))
+	}
+}
+
 func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) {
 	if peer.kxState != KeyExchange_Done {
 		err := peer.continueKeyExchange(n.controller, n.idAdapter, raw)
 		if err != nil {
 			log.Error().Err(err).Msg("cannot continue key exchange")
-			n.peers.Delete(string(peer.RemoteEndpoint()))
+			n.removePeer(peer.RemoteEndpoint())
 		}
 		return
 	}
@@ -87,7 +97,11 @@ func (n *Node) Start() {
 
 			n.peers.Store(string(adapter.RemoteEndpoint()), peer)
 			adapter.StartRecvMessage(n.controller, func(message []byte) {
-				n.dispatchIncomingMessage(peer, message)
+				if message == nil {
+					n.removePeer(adapter.RemoteEndpoint())
+				} else {
+					n.dispatchIncomingMessage(peer, message)
+				}
 			})
 		}
 	}()
@@ -121,16 +135,20 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 				if err != nil {
 					established = nil
 					msgAdapter = nil
-					n.peers.Delete(string(remote))
+					n.removePeer(remote)
 					log.Error().Err(err).Msg("cannot establish peer")
 				} else {
 					n.peers.Store(string(remote), established)
 					msgAdapter.StartRecvMessage(n.controller, func(message []byte) {
-						n.dispatchIncomingMessage(established, message)
+						if message == nil {
+							n.removePeer(remote)
+						} else {
+							n.dispatchIncomingMessage(established, message)
+						}
 					})
 				}
 			} else {
-				n.peers.Delete(string(remote))
+				n.removePeer(remote)
 			}
 
 			close(peer.Done)
@@ -155,6 +173,10 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 	}
 }
 
+func (n *Node) ManuallyRemovePeer(remote []byte) {
+	n.removePeer(remote)
+}
+
 func (n *Node) Send(message *Message) error {
 	if !bytes.Equal(message.Sender, n.idAdapter.MyIdentity()) {
 		return errors.New("sender mismatch")
@@ -167,7 +189,7 @@ func (n *Node) Send(message *Message) error {
 
 	err = peer.SendMessage(n.controller, message.Body.Serialize())
 	if err != nil {
-		n.peers.Delete(string(message.Recipient))
+		n.removePeer(message.Recipient)
 		return err
 	}
 

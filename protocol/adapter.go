@@ -11,6 +11,7 @@ type MessageAdapter interface {
 	RemoteEndpoint() []byte
 	StartRecvMessage(c *Controller, callback RecvMessageCallback)
 	SendMessage(c *Controller, message []byte) error
+	Close()
 }
 
 type IdentityAdapter interface {

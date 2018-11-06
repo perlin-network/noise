@@ -10,7 +10,6 @@ import (
 	"github.com/pkg/errors"
 	"io"
 	"net"
-	"runtime"
 	"sync"
 	"time"
 )
@@ -148,14 +147,10 @@ func startTCPMessageAdapter(conn net.Conn, local, remote []byte, passive bool) (
 		finalizerNotifier: make(chan struct{}),
 	}
 
-	runtime.SetFinalizer(adapter, func(a interface{}) {
-		a.(*TCPMessageAdapter).gcFinalize()
-	})
-
 	return adapter, nil
 }
 
-func (a *TCPMessageAdapter) gcFinalize() {
+func (a *TCPMessageAdapter) Close() {
 	a.conn.Close()
 	close(a.finalizerNotifier)
 }
@@ -206,4 +201,6 @@ func runRecvWorker(finalizerNotifier chan struct{}, conn net.Conn, callback prot
 
 		callback(buf)
 	}
+
+	callback(nil)
 }

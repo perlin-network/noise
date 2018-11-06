@@ -59,6 +59,7 @@ func main() {
 					Payload: []byte("Hello world!"),
 				},
 			})
+			//node.ManuallyRemovePeer(peerID)
 		}
 	}
 

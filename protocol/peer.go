@@ -26,6 +26,8 @@ type EstablishedPeer struct {
 	aead        cipher.AEAD
 	localNonce  uint64
 	remoteNonce uint64
+
+	closed bool
 }
 
 type KeyExchangeState byte
@@ -116,6 +118,15 @@ func (p *EstablishedPeer) continueKeyExchange(c *Controller, idAdapter IdentityA
 	default:
 		panic("unexpected key exchange state")
 	}
+}
+
+func (p *EstablishedPeer) Close() {
+	p.Lock()
+	if !p.closed {
+		p.closed = true
+		p.adapter.Close()
+	}
+	p.Unlock()
 }
 
 func (p *EstablishedPeer) SendMessage(c *Controller, body []byte) error {
