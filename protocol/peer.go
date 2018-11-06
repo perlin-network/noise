@@ -131,6 +131,10 @@ func (p *EstablishedPeer) Close() {
 	if !p.closed {
 		p.closed = true
 		p.adapter.Close()
+		if p.kxState != KeyExchange_Done && p.kxState != KeyExchange_Failed {
+			p.kxState = KeyExchange_Failed
+			close(p.kxDone)
+		}
 	}
 	p.Unlock()
 }
