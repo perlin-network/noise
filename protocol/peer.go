@@ -74,6 +74,12 @@ func (p *EstablishedPeer) continueKeyExchange(c *Controller, idAdapter IdentityA
 
 	switch p.kxState {
 	case KeyExchange_ActivelyWaitForPublicKey, KeyExchange_PassivelyWaitForPublicKey:
+		if len(raw) < idAdapter.SignatureSize() {
+			p.kxState = KeyExchange_Failed
+			close(p.kxDone)
+			return errors.New("incomplete message")
+		}
+
 		sig := raw[:idAdapter.SignatureSize()]
 		rawPubKey := raw[idAdapter.SignatureSize():]
 		if idAdapter.Verify(p.adapter.RemoteEndpoint(), rawPubKey, sig) == false {
