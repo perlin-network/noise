@@ -186,7 +186,8 @@ func runRecvWorker(finalizerNotifier chan struct{}, conn net.Conn, callback prot
 	reader := bufio.NewReader(conn)
 
 	for {
-		// FIXME: check termination
+		// conn should also be closed as soon as gcFinalize() is called
+		// so we do not need to check finalizerNotifier?
 		n, err := binary.ReadUvarint(reader)
 		if err != nil {
 			break
