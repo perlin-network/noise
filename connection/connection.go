@@ -23,8 +23,6 @@ type TCPConnectionAdapter struct {
 	idToAddress sync.Map
 }
 
-// No outside references to TCPMessageAdapter should be kept. Otherwise, a resource leak will happen
-// because TCPMessageAdapter uses a finalizer to clean-up itself.
 type TCPMessageAdapter struct {
 	conn              net.Conn
 	local             []byte
