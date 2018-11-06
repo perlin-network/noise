@@ -82,20 +82,25 @@ func main() {
 				}
 				selected := instances[selectedN].keypair.PublicKey
 
-				current.node.Send(&protocol.Message{
-					Sender:    current.keypair.PublicKey,
-					Recipient: selected,
-					Body: &protocol.MessageBody{
-						Service: 42,
-						Payload: []byte("Hello world!"),
-					},
-				})
+				for {
+					err := current.node.Send(&protocol.Message{
+						Sender:    current.keypair.PublicKey,
+						Recipient: selected,
+						Body: &protocol.MessageBody{
+							Service: 42,
+							Payload: []byte("Hello world!"),
+						},
+					})
+					if err == nil {
+						break
+					}
+					time.Sleep(5 * time.Microsecond)
+				}
 
 				// simulate unstable connection
 				if rand.Intn(1000) == 0 {
 					current.node.ManuallyRemovePeer(selected)
 				}
-				time.Sleep(5 * time.Microsecond)
 			}
 		}()
 	}
