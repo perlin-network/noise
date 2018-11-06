@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bytes"
+	"github.com/monnand/dhkx"
 	"github.com/perlin-network/noise/log"
 	"github.com/pkg/errors"
 	"sync"
@@ -15,14 +16,28 @@ type Node struct {
 	idAdapter   IdentityAdapter
 	peers       sync.Map // string -> *PendingPeer | *EstablishedPeer
 	services    map[uint16]Service
+	dhGroup     *dhkx.DHGroup
+	dhKeypair   *dhkx.DHKey
 }
 
 func NewNode(c *Controller, ca ConnectionAdapter, id IdentityAdapter) *Node {
+	g, err := dhkx.GetGroup(0)
+	if err != nil {
+		panic(err)
+	}
+
+	privKey, err := g.GeneratePrivateKey(nil)
+	if err != nil {
+		panic(err)
+	}
+
 	return &Node{
 		controller:  c,
 		connAdapter: ca,
 		idAdapter:   id,
 		services:    make(map[uint16]Service),
+		dhGroup:     g,
+		dhKeypair:   privKey,
 	}
 }
 
@@ -64,7 +79,7 @@ func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) {
 func (n *Node) Start() {
 	go func() {
 		for adapter := range n.connAdapter.EstablishPassively(n.controller, n.idAdapter.MyIdentity()) {
-			peer, err := EstablishPeerWithMessageAdapter(n.controller, n.idAdapter, adapter, true)
+			peer, err := EstablishPeerWithMessageAdapter(n.controller, n.dhGroup, n.dhKeypair, n.idAdapter, adapter, true)
 			if err != nil {
 				log.Error().Err(err).Msg("cannot establish peer")
 				continue
@@ -102,7 +117,7 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 			}
 
 			if msgAdapter != nil {
-				established, err = EstablishPeerWithMessageAdapter(n.controller, n.idAdapter, msgAdapter, false)
+				established, err = EstablishPeerWithMessageAdapter(n.controller, n.dhGroup, n.dhKeypair, n.idAdapter, msgAdapter, false)
 				if err != nil {
 					established = nil
 					msgAdapter = nil
