@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const NumInstances = 3
+const NumInstances = 20
 const StartPort = 7000
 
 type Instance struct {
@@ -112,8 +112,13 @@ func main() {
 			newMsgCount[i] = instances[i].ReadMessageCount()
 		}
 		info := ""
+		sum := uint64(0)
 		for i := 0; i < NumInstances; i++ {
-			info += fmt.Sprintf("%d ", newMsgCount[i]-lastMsgCount[i])
+			sum += newMsgCount[i] - lastMsgCount[i]
+		}
+		info += fmt.Sprintf("total=%d\t", sum)
+		for i := 0; i < NumInstances; i++ {
+			info += fmt.Sprintf("%d\t", newMsgCount[i]-lastMsgCount[i])
 		}
 		log.Info().Msg(info)
 		lastMsgCount = newMsgCount
