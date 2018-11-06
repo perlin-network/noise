@@ -89,7 +89,7 @@ func newNode(i int, addDiscoveryPlugin bool, addBackoffPlugin bool) (*network.Ne
 	builder.SetAddress(addr)
 
 	if addDiscoveryPlugin {
-		builder.AddPlugin(new(discovery.Plugin))
+		builder.AddPlugin(discovery.New())
 	}
 	if addBackoffPlugin {
 		builder.AddPlugin(New())

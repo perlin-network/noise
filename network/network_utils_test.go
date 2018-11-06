@@ -58,7 +58,7 @@ func (te *testSuite) startBoostrap(numNodes int, plugins ...network.PluginInterf
 		builder.SetKeys(te.e.signature.RandomKeyPair())
 		builder.SetAddress(network.FormatAddress(te.e.networkType, "localhost", uint16(network.GetRandomUnusedPort())))
 
-		builder.AddPlugin(new(discovery.Plugin))
+		builder.AddPlugin(discovery.Plugin())
 		builder.AddPlugin(new(MailBoxPlugin))
 
 		for _, plugin := range plugins {

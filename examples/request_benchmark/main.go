@@ -83,7 +83,7 @@ func setupNetworks(host string, startPort int, numNodes int) []*network.Network 
 		builder.SetKeys(ed25519.RandomKeyPair())
 		builder.SetAddress(network.FormatAddress("tcp", host, uint16(startPort+i)))
 
-		builder.AddPlugin(new(discovery.Plugin))
+		builder.AddPlugin(discovery.New())
 		builder.AddPlugin(new(loadTestPlugin))
 
 		node, err := builder.Build()

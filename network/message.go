@@ -3,16 +3,20 @@ package network
 import (
 	"context"
 
-	"github.com/gogo/protobuf/proto"
+	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/peer"
+
+	"github.com/gogo/protobuf/proto"
 )
 
 // PluginContext provides parameters and helper functions to a Plugin
 // for interacting with/analyzing incoming messages from a select peer.
 type PluginContext struct {
-	client  *PeerClient
-	message proto.Message
-	nonce   uint64
+	client     *PeerClient
+	message    proto.Message
+	nonce      uint64
+	rawMessage protobuf.Message
+	signature  []byte
 }
 
 // Reply sends back a message to an incoming message's incoming stream.
@@ -34,6 +38,11 @@ func (pctx *PluginContext) Client() *PeerClient {
 // Network returns the entire node's network.
 func (pctx *PluginContext) Network() *Network {
 	return pctx.client.Network
+}
+
+// RawMessage returns the raw protobuf message
+func (pctx *PluginContext) RawMessage() protobuf.Message {
+	return pctx.rawMessage
 }
 
 // Self returns the node's ID.

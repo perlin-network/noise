@@ -20,7 +20,7 @@ func TestNatConnect(t *testing.T) {
 		port := network.GetRandomUnusedPort()
 		b.SetAddress(network.FormatAddress("tcp", "localhost", uint16(port)))
 		RegisterPlugin(b)
-		b.AddPlugin(new(discovery.Plugin))
+		b.AddPlugin(discovery.New())
 		n, err := b.Build()
 		go n.Listen()
 

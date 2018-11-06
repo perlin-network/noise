@@ -201,11 +201,11 @@ builder.AddPlugin(new(YourAwesomePlugin))
 ```go
 // Enables peer discovery through the network.
 // Check documentation for more info.
-builder.AddPlugin(new(discovery.Plugin))
+builder.AddPlugin(discovery.New())
 
 // Enables exponential backoff upon peer disconnection.
 // Check documentation for more info.
-builder.AddPlugin(new(backoff.Plugin))
+builder.AddPlugin(backoff.New())
 
 // Enables automated NAT traversal/port forwarding for your node.
 // Check documentation for more info.

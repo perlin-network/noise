@@ -19,11 +19,13 @@ func queryPeerByID(net *network.Network, peerID peer.ID, targetID peer.ID, respo
 	}
 
 	targetProtoID := protobuf.ID(targetID)
+	expiration := time.Now().Add(weakSignatureExpiration)
+	signature := serializePeerIDAndExpiration(&net.ID, &expiration)
 
 	msg := &protobuf.LookupNodeRequest{Target: &targetProtoID}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	response, err := client.Request(ctx, msg)
+	response, err := client.Request(ctx, msg, network.WithRequestSignature(signature))
 
 	if err != nil {
 		responses <- []*protobuf.ID{}

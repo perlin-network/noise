@@ -176,6 +176,10 @@ func (state *Plugin) Startup(net *network.Network) {
 		}
 	}
 
+	if state.signaturePolicy == nil || state.hashPolicy == nil {
+		log.Fatal().Msg("discovery: plugin is not properly initialized, please use discovery.New()")
+	}
+
 	// Create routing table.
 	state.Routes = CreateRoutingTable(net.ID)
 	state.id = net.ID
@@ -190,8 +194,8 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 	state.Routes.Update(sender)
 	// expire signature after 30 seconds
 	ctx := context.Background()
-	/*expiration := time.Now().Add(weakSignatureExpiration)
-	signature := serializePeerIDAndExpiration(&state.id, &expiration)*/
+	expiration := time.Now().Add(weakSignatureExpiration)
+	signature := serializePeerIDAndExpiration(&state.id, &expiration)
 
 	// Handle RPC.
 	switch msg := pctx.Message().(type) {
@@ -200,10 +204,8 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 			break
 		}
 
-		// Verify weak signature
-
 		// Send pong to peer.
-		err := pctx.Reply(ctx, &protobuf.Pong{})
+		err := pctx.Reply(ctx, &protobuf.Pong{}, network.WithReplySignature(signature))
 
 		if err != nil {
 			return err
@@ -211,6 +213,11 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 	case *protobuf.Pong:
 		if state.disablePong {
 			break
+		}
+
+		// Verify weak signature
+		if ok, err := state.verifyWeakSignature(pctx.RawMessage()); !ok && err != nil {
+			return err
 		}
 
 		peers := FindNode(pctx.Network(), pctx.Sender(), BucketSize, 8)
@@ -228,6 +235,11 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 			break
 		}
 
+		// Verify weak signature
+		if ok, err := state.verifyWeakSignature(pctx.RawMessage()); !ok && err != nil {
+			return err
+		}
+
 		// Prepare response.
 		response := &protobuf.LookupNodeResponse{}
 
@@ -237,7 +249,7 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 			response.Peers = append(response.Peers, &id)
 		}
 
-		err := pctx.Reply(ctx, response)
+		err := pctx.Reply(ctx, response, network.WithReplySignature(signature))
 		if err != nil {
 			return err
 		}
@@ -269,12 +281,45 @@ func (state *Plugin) PeerDisconnect(client *network.PeerClient) {
 }
 
 // GetStrongSignature generates the strong signature of the message.
-func (state Plugin) GetStrongSignature(msg *protobuf.Message) ([]byte, error) {
-	raw, err := proto.Marshal(msg)
+func (state Plugin) GetStrongSignature(msg protobuf.Message) ([]byte, error) {
+	if len(msg.Signature) != 0 {
+		return nil, errors.New("discovery: message signature must be empty")
+	}
+	raw, err := proto.Marshal(&msg)
 	if err != nil {
 		return nil, err
 	}
 	return state.kp.Sign(state.signaturePolicy, state.hashPolicy, serializeMessage(&state.id, raw))
+}
+
+// verifyStrongSignature verifies whether the message signature is a valid strong signature
+func (state Plugin) verifyStrongSignature(msg protobuf.Message) (bool, error) {
+	if len(msg.Signature) == 0 {
+		return false, errors.Wrapf(ErrSignatureInvalid, "no message signature provided")
+	}
+	if msg.Sender == nil || msg.Sender.PublicKey == nil {
+		return false, ErrSignatureNoSender
+	}
+
+	// clear out message signature prior to serializing
+	signature := msg.Signature
+	msg.Signature = nil
+
+	id := (*peer.ID)(msg.GetSender())
+	raw, err := proto.Marshal(&msg)
+	if err != nil {
+		return false, err
+	}
+
+	if crypto.Verify(state.signaturePolicy,
+		state.hashPolicy,
+		id.PublicKey,
+		serializeMessage(id, raw),
+		signature,
+	) {
+		return true, nil
+	}
+	return false, ErrSignatureInvalid
 }
 
 // GetWeakSignature generates the weak signature of the message.
@@ -282,7 +327,8 @@ func (state Plugin) GetWeakSignature(expiration time.Time) ([]byte, error) {
 	return state.kp.Sign(state.signaturePolicy, state.hashPolicy, serializePeerIDAndExpiration(&state.id, &expiration))
 }
 
-func (state Plugin) verifyWeakSignature(msg *protobuf.Message) (bool, error) {
+// verifyWeakSignature verifies whether the message signature is a valid weak signature
+func (state Plugin) verifyWeakSignature(msg protobuf.Message) (bool, error) {
 	if len(msg.Signature) == 0 {
 		return false, errors.Wrapf(ErrSignatureInvalid, "no message signature provided")
 	}

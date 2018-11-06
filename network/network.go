@@ -175,14 +175,16 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 		}
 	}
 
-	switch msgRaw := ptr.(type) {
+	switch decodedMsg := ptr.(type) {
 	case *protobuf.Bytes:
-		client.handleBytes(msgRaw.Data)
+		client.handleBytes(decodedMsg.Data)
 	default:
 		ctx := contextPool.Get().(*PluginContext)
 		ctx.client = client
-		ctx.message = msgRaw
+		ctx.message = decodedMsg
+		ctx.rawMessage = *msg
 		ctx.nonce = msg.RequestNonce
+		ctx.signature = msg.Signature
 
 		go func() {
 			// Execute 'on receive message' callback for all plugins.
