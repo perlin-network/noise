@@ -49,7 +49,7 @@ func main() {
 	}
 
 	// Register peer discovery plugin.
-	builder.AddPlugin(new(discovery.Plugin))
+	builder.AddPlugin(discovery.New())
 
 	net, err := builder.Build()
 	if err != nil {

@@ -102,7 +102,7 @@ func main() {
 	builder.SetAddress(network.FormatAddress(protocol, host, port))
 
 	// Register peer discovery plugin.
-	builder.AddPlugin(new(discovery.Plugin))
+	builder.AddPlugin(discovery.New())
 
 	// Add backoff plugin.
 	builder.AddPlugin(new(backoff.Plugin))

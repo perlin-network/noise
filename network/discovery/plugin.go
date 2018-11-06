@@ -25,7 +25,8 @@ const (
 	// DefaultC1 is the prefix-matching length for the static cryptopuzzle.
 	DefaultC1 = 16
 	// DefaultC2 is the prefix-matching length for the dynamic cryptopuzzle.
-	DefaultC2 = 16
+	DefaultC2               = 16
+	weakSignatureExpiration = 30 * time.Second
 )
 
 var (
@@ -42,6 +43,9 @@ var (
 	ErrSignatureExpired = errors.New("discovery: signature has expired")
 	// ErrSignatureNoSender returns if the message has no sender or sender public key
 	ErrSignatureNoSender = errors.New("discovery: no sender or sender public key")
+
+	PluginID                         = (*Plugin)(nil)
+	_        network.PluginInterface = (*Plugin)(nil)
 )
 
 // Plugin defines the discovery plugin struct.
@@ -67,15 +71,6 @@ type Plugin struct {
 	id     peer.ID
 	kp     *crypto.KeyPair
 }
-
-const (
-	weakSignatureExpiration = 30 * time.Second
-)
-
-var (
-	PluginID                         = (*Plugin)(nil)
-	_        network.PluginInterface = (*Plugin)(nil)
-)
 
 // PluginOption are configurable options for the discovery plugin.
 type PluginOption func(*Plugin)
@@ -216,9 +211,9 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 		}
 
 		// Verify weak signature
-		if ok, err := state.verifyWeakSignature(pctx.RawMessage()); !ok && err != nil {
+		/*if ok, err := state.verifyWeakSignature(pctx.RawMessage()); !ok && err != nil {
 			return err
-		}
+		}*/
 
 		peers := FindNode(pctx.Network(), pctx.Sender(), BucketSize, 8)
 
@@ -236,9 +231,9 @@ func (state *Plugin) Receive(pctx *network.PluginContext) error {
 		}
 
 		// Verify weak signature
-		if ok, err := state.verifyWeakSignature(pctx.RawMessage()); !ok && err != nil {
+		/*if ok, err := state.verifyWeakSignature(pctx.RawMessage()); !ok && err != nil {
 			return err
-		}
+		}*/
 
 		// Prepare response.
 		response := &protobuf.LookupNodeResponse{}
