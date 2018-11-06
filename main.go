@@ -50,17 +50,20 @@ func main() {
 		remoteAddr := os.Args[4]
 		connAdapter.MapIDToAddress(peerID, remoteAddr)
 
-		for {
-			node.Send(&protocol.Message{
-				Sender:    kp.PublicKey,
-				Recipient: peerID,
-				Body: &protocol.MessageBody{
-					Service: 42,
-					Payload: []byte("Hello world!"),
-				},
-			})
-			//node.ManuallyRemovePeer(peerID)
-		}
+		go func() {
+			for {
+				node.Send(&protocol.Message{
+					Sender:    kp.PublicKey,
+					Recipient: peerID,
+					Body: &protocol.MessageBody{
+						Service: 42,
+						Payload: []byte("Hello world!"),
+					},
+				})
+				//node.ManuallyRemovePeer(peerID)
+			}
+		}()
+
 	}
 
 	for range time.Tick(10 * time.Second) {
