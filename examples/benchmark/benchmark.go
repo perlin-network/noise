@@ -92,9 +92,10 @@ func main() {
 				})
 
 				// simulate unstable connection
-				/*if rand.Intn(1000) == 0 {
+				if rand.Intn(1000) == 0 {
 					current.node.ManuallyRemovePeer(selected)
-				}*/
+				}
+				time.Sleep(5 * time.Microsecond)
 			}
 		}()
 	}
