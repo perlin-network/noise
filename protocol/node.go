@@ -89,6 +89,7 @@ func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) {
 func (n *Node) Start() {
 	go func() {
 		for adapter := range n.connAdapter.EstablishPassively(n.controller, n.idAdapter.MyIdentity()) {
+			adapter := adapter // the outer adapter is shared?
 			peer, err := EstablishPeerWithMessageAdapter(n.controller, n.dhGroup, n.dhKeypair, n.idAdapter, adapter, true)
 			if err != nil {
 				log.Error().Err(err).Msg("cannot establish peer")
