@@ -186,7 +186,9 @@ func runRecvWorker(finalizerNotifier chan struct{}, conn net.Conn, callback prot
 			break
 		}
 
-		if n > 1048576 {
+		// not so accurate since the message header takes a few bytes;
+		// but it works just fine here.
+		if n > protocol.MaxPayloadLen {
 			log.Error().Msg("message too long")
 			break
 		}
