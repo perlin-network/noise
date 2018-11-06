@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"github.com/monnand/dhkx"
 	"github.com/pkg/errors"
+	"sync"
 )
 
 type PendingPeer struct {
@@ -15,6 +16,8 @@ type PendingPeer struct {
 }
 
 type EstablishedPeer struct {
+	sync.Mutex
+
 	adapter     MessageAdapter
 	kxState     KeyExchangeState
 	kxDone      chan struct{}
@@ -43,28 +46,18 @@ func prependSimpleSignature(idAdapter IdentityAdapter, data []byte) []byte {
 
 }
 
-func EstablishPeerWithMessageAdapter(c *Controller, idAdapter IdentityAdapter, adapter MessageAdapter, passive bool) (*EstablishedPeer, error) {
-	g, err := dhkx.GetGroup(0)
-	if err != nil {
-		return nil, err
-	}
-
-	privKey, err := g.GeneratePrivateKey(nil)
-	if err != nil {
-		return nil, err
-	}
-
+func EstablishPeerWithMessageAdapter(c *Controller, dhGroup *dhkx.DHGroup, dhKeypair *dhkx.DHKey, idAdapter IdentityAdapter, adapter MessageAdapter, passive bool) (*EstablishedPeer, error) {
 	peer := &EstablishedPeer{
 		adapter:   adapter,
 		kxDone:    make(chan struct{}),
-		dhGroup:   g,
-		dhKeypair: privKey,
+		dhGroup:   dhGroup,
+		dhKeypair: dhKeypair,
 	}
 	if passive {
 		peer.kxState = KeyExchange_PassivelyWaitForPublicKey
 	} else {
 		peer.kxState = KeyExchange_ActivelyWaitForPublicKey
-		err = peer.adapter.SendMessage(c, prependSimpleSignature(idAdapter, peer.dhKeypair.Bytes()))
+		err := peer.adapter.SendMessage(c, prependSimpleSignature(idAdapter, peer.dhKeypair.Bytes()))
 		if err != nil {
 			return nil, err
 		}
@@ -74,6 +67,9 @@ func EstablishPeerWithMessageAdapter(c *Controller, idAdapter IdentityAdapter, a
 }
 
 func (p *EstablishedPeer) continueKeyExchange(c *Controller, idAdapter IdentityAdapter, raw []byte) error {
+	p.Lock()
+	defer p.Unlock()
+
 	switch p.kxState {
 	case KeyExchange_ActivelyWaitForPublicKey, KeyExchange_PassivelyWaitForPublicKey:
 		sig := raw[:idAdapter.SignatureSize()]
@@ -98,14 +94,14 @@ func (p *EstablishedPeer) continueKeyExchange(c *Controller, idAdapter IdentityA
 
 		p.dhGroup = nil
 		p.dhKeypair = nil
-		aesKey := sha256.Sum256(sharedKey.Bytes())
+		aesKey := sha256.Sum256(sharedKey.Bytes()) // FIXME: security?
 		aesCipher, err := aes.NewCipher(aesKey[:])
 		if err != nil {
 			p.kxState = KeyExchange_Failed
 			close(p.kxDone)
 			return err
 		}
-		aead, err := cipher.NewGCM(aesCipher) // FIXME
+		aead, err := cipher.NewGCM(aesCipher)
 		if err != nil {
 			p.kxState = KeyExchange_Failed
 			close(p.kxDone)
@@ -123,7 +119,9 @@ func (p *EstablishedPeer) continueKeyExchange(c *Controller, idAdapter IdentityA
 }
 
 func (p *EstablishedPeer) SendMessage(c *Controller, body []byte) error {
-	// TODO: thread safety
+	p.Lock()
+	defer p.Unlock()
+
 	nonceBuffer := make([]byte, 12)
 	binary.LittleEndian.PutUint64(nonceBuffer, p.localNonce)
 	p.localNonce++
@@ -133,6 +131,9 @@ func (p *EstablishedPeer) SendMessage(c *Controller, body []byte) error {
 }
 
 func (p *EstablishedPeer) UnwrapMessage(c *Controller, raw []byte) ([]byte, error) {
+	p.Lock()
+	defer p.Unlock()
+
 	nonceBuffer := make([]byte, 12)
 	binary.LittleEndian.PutUint64(nonceBuffer, p.remoteNonce)
 	p.remoteNonce++
