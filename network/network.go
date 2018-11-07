@@ -138,15 +138,15 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 	code := opcode.Opcode(msg.Opcode)
 	switch code {
 	case opcode.BytesCode:
-		ptr = &protobuf.Bytes{}
+		ptr = new(protobuf.Bytes)
 	case opcode.PingCode:
-		ptr = &protobuf.Ping{}
+		ptr = new(protobuf.Ping)
 	case opcode.PongCode:
-		ptr = &protobuf.Pong{}
+		ptr = new(protobuf.Pong)
 	case opcode.LookupNodeRequestCode:
-		ptr = &protobuf.LookupNodeRequest{}
+		ptr = new(protobuf.LookupNodeRequest)
 	case opcode.LookupNodeResponseCode:
-		ptr = &protobuf.LookupNodeResponse{}
+		ptr = new(protobuf.LookupNodeResponse)
 	case opcode.UnregisteredCode:
 		log.Error().Msg("network: message received had no opcode")
 		return
@@ -158,9 +158,10 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 			return
 		}
 	}
+
 	if len(msg.Message) > 0 {
 		if err := proto.Unmarshal(msg.Message, ptr); err != nil {
-			log.Error().Err(err).Msg("")
+			log.Error().Msgf("%v", err)
 			return
 		}
 	}
@@ -200,7 +201,6 @@ func (n *Network) dispatchMessage(client *PeerClient, msg *protobuf.Message) {
 
 // Listen starts listening for peers on a port.
 func (n *Network) Listen() {
-
 	// Handle 'network starts listening' callback for plugins.
 	n.plugins.Each(func(plugin PluginInterface) {
 		plugin.Startup(n)
@@ -234,7 +234,7 @@ func (n *Network) Listen() {
 
 	log.Info().
 		Str("address", n.Address).
-		Msg("listening for peers")
+		Msg("Listening for peers.")
 
 	// handle server shutdowns
 	go func() {
@@ -249,15 +249,14 @@ func (n *Network) Listen() {
 	for {
 		if conn, err := listener.Accept(); err == nil {
 			go n.Accept(conn)
-
 		} else {
 			// if the Shutdown flag is set, no need to continue with the for loop
 			select {
 			case <-n.kill:
-				log.Info().Msgf("shutting down server on %s.", n.Address)
+				log.Info().Msgf("Shutting down server %s.", n.Address)
 				return
 			default:
-				log.Error().Err(err).Msg("")
+				log.Error().Msgf("%v", err)
 			}
 		}
 	}
@@ -423,7 +422,6 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 // Accept handles peer registration and processes incoming message streams.
 func (n *Network) Accept(incoming net.Conn) {
 	var client *PeerClient
-	var clientInit sync.Once
 
 	recvWindow := NewRecvWindow(n.opts.recvWindowSize)
 
@@ -444,18 +442,21 @@ func (n *Network) Accept(incoming net.Conn) {
 		msg, err := n.receiveMessage(incoming)
 		if err != nil {
 			if err != errEmptyMsg {
-				log.Error().Err(err).Msg("")
+				log.Error().Msgf("%v", err)
 			}
 			break
 		}
 
 		// Initialize client if not exists.
-		clientInit.Do(func() {
+		if client == nil {
 			client, err = n.getOrSetPeerClient(msg.Sender.Address, incoming)
+
 			if err != nil {
 				return
 			}
+		}
 
+		client.Do(func() {
 			client.ID = (*peer.ID)(msg.Sender)
 
 			if !n.ConnectionStateExists(client.ID.Address) {
@@ -476,7 +477,7 @@ func (n *Network) Accept(incoming net.Conn) {
 				log.Error().
 					Interface("peer_id", peer.ID(*msg.Sender)).
 					Interface("client_id", client.ID).
-					Msg("message signed by peer does not match client ID")
+					Msg("Message signed by peer does not match client ID.")
 				return
 			}
 

@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	defaultNumNodes      = 5
-	defaultNumReqPerNode = 50
+	defaultNumNodes      = 8
+	defaultNumReqPerNode = 100
 	host                 = "localhost"
 	startPort            = 23000
 )
@@ -109,7 +109,7 @@ func setupNetworks(host string, startPort int, numNodes int) []*network.Network 
 	}
 
 	// Wait for all nodes to finish discovering other peers.
-	time.Sleep(1 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	return nodes
 }

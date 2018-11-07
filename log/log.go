@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	logger = zerolog.New(os.Stderr).With().Timestamp().Caller().Logger()
+	logger = zerolog.New(os.Stderr).With().Timestamp().Logger()
 )
 
 func init() {
