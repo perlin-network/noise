@@ -61,6 +61,8 @@ func (inst *Instance) ReadMessageCount() uint64 {
 }
 
 func main() {
+	dropRate := uint32(10000) // 1/10000
+
 	instances := make([]*Instance, NumInstances)
 	for i := 0; i < NumInstances; i++ {
 		instances[i] = StartInstance(StartPort + uint16(i))
@@ -98,7 +100,7 @@ func main() {
 				}
 
 				// simulate unstable connection
-				if rand.Intn(1000) == 0 {
+				if rand.Intn(int(atomic.LoadUint32(&dropRate))) == 0 {
 					current.node.ManuallyRemovePeer(selected)
 				}
 			}
@@ -106,21 +108,27 @@ func main() {
 	}
 
 	lastMsgCount := make([]uint64, NumInstances)
-	for range time.Tick(1 * time.Second) {
+	periodSecs := 5
+
+	for range time.Tick(time.Duration(periodSecs) * time.Second) {
 		newMsgCount := make([]uint64, NumInstances)
 		for i := 0; i < NumInstances; i++ {
 			newMsgCount[i] = instances[i].ReadMessageCount()
 		}
-		info := ""
+		info := fmt.Sprintf("Drop rate=1/%d\t", atomic.LoadUint32(&dropRate))
 		sum := uint64(0)
 		for i := 0; i < NumInstances; i++ {
 			sum += newMsgCount[i] - lastMsgCount[i]
 		}
-		info += fmt.Sprintf("total=%d\t", sum)
-		for i := 0; i < NumInstances; i++ {
+		info += fmt.Sprintf("Messages per second=%f\t", float64(sum)/float64(periodSecs))
+		/*for i := 0; i < NumInstances; i++ {
 			info += fmt.Sprintf("%d\t", newMsgCount[i]-lastMsgCount[i])
-		}
+		}*/
 		log.Info().Msg(info)
 		lastMsgCount = newMsgCount
+		if atomic.LoadUint32(&dropRate) < 10 {
+			break
+		}
+		atomic.StoreUint32(&dropRate, atomic.LoadUint32(&dropRate)*3/4)
 	}
 }
