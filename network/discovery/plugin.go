@@ -158,7 +158,7 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 
 		log.Debug().
 			Strs("peers", state.Routes.GetPeerAddresses()).
-			Msg("bootstrapped w/ peer(s)")
+			Msg("Bootstrapped w/ peer(s).")
 	case *protobuf.LookupNodeRequest:
 		if state.disableLookup {
 			break
@@ -180,7 +180,7 @@ func (state *Plugin) Receive(ctx *network.PluginContext) error {
 
 		log.Debug().
 			Strs("peers", state.Routes.GetPeerAddresses()).
-			Msg("connected to peer(s)")
+			Msg("Connected to peer(s).")
 	}
 
 	return nil
@@ -199,7 +199,7 @@ func (state *Plugin) PeerDisconnect(client *network.PeerClient) {
 			log.Debug().
 				Str("address", client.Network.ID.Address).
 				Str("peer_address", client.ID.Address).
-				Msg("peer has disconnected")
+				Msg("Peer has disconnected.")
 		}
 	}
 }
