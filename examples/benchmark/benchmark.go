@@ -147,7 +147,7 @@ func main() {
 					if err == nil {
 						break
 					}
-					time.Sleep(5 * time.Microsecond)
+					time.Sleep(5 * time.Millisecond)
 				}
 
 				// simulate unstable connection
@@ -159,7 +159,7 @@ func main() {
 	}
 
 	lastMsgCount := make([]uint64, NumInstances)
-	periodSecs := 5
+	periodSecs := 10
 
 	for range time.Tick(time.Duration(periodSecs) * time.Second) {
 		newMsgCount := make([]uint64, NumInstances)
