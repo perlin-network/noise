@@ -11,13 +11,14 @@ import (
 type Service func(message *Message)
 
 type Node struct {
-	controller  *Controller
-	connAdapter ConnectionAdapter
-	idAdapter   IdentityAdapter
-	peers       sync.Map // string -> *PendingPeer | *EstablishedPeer
-	services    map[uint16]Service
-	dhGroup     *dhkx.DHGroup
-	dhKeypair   *dhkx.DHKey
+	controller               *Controller
+	connAdapter              ConnectionAdapter
+	idAdapter                IdentityAdapter
+	peers                    sync.Map // string -> *PendingPeer | *EstablishedPeer
+	services                 map[uint16]Service
+	dhGroup                  *dhkx.DHGroup
+	dhKeypair                *dhkx.DHKey
+	customHandshakeProcessor HandshakeProcessor
 }
 
 func NewNode(c *Controller, ca ConnectionAdapter, id IdentityAdapter) *Node {
@@ -41,6 +42,10 @@ func NewNode(c *Controller, ca ConnectionAdapter, id IdentityAdapter) *Node {
 	}
 }
 
+func (n *Node) SetCustomHandshakeProcessor(p HandshakeProcessor) {
+	n.customHandshakeProcessor = p
+}
+
 func (n *Node) AddService(id uint16, s Service) {
 	n.services[id] = s
 }
@@ -57,7 +62,7 @@ func (n *Node) removePeer(id []byte) {
 
 func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) {
 	if peer.kxState != KeyExchange_Done {
-		err := peer.continueKeyExchange(n.controller, n.idAdapter, raw)
+		err := peer.continueKeyExchange(n.controller, n.idAdapter, n.customHandshakeProcessor, raw)
 		if err != nil {
 			log.Error().Err(err).Msg("cannot continue key exchange")
 			n.removePeer(peer.RemoteEndpoint())

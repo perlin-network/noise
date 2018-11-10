@@ -18,14 +18,15 @@ type PendingPeer struct {
 type EstablishedPeer struct {
 	sync.Mutex
 
-	adapter     MessageAdapter
-	kxState     KeyExchangeState
-	kxDone      chan struct{}
-	dhGroup     *dhkx.DHGroup
-	dhKeypair   *dhkx.DHKey
-	aead        cipher.AEAD
-	localNonce  uint64
-	remoteNonce uint64
+	adapter                MessageAdapter
+	kxState                KeyExchangeState
+	kxCustomHandshakeState interface{}
+	kxDone                 chan struct{}
+	dhGroup                *dhkx.DHGroup
+	dhKeypair              *dhkx.DHKey
+	aead                   cipher.AEAD
+	localNonce             uint64
+	remoteNonce            uint64
 
 	closed bool
 }
@@ -36,6 +37,7 @@ const (
 	KeyExchange_Invalid KeyExchangeState = iota
 	KeyExchange_PassivelyWaitForPublicKey
 	KeyExchange_ActivelyWaitForPublicKey
+	KeyExchange_CustomHandshake
 	KeyExchange_Failed
 	KeyExchange_Done
 )
@@ -68,7 +70,7 @@ func EstablishPeerWithMessageAdapter(c *Controller, dhGroup *dhkx.DHGroup, dhKey
 	return peer, nil
 }
 
-func (p *EstablishedPeer) continueKeyExchange(c *Controller, idAdapter IdentityAdapter, raw []byte) error {
+func (p *EstablishedPeer) continueKeyExchange(c *Controller, idAdapter IdentityAdapter, handshakeProcessor HandshakeProcessor, raw []byte) error {
 	p.Lock()
 	defer p.Unlock()
 
@@ -116,9 +118,79 @@ func (p *EstablishedPeer) continueKeyExchange(c *Controller, idAdapter IdentityA
 			return err
 		}
 		p.aead = aead
-		p.kxState = KeyExchange_Done
-		close(p.kxDone)
+
+		if handshakeProcessor != nil {
+			if p.kxState == KeyExchange_ActivelyWaitForPublicKey {
+				outMessage, newState, err := handshakeProcessor.ActivelyInitHandshake()
+				if err == nil {
+					err = p.sendMessageLocked(c, outMessage)
+				}
+				if err != nil {
+					p.kxState = KeyExchange_Failed
+					close(p.kxDone)
+					return err
+				}
+
+				p.kxCustomHandshakeState = newState
+			} else {
+				newState, err := handshakeProcessor.PassivelyInitHandshake()
+				if err != nil {
+					p.kxState = KeyExchange_Failed
+					close(p.kxDone)
+					return err
+				}
+
+				p.kxCustomHandshakeState = newState
+			}
+			p.kxState = KeyExchange_CustomHandshake
+		} else {
+			p.kxState = KeyExchange_Done
+			close(p.kxDone)
+		}
+
 		return nil
+	case KeyExchange_CustomHandshake:
+		unwrapped, err := p.unwrapMessageLocked(c, raw)
+		if err != nil {
+			p.kxState = KeyExchange_Failed
+			close(p.kxDone)
+			return err
+		}
+
+		outMessage, doneAction, err := handshakeProcessor.ProcessHandshakeMessage(p.kxCustomHandshakeState, unwrapped)
+		if err != nil {
+			p.kxState = KeyExchange_Failed
+			close(p.kxDone)
+			return err
+		}
+
+		switch doneAction {
+		case DoneAction_NotDone:
+			err := p.sendMessageLocked(c, outMessage)
+			if err != nil {
+				p.kxState = KeyExchange_Failed
+				close(p.kxDone)
+				return err
+			}
+			return nil
+		case DoneAction_SendMessage:
+			err := p.sendMessageLocked(c, outMessage)
+			if err != nil {
+				p.kxState = KeyExchange_Failed
+				close(p.kxDone)
+				return err
+			}
+
+			p.kxState = KeyExchange_Done
+			close(p.kxDone)
+			return nil
+		case DoneAction_DoNothing:
+			p.kxState = KeyExchange_Done
+			close(p.kxDone)
+			return nil
+		default:
+			panic("invalid done action")
+		}
 	case KeyExchange_Failed:
 		return errors.New("failed previously")
 	default:
@@ -139,10 +211,8 @@ func (p *EstablishedPeer) Close() {
 	p.Unlock()
 }
 
-func (p *EstablishedPeer) SendMessage(c *Controller, body []byte) error {
-	p.Lock()
-	defer p.Unlock()
-
+// sendMessageLocked sends a message assuming the peer is already locked.
+func (p *EstablishedPeer) sendMessageLocked(c *Controller, body []byte) error {
 	nonceBuffer := make([]byte, 12)
 	binary.LittleEndian.PutUint64(nonceBuffer, p.localNonce)
 	p.localNonce++
@@ -151,15 +221,27 @@ func (p *EstablishedPeer) SendMessage(c *Controller, body []byte) error {
 	return p.adapter.SendMessage(c, cipherText)
 }
 
-func (p *EstablishedPeer) UnwrapMessage(c *Controller, raw []byte) ([]byte, error) {
+func (p *EstablishedPeer) SendMessage(c *Controller, body []byte) error {
 	p.Lock()
-	defer p.Unlock()
+	err := p.sendMessageLocked(c, body)
+	p.Unlock()
+	return err
+}
 
+// sendMessageLocked unwraps a message assuming the peer is already locked.
+func (p *EstablishedPeer) unwrapMessageLocked(c *Controller, raw []byte) ([]byte, error) {
 	nonceBuffer := make([]byte, 12)
 	binary.LittleEndian.PutUint64(nonceBuffer, p.remoteNonce)
 	p.remoteNonce++
 
 	return p.aead.Open(nil, nonceBuffer, raw, nil)
+}
+
+func (p *EstablishedPeer) UnwrapMessage(c *Controller, raw []byte) ([]byte, error) {
+	p.Lock()
+	ret, err := p.unwrapMessageLocked(c, raw)
+	p.Unlock()
+	return ret, err
 }
 
 func (p *EstablishedPeer) RemoteEndpoint() []byte {
