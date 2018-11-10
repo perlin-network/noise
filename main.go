@@ -7,13 +7,25 @@ import (
 	"github.com/perlin-network/noise/identity"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
+	"net"
 	"os"
 	"sync/atomic"
 	"time"
 )
 
+const DialTimeout = 10 * time.Second
+
+func dialTCP(addr string) (net.Conn, error) {
+	return net.DialTimeout("tcp", addr, DialTimeout)
+}
+
 func main() {
-	connAdapter, err := connection.StartTCPConnectionAdapter(os.Args[1], 0)
+	listener, err := net.Listen("tcp", os.Args[1])
+	if err != nil {
+		panic(err)
+	}
+
+	connAdapter, err := connection.StartAddressableConnectionAdapter(listener, dialTCP)
 	if err != nil {
 		panic(err)
 	}

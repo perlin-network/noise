@@ -9,24 +9,35 @@ import (
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"math/rand"
+	"net"
 	"sync/atomic"
 	"time"
 )
 
 const NumInstances = 20
 const StartPort = 7000
+const DialTimeout = 10 * time.Second
 
 type Instance struct {
 	address      string
-	connAdapter  *connection.TCPConnectionAdapter
+	connAdapter  *connection.AddressableConnectionAdapter
 	node         *protocol.Node
 	messageCount uint64
 	keypair      *crypto.KeyPair
 }
 
+func dialTCP(addr string) (net.Conn, error) {
+	return net.DialTimeout("tcp", addr, DialTimeout)
+}
+
 func StartInstance(port uint16) *Instance {
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	connAdapter, err := connection.StartTCPConnectionAdapter(addr, 0)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		panic(err)
+	}
+
+	connAdapter, err := connection.StartAddressableConnectionAdapter(listener, dialTCP)
 	if err != nil {
 		panic(err)
 	}
