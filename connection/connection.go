@@ -187,7 +187,7 @@ func startAddressableMessageAdapter(connAdapter *AddressableConnectionAdapter, c
 			}
 			pva := string(pvaBytes)
 			connAdapter.updatePubliclyVisibleAddress(pva)
-			log.Debug().Msgf("Current publicly visible address: %s", connAdapter.getPubliclyVisibleAddress())
+			//log.Debug().Msgf("Current publicly visible address: %s", connAdapter.getPubliclyVisibleAddress())
 		}
 	} else {
 		_, err := conn.Write(local)
