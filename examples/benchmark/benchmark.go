@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/perlin-network/noise/connection"
 	"github.com/perlin-network/noise/crypto"
@@ -8,6 +9,7 @@ import (
 	"github.com/perlin-network/noise/identity"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
+	"github.com/pkg/errors"
 	"math/rand"
 	"net"
 	"sync/atomic"
@@ -24,6 +26,43 @@ type Instance struct {
 	node         *protocol.Node
 	messageCount uint64
 	keypair      *crypto.KeyPair
+}
+
+type SimpleHandshakeProcessor struct{}
+
+type SimpleHandshakeState struct {
+	passive bool
+}
+
+/*
+	ActivelyInitHandshake() ([]byte, interface{}, error) // (message, state, err)
+	PassivelyInitHandshake() (interface{}, error) // (state, err)
+	ProcessHandshakeMessage(state interface{}, payload []byte) ([]byte, DoneAction, error) // (message, doneAction, err)
+*/
+
+func (*SimpleHandshakeProcessor) ActivelyInitHandshake() ([]byte, interface{}, error) {
+	return []byte("init"), &SimpleHandshakeState{passive: false}, nil
+}
+
+func (*SimpleHandshakeProcessor) PassivelyInitHandshake() (interface{}, error) {
+	return &SimpleHandshakeState{passive: true}, nil
+}
+
+func (*SimpleHandshakeProcessor) ProcessHandshakeMessage(_state interface{}, payload []byte) ([]byte, protocol.DoneAction, error) {
+	state := _state.(*SimpleHandshakeState)
+	if state.passive {
+		if bytes.Equal(payload, []byte("init")) {
+			return []byte("ack"), protocol.DoneAction_SendMessage, nil
+		} else {
+			return nil, protocol.DoneAction_Invalid, errors.New("invalid handshake (passive)")
+		}
+	} else {
+		if bytes.Equal(payload, []byte("ack")) {
+			return nil, protocol.DoneAction_DoNothing, nil
+		} else {
+			return nil, protocol.DoneAction_Invalid, errors.New("invalid handshake (active)")
+		}
+	}
 }
 
 func dialTCP(addr string) (net.Conn, error) {
@@ -50,6 +89,7 @@ func StartInstance(port uint16) *Instance {
 		connAdapter,
 		idAdapter,
 	)
+	node.SetCustomHandshakeProcessor((*SimpleHandshakeProcessor)(nil))
 
 	inst := &Instance{
 		address:     addr,
