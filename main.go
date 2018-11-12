@@ -1,3 +1,9 @@
+/*
+  Usage:
+	[terminal 1] go run main.go localhost:8000 wait
+	[terminal 2] go run main.go localhost:8001 send (peerID from terminal 1) localhost:8000
+*/
+
 package main
 
 import (
