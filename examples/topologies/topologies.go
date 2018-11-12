@@ -8,7 +8,6 @@ import (
 
 	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/examples/topologies/messages"
-	"github.com/perlin-network/noise/network"
 	"github.com/perlin-network/noise/types/opcode"
 )
 
