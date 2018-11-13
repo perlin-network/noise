@@ -74,7 +74,7 @@ func (p *plugin) Startup(n *network.Network) {
 		Str("external_ip", p.externalIP.String()).
 		Msg("")
 
-	p.externalPort, err = gateway.AddPortMapping("tcp", p.internalPort, "noise", 1*time.Second)
+	p.externalPort, err = gateway.AddPortMapping("tcp", p.internalPort, "noise", 60*time.Second)
 
 	if err != nil {
 		log.Warn().
@@ -90,14 +90,21 @@ func (p *plugin) Startup(n *network.Network) {
 
 	p.gateway = gateway
 
-	info.Host = p.externalIP.String()
-	info.Port = uint16(p.externalPort)
+	// info.Host = p.internalIP.String()
+	// info.Port = uint16(p.internalPort)
 
+	externalAddress := network.AddressInfo{
+		Host:     p.externalIP.String(),
+		Port:     uint16(p.externalPort),
+		Protocol: "tcp",
+	}
 	// Set peer information based off of port mapping info.
 	n.Address = info.String()
 	n.ID = peer.CreateID(n.Address, n.GetKeys().PublicKey)
 
-	log.Info().Msgf("other peers may connect to you through the address %s.", n.Address)
+	log.Info().
+		Str("address", externalAddress.String()).
+		Msg("port-forwarded external address.")
 }
 
 func (p *plugin) Cleanup(n *network.Network) {
@@ -116,5 +123,6 @@ func (p *plugin) Cleanup(n *network.Network) {
 //
 // The plugin is registered with a priority of -999999, and thus is executed first.
 func RegisterPlugin(builder *network.Builder) {
-	builder.AddPluginWithPriority(-99999, new(plugin))
+	x := new(plugin)
+	builder.AddPluginWithPriority(-99999, x)
 }
