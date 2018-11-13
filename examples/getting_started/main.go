@@ -49,7 +49,6 @@ func main() {
 		connAdapter,
 		idAdapter,
 	)
-	node.Start()
 
 	node.AddService(42, func(message *protocol.Message) {
 		log.Info().Msgf("received payload from %s: %s", hex.EncodeToString(message.Sender), string(message.Body.Payload))
@@ -70,6 +69,8 @@ func main() {
 			connAdapter.MapIDToAddress(peerID, remoteAddr)
 		}
 	}
+
+	node.Start()
 
 	select {}
 
