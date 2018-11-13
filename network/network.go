@@ -233,7 +233,7 @@ func (n *Network) Listen() {
 
 	log.Info().
 		Str("address", n.Address).
-		Msg("Listening for peers.")
+		Msg("Listening on: ")
 
 	// handle server shutdowns
 	go func() {
