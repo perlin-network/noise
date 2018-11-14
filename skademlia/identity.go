@@ -13,38 +13,74 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	// DefaultC1 is the prefix-matching length for the static cryptopuzzle.
+	DefaultC1 = 16
+	// DefaultC2 is the prefix-matching length for the dynamic cryptopuzzle.
+	DefaultC2 = 16
+)
+
 var _ protocol.IdentityAdapter = (*SKademliaIdentityAdapter)(nil)
 
+// SKademliaIdentityAdapter implements the identity interface for S/Kademlia node IDs
 type SKademliaIdentityAdapter struct {
 	keypair *crypto.KeyPair
-	ID      []byte
+	id      []byte
 	Nonce   []byte
+	signer  crypto.SignaturePolicy
+	hasher  crypto.HashPolicy
 }
 
+// NewSKademliaIdentityAdapter creates a new SKademliaIdentityAdapter with the given cryptopuzzle constants
 func NewSKademliaIdentityAdapter(c1, c2 int) *SKademliaIdentityAdapter {
 	kp, nonce := generateKeyPairAndNonce(c1, c2)
+	b := blake2b.New()
 	return &SKademliaIdentityAdapter{
 		keypair: kp,
+		id:      b.HashBytes(kp.PublicKey),
 		Nonce:   nonce,
+		signer:  ed25519.New(),
+		hasher:  b,
 	}
 }
 
-func (a *SKademliaIdentityAdapter) MyIdentity() []byte {
-	return a.keypair.PublicKey
+// NewSKademliaIdentityFromKeypair creates a new SKademliaIdentityAdapter with the given cryptopuzzle
+// constants from an existing keypair
+func NewSKademliaIdentityFromKeypair(kp *crypto.KeyPair, c1, c2 int) (*SKademliaIdentityAdapter, error) {
+	b := blake2b.New()
+	id := b.HashBytes(kp.PublicKey)
+	if !checkHashedBytesPrefixLen(id, c1) {
+		return nil, errors.Errorf("skademlia: provided keypair does not generate a valid node ID for c1: %d", c1)
+	}
+	return &SKademliaIdentityAdapter{
+		keypair: kp,
+		id:      id,
+		Nonce:   getNonce(id, c2),
+		signer:  ed25519.New(),
+		hasher:  b,
+	}, nil
 }
 
+// MyIdentity returns the S/Kademlia node ID
+func (a *SKademliaIdentityAdapter) MyIdentity() []byte {
+	return a.id
+}
+
+// Sign signs the input bytes with the identity's private key
 func (a *SKademliaIdentityAdapter) Sign(input []byte) []byte {
-	ret, err := a.keypair.Sign(ed25519.New(), blake2b.New(), input)
+	ret, err := a.keypair.Sign(a.signer, a.hasher, input)
 	if err != nil {
 		panic(err)
 	}
 	return ret
 }
 
-func (a *SKademliaIdentityAdapter) Verify(id, data, signature []byte) bool {
-	return crypto.Verify(ed25519.New(), blake2b.New(), id, data, signature)
+// Verify checks whether the signature matches the signed data
+func (a *SKademliaIdentityAdapter) Verify(publicKey, data, signature []byte) bool {
+	return crypto.Verify(a.signer, a.hasher, publicKey, data, signature)
 }
 
+// SignatureSize specifies the byte length for signatures generated with the keypair
 func (a *SKademliaIdentityAdapter) SignatureSize() int {
 	return ed25519.SignatureSize
 }
