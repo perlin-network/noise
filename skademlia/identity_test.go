@@ -12,9 +12,8 @@ import (
 )
 
 var (
-	id1 = []byte("12345678901234567890123456789012")
-	id2 = []byte("12345678901234567890123456789011")
-	id3 = []byte("12345678901234567890123456789013")
+	idBytes1 = []byte("12345678901234567890123456789012")
+	idBytes2 = []byte("12345678901234567890123456789013")
 )
 
 func TestNewSKademliaIdentityAdapter(t *testing.T) {
@@ -217,7 +216,7 @@ func TestXor(t *testing.T) {
 
 	xorResult := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
 
-	result := xor(id1, id3)
+	result := xor(idBytes1, idBytes2)
 
 	if !bytes.Equal(xorResult, result) {
 		t.Errorf("Xor() = %v, want %v", xorResult, result)

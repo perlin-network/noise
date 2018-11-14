@@ -3,6 +3,7 @@ package skademlia
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/hex"
 	"math/bits"
 
 	"github.com/perlin-network/noise/crypto"
@@ -64,6 +65,11 @@ func NewSKademliaIdentityFromKeypair(kp *crypto.KeyPair, c1, c2 int) (*SKademlia
 // MyIdentity returns the S/Kademlia node ID
 func (a *SKademliaIdentityAdapter) MyIdentity() []byte {
 	return a.id
+}
+
+// MyIdentityHex returns the S/Kademlia hex-encoded node ID
+func (a *SKademliaIdentityAdapter) MyIdentityHex() string {
+	return hex.EncodeToString(a.id)
 }
 
 // Sign signs the input bytes with the identity's private key
