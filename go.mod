@@ -2,7 +2,7 @@ module github.com/perlin-network/noise
 
 require (
 	github.com/davecgh/go-spew v1.1.0 // indirect
-	github.com/fd/go-nat v1.0.0
+	github.com/fd/go-nat v1.0.0 // indirect
 	github.com/gogo/protobuf v1.1.1
 	github.com/golang/mock v1.1.1
 	github.com/klauspost/cpuid v0.0.0-20180405133222-e7e905edc00e // indirect
@@ -16,8 +16,8 @@ require (
 	github.com/templexxx/cpufeat v0.0.0-20180714071118-e85c4911a733 // indirect
 	github.com/templexxx/xor v0.0.0-20170926022130-0af8e873c554 // indirect
 	github.com/tjfoc/gmsm v1.0.1 // indirect
-	github.com/uber-go/atomic v1.3.2
-	github.com/xtaci/kcp-go v0.0.0-20180203133237-42bc1dfefff5
+	github.com/uber-go/atomic v1.3.2 // indirect
+	github.com/xtaci/kcp-go v0.0.0-20180203133237-42bc1dfefff5 // indirect
 	github.com/xtaci/smux v1.0.7
 	go.uber.org/atomic v1.3.2 // indirect
 	golang.org/x/crypto v0.0.0-20180718160520-a2144134853f
