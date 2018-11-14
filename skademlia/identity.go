@@ -7,8 +7,34 @@ import (
 	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/peer"
+	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
 )
+
+var _ protocol.IdentityAdapter = (*IdentityAdapter)(nil)
+
+type IdentityAdapter struct {
+}
+
+func NewIdentityAdapter(*crypto.KeyPair) *IdentityAdapter {
+	return nil
+}
+
+func (ia *IdentityAdapter) MyIdentity() []byte {
+	return nil
+}
+
+func (ia *IdentityAdapter) Sign(input []byte) []byte {
+	return nil
+}
+
+func (ia *IdentityAdapter) Verify(id, data, signature []byte) bool {
+	return false
+}
+
+func (ia *IdentityAdapter) SignatureSize() int {
+	return 0
+}
 
 // generateKeyPairAndNonce generates an S/Kademlia keypair and nonce with cryptopuzzle prefix matching constants c1
 // and c2
