@@ -1,26 +1,27 @@
 package skademlia_test
 
 import (
-	"flag"
 	"fmt"
 	"net"
 	"time"
 
-	"github.com/perlin-network/noise/connection"
-	"github.com/perlin-network/noise/identity"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/skademlia"
 )
 
 const (
 	serviceID = 42
+	numNodes  = 3
+	startPort = 5000
+	host      = "localhost"
 )
 
 // SKNode buffers all messages into a mailbox for this test.
 type SKNode struct {
 	Node        *protocol.Node
 	Mailbox     chan string
-	ConnAdapter *connection.AddressableConnectionAdapter
+	ConnAdapter *skademlia.ConnectionAdapter
 }
 
 func (n *SKNode) service(message *protocol.Message) {
@@ -47,27 +48,18 @@ func dialTCP(addr string) (net.Conn, error) {
 
 // ExampleSKademliaExample demonstrates a simple test using SKademlia
 func ExampleSKademliaExample() {
-	startPortFlag := flag.Int("port", 5000, "start port to listen to")
-	hostFlag := flag.String("host", "localhost", "host to listen to")
-	nodesFlag := flag.Int("nodes", 3, "number of nodes to start")
-	flag.Parse()
-
-	numNodes := *nodesFlag
-	startPort := *startPortFlag
-	host := *hostFlag
-
 	var nodes []*SKNode
 
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
-		idAdapter := identity.NewDefaultIdentityAdapter()
+		idAdapter := skademlia.NewIdentityAdapter(skademlia.DefaultC1, skademlia.DefaultC2)
 
 		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, startPort+i))
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
 
-		connAdapter, err := connection.StartAddressableConnectionAdapter(listener, dialTCP)
+		connAdapter, err := skademlia.NewConnectionAdapter(listener, dialTCP)
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
@@ -96,7 +88,7 @@ func ExampleSKademliaExample() {
 				continue
 			}
 			peerID := (*otherNode.Node.GetIdentityAdapter()).MyIdentity()
-			srcNode.ConnAdapter.MapIDToAddress(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
+			srcNode.ConnAdapter.AddPeer(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
 		}
 	}
 
@@ -120,8 +112,33 @@ func ExampleSKademliaExample() {
 		}
 	}
 
+	// disconnect a node
+	nodes[0].Node.ManuallyRemovePeer((*nodes[numNodes-1].Node.GetIdentityAdapter()).MyIdentity())
+
+	expected = "This is a second broadcasted message from Node 0."
+	nodes[0].Node.Broadcast(makeMessageBody(expected))
+
+	fmt.Println("Node 0 sent out a second message.")
+
+	// Check if message was received by other nodes.
+	for i := 1; i < len(nodes); i++ {
+		select {
+		case received := <-nodes[i].Mailbox:
+			if received != expected {
+				fmt.Printf("Expected message %s to be received by node %d but got %v\n", expected, i, received)
+			} else {
+				fmt.Printf("Node %d received a second message from Node 0.\n", i)
+			}
+		case <-time.After(3 * time.Second):
+			fmt.Printf("Timed out attempting to receive message from Node 0.\n")
+		}
+	}
+
 	// Output:
 	// Node 0 sent out a message.
 	// Node 1 received a message from Node 0.
 	// Node 2 received a message from Node 0.
+	// Node 0 sent out a second message.
+	// Node 1 received a second message from Node 0.
+	// Timed out attempting to receive message from Node 0.
 }
