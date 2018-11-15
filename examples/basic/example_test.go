@@ -39,7 +39,7 @@ func (n *BasicNode) Service(message *protocol.Message) {
 	n.Mailbox <- &basicMessage
 }
 
-func (n *BasicNode) MakeMessageBody(value string) *protocol.MessageBody {
+func makeMessageBody(value string) *protocol.MessageBody {
 	basicMessage := &messages.BasicMessage{
 		Message: value,
 	}
@@ -72,6 +72,7 @@ func ExampleBasic() {
 
 	var nodes []*BasicNode
 
+	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
 		idAdapter := identity.NewDefaultIdentityAdapter()
 
@@ -95,9 +96,9 @@ func ExampleBasic() {
 			ConnAdapter: connAdapter,
 		}
 
-		node.Node.Start()
-
 		node.Node.AddService(serviceID, node.Service)
+
+		node.Node.Start()
 
 		nodes = append(nodes, node)
 	}
@@ -115,19 +116,7 @@ func ExampleBasic() {
 
 	// Broadcast out a message from Node 0.
 	expected := "This is a broadcasted message from Node 0."
-	nodes[0].Node.Broadcast(nodes[0].MakeMessageBody(expected))
-	/*
-		for i := range nodes {
-			if i == 0 {
-				continue
-			}
-			nodes[0].Node.Send(&protocol.Message{
-				Sender:    (*nodes[0].Node.GetIdentityAdapter()).MyIdentity(),
-				Recipient: (*nodes[i].Node.GetIdentityAdapter()).MyIdentity(),
-				Body:      nodes[0].MakeMessageBody(expected),
-			})
-		}
-	*/
+	nodes[0].Node.Broadcast(makeMessageBody(expected))
 
 	fmt.Println("Node 0 sent out a message.")
 
