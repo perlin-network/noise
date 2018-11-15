@@ -284,3 +284,14 @@ func runRecvWorker(finalizerNotifier chan struct{}, conn net.Conn, callback prot
 
 	callback(nil)
 }
+
+func (a *AddressableConnectionAdapter) GetConnectionIDs() [][]byte {
+	results := [][]byte{}
+	a.idToAddress.Range(func(key, _ interface{}) bool {
+		if peerIDStr, ok := key.(string); ok {
+			results = append(results, ([]byte)(peerIDStr))
+		}
+		return true
+	})
+	return results
+}

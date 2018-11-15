@@ -6,6 +6,7 @@ type RecvMessageCallback func(message []byte)
 type ConnectionAdapter interface {
 	EstablishPassively(c *Controller, local []byte) chan MessageAdapter
 	EstablishActively(c *Controller, local []byte, remote []byte) (MessageAdapter, error)
+	GetConnectionIDs() [][]byte
 }
 
 // A MessageAdapter is an adapter that sends/receives messages, usually corresponding to a real/virtual connection.

@@ -1,11 +1,9 @@
 package basic
 
 import (
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"net"
-	"testing"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
@@ -34,11 +32,11 @@ func (n *BasicNode) Service(message *protocol.Message) {
 	if len(message.Body.Payload) == 0 {
 		return
 	}
-	var basicMessage *messages.BasicMessage
-	if err := proto.Unmarshal(message.Body.Payload, basicMessage); err != nil {
+	var basicMessage messages.BasicMessage
+	if err := proto.Unmarshal(message.Body.Payload, &basicMessage); err != nil {
 		return
 	}
-	n.Mailbox <- basicMessage
+	n.Mailbox <- &basicMessage
 }
 
 func (n *BasicNode) MakeMessageBody(value string) *protocol.MessageBody {
@@ -56,8 +54,8 @@ func (n *BasicNode) MakeMessageBody(value string) *protocol.MessageBody {
 	return pMsg
 }
 
-func TestBasic(t *testing.T) {
-	//ExampleBasic()
+func dialTCP(addr string) (net.Conn, error) {
+	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
 // ExampleBasic demonstrates how to broadcast a message to a set of peers that discover
@@ -73,22 +71,18 @@ func ExampleBasic() {
 	host := *hostFlag
 
 	var nodes []*BasicNode
-	node2keys := make(map[string]int)
 
 	for i := 0; i < numNodes; i++ {
 		idAdapter := identity.NewDefaultIdentityAdapter()
-		keyPair := idAdapter.GetKeyPair()
 
 		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, startPort+i))
 		if err != nil {
-			log.Fatal().Err(err).Msg("")
+			log.Fatal().Msgf("%+v", err)
 		}
 
-		connAdapter, err := connection.StartAddressableConnectionAdapter(listener, func(addr string) (net.Conn, error) {
-			return net.DialTimeout("tcp", addr, 10*time.Second)
-		})
+		connAdapter, err := connection.StartAddressableConnectionAdapter(listener, dialTCP)
 		if err != nil {
-			log.Fatal().Err(err).Msg("")
+			log.Fatal().Msgf("%+v", err)
 		}
 
 		node := &BasicNode{
@@ -101,34 +95,39 @@ func ExampleBasic() {
 			ConnAdapter: connAdapter,
 		}
 
+		node.Node.Start()
+
 		node.Node.AddService(serviceID, node.Service)
 
 		nodes = append(nodes, node)
-		node2keys[keyPair.PublicKeyHex()] = i
 	}
 
 	// Connect all the node routing tables
-	for _, node := range nodes {
-		for pubKey, portOffset := range node2keys {
-			if pubKey == string((*node.Node.GetIdentityAdapter()).MyIdentity()) {
+	for i, srcNode := range nodes {
+		for j, otherNode := range nodes {
+			if i == j {
 				continue
 			}
-			peerID, err := hex.DecodeString(pubKey)
-			if err != nil {
-				log.Fatal().Msgf("%+v", err)
-			}
-			node.ConnAdapter.MapIDToAddress(peerID, fmt.Sprintf("%s:%d", host, startPort+portOffset))
+			peerID := (*otherNode.Node.GetIdentityAdapter()).MyIdentity()
+			srcNode.ConnAdapter.MapIDToAddress(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
 		}
-	}
-
-	// Bootstrap all the nodes
-	for _, node := range nodes {
-		node.Node.Start()
 	}
 
 	// Broadcast out a message from Node 0.
 	expected := "This is a broadcasted message from Node 0."
 	nodes[0].Node.Broadcast(nodes[0].MakeMessageBody(expected))
+	/*
+		for i := range nodes {
+			if i == 0 {
+				continue
+			}
+			nodes[0].Node.Send(&protocol.Message{
+				Sender:    (*nodes[0].Node.GetIdentityAdapter()).MyIdentity(),
+				Recipient: (*nodes[i].Node.GetIdentityAdapter()).MyIdentity(),
+				Body:      nodes[0].MakeMessageBody(expected),
+			})
+		}
+	*/
 
 	fmt.Println("Node 0 sent out a message.")
 

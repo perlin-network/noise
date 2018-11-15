@@ -1,15 +1,8 @@
-/*
-  Usage:
-	[terminal 1] go run main.go localhost:8000 wait
-	[terminal 2] go run main.go localhost:8001 send (peerID from terminal 1) localhost:8000
-*/
-
 package main
 
 import (
 	"encoding/hex"
 	"github.com/perlin-network/noise/connection"
-	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/identity"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
@@ -25,6 +18,11 @@ func dialTCP(addr string) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, DialTimeout)
 }
 
+/*
+  Usage:
+	[terminal 1] go run main.go localhost:8000 wait
+	[terminal 2] go run main.go localhost:8001 send (peerID from terminal 1) localhost:8000
+*/
 func main() {
 	listener, err := net.Listen("tcp", os.Args[1])
 	if err != nil {
@@ -36,8 +34,8 @@ func main() {
 		panic(err)
 	}
 
-	kp := ed25519.RandomKeyPair()
-	idAdapter := identity.NewDefaultIdentityAdapter(kp)
+	idAdapter := identity.NewDefaultIdentityAdapter()
+	kp := idAdapter.GetKeyPair()
 
 	node := protocol.NewNode(
 		protocol.NewController(),

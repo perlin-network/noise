@@ -202,25 +202,27 @@ func (n *Node) Send(message *Message) error {
 	return nil
 }
 
+func AddPeer(remote []byte) error {
+	return nil
+}
+
 // Broadcast sends a message body to all it's peers
 func (n *Node) Broadcast(body *MessageBody) error {
 	msgTemplate := &Message{
 		Sender: n.idAdapter.MyIdentity(),
 		Body:   body,
 	}
-	n.peers.Range(func(key, value interface{}) bool {
-		peerIDStr, ok := key.(string)
-		if !ok {
-			return true
+	connections := n.connAdapter.GetConnectionIDs()
+	for _, peerID := range connections {
+		if string(n.idAdapter.MyIdentity()) == string(peerID) {
+			// skip sending to itself
+			continue
 		}
-		// don't send to itself
-		if string(n.idAdapter.MyIdentity()) == peerIDStr {
-			return true
-		}
-		msgTemplate.Recipient = ([]byte)(peerIDStr)
-		n.Send(msgTemplate)
-		return true
-	})
+		// copy the struct
+		msg := *msgTemplate
+		msg.Recipient = peerID
+		n.Send(&msg)
+	}
 	return nil
 }
 
