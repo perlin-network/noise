@@ -16,7 +16,7 @@ var (
 	idBytes2 = []byte("12345678901234567890123456789013")
 )
 
-func TestNewSKademliaIdentityAdapter(t *testing.T) {
+func TestNewIdentityAdapter(t *testing.T) {
 	t.Parallel()
 
 	id := NewIdentityAdapter(DefaultC1, DefaultC2)

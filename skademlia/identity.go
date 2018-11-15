@@ -168,9 +168,9 @@ func checkDynamicPuzzle(nodeID, x []byte, c int) bool {
 func VerifyPuzzle(id *IdentityAdapter, c1, c2 int) bool {
 	// check if static puzzle and dynamic puzzle is solved
 	b := blake2b.New()
-	return bytes.Equal(b.HashBytes(id.keypair.PublicKey), id.MyIdentity()) &&
-		checkHashedBytesPrefixLen(id.MyIdentity(), c1) &&
-		checkDynamicPuzzle(id.MyIdentity(), id.Nonce, c2)
+	return bytes.Equal(b.HashBytes(id.keypair.PublicKey), id.ID()) &&
+		checkHashedBytesPrefixLen(id.ID(), c1) &&
+		checkDynamicPuzzle(id.ID(), id.Nonce, c2)
 }
 
 // xor performs an xor operation on two byte slices.
