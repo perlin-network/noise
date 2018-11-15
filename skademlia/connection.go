@@ -1,16 +1,19 @@
 package skademlia
 
 import (
+	"net"
+
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/protocol"
-	"net"
+
+	"github.com/pkg/errors"
 )
 
 var _ protocol.ConnectionAdapter = (*ConnectionAdapter)(nil)
 
 type ConnectionAdapter struct {
 	baseConn *base.ConnectionAdapter
-	RoutingTable
+	rt       RoutingTable
 }
 
 func NewConnectionAdapter(listener net.Listener, dialer base.Dialer, id ID) (*ConnectionAdapter, error) {
@@ -20,23 +23,39 @@ func NewConnectionAdapter(listener net.Listener, dialer base.Dialer, id ID) (*Co
 	}
 	table := CreateRoutingTable(id)
 	return &ConnectionAdapter{
-		baseConn:     baseConn,
-		RoutingTable: *table,
+		baseConn: baseConn,
+		rt:       *table,
 	}, nil
 }
 
 func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
-	return a.baseConn.EstablishActively(c, local, remote)
+	ok, id := a.rt.GetPeerFromPublicKey(remote)
+	if !ok {
+		return nil, errors.New("skademlia: remote ID not found in routing table")
+	}
+
+	conn, err := a.baseConn.Dialer(id.Address)
+	if err != nil {
+		return nil, err
+	}
+
+	return base.NewMessageAdapter(a.baseConn, conn, local, remote, id.Address, false)
 }
 
-func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []byte) chan protocol.MessageAdapter {
-	return a.baseConn.EstablishPassively(c, local)
+func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, localID []byte) chan protocol.MessageAdapter {
+	return a.baseConn.EstablishPassively(c, localID)
 }
 
 func (a *ConnectionAdapter) GetConnectionIDs() [][]byte {
-	return a.baseConn.GetConnectionIDs()
+	results := [][]byte{}
+	for _, peer := range a.rt.GetPeers() {
+		results = append(results, peer.MyIdentity())
+	}
+	return results
 }
 
-func (a *ConnectionAdapter) AddPeer(id []byte, addr string) error {
+func (a *ConnectionAdapter) AddPeer(peerID *IdentityAdapter, addr string) error {
+	id := ID{peerID, addr}
+	a.rt.Update(id)
 	return nil
 }

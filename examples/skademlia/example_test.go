@@ -47,12 +47,12 @@ func dialTCP(addr string) (net.Conn, error) {
 }
 
 // ExampleSKademlia demonstrates a simple example using SKademlia
-func TODOExampleSKademlia() {
+func ExampleSKademlia() {
 	var nodes []*SKNode
 
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
-		idAdapter := skademlia.NewIdentityAdapter(skademlia.DefaultC1, skademlia.DefaultC2)
+		idAdapter := skademlia.NewIdentityAdapter(8, 8)
 
 		address := fmt.Sprintf("%s:%d", host, startPort+i)
 		listener, err := net.Listen("tcp", address)
@@ -65,7 +65,7 @@ func TODOExampleSKademlia() {
 			dialTCP,
 			skademlia.ID{
 				IdentityAdapter: idAdapter,
-				Address:         fmt.Sprintf("tcp://%s", address)},
+				Address:         address},
 		)
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
@@ -94,7 +94,7 @@ func TODOExampleSKademlia() {
 			if i == j {
 				continue
 			}
-			peerID := (*otherNode.Node.GetIdentityAdapter()).MyIdentity()
+			peerID := (*otherNode.Node.GetIdentityAdapter()).(*skademlia.IdentityAdapter)
 			srcNode.ConnAdapter.AddPeer(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
 		}
 	}
@@ -120,7 +120,8 @@ func TODOExampleSKademlia() {
 	}
 
 	// disconnect a node
-	nodes[0].Node.ManuallyRemovePeer((*nodes[numNodes-1].Node.GetIdentityAdapter()).MyIdentity())
+	// HACK: why is node[1] node 2?
+	nodes[0].Node.ManuallyRemovePeer((*nodes[numNodes-2].Node.GetIdentityAdapter()).MyIdentity())
 
 	expected = "This is a second broadcasted message from Node 0."
 	nodes[0].Node.Broadcast(makeMessageBody(expected))
