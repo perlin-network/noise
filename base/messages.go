@@ -10,16 +10,16 @@ import (
 	"net"
 )
 
-var _ protocol.MessageAdapter = (*AddressableMessageAdapter)(nil)
+var _ protocol.MessageAdapter = (*MessageAdapter)(nil)
 
-type AddressableMessageAdapter struct {
+type MessageAdapter struct {
 	conn              net.Conn
 	local             []byte
 	remote            []byte
 	finalizerNotifier chan struct{}
 }
 
-func startAddressableMessageAdapter(connAdapter *ConnectionAdapter, conn net.Conn, local, remote []byte, remoteAddr string, passive bool) (*AddressableMessageAdapter, error) {
+func NewMessageAdapter(connAdapter *ConnectionAdapter, conn net.Conn, local, remote []byte, remoteAddr string, passive bool) (*MessageAdapter, error) {
 	if len(local) > 255 || len(remote) > 255 {
 		return nil, errors.New("local or remote id too long")
 	}
@@ -87,7 +87,7 @@ func startAddressableMessageAdapter(connAdapter *ConnectionAdapter, conn net.Con
 		}
 	}
 
-	adapter := &AddressableMessageAdapter{
+	adapter := &MessageAdapter{
 		conn:              conn,
 		local:             local,
 		remote:            remote,
@@ -97,16 +97,16 @@ func startAddressableMessageAdapter(connAdapter *ConnectionAdapter, conn net.Con
 	return adapter, nil
 }
 
-func (a *AddressableMessageAdapter) Close() {
+func (a *MessageAdapter) Close() {
 	a.conn.Close()
 	close(a.finalizerNotifier)
 }
 
-func (a *AddressableMessageAdapter) RemoteEndpoint() []byte {
+func (a *MessageAdapter) RemoteEndpoint() []byte {
 	return a.remote
 }
 
-func (a *AddressableMessageAdapter) SendMessage(c *protocol.Controller, message []byte) error {
+func (a *MessageAdapter) SendMessage(c *protocol.Controller, message []byte) error {
 	lenBuf := make([]byte, 16)
 	n := binary.PutUvarint(lenBuf, uint64(len(message)))
 	_, err := a.conn.Write(lenBuf[:n])
@@ -120,6 +120,6 @@ func (a *AddressableMessageAdapter) SendMessage(c *protocol.Controller, message 
 	return nil
 }
 
-func (a *AddressableMessageAdapter) StartRecvMessage(c *protocol.Controller, callback protocol.RecvMessageCallback) {
+func (a *MessageAdapter) StartRecvMessage(c *protocol.Controller, callback protocol.RecvMessageCallback) {
 	go runRecvWorker(a.finalizerNotifier, a.conn, callback)
 }
