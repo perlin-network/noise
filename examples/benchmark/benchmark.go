@@ -3,10 +3,8 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/perlin-network/noise/connection"
+	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/crypto/ed25519"
-	"github.com/perlin-network/noise/identity"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
@@ -16,13 +14,15 @@ import (
 	"time"
 )
 
-const NumInstances = 20
-const StartPort = 7000
-const DialTimeout = 10 * time.Second
+const (
+	NumInstances = 20
+	StartPort    = 7000
+	DialTimeout  = 10 * time.Second
+)
 
 type Instance struct {
 	address      string
-	connAdapter  *connection.AddressableConnectionAdapter
+	connAdapter  *base.ConnectionAdapter
 	node         *protocol.Node
 	messageCount uint64
 	keypair      *crypto.KeyPair
@@ -69,20 +69,19 @@ func dialTCP(addr string) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, DialTimeout)
 }
 
-func StartInstance(port uint16) *Instance {
+func StartInstance(port int) *Instance {
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		panic(err)
 	}
 
-	connAdapter, err := connection.StartAddressableConnectionAdapter(listener, dialTCP)
+	connAdapter, err := base.NewConnectionAdapter(listener, dialTCP)
 	if err != nil {
 		panic(err)
 	}
 
-	kp := ed25519.RandomKeyPair()
-	idAdapter := identity.NewDefaultIdentityAdapter(kp)
+	idAdapter := base.NewIdentityAdapter()
 
 	node := protocol.NewNode(
 		protocol.NewController(),
@@ -95,7 +94,7 @@ func StartInstance(port uint16) *Instance {
 		address:     addr,
 		connAdapter: connAdapter,
 		node:        node,
-		keypair:     kp,
+		keypair:     idAdapter.GetKeyPair(),
 	}
 
 	node.AddService(42, func(message *protocol.Message) {
@@ -114,7 +113,7 @@ func (inst *Instance) ReadMessageCount() uint64 {
 func main() {
 	instances := make([]*Instance, NumInstances)
 	for i := 0; i < NumInstances; i++ {
-		instances[i] = StartInstance(StartPort + uint16(i))
+		instances[i] = StartInstance(StartPort + i)
 	}
 	for i := 0; i < NumInstances; i++ {
 		for j := 0; j < NumInstances; j++ {
