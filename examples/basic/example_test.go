@@ -1,7 +1,6 @@
 package basic
 
 import (
-	"flag"
 	"fmt"
 	"net"
 	"time"
@@ -16,6 +15,9 @@ import (
 
 const (
 	serviceID = 42
+	numNodes  = 3
+	startPort = 5000
+	host      = "localhost"
 )
 
 // BasicNode buffers all messages into a mailbox for this test.
@@ -61,15 +63,6 @@ func dialTCP(addr string) (net.Conn, error) {
 // ExampleBasic demonstrates how to broadcast a message to a set of peers that discover
 // each other through peer discovery.
 func ExampleBasic() {
-	startPortFlag := flag.Int("port", 5000, "start port to listen to")
-	hostFlag := flag.String("host", "localhost", "host to listen to")
-	nodesFlag := flag.Int("nodes", 3, "number of nodes to start")
-	flag.Parse()
-
-	numNodes := *nodesFlag
-	startPort := *startPortFlag
-	host := *hostFlag
-
 	var nodes []*BasicNode
 
 	// setup all the nodes
