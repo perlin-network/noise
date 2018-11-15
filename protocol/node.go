@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bytes"
+	_ "fmt"
 	"github.com/monnand/dhkx"
 	"github.com/perlin-network/noise/log"
 	"github.com/pkg/errors"
@@ -51,12 +52,14 @@ func (n *Node) AddService(id uint16, s Service) {
 }
 
 func (n *Node) removePeer(id []byte) {
+	//fmt.Printf("removing peer: %b\n", id)
 	peer, ok := n.peers.Load(string(id))
 	if ok {
 		if peer, ok := peer.(*EstablishedPeer); ok {
 			peer.Close()
 		}
 		n.peers.Delete(string(id))
+		//fmt.Printf("deleting peer: %b\n", id)
 	}
 }
 
@@ -104,7 +107,8 @@ func (n *Node) Start() {
 			n.peers.Store(string(adapter.RemoteEndpoint()), peer)
 			adapter.StartRecvMessage(n.controller, func(message []byte) {
 				if message == nil {
-					n.removePeer(adapter.RemoteEndpoint())
+					//fmt.Printf("message is nil, removing peer: %b\n", adapter.RemoteEndpoint())
+					//n.removePeer(adapter.RemoteEndpoint())
 				} else {
 					n.dispatchIncomingMessage(peer, message)
 				}
@@ -147,7 +151,8 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 					n.peers.Store(string(remote), established)
 					msgAdapter.StartRecvMessage(n.controller, func(message []byte) {
 						if message == nil {
-							n.removePeer(remote)
+							//fmt.Printf("getPeer removing since nil\n")
+							//n.removePeer(remote)
 						} else {
 							n.dispatchIncomingMessage(established, message)
 						}
@@ -214,8 +219,13 @@ func (n *Node) Broadcast(body *MessageBody) error {
 	}
 	connections := n.connAdapter.GetConnectionIDs()
 	for _, peerID := range connections {
-		if string(n.idAdapter.MyIdentity()) == string(peerID) {
+		if bytes.Equal(n.idAdapter.MyIdentity(), peerID) {
 			// skip sending to itself
+			continue
+		}
+		_, ok := n.peers.Load(string(peerID))
+		if ok {
+			// HACK: due to coupling, skip if not found in routing table
 			continue
 		}
 		// copy the struct
