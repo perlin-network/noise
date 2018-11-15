@@ -87,6 +87,23 @@ func TestGetPeerAddresses(t *testing.T) {
 	}
 }
 
+func TestGetPeer(t *testing.T) {
+	t.Parallel()
+
+	routingTable := CreateRoutingTable(id1)
+	routingTable.Update(id2)
+	routingTable.Update(id3)
+
+	peers := routingTable.GetPeers()
+	if len(peers) != 1 {
+		t.Errorf("len(peers) = %d, expected 1", len(peers))
+	}
+	peer1 := peers[0]
+	if !bytes.Equal(peer1.MyIdentity(), id2.MyIdentity()) {
+		t.Errorf("'%v'.Equals(%v) = false, expected true", peer1, id2)
+	}
+}
+
 func TestGetPeers(t *testing.T) {
 	t.Parallel()
 
@@ -108,17 +125,33 @@ func TestRemovePeer(t *testing.T) {
 
 	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
-	routingTable.Update(id3)
 
-	routingTable.RemovePeer(id2)
-	testee := routingTable.GetPeerAddresses()
-	sort.Strings(testee)
-	tester := []string{"0002"}
-
-	if !reflect.DeepEqual(tester, testee) {
-		t.Fatalf("testremovepeer() failed got: %v, expected : %v", routingTable.GetPeerAddresses(), testee)
+	found := routingTable.GetPeer(id1.MyIdentity())
+	if found == nil {
+		t.Errorf("GetPeer() expected to find id1")
+	}
+	if !reflect.DeepEqual(id1, *found) {
+		t.Fatalf("GetPeer() expected found peer %+v to be equal to id1 %+v", found, id1)
 	}
 
+	found = routingTable.GetPeer(id3.MyIdentity())
+	if found != nil {
+		t.Errorf("GetPeer() expected not to find id3")
+	}
+	routingTable.Update(id3)
+	found = routingTable.GetPeer(id3.MyIdentity())
+	if found == nil {
+		t.Errorf("GetPeer() expected to find id3")
+	}
+	if !reflect.DeepEqual(id3, *found) {
+		t.Fatalf("GetPeer() expected found peer to be equal to id1")
+	}
+
+	routingTable.RemovePeer(id1.MyIdentity())
+	found = routingTable.GetPeer(id1.MyIdentity())
+	if found != nil {
+		t.Errorf("GetPeer() expected not to find id1 after deletion")
+	}
 }
 
 /*
@@ -209,7 +242,7 @@ func TestRoutingTable(t *testing.T) {
 					{
 						id := (*ID)(atomic.LoadPointer(&ids[int(RandByte())%IDPoolSize]))
 						if id != nil {
-							table.RemovePeer(*id)
+							table.RemovePeer(id.MyIdentity())
 						}
 					}
 				case 2:

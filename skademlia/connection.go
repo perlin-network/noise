@@ -13,13 +13,15 @@ type ConnectionAdapter struct {
 	RoutingTable
 }
 
-func NewConnectionAdapter(listener net.Listener, dialer base.Dialer) (*ConnectionAdapter, error) {
+func NewConnectionAdapter(listener net.Listener, dialer base.Dialer, id ID) (*ConnectionAdapter, error) {
 	baseConn, err := base.NewConnectionAdapter(listener, dialer)
 	if err != nil {
 		return nil, err
 	}
+	table := CreateRoutingTable(id)
 	return &ConnectionAdapter{
-		baseConn: baseConn,
+		baseConn:     baseConn,
+		RoutingTable: *table,
 	}, nil
 }
 

@@ -54,12 +54,19 @@ func TODOExampleSKademlia() {
 	for i := 0; i < numNodes; i++ {
 		idAdapter := skademlia.NewIdentityAdapter(skademlia.DefaultC1, skademlia.DefaultC2)
 
-		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, startPort+i))
+		address := fmt.Sprintf("%s:%d", host, startPort+i)
+		listener, err := net.Listen("tcp", address)
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
 
-		connAdapter, err := skademlia.NewConnectionAdapter(listener, dialTCP)
+		connAdapter, err := skademlia.NewConnectionAdapter(
+			listener,
+			dialTCP,
+			skademlia.ID{
+				IdentityAdapter: idAdapter,
+				Address:         fmt.Sprintf("tcp://%s", address)},
+		)
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}

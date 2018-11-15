@@ -92,6 +92,25 @@ func (t *RoutingTable) Update(target ID) {
 	bucket.mutex.Unlock()
 }
 
+// GetPeer retrieves the ID struct in the routing table given a node ID if found.
+func (t *RoutingTable) GetPeer(id []byte) *ID {
+	bucketID := prefixLen(xor(id, t.self.MyIdentity()))
+	bucket := t.Bucket(bucketID)
+
+	bucket.mutex.Lock()
+
+	defer bucket.mutex.Unlock()
+
+	for e := bucket.Front(); e != nil; e = e.Next() {
+		found := e.Value.(ID)
+		if bytes.Equal(found.MyIdentity(), id) {
+			return &found
+		}
+	}
+
+	return nil
+}
+
 // GetPeers returns a randomly-ordered, unique list of all peers within the routing network (excluding itself).
 func (t *RoutingTable) GetPeers() (peers []ID) {
 	visited := make(map[string]struct{})
@@ -136,16 +155,16 @@ func (t *RoutingTable) GetPeerAddresses() (peers []string) {
 	return
 }
 
-// RemovePeer removes a peer from the routing table with O(bucket_size) time complexity.
-func (t *RoutingTable) RemovePeer(target ID) bool {
-	bucketID := prefixLen(xor(target.MyIdentity(), t.self.MyIdentity()))
+// RemovePeer removes a peer from the routing table given the node ID with O(bucket_size) time complexity.
+func (t *RoutingTable) RemovePeer(id []byte) bool {
+	bucketID := prefixLen(xor(id, t.self.MyIdentity()))
 	bucket := t.Bucket(bucketID)
 
 	bucket.mutex.Lock()
 
 	for e := bucket.Front(); e != nil; e = e.Next() {
-		id := e.Value.(ID)
-		if bytes.Equal(id.MyIdentity(), target.MyIdentity()) {
+		found := e.Value.(ID)
+		if bytes.Equal(found.MyIdentity(), id) {
 			bucket.Remove(e)
 
 			bucket.mutex.Unlock()
