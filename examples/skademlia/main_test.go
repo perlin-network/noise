@@ -1,4 +1,4 @@
-package basic
+package skademlia_test
 
 import (
 	"flag"
@@ -6,9 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/connection"
-	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/identity"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
@@ -18,49 +16,37 @@ const (
 	serviceID = 42
 )
 
-// BasicNode buffers all messages into a mailbox for this test.
-type BasicNode struct {
+// SKNode buffers all messages into a mailbox for this test.
+type SKNode struct {
 	Node        *protocol.Node
-	Mailbox     chan *messages.BasicMessage
+	Mailbox     chan string
 	ConnAdapter *connection.AddressableConnectionAdapter
 }
 
-func (n *BasicNode) service(message *protocol.Message) {
+func (n *SKNode) service(message *protocol.Message) {
 	if message.Body.Service != serviceID {
 		return
 	}
 	if len(message.Body.Payload) == 0 {
 		return
 	}
-	var basicMessage messages.BasicMessage
-	if err := proto.Unmarshal(message.Body.Payload, &basicMessage); err != nil {
-		return
-	}
-	n.Mailbox <- &basicMessage
+	payload := string(message.Body.Payload)
+	n.Mailbox <- payload
 }
 
 func makeMessageBody(value string) *protocol.MessageBody {
-	basicMessage := &messages.BasicMessage{
-		Message: value,
-	}
-	payload, err := proto.Marshal(basicMessage)
-	if err != nil {
-		return nil
-	}
-	pMsg := &protocol.MessageBody{
+	return &protocol.MessageBody{
 		Service: serviceID,
-		Payload: payload,
+		Payload: ([]byte)(value),
 	}
-	return pMsg
 }
 
 func dialTCP(addr string) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
-// ExampleBasic demonstrates how to broadcast a message to a set of peers that discover
-// each other through peer discovery.
-func ExampleBasic() {
+// ExampleSKademliaExample demonstrates a simple test using SKademlia
+func ExampleSKademliaExample() {
 	startPortFlag := flag.Int("port", 5000, "start port to listen to")
 	hostFlag := flag.String("host", "localhost", "host to listen to")
 	nodesFlag := flag.Int("nodes", 3, "number of nodes to start")
@@ -70,7 +56,7 @@ func ExampleBasic() {
 	startPort := *startPortFlag
 	host := *hostFlag
 
-	var nodes []*BasicNode
+	var nodes []*SKNode
 
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
@@ -86,13 +72,13 @@ func ExampleBasic() {
 			log.Fatal().Msgf("%+v", err)
 		}
 
-		node := &BasicNode{
+		node := &SKNode{
 			Node: protocol.NewNode(
 				protocol.NewController(),
 				connAdapter,
 				idAdapter,
 			),
-			Mailbox:     make(chan *messages.BasicMessage, 1),
+			Mailbox:     make(chan string, 1),
 			ConnAdapter: connAdapter,
 		}
 
@@ -124,8 +110,8 @@ func ExampleBasic() {
 	for i := 1; i < len(nodes); i++ {
 		select {
 		case received := <-nodes[i].Mailbox:
-			if received.Message != expected {
-				fmt.Printf("Expected message %s to be received by node %d but got %v\n", expected, i, received.Message)
+			if received != expected {
+				fmt.Printf("Expected message %s to be received by node %d but got %v\n", expected, i, received)
 			} else {
 				fmt.Printf("Node %d received a message from Node 0.\n", i)
 			}
