@@ -1,7 +1,7 @@
 package skademlia
 
 import (
-	"github.com/perlin-network/noise/connection"
+	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/protocol"
 	"net"
 )
@@ -9,30 +9,30 @@ import (
 var _ protocol.ConnectionAdapter = (*ConnectionAdapter)(nil)
 
 type ConnectionAdapter struct {
-	aca *connection.AddressableConnectionAdapter
+	baseConn *base.ConnectionAdapter
 	RoutingTable
 }
 
-func NewConnectionAdapter(listener net.Listener, dialer connection.Dialer) (*ConnectionAdapter, error) {
-	aca, err := connection.StartAddressableConnectionAdapter(listener, dialer)
+func NewConnectionAdapter(listener net.Listener, dialer base.Dialer) (*ConnectionAdapter, error) {
+	baseConn, err := base.NewConnectionAdapter(listener, dialer)
 	if err != nil {
 		return nil, err
 	}
 	return &ConnectionAdapter{
-		aca: aca,
+		baseConn: baseConn,
 	}, nil
 }
 
 func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
-	return a.aca.EstablishActively(c, local, remote)
+	return a.baseConn.EstablishActively(c, local, remote)
 }
 
 func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []byte) chan protocol.MessageAdapter {
-	return a.aca.EstablishPassively(c, local)
+	return a.baseConn.EstablishPassively(c, local)
 }
 
 func (a *ConnectionAdapter) GetConnectionIDs() [][]byte {
-	return a.aca.GetConnectionIDs()
+	return a.baseConn.GetConnectionIDs()
 }
 
 func (a *ConnectionAdapter) AddPeer(id []byte, addr string) error {
