@@ -19,7 +19,7 @@ type Dialer func(address string) (net.Conn, error)
 
 type ConnectionAdapter struct {
 	listener    net.Listener
-	dialer      Dialer
+	Dialer      Dialer
 	idToAddress sync.Map
 
 	reportedPubliclyVisibleAddresses      []*PubliclyVisibleAddress
@@ -37,7 +37,7 @@ func NewConnectionAdapter(
 ) (*ConnectionAdapter, error) {
 	return &ConnectionAdapter{
 		listener: listener,
-		dialer:   dialer,
+		Dialer:   dialer,
 	}, nil
 }
 
@@ -58,7 +58,7 @@ func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []by
 		return nil, err
 	}
 
-	conn, err := a.dialer(remoteAddr)
+	conn, err := a.Dialer(remoteAddr)
 	if err != nil {
 		return nil, err
 	}
