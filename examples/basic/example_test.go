@@ -41,18 +41,18 @@ func (n *BasicNode) service(message *protocol.Message) {
 }
 
 func makeMessageBody(value string) *protocol.MessageBody {
-	basicMessage := &messages.BasicMessage{
+	msg := &messages.BasicMessage{
 		Message: value,
 	}
-	payload, err := proto.Marshal(basicMessage)
+	payload, err := proto.Marshal(msg)
 	if err != nil {
 		return nil
 	}
-	pMsg := &protocol.MessageBody{
+	body := &protocol.MessageBody{
 		Service: serviceID,
 		Payload: payload,
 	}
-	return pMsg
+	return body
 }
 
 func dialTCP(addr string) (net.Conn, error) {

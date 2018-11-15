@@ -2,68 +2,119 @@ package main
 
 import (
 	"bufio"
-	"context"
+	"encoding/hex"
 	"flag"
+	"fmt"
+	"net"
 	"os"
 	"strings"
+	"time"
 
-	"github.com/perlin-network/noise/crypto/ed25519"
+	"github.com/gogo/protobuf/proto"
+	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/examples/chat/messages"
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/types/opcode"
+	"github.com/perlin-network/noise/protocol"
 )
 
-type ChatPlugin struct{ *network.Plugin }
+const (
+	serviceID = 44
+)
 
-func (state *ChatPlugin) Receive(ctx *network.PluginContext) error {
-	switch msg := ctx.Message().(type) {
-	case *messages.ChatMessage:
-		log.Info().Msgf("<%s> %s", ctx.Client().ID.Address, msg.Message)
+type ChatNode struct {
+	Node        *protocol.Node
+	Address     string
+	ConnAdapter *base.ConnectionAdapter
+}
+
+func (n *ChatNode) service(message *protocol.Message) {
+	if message.Body.Service != serviceID {
+		return
 	}
+	if len(message.Body.Payload) == 0 {
+		return
+	}
+	var msg messages.ChatMessage
+	if err := proto.Unmarshal(message.Body.Payload, &msg); err != nil {
+		return
+	}
+	log.Info().Msgf("<%s> %s", n.Address, msg.Message)
+}
 
-	return nil
+func makeMessageBody(value string) *protocol.MessageBody {
+	msg := &messages.ChatMessage{
+		Message: value,
+	}
+	payload, err := proto.Marshal(msg)
+	if err != nil {
+		return nil
+	}
+	body := &protocol.MessageBody{
+		Service: serviceID,
+		Payload: payload,
+	}
+	return body
 }
 
 func main() {
 	// process other flags
 	portFlag := flag.Int("port", 3000, "port to listen to")
 	hostFlag := flag.String("host", "localhost", "host to listen to")
-	protocolFlag := flag.String("protocol", "tcp", "protocol to use (kcp/tcp)")
-	peersFlag := flag.String("peers", "", "peers to connect to")
+	peersFlag := flag.String("peers", "", "peers to connect to in format: peerKeyHash1=host1:port1,peerKeyHash2=host2:port2,...")
 	flag.Parse()
 
-	port := uint16(*portFlag)
+	port := *portFlag
 	host := *hostFlag
-	protocol := *protocolFlag
 	peers := strings.Split(*peersFlag, ",")
 
-	keys := ed25519.RandomKeyPair()
+	idAdapter := base.NewIdentityAdapter()
+	keys := idAdapter.GetKeyPair()
 
 	log.Info().Msgf("Private Key: %s", keys.PrivateKeyHex())
 	log.Info().Msgf("Public Key: %s", keys.PublicKeyHex())
 
-	opcode.RegisterMessageType(opcode.Opcode(1000), &messages.ChatMessage{})
-	builder := network.NewBuilder()
-	builder.SetKeys(keys)
-	builder.SetAddress(network.FormatAddress(protocol, host, port))
-
-	// Register peer discovery plugin.
-	builder.AddPlugin(new(discovery.Plugin))
-
-	// Add custom chat plugin.
-	builder.AddPlugin(new(ChatPlugin))
-
-	net, err := builder.Build()
+	addr := fmt.Sprintf("%s:%d", host, port)
+	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatal().Err(err)
-		return
+		panic(err)
 	}
 
-	go net.Listen()
+	connAdapter, err := base.NewConnectionAdapter(listener, func(addr string) (net.Conn, error) {
+		return net.DialTimeout("tcp", addr, 10*time.Second)
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	node := &ChatNode{
+		Node: protocol.NewNode(
+			protocol.NewController(),
+			connAdapter,
+			idAdapter,
+		),
+		Address:     addr,
+		ConnAdapter: connAdapter,
+	}
+
+	node.Node.AddService(serviceID, node.service)
 
 	if len(peers) > 0 {
-		net.Bootstrap(peers...)
+		for _, peerKV := range peers {
+			if len(peerKV) == 0 {
+				// this is a blank parameter
+				continue
+			}
+			peer := strings.Split(peerKV, "=")
+			peerID, err := hex.DecodeString(peer[0])
+			if err != nil {
+				panic(err)
+			}
+			remoteAddr := peer[1]
+			connAdapter.MapIDToAddress(peerID, remoteAddr)
+		}
 	}
+
+	node.Node.Start()
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -74,10 +125,8 @@ func main() {
 			continue
 		}
 
-		log.Info().Msgf("<%s> %s", net.Address, input)
+		log.Info().Msgf("<%s> %s", addr, input)
 
-		ctx := network.WithSignMessage(context.Background(), true)
-		net.Broadcast(ctx, &messages.ChatMessage{Message: input})
+		node.Node.Broadcast(makeMessageBody(input))
 	}
-
 }
