@@ -1,23 +1,33 @@
 package skademlia
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/hex"
-	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/crypto/ed25519"
-	"github.com/perlin-network/noise/peer"
 	"testing"
+
+	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/blake2b"
+	"github.com/perlin-network/noise/crypto/ed25519"
 )
 
-func TestGenerateKeyPairAndID(t *testing.T) {
+var (
+	idBytes1 = []byte("12345678901234567890123456789012")
+	idBytes2 = []byte("12345678901234567890123456789013")
+)
+
+func TestNewSKademliaIdentityAdapter(t *testing.T) {
 	t.Parallel()
-	kp, nonce := generateKeyPairAndNonce(DefaultC1, DefaultC2)
-	id := peer.CreateID("tcp://localhost:8000", kp.PublicKey, peer.WithNonce(nonce))
+
+	id := NewSKademliaIdentityAdapter(DefaultC1, DefaultC2)
 	if !VerifyPuzzle(id, DefaultC1, DefaultC2) {
 		t.Errorf("GenerateKeyPairAndID() expected ID to be valid")
 	}
 }
-func TestCheckHashedBytesPrefixLen(t *testing.T) {
+
+func TestNewSKademliaIdentityFromKeypair(t *testing.T) {
 	t.Parallel()
+
 	testCases := []struct {
 		privateKeyHex string
 		c1            int
@@ -34,8 +44,84 @@ func TestCheckHashedBytesPrefixLen(t *testing.T) {
 		if err != nil {
 			t.Errorf("FromPrivateKey() expected no error, got: %v", err)
 		}
-		id := peer.CreateID("tcp://localhost:8000", kp.PublicKey)
-		if tt.valid != checkHashedBytesPrefixLen(id.Id, tt.c1) {
+		id, err := NewSKademliaIdentityFromKeypair(kp, tt.c1, DefaultC2)
+		if tt.valid {
+			if err != nil {
+				t.Errorf("NewSKademliaIdentityFromKeypair() expected to be valid, got: %+v", err)
+			} else if id == nil {
+				t.Errorf("NewSKademliaIdentityFromKeypair() expected to have non-nil id")
+			}
+		} else {
+			if err == nil {
+				t.Errorf("NewSKademliaIdentityFromKeypair() expected an error")
+			} else if id != nil {
+				t.Errorf("NewSKademliaIdentityFromKeypair() expected nil id")
+			}
+		}
+	}
+}
+
+func TestSignAndVerify(t *testing.T) {
+	t.Parallel()
+
+	data, err := randomBytes(1024)
+	if err != nil {
+		t.Errorf("randBytes() expected no error, got %+v", err)
+	}
+	privateKeyHex := "1946e455ca6072bcdfd3182799c2ceb1557c2a56c5f810478ac0eb279ad4c93e8e8b6a97551342fd70ec03bea8bae5b05bc5dc0f54b2721dff76f06fab909263"
+	sp := ed25519.New()
+	kp, err := crypto.FromPrivateKey(sp, privateKeyHex)
+	if err != nil {
+		t.Errorf("FromPrivateKey() expected no error, got: %v", err)
+	}
+	id, err := NewSKademliaIdentityFromKeypair(kp, DefaultC1, DefaultC2)
+	if err != nil {
+		t.Errorf("NewSKademliaIdentityFromKeypair() expected to be valid, got: %+v", err)
+	}
+	sign := id.Sign([]byte(data))
+	if len(sign) != id.SignatureSize() {
+		t.Errorf("SignatureSize() expectec signature size to be %d, got %d", id.SignatureSize(), len(sign))
+	}
+
+	valid := id.Verify(kp.PublicKey, data, sign)
+	if !valid {
+		t.Errorf("Verify() expected to be true")
+	}
+}
+
+func TestGenerateKeyPairAndID(t *testing.T) {
+	t.Parallel()
+
+	id, nonce := generateKeyPairAndNonce(DefaultC1, DefaultC2)
+	if id == nil {
+		t.Errorf("generateKeyPairAndNonce() expected id not to be nil")
+	}
+	if len(nonce) == 0 {
+		t.Errorf("generateKeyPairAndNonce() expected nonce to not be nil")
+	}
+}
+
+func TestCheckHashedBytesPrefixLen(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		privateKeyHex string
+		c1            int
+		valid         bool
+	}{
+		{"078e11ac002673b20922a777d827a68191163fa87ce897f55be672a508b5c5a017246e17eb3aa6d3eed0150044d426e899525665b86574f11dbcf150ac65a988", 8, true},
+		{"1946e455ca6072bcdfd3182799c2ceb1557c2a56c5f810478ac0eb279ad4c93e8e8b6a97551342fd70ec03bea8bae5b05bc5dc0f54b2721dff76f06fab909263", 16, true},
+		{"1946e455ca6072bcdfd3182799c2ceb1557c2a56c5f810478ac0eb279ad4c93e8e8b6a97551342fd70ec03bea8bae5b05bc5dc0f54b2721dff76f06fab909263", 10, true},
+		{"078e11ac002673b20922a777d827a68191163fa87ce897f55be672a508b5c5a017246e17eb3aa6d3eed0150044d426e899525665b86574f11dbcf150ac65a988", 16, false},
+	}
+	for _, tt := range testCases {
+		sp := ed25519.New()
+		kp, err := crypto.FromPrivateKey(sp, tt.privateKeyHex)
+		if err != nil {
+			t.Errorf("FromPrivateKey() expected no error, got: %v", err)
+		}
+		b := blake2b.New()
+		if tt.valid != checkHashedBytesPrefixLen(b.HashBytes(kp.PublicKey), tt.c1) {
 			t.Errorf("isValidKeyPair expected %t, got: %t", tt.valid, !tt.valid)
 		}
 	}
@@ -60,8 +146,10 @@ func TestRandomBytes(t *testing.T) {
 		}
 	}
 }
+
 func TestCheckDynamicPuzzle(t *testing.T) {
 	t.Parallel()
+
 	testCases := []struct {
 		privateKeyHex string
 		encodedX      string
@@ -75,19 +163,21 @@ func TestCheckDynamicPuzzle(t *testing.T) {
 	for _, tt := range testCases {
 		sp := ed25519.New()
 		kp, err := crypto.FromPrivateKey(sp, tt.privateKeyHex)
-		id := peer.CreateID("tcp://localhost:8000", kp.PublicKey)
+		nodeID := blake2b.New().HashBytes(kp.PublicKey)
 		x, err := hex.DecodeString(tt.encodedX)
 		if err != nil {
 			t.Errorf("DecodeString() expected no error, got: %v", err)
 		}
-		ok := checkDynamicPuzzle(id.Id, x, tt.prefixLength)
+		ok := checkDynamicPuzzle(nodeID, x, tt.prefixLength)
 		if !ok {
 			t.Errorf("checkDynamicPuzzle() expected to be true")
 		}
 	}
 }
+
 func TestVerifyPuzzle(t *testing.T) {
 	t.Parallel()
+
 	testCases := []struct {
 		privateKeyHex string
 		encodedX      string
@@ -99,15 +189,59 @@ func TestVerifyPuzzle(t *testing.T) {
 	for _, tt := range testCases {
 		sp := ed25519.New()
 		kp, err := crypto.FromPrivateKey(sp, tt.privateKeyHex)
-		id := peer.CreateID("tcp://localhost:8000", kp.PublicKey)
+		id, err := NewSKademliaIdentityFromKeypair(kp, DefaultC1, DefaultC2)
+		if err != nil {
+			t.Errorf("NewSKademliaIdentityFromKeypair() expected no error, got: %+v", err)
+		}
 		nonce, err := hex.DecodeString(tt.encodedX)
 		if err != nil {
 			t.Errorf("DecodeString() expected no error, got: %v", err)
 		}
-		id = peer.CreateID("tcp://localhost:8000", kp.PublicKey, peer.WithNonce(nonce))
+
+		id, err = NewSKademliaIdentityFromKeypair(kp, 16, 16)
+		if err != nil {
+			t.Errorf("NewSKademliaIdentityFromKeypair() expected no error, got: %+v", err)
+		}
+		id.Nonce = nonce
 		ok := VerifyPuzzle(id, 16, 16)
 		if ok != tt.valid {
 			t.Errorf("VerifyPuzzle() expected to be %t, got %t", tt.valid, ok)
+		}
+	}
+}
+
+func TestXor(t *testing.T) {
+	t.Parallel()
+
+	xorResult := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
+
+	result := xor(idBytes1, idBytes2)
+
+	if !bytes.Equal(xorResult, result) {
+		t.Errorf("Xor() = %v, want %v", xorResult, result)
+	}
+}
+
+func TestPrefixLen(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		publicKeyHash uint32
+		expected      int
+	}{
+		{1, 7},
+		{2, 6},
+		{4, 5},
+		{8, 4},
+		{16, 3},
+		{32, 2},
+		{64, 1},
+	}
+	for _, tt := range testCases {
+		publicKey := make([]byte, 4)
+		binary.LittleEndian.PutUint32(publicKey, tt.publicKeyHash)
+		if prefixLen(publicKey) != tt.expected {
+			t.Errorf("PrefixLen() expected: %d, value: %d", tt.expected, prefixLen(publicKey))
 		}
 	}
 }

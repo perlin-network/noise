@@ -3,37 +3,92 @@ package skademlia
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/hex"
+	"math/bits"
+
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/crypto/ed25519"
-	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
+
 	"github.com/pkg/errors"
 )
 
-var _ protocol.IdentityAdapter = (*IdentityAdapter)(nil)
+const (
+	// DefaultC1 is the prefix-matching length for the static cryptopuzzle.
+	DefaultC1 = 16
+	// DefaultC2 is the prefix-matching length for the dynamic cryptopuzzle.
+	DefaultC2 = 16
+)
 
-type IdentityAdapter struct {
+var _ protocol.IdentityAdapter = (*SKademliaIdentityAdapter)(nil)
+
+// SKademliaIdentityAdapter implements the identity interface for S/Kademlia node IDs
+type SKademliaIdentityAdapter struct {
+	keypair *crypto.KeyPair
+	id      []byte
+	Nonce   []byte
+	signer  crypto.SignaturePolicy
+	hasher  crypto.HashPolicy
 }
 
-func NewIdentityAdapter(*crypto.KeyPair) *IdentityAdapter {
-	return nil
+// NewSKademliaIdentityAdapter creates a new SKademliaIdentityAdapter with the given cryptopuzzle constants
+func NewSKademliaIdentityAdapter(c1, c2 int) *SKademliaIdentityAdapter {
+	kp, nonce := generateKeyPairAndNonce(c1, c2)
+	b := blake2b.New()
+	return &SKademliaIdentityAdapter{
+		keypair: kp,
+		id:      b.HashBytes(kp.PublicKey),
+		Nonce:   nonce,
+		signer:  ed25519.New(),
+		hasher:  b,
+	}
 }
 
-func (ia *IdentityAdapter) MyIdentity() []byte {
-	return nil
+// NewSKademliaIdentityFromKeypair creates a new SKademliaIdentityAdapter with the given cryptopuzzle
+// constants from an existing keypair
+func NewSKademliaIdentityFromKeypair(kp *crypto.KeyPair, c1, c2 int) (*SKademliaIdentityAdapter, error) {
+	b := blake2b.New()
+	id := b.HashBytes(kp.PublicKey)
+	if !checkHashedBytesPrefixLen(id, c1) {
+		return nil, errors.Errorf("skademlia: provided keypair does not generate a valid node ID for c1: %d", c1)
+	}
+	return &SKademliaIdentityAdapter{
+		keypair: kp,
+		id:      id,
+		Nonce:   getNonce(id, c2),
+		signer:  ed25519.New(),
+		hasher:  b,
+	}, nil
 }
 
-func (ia *IdentityAdapter) Sign(input []byte) []byte {
-	return nil
+// MyIdentity returns the S/Kademlia node ID
+func (a *SKademliaIdentityAdapter) MyIdentity() []byte {
+	return a.id
 }
 
-func (ia *IdentityAdapter) Verify(id, data, signature []byte) bool {
-	return false
+// MyIdentityHex returns the S/Kademlia hex-encoded node ID
+func (a *SKademliaIdentityAdapter) MyIdentityHex() string {
+	return hex.EncodeToString(a.id)
 }
 
-func (ia *IdentityAdapter) SignatureSize() int {
-	return 0
+// Sign signs the input bytes with the identity's private key
+func (a *SKademliaIdentityAdapter) Sign(input []byte) []byte {
+	ret, err := a.keypair.Sign(a.signer, a.hasher, input)
+	if err != nil {
+		panic(err)
+	}
+	return ret
+}
+
+// Verify checks whether the signature matches the signed data
+func (a *SKademliaIdentityAdapter) Verify(publicKey, data, signature []byte) bool {
+	return crypto.Verify(a.signer, a.hasher, publicKey, data, signature)
+}
+
+// SignatureSize specifies the byte length for signatures generated with the keypair
+func (a *SKademliaIdentityAdapter) SignatureSize() int {
+	return ed25519.SignatureSize
 }
 
 // generateKeyPairAndNonce generates an S/Kademlia keypair and nonce with cryptopuzzle prefix matching constants c1
@@ -53,7 +108,7 @@ func generateKeyPairAndNonce(c1, c2 int) (*crypto.KeyPair, []byte) {
 func checkHashedBytesPrefixLen(a []byte, c int) bool {
 	b := blake2b.New()
 	P := b.HashBytes(a)
-	return peer.PrefixLen(P) >= c
+	return prefixLen(P) >= c
 }
 
 // randomBytes generates a random byte slice with specified length
@@ -86,14 +141,37 @@ func getNonce(nodeID []byte, c int) []byte {
 
 // checkDynamicPuzzle checks whether the nodeID and bytes x solves the S/Kademlia dynamic puzzle for c prefix length
 func checkDynamicPuzzle(nodeID, x []byte, c int) bool {
-	xored := peer.Xor(nodeID, x)
+	xored := xor(nodeID, x)
 	return checkHashedBytesPrefixLen(xored, c)
 }
 
 // VerifyPuzzle checks whether an ID is a valid S/Kademlia node ID with cryptopuzzle constants c1 and c2
-func VerifyPuzzle(id peer.ID, c1, c2 int) bool {
+func VerifyPuzzle(id *SKademliaIdentityAdapter, c1, c2 int) bool {
 	// check if static puzzle and dynamic puzzle is solved
 	b := blake2b.New()
-	nonce := peer.GetNonce(id)
-	return bytes.Equal(b.HashBytes(id.PublicKey), id.Id) && checkHashedBytesPrefixLen(id.Id, c1) && checkDynamicPuzzle(id.Id, nonce, c2)
+	return bytes.Equal(b.HashBytes(id.keypair.PublicKey), id.MyIdentity()) && checkHashedBytesPrefixLen(id.MyIdentity(), c1) && checkDynamicPuzzle(id.MyIdentity(), id.Nonce, c2)
+}
+
+// xor performs an xor operation on two byte slices.
+func xor(a, b []byte) []byte {
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+
+	dst := make([]byte, n)
+	for i := 0; i < n; i++ {
+		dst[i] = a[i] ^ b[i]
+	}
+	return dst
+}
+
+// prefixLen returns the number of prefixed zeroes in a byte slice.
+func prefixLen(bytes []byte) int {
+	for i, b := range bytes {
+		if b != 0 {
+			return i*8 + bits.LeadingZeros8(uint8(b))
+		}
+	}
+	return len(bytes)*8 - 1
 }

@@ -5,24 +5,54 @@ import (
 	"github.com/perlin-network/noise/protocol"
 )
 
-var _ protocol.ConnectionAdapter = (*ConnectionAdapter)(nil)
+var _ protocol.ConnectionAdapter = (*SKademliaConnectionAdapter)(nil)
 
-// ConnectionAdapter implements the protocol.ConnectionAdapter
-type ConnectionAdapter struct {
+type SKademliaConnectionAdapter struct {
 	connection.AddressableConnectionAdapter
+	RoutingTable
 }
 
-// NewConnectionAdapter creates a new instance.
-func NewConnectionAdapter() *ConnectionAdapter {
-	return &ConnectionAdapter{}
+/*
+func (a *SKademliaConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
+	remoteAddr, err := a.lookupAddressByID(remote)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := a.dialer(remoteAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return startAddressableMessageAdapter(a, conn, local, remote, remoteAddr, false)
 }
 
-// EstablishPassively implements the protocol.ConnectionAdapter interface
-func (ca *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []byte) chan protocol.MessageAdapter {
-	return nil
-}
+func (a *SKademliaConnectionAdapter) EstablishPassively(c *protocol.Controller, local []byte) chan protocol.MessageAdapter {
+	ch := make(chan protocol.MessageAdapter)
+	go func() {
+		defer close(ch)
+		for {
+			select {
+			case <-c.Cancellation:
+				return
+			default:
+			}
 
-// EstablishActively implements the protocol.ConnectionAdapter interface
-func (ca *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
-	return nil, nil
+			conn, err := a.listener.Accept() // TODO: timeout
+			if err != nil {
+				log.Error().Err(err).Msg("unable to accept connection")
+				continue
+			}
+
+			adapter, err := startAddressableMessageAdapter(a, conn, local, nil, "", true)
+			if err != nil {
+				log.Error().Err(err).Msg("unable to start message adapter")
+				continue
+			}
+
+			ch <- adapter
+		}
+	}()
+	return ch
 }
+*/
