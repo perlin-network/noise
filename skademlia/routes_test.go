@@ -56,21 +56,6 @@ func TestSelf(t *testing.T) {
 	}
 }
 
-func TestPeerExists(t *testing.T) {
-	t.Parallel()
-
-	routingTable := CreateRoutingTable(id1)
-	routingTable.Update(id2)
-	routingTable.Update(id3)
-
-	if !routingTable.PeerExists(id1) {
-		t.Fatal("PeerExists() targeting self failed")
-	}
-	if !routingTable.PeerExists(id2) {
-		t.Fatal("PeerExists() targeting others failed")
-	}
-}
-
 func TestGetPeerAddresses(t *testing.T) {
 	t.Parallel()
 
@@ -126,21 +111,21 @@ func TestRemovePeer(t *testing.T) {
 	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
 
-	found := routingTable.GetPeer(id1.MyIdentity())
-	if found == nil {
+	ok, found := routingTable.GetPeer(id1.MyIdentity())
+	if !ok && found == nil {
 		t.Errorf("GetPeer() expected to find id1")
 	}
 	if !reflect.DeepEqual(id1, *found) {
 		t.Fatalf("GetPeer() expected found peer %+v to be equal to id1 %+v", found, id1)
 	}
 
-	found = routingTable.GetPeer(id3.MyIdentity())
-	if found != nil {
+	ok, found = routingTable.GetPeer(id3.MyIdentity())
+	if ok && found != nil {
 		t.Errorf("GetPeer() expected not to find id3")
 	}
 	routingTable.Update(id3)
-	found = routingTable.GetPeer(id3.MyIdentity())
-	if found == nil {
+	ok, found = routingTable.GetPeer(id3.MyIdentity())
+	if !ok && found == nil {
 		t.Errorf("GetPeer() expected to find id3")
 	}
 	if !reflect.DeepEqual(id3, *found) {
@@ -148,8 +133,8 @@ func TestRemovePeer(t *testing.T) {
 	}
 
 	routingTable.RemovePeer(id1.MyIdentity())
-	found = routingTable.GetPeer(id1.MyIdentity())
-	if found != nil {
+	ok, found = routingTable.GetPeer(id1.MyIdentity())
+	if ok && found != nil {
 		t.Errorf("GetPeer() expected not to find id1 after deletion")
 	}
 }
@@ -249,7 +234,7 @@ func TestRoutingTable(t *testing.T) {
 					{
 						id := (*ID)(atomic.LoadPointer(&ids[int(RandByte())%IDPoolSize]))
 						if id != nil {
-							table.PeerExists(*id)
+							table.GetPeer(id.MyIdentity())
 						}
 					}
 				case 3:

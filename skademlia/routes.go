@@ -24,7 +24,7 @@ type ID struct {
 	Address string
 }
 
-// Bucket holds a list of contacts of this node.
+// Bucket holds a list of peers of this node.
 type Bucket struct {
 	*list.List
 	mutex *sync.RWMutex
@@ -69,7 +69,7 @@ func (t *RoutingTable) Update(target ID) {
 
 	var element *list.Element
 
-	// Find current node in bucket.
+	// Find current peer in bucket.
 	bucket.mutex.Lock()
 
 	for e := bucket.Front(); e != nil; e = e.Next() {
@@ -92,8 +92,8 @@ func (t *RoutingTable) Update(target ID) {
 	bucket.mutex.Unlock()
 }
 
-// GetPeer retrieves the ID struct in the routing table given a node ID if found.
-func (t *RoutingTable) GetPeer(id []byte) *ID {
+// GetPeer retrieves the ID struct in the routing table given a peer ID if found.
+func (t *RoutingTable) GetPeer(id []byte) (bool, *ID) {
 	bucketID := prefixLen(xor(id, t.self.MyIdentity()))
 	bucket := t.Bucket(bucketID)
 
@@ -104,11 +104,11 @@ func (t *RoutingTable) GetPeer(id []byte) *ID {
 	for e := bucket.Front(); e != nil; e = e.Next() {
 		found := e.Value.(ID)
 		if bytes.Equal(found.MyIdentity(), id) {
-			return &found
+			return true, &found
 		}
 	}
 
-	return nil
+	return false, nil
 }
 
 // GetPeers returns a randomly-ordered, unique list of all peers within the routing network (excluding itself).
@@ -155,7 +155,7 @@ func (t *RoutingTable) GetPeerAddresses() (peers []string) {
 	return
 }
 
-// RemovePeer removes a peer from the routing table given the node ID with O(bucket_size) time complexity.
+// RemovePeer removes a peer from the routing table given the peer ID with O(bucket_size) time complexity.
 func (t *RoutingTable) RemovePeer(id []byte) bool {
 	bucketID := prefixLen(xor(id, t.self.MyIdentity()))
 	bucket := t.Bucket(bucketID)
@@ -173,25 +173,6 @@ func (t *RoutingTable) RemovePeer(id []byte) bool {
 	}
 
 	bucket.mutex.Unlock()
-
-	return false
-}
-
-// PeerExists checks if a peer exists in the routing table with O(bucket_size) time complexity.
-func (t *RoutingTable) PeerExists(target ID) bool {
-	bucketID := prefixLen(xor(target.MyIdentity(), t.self.MyIdentity()))
-	bucket := t.Bucket(bucketID)
-
-	bucket.mutex.Lock()
-
-	defer bucket.mutex.Unlock()
-
-	for e := bucket.Front(); e != nil; e = e.Next() {
-		id := e.Value.(ID)
-		if bytes.Equal(id.MyIdentity(), target.MyIdentity()) {
-			return true
-		}
-	}
 
 	return false
 }
