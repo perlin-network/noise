@@ -8,9 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/perlin-network/noise/connection"
-	"github.com/perlin-network/noise/identity"
-	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/protocol"
 )
 
@@ -25,22 +23,22 @@ func main() {
 	host := *hostFlag
 	peers := strings.Split(*peersFlag, ",")
 
-	idAdapter := identity.NewDefaultIdentityAdapter()
+	idAdapter := base.NewIdentityAdapter()
 	keys := idAdapter.GetKeyPair()
 
-	log.Info().Str("private_key", keys.PrivateKeyHex()).Msg("")
-	log.Info().Str("public_key", keys.PublicKeyHex()).Msg("")
+	fmt.Printf("private_key: %s\n", keys.PrivateKeyHex())
+	fmt.Printf("public_key: %s\n", keys.PublicKeyHex())
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
-		log.Fatal().Err(err).Msg("")
+		panic(err)
 	}
 
-	connAdapter, err := connection.StartAddressableConnectionAdapter(listener, func(addr string) (net.Conn, error) {
+	connAdapter, err := base.NewConnectionAdapter(listener, func(addr string) (net.Conn, error) {
 		return net.DialTimeout("tcp", addr, 10*time.Second)
 	})
 	if err != nil {
-		log.Fatal().Err(err).Msg("")
+		panic(err)
 	}
 
 	node := protocol.NewNode(
@@ -50,7 +48,7 @@ func main() {
 	)
 
 	node.AddService(42, func(message *protocol.Message) {
-		log.Info().Msgf("received payload from %s: %s", hex.EncodeToString(message.Sender), string(message.Body.Payload))
+		fmt.Printf("received payload from %s: %s\n", hex.EncodeToString(message.Sender), string(message.Body.Payload))
 	})
 
 	if len(peers) > 0 {
@@ -62,7 +60,7 @@ func main() {
 			peer := strings.Split(peerKV, "=")
 			peerID, err := hex.DecodeString(peer[0])
 			if err != nil {
-				log.Fatal().Err(err).Msg("")
+				panic(err)
 			}
 			remoteAddr := peer[1]
 			connAdapter.MapIDToAddress(peerID, remoteAddr)

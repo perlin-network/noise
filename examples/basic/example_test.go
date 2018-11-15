@@ -6,9 +6,8 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/perlin-network/noise/connection"
+	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/examples/basic/messages"
-	"github.com/perlin-network/noise/identity"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 )
@@ -24,7 +23,7 @@ const (
 type BasicNode struct {
 	Node        *protocol.Node
 	Mailbox     chan *messages.BasicMessage
-	ConnAdapter *connection.AddressableConnectionAdapter
+	ConnAdapter *base.ConnectionAdapter
 }
 
 func (n *BasicNode) service(message *protocol.Message) {
@@ -67,14 +66,14 @@ func ExampleBasic() {
 
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
-		idAdapter := identity.NewDefaultIdentityAdapter()
+		idAdapter := base.NewIdentityAdapter()
 
 		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, startPort+i))
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
 
-		connAdapter, err := connection.StartAddressableConnectionAdapter(listener, dialTCP)
+		connAdapter, err := base.NewConnectionAdapter(listener, dialTCP)
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
