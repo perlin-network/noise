@@ -18,9 +18,9 @@ type RoutingTable struct {
 	buckets []*Bucket
 }
 
-// ID is an SKademliaIdentityAdapter and address pair
+// ID is an IdentityAdapter and address pair
 type ID struct {
-	*SKademliaIdentityAdapter
+	*IdentityAdapter
 	Address string
 }
 

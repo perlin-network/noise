@@ -21,9 +21,9 @@ var (
 )
 
 func init() {
-	id1 = ID{NewSKademliaIdentityAdapter(8, 8), "0000"}
-	id2 = ID{NewSKademliaIdentityAdapter(8, 8), "0001"}
-	id3 = ID{NewSKademliaIdentityAdapter(8, 8), "0002"}
+	id1 = ID{NewIdentityAdapter(8, 8), "0000"}
+	id2 = ID{NewIdentityAdapter(8, 8), "0001"}
+	id3 = ID{NewIdentityAdapter(8, 8), "0002"}
 
 	idBytes = id1.id
 }
@@ -180,7 +180,7 @@ func TestRoutingTable(t *testing.T) {
 
 	ids := make([]unsafe.Pointer, IDPoolSize) // Element type: *peer.ID
 
-	id := ID{NewSKademliaIdentityAdapter(8, 8), "000"}
+	id := ID{NewIdentityAdapter(8, 8), "000"}
 	table := CreateRoutingTable(id)
 
 	wg := &sync.WaitGroup{}
@@ -200,7 +200,7 @@ func TestRoutingTable(t *testing.T) {
 						addrRaw := MustReadRand(8)
 						addr := hex.EncodeToString(addrRaw)
 
-						id := ID{NewSKademliaIdentityAdapter(8, 8), addr}
+						id := ID{NewIdentityAdapter(8, 8), addr}
 						table.Update(id)
 
 						atomic.StorePointer(&ids[int(RandByte())%IDPoolSize], unsafe.Pointer(&id))

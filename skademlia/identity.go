@@ -21,10 +21,10 @@ const (
 	DefaultC2 = 16
 )
 
-var _ protocol.IdentityAdapter = (*SKademliaIdentityAdapter)(nil)
+var _ protocol.IdentityAdapter = (*IdentityAdapter)(nil)
 
-// SKademliaIdentityAdapter implements the identity interface for S/Kademlia node IDs
-type SKademliaIdentityAdapter struct {
+// IdentityAdapter implements the identity interface for S/Kademlia node IDs
+type IdentityAdapter struct {
 	keypair *crypto.KeyPair
 	id      []byte
 	Nonce   []byte
@@ -32,11 +32,11 @@ type SKademliaIdentityAdapter struct {
 	hasher  crypto.HashPolicy
 }
 
-// NewSKademliaIdentityAdapter creates a new SKademliaIdentityAdapter with the given cryptopuzzle constants
-func NewSKademliaIdentityAdapter(c1, c2 int) *SKademliaIdentityAdapter {
+// NewIdentityAdapter creates a new SKademlia IdentityAdapter with the given cryptopuzzle constants
+func NewIdentityAdapter(c1, c2 int) *IdentityAdapter {
 	kp, nonce := generateKeyPairAndNonce(c1, c2)
 	b := blake2b.New()
-	return &SKademliaIdentityAdapter{
+	return &IdentityAdapter{
 		keypair: kp,
 		id:      b.HashBytes(kp.PublicKey),
 		Nonce:   nonce,
@@ -45,15 +45,15 @@ func NewSKademliaIdentityAdapter(c1, c2 int) *SKademliaIdentityAdapter {
 	}
 }
 
-// NewSKademliaIdentityFromKeypair creates a new SKademliaIdentityAdapter with the given cryptopuzzle
+// NewIdentityFromKeypair creates a new SKademlia IdentityAdapter with the given cryptopuzzle
 // constants from an existing keypair
-func NewSKademliaIdentityFromKeypair(kp *crypto.KeyPair, c1, c2 int) (*SKademliaIdentityAdapter, error) {
+func NewIdentityFromKeypair(kp *crypto.KeyPair, c1, c2 int) (*IdentityAdapter, error) {
 	b := blake2b.New()
 	id := b.HashBytes(kp.PublicKey)
 	if !checkHashedBytesPrefixLen(id, c1) {
 		return nil, errors.Errorf("skademlia: provided keypair does not generate a valid node ID for c1: %d", c1)
 	}
-	return &SKademliaIdentityAdapter{
+	return &IdentityAdapter{
 		keypair: kp,
 		id:      id,
 		Nonce:   getNonce(id, c2),
@@ -63,17 +63,17 @@ func NewSKademliaIdentityFromKeypair(kp *crypto.KeyPair, c1, c2 int) (*SKademlia
 }
 
 // MyIdentity returns the S/Kademlia node ID
-func (a *SKademliaIdentityAdapter) MyIdentity() []byte {
+func (a *IdentityAdapter) MyIdentity() []byte {
 	return a.id
 }
 
 // MyIdentityHex returns the S/Kademlia hex-encoded node ID
-func (a *SKademliaIdentityAdapter) MyIdentityHex() string {
+func (a *IdentityAdapter) MyIdentityHex() string {
 	return hex.EncodeToString(a.id)
 }
 
 // Sign signs the input bytes with the identity's private key
-func (a *SKademliaIdentityAdapter) Sign(input []byte) []byte {
+func (a *IdentityAdapter) Sign(input []byte) []byte {
 	ret, err := a.keypair.Sign(a.signer, a.hasher, input)
 	if err != nil {
 		panic(err)
@@ -82,13 +82,18 @@ func (a *SKademliaIdentityAdapter) Sign(input []byte) []byte {
 }
 
 // Verify checks whether the signature matches the signed data
-func (a *SKademliaIdentityAdapter) Verify(publicKey, data, signature []byte) bool {
+func (a *IdentityAdapter) Verify(publicKey, data, signature []byte) bool {
 	return crypto.Verify(a.signer, a.hasher, publicKey, data, signature)
 }
 
 // SignatureSize specifies the byte length for signatures generated with the keypair
-func (a *SKademliaIdentityAdapter) SignatureSize() int {
+func (a *IdentityAdapter) SignatureSize() int {
 	return ed25519.SignatureSize
+}
+
+// GetKeyPair returns the key pair used to create the idenity
+func (a *IdentityAdapter) GetKeyPair() *crypto.KeyPair {
+	return a.keypair
 }
 
 // generateKeyPairAndNonce generates an S/Kademlia keypair and nonce with cryptopuzzle prefix matching constants c1
@@ -146,10 +151,12 @@ func checkDynamicPuzzle(nodeID, x []byte, c int) bool {
 }
 
 // VerifyPuzzle checks whether an ID is a valid S/Kademlia node ID with cryptopuzzle constants c1 and c2
-func VerifyPuzzle(id *SKademliaIdentityAdapter, c1, c2 int) bool {
+func VerifyPuzzle(id *IdentityAdapter, c1, c2 int) bool {
 	// check if static puzzle and dynamic puzzle is solved
 	b := blake2b.New()
-	return bytes.Equal(b.HashBytes(id.keypair.PublicKey), id.MyIdentity()) && checkHashedBytesPrefixLen(id.MyIdentity(), c1) && checkDynamicPuzzle(id.MyIdentity(), id.Nonce, c2)
+	return bytes.Equal(b.HashBytes(id.keypair.PublicKey), id.MyIdentity()) &&
+		checkHashedBytesPrefixLen(id.MyIdentity(), c1) &&
+		checkDynamicPuzzle(id.MyIdentity(), id.Nonce, c2)
 }
 
 // xor performs an xor operation on two byte slices.

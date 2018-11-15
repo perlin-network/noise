@@ -19,7 +19,7 @@ var (
 func TestNewSKademliaIdentityAdapter(t *testing.T) {
 	t.Parallel()
 
-	id := NewSKademliaIdentityAdapter(DefaultC1, DefaultC2)
+	id := NewIdentityAdapter(DefaultC1, DefaultC2)
 	if !VerifyPuzzle(id, DefaultC1, DefaultC2) {
 		t.Errorf("GenerateKeyPairAndID() expected ID to be valid")
 	}
@@ -44,18 +44,18 @@ func TestNewSKademliaIdentityFromKeypair(t *testing.T) {
 		if err != nil {
 			t.Errorf("FromPrivateKey() expected no error, got: %v", err)
 		}
-		id, err := NewSKademliaIdentityFromKeypair(kp, tt.c1, DefaultC2)
+		id, err := NewIdentityFromKeypair(kp, tt.c1, DefaultC2)
 		if tt.valid {
 			if err != nil {
-				t.Errorf("NewSKademliaIdentityFromKeypair() expected to be valid, got: %+v", err)
+				t.Errorf("NewIdentityFromKeypair() expected to be valid, got: %+v", err)
 			} else if id == nil {
-				t.Errorf("NewSKademliaIdentityFromKeypair() expected to have non-nil id")
+				t.Errorf("NewIdentityFromKeypair() expected to have non-nil id")
 			}
 		} else {
 			if err == nil {
-				t.Errorf("NewSKademliaIdentityFromKeypair() expected an error")
+				t.Errorf("NewIdentityFromKeypair() expected an error")
 			} else if id != nil {
-				t.Errorf("NewSKademliaIdentityFromKeypair() expected nil id")
+				t.Errorf("NewIdentityFromKeypair() expected nil id")
 			}
 		}
 	}
@@ -74,9 +74,9 @@ func TestSignAndVerify(t *testing.T) {
 	if err != nil {
 		t.Errorf("FromPrivateKey() expected no error, got: %v", err)
 	}
-	id, err := NewSKademliaIdentityFromKeypair(kp, DefaultC1, DefaultC2)
+	id, err := NewIdentityFromKeypair(kp, DefaultC1, DefaultC2)
 	if err != nil {
-		t.Errorf("NewSKademliaIdentityFromKeypair() expected to be valid, got: %+v", err)
+		t.Errorf("NewIdentityFromKeypair() expected to be valid, got: %+v", err)
 	}
 	sign := id.Sign([]byte(data))
 	if len(sign) != id.SignatureSize() {
@@ -189,18 +189,18 @@ func TestVerifyPuzzle(t *testing.T) {
 	for _, tt := range testCases {
 		sp := ed25519.New()
 		kp, err := crypto.FromPrivateKey(sp, tt.privateKeyHex)
-		id, err := NewSKademliaIdentityFromKeypair(kp, DefaultC1, DefaultC2)
+		id, err := NewIdentityFromKeypair(kp, DefaultC1, DefaultC2)
 		if err != nil {
-			t.Errorf("NewSKademliaIdentityFromKeypair() expected no error, got: %+v", err)
+			t.Errorf("NewIdentityFromKeypair() expected no error, got: %+v", err)
 		}
 		nonce, err := hex.DecodeString(tt.encodedX)
 		if err != nil {
 			t.Errorf("DecodeString() expected no error, got: %v", err)
 		}
 
-		id, err = NewSKademliaIdentityFromKeypair(kp, 16, 16)
+		id, err = NewIdentityFromKeypair(kp, 16, 16)
 		if err != nil {
-			t.Errorf("NewSKademliaIdentityFromKeypair() expected no error, got: %+v", err)
+			t.Errorf("NewIdentityFromKeypair() expected no error, got: %+v", err)
 		}
 		id.Nonce = nonce
 		ok := VerifyPuzzle(id, 16, 16)
