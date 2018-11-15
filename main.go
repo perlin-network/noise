@@ -2,8 +2,7 @@ package main
 
 import (
 	"encoding/hex"
-	"github.com/perlin-network/noise/connection"
-	"github.com/perlin-network/noise/identity"
+	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"net"
@@ -29,12 +28,12 @@ func main() {
 		panic(err)
 	}
 
-	connAdapter, err := connection.StartAddressableConnectionAdapter(listener, dialTCP)
+	connAdapter, err := base.NewConnectionAdapter(listener, dialTCP)
 	if err != nil {
 		panic(err)
 	}
 
-	idAdapter := identity.NewDefaultIdentityAdapter()
+	idAdapter := base.NewIdentityAdapter()
 	kp := idAdapter.GetKeyPair()
 
 	node := protocol.NewNode(
