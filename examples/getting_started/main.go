@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/perlin-network/noise/connection"
-	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/identity"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
@@ -26,8 +25,8 @@ func main() {
 	host := *hostFlag
 	peers := strings.Split(*peersFlag, ",")
 
-	keys := ed25519.RandomKeyPair()
-	idAdapter := identity.NewDefaultIdentityAdapter(keys)
+	idAdapter := identity.NewDefaultIdentityAdapter()
+	keys := idAdapter.GetKeyPair()
 
 	log.Info().Str("private_key", keys.PrivateKeyHex()).Msg("")
 	log.Info().Str("public_key", keys.PublicKeyHex()).Msg("")

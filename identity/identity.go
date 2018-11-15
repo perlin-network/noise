@@ -13,7 +13,12 @@ type DefaultIdentityAdapter struct {
 	keypair *crypto.KeyPair
 }
 
-func NewDefaultIdentityAdapter(kp *crypto.KeyPair) *DefaultIdentityAdapter {
+func NewDefaultIdentityAdapter() *DefaultIdentityAdapter {
+	kp := ed25519.RandomKeyPair()
+	return NewDefaultIdentityAdapterFromKeypair(kp)
+}
+
+func NewDefaultIdentityAdapterFromKeypair(kp *crypto.KeyPair) *DefaultIdentityAdapter {
 	return &DefaultIdentityAdapter{
 		keypair: kp,
 	}
@@ -37,4 +42,8 @@ func (a *DefaultIdentityAdapter) Verify(id, data, signature []byte) bool {
 
 func (a *DefaultIdentityAdapter) SignatureSize() int {
 	return ed25519.SignatureSize
+}
+
+func (a *DefaultIdentityAdapter) GetKeyPair() *crypto.KeyPair {
+	return a.keypair
 }
