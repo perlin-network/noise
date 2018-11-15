@@ -46,8 +46,8 @@ func dialTCP(addr string) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
-// ExampleSKademliaExample demonstrates a simple test using SKademlia
-func ExampleSKademliaExample() {
+// ExampleSKademlia demonstrates a simple example using SKademlia
+func TODOExampleSKademlia() {
 	var nodes []*SKNode
 
 	// setup all the nodes
