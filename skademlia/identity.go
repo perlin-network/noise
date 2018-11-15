@@ -62,18 +62,32 @@ func NewIdentityFromKeypair(kp *crypto.KeyPair, c1, c2 int) (*IdentityAdapter, e
 	}, nil
 }
 
-// MyIdentity returns the S/Kademlia node ID
-func (a *IdentityAdapter) MyIdentity() []byte {
+// MyIdentity returns the S/Kademlia public key ID
+// (HACK): base structs assume MyIdentity() is the public key
+func (a IdentityAdapter) MyIdentity() []byte {
+	return a.keypair.PublicKey
+}
+
+// MyIdentityHex returns the S/Kademlia hex-encoded node's public key
+// (HACK): base structs assume MyIdentity() is the public key
+func (a IdentityAdapter) MyIdentityHex() string {
+	return hex.EncodeToString(a.keypair.PublicKey)
+}
+
+// ID returns the S/Kademlia node ID.
+// (HACK): used in the routing table
+func (a IdentityAdapter) ID() []byte {
 	return a.id
 }
 
-// MyIdentityHex returns the S/Kademlia hex-encoded node ID
-func (a *IdentityAdapter) MyIdentityHex() string {
+// IDHex returns the S/Kademlia hex-encoded node's public key.
+// (HACK): used in the routing table
+func (a IdentityAdapter) IDHex() string {
 	return hex.EncodeToString(a.id)
 }
 
 // Sign signs the input bytes with the identity's private key
-func (a *IdentityAdapter) Sign(input []byte) []byte {
+func (a IdentityAdapter) Sign(input []byte) []byte {
 	ret, err := a.keypair.Sign(a.signer, a.hasher, input)
 	if err != nil {
 		panic(err)
@@ -82,17 +96,17 @@ func (a *IdentityAdapter) Sign(input []byte) []byte {
 }
 
 // Verify checks whether the signature matches the signed data
-func (a *IdentityAdapter) Verify(publicKey, data, signature []byte) bool {
+func (a IdentityAdapter) Verify(publicKey, data, signature []byte) bool {
 	return crypto.Verify(a.signer, a.hasher, publicKey, data, signature)
 }
 
 // SignatureSize specifies the byte length for signatures generated with the keypair
-func (a *IdentityAdapter) SignatureSize() int {
+func (a IdentityAdapter) SignatureSize() int {
 	return ed25519.SignatureSize
 }
 
 // GetKeyPair returns the key pair used to create the idenity
-func (a *IdentityAdapter) GetKeyPair() *crypto.KeyPair {
+func (a IdentityAdapter) GetKeyPair() *crypto.KeyPair {
 	return a.keypair
 }
 
