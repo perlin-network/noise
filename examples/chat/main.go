@@ -24,7 +24,7 @@ const (
 type ChatNode struct {
 	Node        *protocol.Node
 	Address     string
-	ConnAdapter *base.ConnectionAdapter
+	ConnAdapter protocol.ConnectionAdapter
 }
 
 func (n *ChatNode) service(message *protocol.Message) {
@@ -110,7 +110,7 @@ func main() {
 				panic(err)
 			}
 			remoteAddr := peer[1]
-			connAdapter.MapIDToAddress(peerID, remoteAddr)
+			connAdapter.AddConnection(peerID, remoteAddr)
 		}
 	}
 

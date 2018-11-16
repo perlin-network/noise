@@ -22,7 +22,7 @@ const (
 
 type Instance struct {
 	address      string
-	connAdapter  *base.ConnectionAdapter
+	connAdapter  protocol.ConnectionAdapter
 	node         *protocol.Node
 	messageCount uint64
 	keypair      *crypto.KeyPair
@@ -117,7 +117,7 @@ func main() {
 	}
 	for i := 0; i < NumInstances; i++ {
 		for j := 0; j < NumInstances; j++ {
-			instances[i].connAdapter.MapIDToAddress(instances[j].keypair.PublicKey, instances[j].address)
+			instances[i].connAdapter.AddConnection(instances[j].keypair.PublicKey, instances[j].address)
 		}
 	}
 

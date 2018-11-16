@@ -232,6 +232,6 @@ func (n *Node) Broadcast(body *MessageBody) error {
 	return nil
 }
 
-func (n *Node) GetIdentityAdapter() *IdentityAdapter {
-	return &n.idAdapter
+func (n *Node) GetIdentityAdapter() IdentityAdapter {
+	return n.idAdapter
 }

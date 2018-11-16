@@ -147,3 +147,11 @@ func (a *ConnectionAdapter) GetConnectionIDs() [][]byte {
 	})
 	return results
 }
+
+func (a *ConnectionAdapter) GetAddressByID(id []byte) (string, error) {
+	return a.lookupAddressByID(id)
+}
+
+func (a *ConnectionAdapter) AddConnection(id []byte, addr string) {
+	a.MapIDToAddress(id, addr)
+}

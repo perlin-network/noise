@@ -23,7 +23,7 @@ const (
 type BasicNode struct {
 	Node        *protocol.Node
 	Mailbox     chan *messages.BasicMessage
-	ConnAdapter *base.ConnectionAdapter
+	ConnAdapter protocol.ConnectionAdapter
 }
 
 func (n *BasicNode) service(message *protocol.Message) {
@@ -101,8 +101,8 @@ func ExampleBasic() {
 			if i == j {
 				continue
 			}
-			peerID := (*otherNode.Node.GetIdentityAdapter()).MyIdentity()
-			srcNode.ConnAdapter.MapIDToAddress(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
+			peerID := otherNode.Node.GetIdentityAdapter().MyIdentity()
+			srcNode.ConnAdapter.AddConnection(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
 		}
 	}
 

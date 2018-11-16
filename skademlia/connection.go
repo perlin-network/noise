@@ -54,8 +54,13 @@ func (a *ConnectionAdapter) GetConnectionIDs() [][]byte {
 	return results
 }
 
-func (a *ConnectionAdapter) AddPeer(peerID *IdentityAdapter, addr string) error {
-	id := ID{peerID, addr}
-	a.rt.Update(id)
-	return nil
+func (a *ConnectionAdapter) GetAddressByID(id []byte) (string, error) {
+	// TODO:
+	return "", errors.New("Not implemented")
+}
+
+func (a *ConnectionAdapter) AddConnection(id []byte, addr string) {
+	// TODO:
+	//id := ID{peerID, addr}
+	//a.rt.Update(id)
 }

@@ -63,7 +63,7 @@ func main() {
 			panic(err)
 		}
 		remoteAddr := os.Args[4]
-		connAdapter.MapIDToAddress(peerID, remoteAddr)
+		connAdapter.AddConnection(peerID, remoteAddr)
 
 		go func() {
 			for {

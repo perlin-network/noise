@@ -21,7 +21,7 @@ const (
 type SKNode struct {
 	Node        *protocol.Node
 	Mailbox     chan string
-	ConnAdapter *skademlia.ConnectionAdapter
+	ConnAdapter protocol.ConnectionAdapter
 }
 
 func (n *SKNode) service(message *protocol.Message) {
@@ -94,8 +94,8 @@ func ExampleSKademlia() {
 			if i == j {
 				continue
 			}
-			peerID := (*otherNode.Node.GetIdentityAdapter()).(*skademlia.IdentityAdapter)
-			srcNode.ConnAdapter.AddPeer(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
+			peerID := otherNode.Node.GetIdentityAdapter().MyIdentity()
+			srcNode.ConnAdapter.AddConnection(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
 		}
 	}
 
@@ -121,7 +121,7 @@ func ExampleSKademlia() {
 
 	// disconnect a node
 	// HACK: why is node[1] node 2?
-	nodes[0].Node.ManuallyRemovePeer((*nodes[numNodes-2].Node.GetIdentityAdapter()).MyIdentity())
+	nodes[0].Node.ManuallyRemovePeer(nodes[numNodes-2].Node.GetIdentityAdapter().MyIdentity())
 
 	expected = "This is a second broadcasted message from Node 0."
 	nodes[0].Node.Broadcast(makeMessageBody(expected))
