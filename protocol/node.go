@@ -207,10 +207,6 @@ func (n *Node) Send(message *Message) error {
 	return nil
 }
 
-func AddPeer(remote []byte) error {
-	return nil
-}
-
 // Broadcast sends a message body to all it's peers
 func (n *Node) Broadcast(body *MessageBody) error {
 	msgTemplate := &Message{
