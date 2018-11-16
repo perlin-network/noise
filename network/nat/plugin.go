@@ -126,6 +126,5 @@ func (p *plugin) Cleanup(n *network.Network) {
 //
 // The plugin is registered with a priority of -999999, and thus is executed first.
 func RegisterPlugin(builder *network.Builder) {
-	x := new(plugin)
-	builder.AddPluginWithPriority(-99999, x)
+	builder.AddPluginWithPriority(-99999, new(plugin))
 }
