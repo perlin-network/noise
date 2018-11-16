@@ -12,9 +12,9 @@ import (
 const (
 	serviceID            = 5
 	pollFrequencyInSec   = 20
-	OpCodeLookupRequest  = 1
-	OpCodeLookupResponse = 2
 	samplerSeed          = 123
+	opCodeLookupRequest  = 1
+	opCodeLookupResponse = 2
 )
 
 // SendHandler is a callback when this service needs to send a message to a peer
@@ -101,7 +101,7 @@ func (s *Service) Receive(message *protocol.Message) {
 	}
 
 	switch msg.Opcode {
-	case OpCodeLookupRequest:
+	case opCodeLookupRequest:
 		// Prepare response
 		peerIDs := s.connAdapter.GetConnectionIDs()
 		var IDs []*messages.ID
@@ -127,7 +127,7 @@ func (s *Service) Receive(message *protocol.Message) {
 		if err := s.sendHandler(message.Sender, body); err != nil {
 			log.Warn().Err(err).Msg("Unable to send response")
 		}
-	case OpCodeLookupResponse:
+	case opCodeLookupResponse:
 		m := messages.LookupNodeResponse{}
 		if err := proto.Unmarshal(msg.Message, &m); err != nil {
 			log.Warn().Err(err).Msg("Unable to read response")
@@ -151,7 +151,7 @@ func makeResponseMessageBody(ids []*messages.ID) (*protocol.MessageBody, error) 
 		return nil, err
 	}
 	msg := &messages.Message{
-		Opcode:  OpCodeLookupResponse,
+		Opcode:  opCodeLookupResponse,
 		Message: contentBytes,
 	}
 	msgBytes, err := proto.Marshal(msg)
@@ -176,7 +176,7 @@ func makeRequestMessageBody(id []byte) (*protocol.MessageBody, error) {
 		return nil, err
 	}
 	msg := &messages.Message{
-		Opcode:  OpCodeLookupRequest,
+		Opcode:  opCodeLookupRequest,
 		Message: contentBytes,
 	}
 	msgBytes, err := proto.Marshal(msg)
