@@ -49,6 +49,10 @@ type Network struct {
 	// Full address to listen on. `protocol://host:port`
 	Address string
 
+	// InternalPort is used when NAT traversal forwards to
+	// an an internal port but the peer address is different.
+	InternalPort *int
+
 	// Map of plugins registered to the network.
 	// map[string]Plugin
 	plugins *PluginList
@@ -220,7 +224,11 @@ func (n *Network) Listen() {
 	var listener net.Listener
 
 	if t, exists := n.transports.Load(addrInfo.Protocol); exists {
-		listener, err = t.(transport.Layer).Listen(int(addrInfo.Port))
+		if n.InternalPort != nil {
+			listener, err = t.(transport.Layer).Listen(*n.InternalPort)
+		} else {
+			listener, err = t.(transport.Layer).Listen(int(addrInfo.Port))
+		}
 		if err != nil {
 			log.Fatal().Err(err).Msg("")
 		}
