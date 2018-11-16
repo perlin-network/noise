@@ -1,9 +1,11 @@
 package base
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
 	"io"
@@ -122,4 +124,34 @@ func (a *MessageAdapter) SendMessage(c *protocol.Controller, message []byte) err
 
 func (a *MessageAdapter) StartRecvMessage(c *protocol.Controller, callback protocol.RecvMessageCallback) {
 	go runRecvWorker(a.finalizerNotifier, a.conn, callback)
+}
+
+func runRecvWorker(finalizerNotifier chan struct{}, conn net.Conn, callback protocol.RecvMessageCallback) {
+	reader := bufio.NewReader(conn)
+
+	for {
+		// conn should also be closed as soon as gcFinalize() is called
+		// so we do not need to check finalizerNotifier?
+		n, err := binary.ReadUvarint(reader)
+		if err != nil {
+			break
+		}
+
+		// not so accurate since the message header takes a few bytes;
+		// but it works just fine here.
+		if n > protocol.MaxPayloadLen {
+			log.Error().Msg("message too long")
+			break
+		}
+
+		buf := make([]byte, int(n))
+		_, err = io.ReadFull(reader, buf)
+		if err != nil {
+			break
+		}
+
+		callback(buf)
+	}
+
+	callback(nil)
 }
