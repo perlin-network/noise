@@ -38,19 +38,8 @@ func NewConnectionAdapter(
 	}, nil
 }
 
-func (a *ConnectionAdapter) MapIDToAddress(id []byte, addr string) {
-	a.idToAddress.Store(string(id), addr)
-}
-
-func (a *ConnectionAdapter) lookupAddressByID(id []byte) (string, error) {
-	if v, ok := a.idToAddress.Load(string(id)); ok {
-		return v.(string), nil
-	}
-	return "", errors.New("not found")
-}
-
 func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
-	remoteAddr, err := a.lookupAddressByID(remote)
+	remoteAddr, err := a.GetAddressByID(remote)
 	if err != nil {
 		return nil, err
 	}
@@ -149,9 +138,12 @@ func (a *ConnectionAdapter) GetConnectionIDs() [][]byte {
 }
 
 func (a *ConnectionAdapter) GetAddressByID(id []byte) (string, error) {
-	return a.lookupAddressByID(id)
+	if v, ok := a.idToAddress.Load(string(id)); ok {
+		return v.(string), nil
+	}
+	return "", errors.New("not found")
 }
 
 func (a *ConnectionAdapter) AddConnection(id []byte, addr string) {
-	a.MapIDToAddress(id, addr)
+	a.idToAddress.Store(string(id), addr)
 }
