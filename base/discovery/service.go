@@ -40,6 +40,7 @@ func NewService(sendHandler SendHandler, connAdapter protocol.ConnectionAdapter)
 	}
 }
 
+// StartLookups starts the goroutine to periodically sample peers for their connection info
 func (s *Service) StartLookups() {
 	s.active = true
 	ticker := time.NewTicker(time.Second * pollFrequencyInSec)
@@ -56,10 +57,12 @@ func (s *Service) StartLookups() {
 	}()
 }
 
+// StopLookups stops sampling the peers connection info
 func (s *Service) StopLookups() {
 	s.active = false
 }
 
+// SampledLookup gets a random peer from the connection adapter and makes a lookup request
 func (s *Service) SampledLookup() error {
 	peerIDs := s.connAdapter.GetConnectionIDs()
 	randPeer := peerIDs[s.sampler.Intn(len(peerIDs))]
@@ -75,8 +78,8 @@ func (s *Service) SampledLookup() error {
 	return nil
 }
 
-// Service is the handler when a message is received
-func (s *Service) Service(message *protocol.Message) {
+// Receive is the handler when a message is received
+func (s *Service) Receive(message *protocol.Message) {
 	if message == nil || message.Body == nil || message.Body.Service != serviceID {
 		// corrupt message so ignore
 		return
