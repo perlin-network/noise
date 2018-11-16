@@ -21,9 +21,9 @@ var (
 )
 
 func init() {
-	id1 = ID{NewIdentityAdapter(8, 8), "0000"}
-	id2 = ID{NewIdentityAdapter(8, 8), "0001"}
-	id3 = ID{NewIdentityAdapter(8, 8), "0002"}
+	id1 = ID{NewIdentityAdapter(8, 8).id(), "0000"}
+	id2 = ID{NewIdentityAdapter(8, 8).id(), "0001"}
+	id3 = ID{NewIdentityAdapter(8, 8).id(), "0002"}
 
 	idBytes = id1.id
 }
@@ -51,8 +51,8 @@ func TestSelf(t *testing.T) {
 	if routingTable.Self().Address != "0000" {
 		t.Fatalf("wrong address: %s", routingTable.Self().Address)
 	}
-	if !bytes.Equal(routingTable.Self().ID(), idBytes) {
-		t.Fatalf("wrong node id: %v", routingTable.Self().ID())
+	if !bytes.Equal(routingTable.Self().id, idBytes) {
+		t.Fatalf("wrong node id: %v", routingTable.Self().id)
 	}
 }
 
@@ -78,7 +78,7 @@ func TestGetPeer(t *testing.T) {
 	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
 
-	ok, found := routingTable.GetPeer(id1.ID())
+	ok, found := routingTable.GetPeer(id1.id)
 	if !ok && found == nil {
 		t.Errorf("GetPeer() expected to find id1")
 	}
@@ -86,12 +86,12 @@ func TestGetPeer(t *testing.T) {
 		t.Fatalf("GetPeer() expected found peer %+v to be equal to id1 %+v", found, id1)
 	}
 
-	ok, found = routingTable.GetPeer(id3.ID())
+	ok, found = routingTable.GetPeer(id3.id)
 	if ok && found != nil {
 		t.Errorf("GetPeer() expected not to find id3")
 	}
 	routingTable.Update(id3)
-	ok, found = routingTable.GetPeer(id3.ID())
+	ok, found = routingTable.GetPeer(id3.id)
 	if !ok && found == nil {
 		t.Errorf("GetPeer() expected to find id3")
 	}
@@ -99,8 +99,8 @@ func TestGetPeer(t *testing.T) {
 		t.Fatalf("GetPeer() expected found peer to be equal to id1")
 	}
 
-	routingTable.RemovePeer(id1.ID())
-	ok, found = routingTable.GetPeer(id1.ID())
+	routingTable.RemovePeer(id1.id)
+	ok, found = routingTable.GetPeer(id1.id)
 	if ok && found != nil {
 		t.Errorf("GetPeer() expected not to find id1 after deletion")
 	}
@@ -117,7 +117,7 @@ func TestGetPeers(t *testing.T) {
 		t.Errorf("len(peers) = %d, expected 1", len(peers))
 	}
 	peer1 := peers[0]
-	if !bytes.Equal(peer1.ID(), id2.ID()) {
+	if !bytes.Equal(peer1.id, id2.id) {
 		t.Errorf("'%v'.Equals(%v) = false, expected true", peer1, id2)
 	}
 }
@@ -129,7 +129,7 @@ func TestRemovePeer(t *testing.T) {
 	routingTable.Update(id2)
 	routingTable.Update(id3)
 
-	routingTable.RemovePeer(id2.ID())
+	routingTable.RemovePeer(id2.id)
 	testee := routingTable.GetPeerAddresses()
 	sort.Strings(testee)
 	tester := []string{"0002"}
@@ -199,7 +199,7 @@ func TestRoutingTable(t *testing.T) {
 
 	ids := make([]unsafe.Pointer, IDPoolSize) // Element type: *peer.ID
 
-	id := ID{NewIdentityAdapter(8, 8), "000"}
+	id := ID{NewIdentityAdapter(8, 8).id(), "000"}
 	table := CreateRoutingTable(id)
 
 	wg := &sync.WaitGroup{}
@@ -219,7 +219,7 @@ func TestRoutingTable(t *testing.T) {
 						addrRaw := MustReadRand(8)
 						addr := hex.EncodeToString(addrRaw)
 
-						id := ID{NewIdentityAdapter(8, 8), addr}
+						id := ID{NewIdentityAdapter(8, 8).id(), addr}
 						table.Update(id)
 
 						atomic.StorePointer(&ids[int(RandByte())%IDPoolSize], unsafe.Pointer(&id))
@@ -228,14 +228,14 @@ func TestRoutingTable(t *testing.T) {
 					{
 						id := (*ID)(atomic.LoadPointer(&ids[int(RandByte())%IDPoolSize]))
 						if id != nil {
-							table.RemovePeer(id.ID())
+							table.RemovePeer(id.id)
 						}
 					}
 				case 2:
 					{
 						id := (*ID)(atomic.LoadPointer(&ids[int(RandByte())%IDPoolSize]))
 						if id != nil {
-							table.GetPeer(id.ID())
+							table.GetPeer(id.id)
 						}
 					}
 				case 3:

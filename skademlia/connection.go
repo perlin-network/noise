@@ -4,6 +4,7 @@ import (
 	"net"
 
 	"github.com/perlin-network/noise/base"
+	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/protocol"
 
 	"github.com/pkg/errors"
@@ -49,7 +50,7 @@ func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, localID [
 func (a *ConnectionAdapter) GetConnectionIDs() [][]byte {
 	results := [][]byte{}
 	for _, peer := range a.rt.GetPeers() {
-		results = append(results, peer.MyIdentity())
+		results = append(results, peer.id)
 	}
 	return results
 }
@@ -59,8 +60,8 @@ func (a *ConnectionAdapter) GetAddressByID(id []byte) (string, error) {
 	return "", errors.New("Not implemented")
 }
 
-func (a *ConnectionAdapter) AddConnection(id []byte, addr string) {
+func (a *ConnectionAdapter) AddConnection(remote []byte, addr string) {
 	// TODO:
-	//id := ID{peerID, addr}
-	//a.rt.Update(id)
+	id := ID{blake2b.New().HashBytes(remote), addr}
+	a.rt.Update(id)
 }

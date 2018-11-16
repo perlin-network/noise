@@ -23,22 +23,22 @@ const (
 
 var _ protocol.IdentityAdapter = (*IdentityAdapter)(nil)
 
-// IdentityAdapter implements the identity interface for S/Kademlia node IDs
+// IdentityAdapter implements the identity interface for S/Kademlia node IDs.
 type IdentityAdapter struct {
 	keypair *crypto.KeyPair
-	id      []byte
+	nodeID  []byte
 	Nonce   []byte
 	signer  crypto.SignaturePolicy
 	hasher  crypto.HashPolicy
 }
 
-// NewIdentityAdapter creates a new SKademlia IdentityAdapter with the given cryptopuzzle constants
+// NewIdentityAdapter creates a new SKademlia IdentityAdapter with the given cryptopuzzle constants.
 func NewIdentityAdapter(c1, c2 int) *IdentityAdapter {
 	kp, nonce := generateKeyPairAndNonce(c1, c2)
 	b := blake2b.New()
 	return &IdentityAdapter{
 		keypair: kp,
-		id:      b.HashBytes(kp.PublicKey),
+		nodeID:  b.HashBytes(kp.PublicKey),
 		Nonce:   nonce,
 		signer:  ed25519.New(),
 		hasher:  b,
@@ -46,7 +46,7 @@ func NewIdentityAdapter(c1, c2 int) *IdentityAdapter {
 }
 
 // NewIdentityFromKeypair creates a new SKademlia IdentityAdapter with the given cryptopuzzle
-// constants from an existing keypair
+// constants from an existing keypair.
 func NewIdentityFromKeypair(kp *crypto.KeyPair, c1, c2 int) (*IdentityAdapter, error) {
 	b := blake2b.New()
 	id := b.HashBytes(kp.PublicKey)
@@ -55,38 +55,34 @@ func NewIdentityFromKeypair(kp *crypto.KeyPair, c1, c2 int) (*IdentityAdapter, e
 	}
 	return &IdentityAdapter{
 		keypair: kp,
-		id:      id,
+		nodeID:  id,
 		Nonce:   getNonce(id, c2),
 		signer:  ed25519.New(),
 		hasher:  b,
 	}, nil
 }
 
-// MyIdentity returns the S/Kademlia public key ID
-// (HACK): base structs assume MyIdentity() is the public key
+// MyIdentity returns the S/Kademlia public key ID.
 func (a IdentityAdapter) MyIdentity() []byte {
 	return a.keypair.PublicKey
 }
 
-// MyIdentityHex returns the S/Kademlia hex-encoded node's public key
-// (HACK): base structs assume MyIdentity() is the public key
+// MyIdentityHex returns the S/Kademlia hex-encoded node's public key.
 func (a IdentityAdapter) MyIdentityHex() string {
 	return hex.EncodeToString(a.keypair.PublicKey)
 }
 
-// ID returns the S/Kademlia node ID.
-// (HACK): used in the routing table
-func (a IdentityAdapter) ID() []byte {
-	return a.id
+// id returns the S/Kademlia node ID. The node ID is used for routing.
+func (a IdentityAdapter) id() []byte {
+	return a.nodeID
 }
 
-// IDHex returns the S/Kademlia hex-encoded node's public key.
-// (HACK): used in the routing table
-func (a IdentityAdapter) IDHex() string {
-	return hex.EncodeToString(a.id)
+// idHex returns the S/Kademlia hex-encoded node ID.
+func (a IdentityAdapter) idHex() string {
+	return hex.EncodeToString(a.nodeID)
 }
 
-// Sign signs the input bytes with the identity's private key
+// Sign signs the input bytes with the identity's private key.
 func (a IdentityAdapter) Sign(input []byte) []byte {
 	ret, err := a.keypair.Sign(a.signer, a.hasher, input)
 	if err != nil {
@@ -110,8 +106,8 @@ func (a IdentityAdapter) GetKeyPair() *crypto.KeyPair {
 	return a.keypair
 }
 
-// generateKeyPairAndNonce generates an S/Kademlia keypair and nonce with cryptopuzzle prefix matching constants c1
-// and c2
+// generateKeyPairAndNonce generates an S/Kademlia keypair and nonce with cryptopuzzle
+// prefix matching constants c1 and c2.
 func generateKeyPairAndNonce(c1, c2 int) (*crypto.KeyPair, []byte) {
 	b := blake2b.New()
 	for {
@@ -123,14 +119,14 @@ func generateKeyPairAndNonce(c1, c2 int) (*crypto.KeyPair, []byte) {
 	}
 }
 
-// checkHashedBytesPrefixLen checks if the hashed bytes has prefix length of c
+// checkHashedBytesPrefixLen checks if the hashed bytes has prefix length of c.
 func checkHashedBytesPrefixLen(a []byte, c int) bool {
 	b := blake2b.New()
 	P := b.HashBytes(a)
 	return prefixLen(P) >= c
 }
 
-// randomBytes generates a random byte slice with specified length
+// randomBytes generates a random byte slice with specified length.
 func randomBytes(len int) ([]byte, error) {
 	randBytes := make([]byte, len)
 	n, err := rand.Read(randBytes)
@@ -144,7 +140,7 @@ func randomBytes(len int) ([]byte, error) {
 }
 
 // getNonce returns random bytes X which satisfies that the hash of the nodeID xored with X
-// has at least a prefix length of c
+// has at least a prefix length of c.
 func getNonce(nodeID []byte, c int) []byte {
 	len := len(nodeID)
 	for {
@@ -158,19 +154,19 @@ func getNonce(nodeID []byte, c int) []byte {
 	}
 }
 
-// checkDynamicPuzzle checks whether the nodeID and bytes x solves the S/Kademlia dynamic puzzle for c prefix length
+// checkDynamicPuzzle checks whether the nodeID and bytes x solves the S/Kademlia dynamic puzzle for c prefix length.
 func checkDynamicPuzzle(nodeID, x []byte, c int) bool {
 	xored := xor(nodeID, x)
 	return checkHashedBytesPrefixLen(xored, c)
 }
 
-// VerifyPuzzle checks whether an ID is a valid S/Kademlia node ID with cryptopuzzle constants c1 and c2
+// VerifyPuzzle checks whether an ID is a valid S/Kademlia node ID with cryptopuzzle constants c1 and c2.
 func VerifyPuzzle(id *IdentityAdapter, c1, c2 int) bool {
 	// check if static puzzle and dynamic puzzle is solved
 	b := blake2b.New()
-	return bytes.Equal(b.HashBytes(id.keypair.PublicKey), id.ID()) &&
-		checkHashedBytesPrefixLen(id.ID(), c1) &&
-		checkDynamicPuzzle(id.ID(), id.Nonce, c2)
+	return bytes.Equal(b.HashBytes(id.keypair.PublicKey), id.id()) &&
+		checkHashedBytesPrefixLen(id.id(), c1) &&
+		checkDynamicPuzzle(id.id(), id.Nonce, c2)
 }
 
 // xor performs an xor operation on two byte slices.

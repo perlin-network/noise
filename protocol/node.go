@@ -108,7 +108,7 @@ func (n *Node) Start() {
 			adapter.StartRecvMessage(n.controller, func(message []byte) {
 				if message == nil {
 					//fmt.Printf("message is nil, removing peer: %b\n", adapter.RemoteEndpoint())
-					//n.removePeer(adapter.RemoteEndpoint())
+					n.removePeer(adapter.RemoteEndpoint())
 				} else {
 					n.dispatchIncomingMessage(peer, message)
 				}
@@ -152,7 +152,7 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 					msgAdapter.StartRecvMessage(n.controller, func(message []byte) {
 						if message == nil {
 							//fmt.Printf("getPeer removing since nil\n")
-							//n.removePeer(remote)
+							n.removePeer(remote)
 						} else {
 							n.dispatchIncomingMessage(established, message)
 						}
@@ -217,11 +217,6 @@ func (n *Node) Broadcast(body *MessageBody) error {
 	for _, peerID := range connections {
 		if bytes.Equal(n.idAdapter.MyIdentity(), peerID) {
 			// skip sending to itself
-			continue
-		}
-		_, ok := n.peers.Load(string(peerID))
-		if ok {
-			// HACK: due to coupling, skip if not found in routing table
 			continue
 		}
 		// copy the struct

@@ -2,6 +2,7 @@ package skademlia
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/perlin-network/noise/protocol"
 
@@ -14,20 +15,30 @@ type HandshakeProcessor struct {
 	nodeID *IdentityAdapter
 }
 
-type HandshakeState struct {
+type HandshakeMessage struct {
 	passive bool
+	nodeID  []byte
+	nonce   []byte
+}
+
+// NewHandshakeProcessor returns a new S/Kademlia handshake processor
+func NewHandshakeProcessor(id *IdentityAdapter) *HandshakeProcessor {
+	return &HandshakeProcessor{id}
 }
 
 func (p *HandshakeProcessor) ActivelyInitHandshake() ([]byte, interface{}, error) {
-	return []byte("init"), &HandshakeState{passive: false}, nil
+	fmt.Printf("active sending\n")
+	return []byte("init"), &HandshakeMessage{passive: false}, nil
 }
 
 func (p *HandshakeProcessor) PassivelyInitHandshake() (interface{}, error) {
-	return &HandshakeState{passive: true}, nil
+	fmt.Printf("passive sending\n")
+	return &HandshakeMessage{passive: true}, nil
 }
 
 func (p *HandshakeProcessor) ProcessHandshakeMessage(state interface{}, payload []byte) ([]byte, protocol.DoneAction, error) {
-	if state.(*HandshakeState).passive {
+	fmt.Printf("processing handshake %+v %+v\n", state, payload)
+	if state.(*HandshakeMessage).passive {
 		if bytes.Equal(payload, []byte("init")) {
 			return []byte("ack"), protocol.DoneAction_SendMessage, nil
 		} else {
