@@ -86,25 +86,28 @@ func (p *plugin) Startup(n *network.Network) {
 	log.Info().
 		Int("internal_port", p.internalPort).
 		Int("external_port", p.externalPort).
-		Msgf("external port now forwards to your local port")
+		Msg("external port now forwards to your local port")
 
 	p.gateway = gateway
 
-	// info.Host = p.internalIP.String()
-	// info.Port = uint16(p.internalPort)
+	info.Host = p.externalIP.String()
+	info.Port = uint16(p.externalPort)
 
-	externalAddress := network.AddressInfo{
-		Host:     p.externalIP.String(),
-		Port:     uint16(p.externalPort),
-		Protocol: "tcp",
-	}
+	n.InternalPort = &p.internalPort
+
 	// Set peer information based off of port mapping info.
 	n.Address = info.String()
 	n.ID = peer.CreateID(n.Address, n.GetKeys().PublicKey)
 
-	log.Info().
-		Str("address", externalAddress.String()).
-		Msg("port-forwarded external address.")
+	go func() {
+		for {
+			time.Sleep(60 * time.Second)
+			_, err = gateway.AddPortMapping("tcp", p.internalPort, "noise", 60*time.Second)
+			if err != nil {
+				log.Error().Err(err).Msg("")
+			}
+		}
+	}()
 }
 
 func (p *plugin) Cleanup(n *network.Network) {
