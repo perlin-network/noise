@@ -96,12 +96,20 @@ func TestHandshake(t *testing.T) {
 	nodeA := nodes[0]
 	nodeB := nodes[1]
 
-	nodeAID := nodeA.Node.GetIdentityAdapter().MyIdentity()
-	nodeB.ConnAdapter.AddConnection(nodeAID, fmt.Sprintf("%s:%d", host, ports[0]))
+	// Connect all the node routing tables
+	for i, srcNode := range nodes {
+		for j, otherNode := range nodes {
+			if i == j {
+				continue
+			}
+			peerID := otherNode.Node.GetIdentityAdapter().MyIdentity()
+			srcNode.ConnAdapter.AddConnection(peerID, fmt.Sprintf("%s:%d", host, ports[j]))
+		}
+	}
 
 	body := makeMessageBody("hello")
 	msg := protocol.Message{
-		Sender:    nodeAID,
+		Sender:    nodeA.Node.GetIdentityAdapter().MyIdentity(),
 		Recipient: nodeB.Node.GetIdentityAdapter().MyIdentity(),
 		Body:      body,
 	}

@@ -1,10 +1,12 @@
 package skademlia
 
 import (
+	"encoding/hex"
 	"net"
 
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/crypto/blake2b"
+	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 
 	"github.com/pkg/errors"
@@ -32,7 +34,8 @@ func NewConnectionAdapter(listener net.Listener, dialer base.Dialer, id ID) (*Co
 func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
 	ok, id := a.rt.GetPeerFromPublicKey(remote)
 	if !ok {
-		return nil, errors.New("skademlia: remote ID not found in routing table")
+		hexID := hex.EncodeToString(remote)
+		return nil, errors.Errorf("skademlia: remote ID %s not found in routing table", hexID)
 	}
 
 	conn, err := a.baseConn.Dialer(id.Address)
@@ -64,5 +67,7 @@ func (a *ConnectionAdapter) GetAddressByID(remote []byte) (string, error) {
 }
 
 func (a *ConnectionAdapter) AddConnection(remote []byte, addr string) {
+	hexID := hex.EncodeToString(remote)
+	log.Debug().Msgf("adding %s to routing table", hexID)
 	a.rt.Update(NewID(remote, addr))
 }
