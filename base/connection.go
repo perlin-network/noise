@@ -1,7 +1,9 @@
 package base
 
 import (
+	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
 	"net"
@@ -18,6 +20,7 @@ type ConnectionAdapter struct {
 	listener    net.Listener
 	Dialer      Dialer
 	idToAddress sync.Map
+	routes      *dht.RoutingTable
 
 	reportedPubliclyVisibleAddresses      []*PubliclyVisibleAddress
 	reportedPubliclyVisibleAddressesMutex sync.Mutex
@@ -28,18 +31,16 @@ type PubliclyVisibleAddress struct {
 	count   uint64
 }
 
-func NewConnectionAdapter(
-	listener net.Listener,
-	dialer Dialer,
-) (*ConnectionAdapter, error) {
+func NewConnectionAdapter(listener net.Listener, dialer Dialer, id peer.ID) (*ConnectionAdapter, error) {
 	return &ConnectionAdapter{
 		listener: listener,
 		Dialer:   dialer,
+		routes:   dht.CreateRoutingTable(id),
 	}, nil
 }
 
 func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
-	remoteAddr, err := a.GetAddressByID(remote)
+	remoteAddr, err := a.lookupAddressByID(remote)
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +92,7 @@ func (a *ConnectionAdapter) getPubliclyVisibleAddress() string {
 	return ret
 }
 
+// updatePubliclyVisibleAddress used to maintain the node's public address in case it's using UPnP
 func (a *ConnectionAdapter) updatePubliclyVisibleAddress(address string) {
 	a.reportedPubliclyVisibleAddressesMutex.Lock()
 	defer a.reportedPubliclyVisibleAddressesMutex.Unlock()
@@ -126,24 +128,20 @@ func (a *ConnectionAdapter) updatePubliclyVisibleAddress(address string) {
 	})
 }
 
-func (a *ConnectionAdapter) GetConnectionIDs() [][]byte {
-	results := [][]byte{}
-	a.idToAddress.Range(func(key, _ interface{}) bool {
-		if peerIDStr, ok := key.(string); ok {
-			results = append(results, ([]byte)(peerIDStr))
-		}
-		return true
-	})
-	return results
+func (a *ConnectionAdapter) AddPeerID(id peer.ID) {
+	a.idToAddress.Store(string(id.PublicKey), id.Address)
+	a.routes.Update(id)
 }
 
-func (a *ConnectionAdapter) GetAddressByID(id []byte) (string, error) {
+func (a *ConnectionAdapter) GetPeerIDs() []peer.ID {
+	return a.GetPeerIDs()
+}
+
+// TODO: replace this with the routes table
+func (a *ConnectionAdapter) lookupAddressByID(id []byte) (string, error) {
 	if v, ok := a.idToAddress.Load(string(id)); ok {
 		return v.(string), nil
+	} else {
+		return "", errors.New("not found")
 	}
-	return "", errors.New("not found")
-}
-
-func (a *ConnectionAdapter) AddConnection(id []byte, addr string) {
-	a.idToAddress.Store(string(id), addr)
 }

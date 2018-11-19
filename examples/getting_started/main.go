@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"github.com/perlin-network/noise/peer"
 	"net"
 	"strings"
 	"time"
@@ -24,19 +25,19 @@ func main() {
 	peers := strings.Split(*peersFlag, ",")
 
 	idAdapter := base.NewIdentityAdapter()
-	keys := idAdapter.GetKeyPair()
+	fmt.Printf("private_key: %s\n", idAdapter.GetKeyPair().PrivateKeyHex())
+	fmt.Printf("public_key: %s\n", idAdapter.GetKeyPair().PublicKeyHex())
 
-	fmt.Printf("private_key: %s\n", keys.PrivateKeyHex())
-	fmt.Printf("public_key: %s\n", keys.PublicKeyHex())
-
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
+	localAddr := fmt.Sprintf("%s:%d", host, port)
+	listener, err := net.Listen("tcp", localAddr)
 	if err != nil {
 		panic(err)
 	}
 
+	selfID := peer.CreateID(localAddr, idAdapter.MyIdentity())
 	connAdapter, err := base.NewConnectionAdapter(listener, func(addr string) (net.Conn, error) {
 		return net.DialTimeout("tcp", addr, 10*time.Second)
-	})
+	}, selfID)
 	if err != nil {
 		panic(err)
 	}
@@ -57,13 +58,13 @@ func main() {
 				// this is a blank parameter
 				continue
 			}
-			peer := strings.Split(peerKV, "=")
-			peerID, err := hex.DecodeString(peer[0])
+			p := strings.Split(peerKV, "=")
+			peerID, err := hex.DecodeString(p[0])
 			if err != nil {
 				panic(err)
 			}
-			remoteAddr := peer[1]
-			connAdapter.AddConnection(peerID, remoteAddr)
+			remoteAddr := p[1]
+			connAdapter.AddPeerID(peer.CreateID(remoteAddr, peerID))
 		}
 	}
 

@@ -213,17 +213,13 @@ func (n *Node) Broadcast(body *MessageBody) error {
 		Sender: n.idAdapter.MyIdentity(),
 		Body:   body,
 	}
-	connections := n.connAdapter.GetConnectionIDs()
-	for _, peerID := range connections {
-		if bytes.Equal(n.idAdapter.MyIdentity(), peerID) {
-			// skip sending to itself
-			continue
-		}
+	n.peers.Range(func(key, _ interface{}) bool {
 		// copy the struct
 		msg := *msgTemplate
-		msg.Recipient = peerID
+		msg.Recipient = ([]byte)(key.(string))
 		n.Send(&msg)
-	}
+		return true
+	})
 	return nil
 }
 

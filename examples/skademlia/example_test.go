@@ -47,7 +47,7 @@ func dialTCP(addr string) (net.Conn, error) {
 }
 
 // ExampleSKademlia demonstrates a simple example using SKademlia
-func ExampleSKademlia() {
+func TODOExampleSKademlia() {
 	var nodes []*SKNode
 
 	// setup all the nodes
