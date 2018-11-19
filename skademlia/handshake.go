@@ -23,6 +23,8 @@ type HandshakeMessage struct {
 	ID        []byte
 	PublicKey []byte
 	Nonce     []byte
+	C1        int
+	C2        int
 }
 
 // NewHandshakeProcessor returns a new S/Kademlia handshake processor
@@ -37,6 +39,8 @@ func (p *HandshakeProcessor) ActivelyInitHandshake() ([]byte, interface{}, error
 		PublicKey: p.nodeID.MyIdentity(),
 		ID:        p.nodeID.id(),
 		Nonce:     p.nodeID.Nonce,
+		C1:        p.nodeID.c1,
+		C2:        p.nodeID.c2,
 	}
 	b, err := json.Marshal(msg)
 	if err != nil {
@@ -58,6 +62,9 @@ func (p *HandshakeProcessor) ProcessHandshakeMessage(state interface{}, payload 
 	if err := json.Unmarshal(payload, &msg); err != nil {
 		return nil, protocol.DoneAction_Invalid, errors.New("skademlia: failed to unmarshal handshake payload")
 	}
+	if msg.C1 < p.nodeID.c1 || msg.C2 < p.nodeID.c2 {
+		return nil, protocol.DoneAction_Invalid, errors.Errorf("skademlia: S/Kademlia constants (%d, %d) for (c1, c2) do not satisfy local constants (%d, %d)", msg.C1, msg.C2, p.nodeID.c1, p.nodeID.c2)
+	}
 	// Verify that the remote peer ID is valid for the current node's c1 and c2 settings
 	if ok := VerifyPuzzle(msg.PublicKey, msg.ID, msg.Nonce, p.nodeID.c1, p.nodeID.c2); !ok {
 		return nil, protocol.DoneAction_Invalid, errors.New("skademlia: keypair failed skademlia verification")
@@ -70,7 +77,10 @@ func (p *HandshakeProcessor) ProcessHandshakeMessage(state interface{}, payload 
 				Msg:       "ack",
 				PublicKey: p.nodeID.MyIdentity(),
 				ID:        p.nodeID.id(),
-				Nonce:     p.nodeID.Nonce}
+				Nonce:     p.nodeID.Nonce,
+				C1:        p.nodeID.c1,
+				C2:        p.nodeID.c2,
+			}
 			b, err := json.Marshal(msg)
 			if err != nil {
 				return nil, protocol.DoneAction_Invalid, errors.New("skademlia: failed to marshal handshake message")
