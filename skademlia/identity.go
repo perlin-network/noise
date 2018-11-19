@@ -64,7 +64,11 @@ func NewIdentityFromKeypair(kp *crypto.KeyPair, c1, c2 int) (*IdentityAdapter, e
 
 // MyIdentity returns the S/Kademlia public key ID.
 func (a IdentityAdapter) MyIdentity() []byte {
-	return a.keypair.PublicKey
+	var bytes []byte
+	for _, b := range a.keypair.PublicKey {
+		bytes = append(bytes, byte(b))
+	}
+	return bytes
 }
 
 // MyIdentityHex returns the S/Kademlia hex-encoded node's public key.

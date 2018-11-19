@@ -47,21 +47,22 @@ func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, localID [
 	return a.baseConn.EstablishPassively(c, localID)
 }
 
+// GetConnectionIDs returns the public keys of all connected nodes in the routing table
 func (a *ConnectionAdapter) GetConnectionIDs() [][]byte {
 	results := [][]byte{}
 	for _, peer := range a.rt.GetPeers() {
-		results = append(results, peer.id)
+		results = append(results, peer.PublicKey)
 	}
 	return results
 }
 
-func (a *ConnectionAdapter) GetAddressByID(id []byte) (string, error) {
-	// TODO:
-	return "", errors.New("Not implemented")
+func (a *ConnectionAdapter) GetAddressByID(remote []byte) (string, error) {
+	if ok, peer := a.rt.GetPeer(blake2b.New().HashBytes(remote)); ok {
+		return peer.Address, nil
+	}
+	return "", errors.New("skademlia: peer not found")
 }
 
 func (a *ConnectionAdapter) AddConnection(remote []byte, addr string) {
-	// TODO:
-	id := ID{blake2b.New().HashBytes(remote), addr}
-	a.rt.Update(id)
+	a.rt.Update(NewID(remote, addr))
 }

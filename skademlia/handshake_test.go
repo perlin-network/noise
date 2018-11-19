@@ -66,7 +66,7 @@ func TestHandshake(t *testing.T) {
 			listener,
 			dialTCP,
 			ID{
-				id:      idAdapter.id(),
+				ID:      idAdapter.MyIdentity(),
 				Address: address},
 		)
 		if err != nil {
