@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	serviceID            = 5
+	DiscoveryServiceID   = 5
 	opCodePing           = 1
 	opCodePong           = 2
 	opCodeLookupRequest  = 3

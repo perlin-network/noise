@@ -32,7 +32,7 @@ func NewService(requestAdapter RequestAdapter, selfID peer.ID) *Service {
 // ReceiveHandler is the handler when a message is received
 func (s *Service) ReceiveHandler(message *protocol.Message) {
 
-	if message == nil || message.Body == nil || message.Body.Service != serviceID {
+	if message == nil || message.Body == nil || message.Body.Service != DiscoveryServiceID {
 		// corrupt message so ignore
 		return
 	}
@@ -73,7 +73,7 @@ func (s *Service) receive(sender peer.ID, target peer.ID, msg protobuf.Message) 
 			break
 		}
 		// send the pong to the peer
-		if err := s.reply(sender, opCodePong, &protobuf.Pong{}); err != nil {
+		if err := s.reply(sender, msg.RequestNonce, opCodePong, &protobuf.Pong{}); err != nil {
 			return err
 		}
 	case opCodePong:
@@ -104,7 +104,7 @@ func (s *Service) receive(sender peer.ID, target peer.ID, msg protobuf.Message) 
 			response.Peers = append(response.Peers, &id)
 		}
 
-		if err := s.reply(sender, opCodeLookupResponse, response); err != nil {
+		if err := s.reply(sender, msg.RequestNonce, opCodeLookupResponse, response); err != nil {
 			return err
 		}
 	default:
@@ -126,11 +126,12 @@ func (s *Service) PeerDisconnect(target peer.ID) {
 	}
 }
 
-func (s *Service) reply(target peer.ID, opcode int, content proto.Message) error {
+func (s *Service) reply(target peer.ID, requestNonce uint64, opcode int, content proto.Message) error {
 	msg, err := toProtobufMessage(opcode, content)
 	if err != nil {
 		return err
 	}
 	msg.ReplyFlag = true
+	msg.RequestNonce = requestNonce
 	return s.requestAdapter.Reply(context.Background(), target, msg)
 }

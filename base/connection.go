@@ -1,7 +1,6 @@
 package base
 
 import (
-	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
@@ -30,11 +29,10 @@ type PubliclyVisibleAddress struct {
 	count   uint64
 }
 
-func NewConnectionAdapter(listener net.Listener, dialer Dialer, id peer.ID) (*ConnectionAdapter, error) {
+func NewConnectionAdapter(listener net.Listener, dialer Dialer) (*ConnectionAdapter, error) {
 	return &ConnectionAdapter{
 		listener: listener,
 		Dialer:   dialer,
-		routes:   dht.CreateRoutingTable(id),
 	}, nil
 }
 

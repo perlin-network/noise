@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/perlin-network/noise/dht"
@@ -13,6 +14,10 @@ import (
 
 const (
 	reqTimeoutInSec = 3
+)
+
+var (
+	reqNonce = uint64(1)
 )
 
 func queryPeerByID(reqAdapter RequestAdapter, peerID peer.ID, targetID peer.ID, responses chan []*protobuf.ID) {
@@ -25,6 +30,7 @@ func queryPeerByID(reqAdapter RequestAdapter, peerID peer.ID, targetID peer.ID, 
 		responses <- []*protobuf.ID{}
 		return
 	}
+	msg.RequestNonce = atomic.AddUint64(&reqNonce, 1)
 
 	ctx, cancel := context.WithTimeout(context.Background(), reqTimeoutInSec*time.Second)
 	defer cancel()

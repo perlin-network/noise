@@ -2,23 +2,35 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"github.com/gogo/protobuf/proto"
+	"github.com/perlin-network/noise/base"
+	"github.com/perlin-network/noise/base/discovery"
+	"github.com/perlin-network/noise/examples/chat/messages"
+	"github.com/perlin-network/noise/internal/protobuf"
+	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/peer"
+	"github.com/perlin-network/noise/protocol"
+	"github.com/pkg/errors"
 	"net"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
-
-	"github.com/gogo/protobuf/proto"
-	"github.com/perlin-network/noise/base"
-	"github.com/perlin-network/noise/examples/chat/messages"
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/protocol"
 )
 
 const (
-	serviceID = 44
+	chatServiceID            = 44
+	requestResponseServiceID = 45
+)
+
+var (
+	reqNonce    = uint64(1)
+	reqResponse sync.Map
 )
 
 type ChatNode struct {
@@ -27,8 +39,8 @@ type ChatNode struct {
 	ConnAdapter protocol.ConnectionAdapter
 }
 
-func (n *ChatNode) service(message *protocol.Message) {
-	if message.Body.Service != serviceID {
+func (n *ChatNode) ReceiveHandler(message *protocol.Message) {
+	if message.Body.Service != chatServiceID {
 		return
 	}
 	if len(message.Body.Payload) == 0 {
@@ -41,19 +53,51 @@ func (n *ChatNode) service(message *protocol.Message) {
 	log.Info().Msgf("<%s> %s", n.Address, msg.Message)
 }
 
-func makeMessageBody(value string) *protocol.MessageBody {
-	msg := &messages.ChatMessage{
-		Message: value,
-	}
+func makeMessageBody(serviceID int, msg *protobuf.Message) *protocol.MessageBody {
 	payload, err := proto.Marshal(msg)
 	if err != nil {
 		return nil
 	}
 	body := &protocol.MessageBody{
-		Service: serviceID,
+		Service: uint16(serviceID),
 		Payload: payload,
 	}
 	return body
+}
+
+type ChatRequestAdapter struct {
+	Node *protocol.Node
+}
+
+func (c *ChatRequestAdapter) Request(ctx context.Context, target peer.ID, body *protobuf.Message) (*protobuf.Message, error) {
+	body.RequestNonce = atomic.AddUint64(&reqNonce, 1)
+	msg := &protocol.Message{
+		Sender:    c.Node.GetIdentityAdapter().MyIdentity(),
+		Recipient: target.PublicKey,
+		Body:      makeMessageBody(requestResponseServiceID, body),
+	}
+	replyChan := make(chan *protobuf.Message, 1)
+	reqResponse.Store(body.RequestNonce, replyChan)
+	if err := c.Node.Send(msg); err != nil {
+		return nil, err
+	}
+	select {
+	case reply := <-replyChan:
+		return reply, nil
+	case <-time.After(3 * time.Second):
+		return nil, errors.New("Timed out")
+	}
+	return nil, errors.New("Unexpected")
+}
+
+func (c *ChatRequestAdapter) Reply(ctx context.Context, target peer.ID, body *protobuf.Message) error {
+	body.ReplyFlag = true
+	msg := &protocol.Message{
+		Sender:    c.Node.GetIdentityAdapter().MyIdentity(),
+		Recipient: target.PublicKey,
+		Body:      makeMessageBody(requestResponseServiceID, body),
+	}
+	return c.Node.Send(msg)
 }
 
 func main() {
@@ -68,10 +112,9 @@ func main() {
 	peers := strings.Split(*peersFlag, ",")
 
 	idAdapter := base.NewIdentityAdapter()
-	keys := idAdapter.GetKeyPair()
 
-	log.Info().Msgf("Private Key: %s", keys.PrivateKeyHex())
-	log.Info().Msgf("Public Key: %s", keys.PublicKeyHex())
+	log.Info().Msgf("Private Key: %s", idAdapter.GetKeyPair().PrivateKeyHex())
+	log.Info().Msgf("Public Key: %s", idAdapter.GetKeyPair().PublicKeyHex())
 
 	addr := fmt.Sprintf("%s:%d", host, port)
 	listener, err := net.Listen("tcp", addr)
@@ -96,7 +139,14 @@ func main() {
 		ConnAdapter: connAdapter,
 	}
 
-	node.Node.AddService(serviceID, node.service)
+	node.Node.AddService(chatServiceID, node.ReceiveHandler)
+
+	discoveryService := discovery.NewService(
+		&ChatRequestAdapter{Node: node.Node},
+		peer.CreateID(addr, idAdapter.GetKeyPair().PublicKey),
+	)
+
+	node.Node.AddService(discovery.DiscoveryServiceID, discoveryService.ReceiveHandler)
 
 	if len(peers) > 0 {
 		for _, peerKV := range peers {
@@ -104,13 +154,13 @@ func main() {
 				// this is a blank parameter
 				continue
 			}
-			peer := strings.Split(peerKV, "=")
-			peerID, err := hex.DecodeString(peer[0])
+			p := strings.Split(peerKV, "=")
+			peerID, err := hex.DecodeString(p[0])
 			if err != nil {
 				panic(err)
 			}
-			remoteAddr := peer[1]
-			connAdapter.AddConnection(peerID, remoteAddr)
+			remoteAddr := p[1]
+			connAdapter.AddPeerID(peer.CreateID(remoteAddr, peerID))
 		}
 	}
 
@@ -127,6 +177,13 @@ func main() {
 
 		log.Info().Msgf("<%s> %s", addr, input)
 
-		node.Node.Broadcast(makeMessageBody(input))
+		chatMsg := &messages.ChatMessage{
+			Message: input,
+		}
+		bytes, _ := chatMsg.Marshal()
+		msg := &protobuf.Message{
+			Message: bytes,
+		}
+		node.Node.Broadcast(makeMessageBody(chatServiceID, msg))
 	}
 }
