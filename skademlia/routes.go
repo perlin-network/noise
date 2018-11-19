@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/perlin-network/noise/crypto/blake2b"
+	"github.com/perlin-network/noise/log"
 )
 
 // BucketSize defines the NodeID, Key, and routing table data structures.
@@ -54,6 +55,9 @@ func NewBucket() *Bucket {
 
 // CreateRoutingTable is a Factory method of RoutingTable containing empty buckets.
 func CreateRoutingTable(id ID) *RoutingTable {
+	if id.PublicKey == nil {
+		log.Fatal().Msg("id cannot have a nil PublicKey, please use NewID to create new IDs")
+	}
 	table := &RoutingTable{
 		self:    id,
 		buckets: make([]*Bucket, len(id.ID)*8),

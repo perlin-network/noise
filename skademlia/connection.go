@@ -68,6 +68,8 @@ func (a *ConnectionAdapter) GetAddressByID(remote []byte) (string, error) {
 
 func (a *ConnectionAdapter) AddConnection(remote []byte, addr string) {
 	hexID := hex.EncodeToString(remote)
-	log.Debug().Msgf("adding %s to routing table", hexID)
+	log.Debug().
+		Str("local", hex.EncodeToString(a.rt.Self().PublicKey)).
+		Msgf("adding %s to routing table", hexID)
 	a.rt.Update(NewID(remote, addr))
 }

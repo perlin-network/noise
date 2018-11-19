@@ -48,11 +48,17 @@ func dialTCP(addr string) (net.Conn, error) {
 func TestHandshake(t *testing.T) {
 	var nodes []*SKNode
 	var ports []int
-	numNodes := 2
+	numNodes := 3
 
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
+		//var idAdapter *IdentityAdapter
 		idAdapter := NewIdentityAdapter(8, 8)
+
+		// sending to node[2] will fail due to handshake verification
+		if i == 2 {
+			idAdapter = NewIdentityAdapter(4, 4)
+		}
 
 		port := utils.GetRandomUnusedPort()
 		ports = append(ports, port)
@@ -65,9 +71,7 @@ func TestHandshake(t *testing.T) {
 		connAdapter, err := NewConnectionAdapter(
 			listener,
 			dialTCP,
-			ID{
-				ID:      idAdapter.MyIdentity(),
-				Address: address},
+			NewID(idAdapter.MyIdentity(), address),
 		)
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
@@ -95,6 +99,7 @@ func TestHandshake(t *testing.T) {
 
 	nodeA := nodes[0]
 	nodeB := nodes[1]
+	nodeC := nodes[2]
 
 	// Connect all the node routing tables
 	for i, srcNode := range nodes {
@@ -113,5 +118,31 @@ func TestHandshake(t *testing.T) {
 		Recipient: nodeB.Node.GetIdentityAdapter().MyIdentity(),
 		Body:      body,
 	}
-	nodeA.Node.Send(&msg)
+	err := nodeA.Node.Send(&msg)
+	if err != nil {
+		t.Errorf("Send() expected no error, got: %+v", err)
+	}
+
+	// nodeC sending to nodeA should error
+	msg.Sender = nodeC.Node.GetIdentityAdapter().MyIdentity()
+	msg.Recipient = nodeA.Node.GetIdentityAdapter().MyIdentity()
+	err = nodeC.Node.Send(&msg)
+	if err == nil {
+		t.Errorf("Send() expected error")
+	}
+
+	// nodeA sending to nodeC should fail handshake
+	msg.Sender = nodeA.Node.GetIdentityAdapter().MyIdentity()
+	msg.Recipient = nodeC.Node.GetIdentityAdapter().MyIdentity()
+	err = nodeA.Node.Send(&msg)
+	if err == nil {
+		t.Errorf("Send() expected error")
+	}
+
+	// nodeB sending to nodeC should fail handshake
+	msg.Sender = nodeB.Node.GetIdentityAdapter().MyIdentity()
+	err = nodeB.Node.Send(&msg)
+	if err == nil {
+		t.Errorf("Send() expected error")
+	}
 }
