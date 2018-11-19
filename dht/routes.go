@@ -227,3 +227,23 @@ func (t *RoutingTable) Bucket(id int) *Bucket {
 	}
 	return nil
 }
+
+// LookupRemoteAddress returns peer.ID associated with the target public key
+func (t *RoutingTable) LookupRemoteAddress(pubKey []byte) (*peer.ID, bool) {
+	for b := 0; b < BucketSize; b++ {
+		bucket := t.Bucket(b)
+		if bucket == nil {
+			continue
+		}
+
+		for e := bucket.Front(); e != nil; e = e.Next() {
+			if p, ok := e.Value.(peer.ID); ok {
+				if string(p.PublicKey) == string(pubKey) {
+					return &p, true
+				}
+			}
+		}
+	}
+
+	return nil, false
+}

@@ -20,7 +20,6 @@ type ConnectionAdapter struct {
 	listener    net.Listener
 	Dialer      Dialer
 	idToAddress sync.Map
-	routes      *dht.RoutingTable
 
 	reportedPubliclyVisibleAddresses      []*PubliclyVisibleAddress
 	reportedPubliclyVisibleAddressesMutex sync.Mutex
@@ -130,11 +129,17 @@ func (a *ConnectionAdapter) updatePubliclyVisibleAddress(address string) {
 
 func (a *ConnectionAdapter) AddPeerID(id peer.ID) {
 	a.idToAddress.Store(string(id.PublicKey), id.Address)
-	a.routes.Update(id)
+
 }
 
 func (a *ConnectionAdapter) GetPeerIDs() []peer.ID {
-	return a.GetPeerIDs()
+	var results []peer.ID
+	a.idToAddress.Range(func(key, value interface{}) bool {
+		peer := peer.CreateID(value.(string), ([]byte)(key.(string)))
+		results = append(results, peer)
+		return true
+	})
+	return results
 }
 
 // TODO: replace this with the routes table

@@ -1,85 +1,37 @@
 package discovery
 
 import (
+	"context"
 	"github.com/gogo/protobuf/proto"
-	"github.com/perlin-network/noise/base/discovery/messages"
+	"github.com/perlin-network/noise/dht"
+	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
-	"math/rand"
-	"time"
+	"github.com/pkg/errors"
 )
-
-const (
-	serviceID            = 5
-	pollFrequencyInSec   = 20
-	samplerSeed          = 123
-	opCodeLookupRequest  = 1
-	opCodeLookupResponse = 2
-)
-
-// SendHandler is a callback when this service needs to send a message to a peer
-type SendHandler func(peerID []byte, body *protocol.MessageBody) error
 
 // Service is a service that handles periodic lookups of remote peers
 type Service struct {
-	active        bool
+	DisablePing   bool
+	DisablePong   bool
 	DisableLookup bool
-	sendHandler   SendHandler
-	connAdapter   protocol.ConnectionAdapter
-	sampler       *rand.Rand
+
+	Routes         *dht.RoutingTable
+	requestAdapter RequestAdapter
 }
 
 // NewService creates a new instance of the Discovery Service
-func NewService(sendHandler SendHandler, connAdapter protocol.ConnectionAdapter) *Service {
+func NewService(requestAdapter RequestAdapter, selfID peer.ID) *Service {
 	return &Service{
-		active:        false,
-		DisableLookup: false,
-		sendHandler:   sendHandler,
-		connAdapter:   connAdapter,
-		sampler:       rand.New(rand.NewSource(samplerSeed)),
+		Routes:         dht.CreateRoutingTable(selfID),
+		requestAdapter: requestAdapter,
 	}
 }
 
-// StartLookups starts the goroutine to periodically sample peers for their connection info
-func (s *Service) StartLookups() {
-	s.active = true
-	ticker := time.NewTicker(time.Second * pollFrequencyInSec)
+// ReceiveHandler is the handler when a message is received
+func (s *Service) ReceiveHandler(message *protocol.Message) {
 
-	go func() {
-		for range ticker.C {
-			if !s.active {
-				break
-			}
-			if err := s.SampledLookup(); err != nil {
-				log.Warn().Err(err).Msg("Error looking up peers")
-			}
-		}
-	}()
-}
-
-// StopLookups stops sampling the peers connection info
-func (s *Service) StopLookups() {
-	s.active = false
-}
-
-// SampledLookup gets a random peer from the connection adapter and makes a lookup request
-func (s *Service) SampledLookup() error {
-	peerIDs := s.connAdapter.GetConnectionIDs()
-	randPeer := peerIDs[s.sampler.Intn(len(peerIDs))]
-
-	body, err := makeRequestMessageBody(randPeer)
-	if err != nil {
-		return err
-	}
-
-	if err := s.sendHandler(randPeer, body); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Receive is the handler when a message is received
-func (s *Service) Receive(message *protocol.Message) {
 	if message == nil || message.Body == nil || message.Body.Service != serviceID {
 		// corrupt message so ignore
 		return
@@ -89,103 +41,96 @@ func (s *Service) Receive(message *protocol.Message) {
 		return
 	}
 
-	if s.DisableLookup {
-		// disabled so ignore
+	sender, ok := s.Routes.LookupRemoteAddress(message.Sender)
+	if !ok {
+		// TODO: handle known peer
+		return
+	}
+	target, ok := s.Routes.LookupRemoteAddress(message.Recipient)
+	if !ok {
+		// TODO: handle known peer
 		return
 	}
 
-	var msg messages.Message
+	var msg protobuf.Message
 	if err := proto.Unmarshal(message.Body.Payload, &msg); err != nil {
-		// not a lookup request so ignore
+		// unknown type so ignore
 		return
 	}
+
+	if err := s.receive(*sender, *target, msg); err != nil {
+		log.Warn().Err(err).Msg("")
+	}
+}
+
+func (s *Service) receive(sender peer.ID, target peer.ID, msg protobuf.Message) error {
+	// update the routes on every message
+	s.Routes.Update(sender)
 
 	switch msg.Opcode {
+	case opCodePing:
+		if s.DisablePing {
+			break
+		}
+		// send the pong to the peer
+		if err := s.reply(sender, opCodePong, &protobuf.Pong{}); err != nil {
+			return err
+		}
+	case opCodePong:
+		if s.DisablePong {
+			break
+		}
+		peers := FindNode(s.Routes, s.requestAdapter, sender, dht.BucketSize, 8)
+
+		// Update routing table w/ closest peers to self.
+		for _, peerID := range peers {
+			s.Routes.Update(peerID)
+		}
+
+		log.Info().
+			Strs("peers", s.Routes.GetPeerAddresses()).
+			Msg("Bootstrapped w/ peer(s).")
 	case opCodeLookupRequest:
+		if s.DisableLookup {
+			break
+		}
+
 		// Prepare response
-		peerIDs := s.connAdapter.GetConnectionIDs()
-		var IDs []*messages.ID
-		for _, peer := range peerIDs {
-			addr, err := s.connAdapter.GetAddressByID(peer)
-			if err != nil {
-				continue
-			}
-			id := &messages.ID{
-				Id:      peer,
-				Address: addr,
-			}
-			IDs = append(IDs, id)
+		response := &protobuf.LookupNodeResponse{}
+
+		// Respond back with closest peers to a provided target.
+		for _, peerID := range s.Routes.FindClosestPeers(target, dht.BucketSize) {
+			id := protobuf.ID(peerID)
+			response.Peers = append(response.Peers, &id)
 		}
 
-		body, err := makeResponseMessageBody(IDs)
-		if err != nil {
-			log.Warn().Err(err).Msg("Unable to marshal response")
-			break
-		}
-
-		// reply
-		if err := s.sendHandler(message.Sender, body); err != nil {
-			log.Warn().Err(err).Msg("Unable to send response")
-		}
-	case opCodeLookupResponse:
-		m := messages.LookupNodeResponse{}
-		if err := proto.Unmarshal(msg.Message, &m); err != nil {
-			log.Warn().Err(err).Msg("Unable to read response")
-			break
-		}
-		// load up all the new connections into the connection adapter
-		for _, peer := range m.Peers {
-			s.connAdapter.AddConnection(peer.Id, peer.Address)
+		if err := s.reply(sender, opCodeLookupResponse, response); err != nil {
+			return err
 		}
 	default:
-		log.Warn().Msgf("Unknown message opcode type: %d", msg.Opcode)
+		return errors.Errorf("Unknown message opcode type: %d", msg.Opcode)
+	}
+	return nil
+}
+
+// PeerDisconnect handles updating the routing table on disconnect
+func (s *Service) PeerDisconnect(target peer.ID) {
+	// Delete peer if in routing table.
+	if s.Routes.PeerExists(target) {
+		s.Routes.RemovePeer(target)
+
+		log.Debug().
+			Str("address", s.Routes.Self().Address).
+			Str("peer_address", target.Address).
+			Msg("Peer has disconnected.")
 	}
 }
 
-func makeResponseMessageBody(ids []*messages.ID) (*protocol.MessageBody, error) {
-	content := &messages.LookupNodeResponse{
-		Peers: ids,
-	}
-	contentBytes, err := proto.Marshal(content)
+func (s *Service) reply(target peer.ID, opcode int, content proto.Message) error {
+	msg, err := toProtobufMessage(opcode, content)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	msg := &messages.Message{
-		Opcode:  opCodeLookupResponse,
-		Message: contentBytes,
-	}
-	msgBytes, err := proto.Marshal(msg)
-	if err != nil {
-		return nil, err
-	}
-	body := &protocol.MessageBody{
-		Service: serviceID,
-		Payload: msgBytes,
-	}
-	return body, nil
-}
-
-func makeRequestMessageBody(id []byte) (*protocol.MessageBody, error) {
-	content := &messages.LookupNodeRequest{
-		Target: &messages.ID{
-			Id: id,
-		},
-	}
-	contentBytes, err := proto.Marshal(content)
-	if err != nil {
-		return nil, err
-	}
-	msg := &messages.Message{
-		Opcode:  opCodeLookupRequest,
-		Message: contentBytes,
-	}
-	msgBytes, err := proto.Marshal(msg)
-	if err != nil {
-		return nil, err
-	}
-	body := &protocol.MessageBody{
-		Service: serviceID,
-		Payload: msgBytes,
-	}
-	return body, nil
+	msg.ReplyFlag = true
+	return s.requestAdapter.Reply(context.Background(), target, msg)
 }
