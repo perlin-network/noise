@@ -27,7 +27,7 @@ type BasicNode struct {
 	ConnAdapter protocol.ConnectionAdapter
 }
 
-func (n *BasicNode) receiveHandler(message *protocol.Message) (*protocol.Message, error) {
+func (n *BasicNode) receiveHandler(message *protocol.Message) (*protocol.MessageBody, error) {
 	if len(message.Body.Payload) == 0 {
 		return nil, errors.New("Empty payload")
 	}

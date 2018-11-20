@@ -13,7 +13,7 @@ import (
 
 // Service receives all messages for a registered service id
 //  and returns the reply or error
-type Service func(request *Message) (*Message, error)
+type Service func(request *Message) (*MessageBody, error)
 
 type Node struct {
 	controller               *Controller
@@ -98,8 +98,14 @@ func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) error 
 		return errors.Wrap(err, "cannot deserialize message body")
 	}
 
+	if rq, ok := n.Requests.Load(body.RequestNonce); ok {
+		rq := rq.(*RequestState)
+		rq.data <- body
+		return nil
+	}
+
 	if svc, ok := n.services[body.Service]; ok {
-		reply, err := svc(&Message{
+		replyBody, err := svc(&Message{
 			Sender:    peer.adapter.RemoteEndpoint(),
 			Recipient: n.idAdapter.MyIdentity(),
 			Body:      body,
@@ -107,9 +113,13 @@ func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) error 
 		if err != nil {
 			return errors.Wrapf(err, "Error processing request for service=%d", body.Service)
 		}
-		if reply != nil {
-			reply.Body.RequestNonce = body.RequestNonce
-			if err := n.Send(reply); err != nil {
+		if replyBody != nil {
+			replyBody.RequestNonce = body.RequestNonce
+			if err := n.Send(&Message{
+				Sender:    n.idAdapter.MyIdentity(),
+				Recipient: peer.adapter.RemoteEndpoint(),
+				Body:      replyBody,
+			}); err != nil {
 				return errors.Wrapf(err, "Error replying to request for service=%d", body.Service)
 			}
 		}
@@ -253,14 +263,17 @@ func (n *Node) Broadcast(body *MessageBody) error {
 
 // Request sends a message and waits for the reply before returning or times out
 func (n *Node) Request(ctx context.Context, target []byte, body *MessageBody) (*MessageBody, error) {
+	if body == nil {
+		return nil, errors.New("message body was empty")
+	}
+	if body.Service == 0 {
+		return nil, errors.New("missing service in message body")
+	}
 	body.RequestNonce = atomic.AddUint64(&n.RequestNonce, 1)
 	msg := &Message{
 		Sender:    n.idAdapter.MyIdentity(),
 		Recipient: target,
 		Body:      body,
-	}
-	if err := n.Send(msg); err != nil {
-		return nil, err
 	}
 
 	// start tracking the request
@@ -271,6 +284,11 @@ func (n *Node) Request(ctx context.Context, target []byte, body *MessageBody) (*
 		data:        channel,
 		closeSignal: closeSignal,
 	})
+
+	// send the message
+	if err := n.Send(msg); err != nil {
+		return nil, err
+	}
 
 	// stop tracking the request
 	defer close(closeSignal)
