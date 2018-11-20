@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -18,13 +17,11 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
 const (
-	chatServiceID            = 44
-	requestResponseServiceID = 45
+	chatServiceID = 44
 )
 
 var (
@@ -38,22 +35,20 @@ type ChatNode struct {
 	ConnAdapter protocol.ConnectionAdapter
 }
 
-func (n *ChatNode) ReceiveHandler(message *protocol.Message) {
-	if message.Body.Service != chatServiceID {
-		return
-	}
-	if len(message.Body.Payload) == 0 {
-		return
+func (n *ChatNode) ReceiveHandler(request *protocol.Message) (*protocol.Message, error) {
+	if len(request.Body.Payload) == 0 {
+		return nil, errors.New("Empty payload")
 	}
 	var pm protobuf.Message
-	if err := proto.Unmarshal(message.Body.Payload, &pm); err != nil {
-		return
+	if err := proto.Unmarshal(request.Body.Payload, &pm); err != nil {
+		return nil, err
 	}
 	var mc messages.ChatMessage
 	if err := proto.Unmarshal(pm.Message, &mc); err != nil {
-		return
+		return nil, err
 	}
 	log.Info().Msgf("<%s> %s", n.Address, mc.Message)
+	return nil, nil
 }
 
 func makeMessageBody(serviceID int, msg *protobuf.Message) *protocol.MessageBody {
@@ -70,37 +65,6 @@ func makeMessageBody(serviceID int, msg *protobuf.Message) *protocol.MessageBody
 
 type ChatRequestAdapter struct {
 	Node *protocol.Node
-}
-
-func (c *ChatRequestAdapter) Request(ctx context.Context, target peer.ID, body *protobuf.Message) (*protobuf.Message, error) {
-	body.RequestNonce = atomic.AddUint64(&reqNonce, 1)
-	msg := &protocol.Message{
-		Sender:    c.Node.GetIdentityAdapter().MyIdentity(),
-		Recipient: target.PublicKey,
-		Body:      makeMessageBody(requestResponseServiceID, body),
-	}
-	replyChan := make(chan *protobuf.Message, 1)
-	reqResponse.Store(body.RequestNonce, replyChan)
-	if err := c.Node.Send(msg); err != nil {
-		return nil, err
-	}
-
-	select {
-	case reply := <-replyChan:
-		return reply, nil
-	case <-time.After(3 * time.Second):
-		return nil, errors.New("Timed out")
-	}
-}
-
-func (c *ChatRequestAdapter) Reply(ctx context.Context, target peer.ID, body *protobuf.Message) error {
-	body.ReplyFlag = true
-	msg := &protocol.Message{
-		Sender:    c.Node.GetIdentityAdapter().MyIdentity(),
-		Recipient: target.PublicKey,
-		Body:      makeMessageBody(requestResponseServiceID, body),
-	}
-	return c.Node.Send(msg)
 }
 
 func main() {

@@ -2,14 +2,18 @@ package protocol
 
 import (
 	"bytes"
+	"context"
 	_ "fmt"
 	"github.com/monnand/dhkx"
 	"github.com/perlin-network/noise/log"
 	"github.com/pkg/errors"
 	"sync"
+	"sync/atomic"
 )
 
-type Service func(message *Message)
+// Service receives all messages for a registered service id
+//  and returns the reply or error
+type Service func(request *Message) (*Message, error)
 
 type Node struct {
 	controller               *Controller
@@ -20,6 +24,16 @@ type Node struct {
 	dhGroup                  *dhkx.DHGroup
 	dhKeypair                *dhkx.DHKey
 	customHandshakeProcessor HandshakeProcessor
+
+	// uint64 -> *RequestState
+	Requests     sync.Map
+	RequestNonce uint64
+}
+
+// RequestState represents a state of a request.
+type RequestState struct {
+	data        chan *MessageBody
+	closeSignal chan struct{}
 }
 
 func NewNode(c *Controller, ca ConnectionAdapter, id IdentityAdapter) *Node {
@@ -34,12 +48,13 @@ func NewNode(c *Controller, ca ConnectionAdapter, id IdentityAdapter) *Node {
 	}
 
 	return &Node{
-		controller:  c,
-		connAdapter: ca,
-		idAdapter:   id,
-		services:    make(map[uint16]Service),
-		dhGroup:     g,
-		dhKeypair:   privKey,
+		controller:   c,
+		connAdapter:  ca,
+		idAdapter:    id,
+		services:     make(map[uint16]Service),
+		dhGroup:      g,
+		dhKeypair:    privKey,
+		RequestNonce: 0,
 	}
 }
 
@@ -63,35 +78,45 @@ func (n *Node) removePeer(id []byte) {
 	}
 }
 
-func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) {
+func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) error {
 	if peer.kxState != KeyExchange_Done {
 		err := peer.continueKeyExchange(n.controller, n.idAdapter, n.customHandshakeProcessor, raw)
 		if err != nil {
-			log.Error().Err(err).Msg("cannot continue key exchange")
 			n.removePeer(peer.RemoteEndpoint())
+			return errors.Wrap(err, "cannot continue key exchange")
 		}
-		return
+		return nil
 	}
 
 	_body, err := peer.UnwrapMessage(n.controller, raw)
 	if err != nil {
-		log.Error().Err(err).Msg("cannot unwrap message")
+		return errors.Wrap(err, "cannot unwrap message")
 	}
 
 	body, err := DeserializeMessageBody(bytes.NewReader(_body))
 	if err != nil {
-		log.Error().Err(err).Msg("cannot deserialize message body")
+		return errors.Wrap(err, "cannot deserialize message body")
 	}
 
 	if svc, ok := n.services[body.Service]; ok {
-		svc(&Message{
+		reply, err := svc(&Message{
 			Sender:    peer.adapter.RemoteEndpoint(),
 			Recipient: n.idAdapter.MyIdentity(),
 			Body:      body,
 		})
+		if err != nil {
+			return errors.Wrapf(err, "Error processing request for service=%d", body.Service)
+		}
+		if reply != nil {
+			reply.Body.RequestNonce = body.RequestNonce
+			if err := n.Send(reply); err != nil {
+				return errors.Wrapf(err, "Error replying to request for service=%d", body.Service)
+			}
+		}
 	} else {
 		log.Debug().Msgf("message to unknown service %d dropped", body.Service)
 	}
+	return nil
 }
 
 func (n *Node) Start() {
@@ -110,7 +135,9 @@ func (n *Node) Start() {
 					//fmt.Printf("message is nil, removing peer: %b\n", adapter.RemoteEndpoint())
 					n.removePeer(adapter.RemoteEndpoint())
 				} else {
-					n.dispatchIncomingMessage(peer, message)
+					if err := n.dispatchIncomingMessage(peer, message); err != nil {
+						log.Warn().Msgf("%v", err)
+					}
 				}
 			})
 		}
@@ -222,6 +249,39 @@ func (n *Node) Broadcast(body *MessageBody) error {
 		}
 	}
 	return nil
+}
+
+// Request sends a message and waits for the reply before returning or times out
+func (n *Node) Request(ctx context.Context, target []byte, body *MessageBody) (*MessageBody, error) {
+	body.RequestNonce = atomic.AddUint64(&n.RequestNonce, 1)
+	msg := &Message{
+		Sender:    n.idAdapter.MyIdentity(),
+		Recipient: target,
+		Body:      body,
+	}
+	if err := n.Send(msg); err != nil {
+		return nil, err
+	}
+
+	// start tracking the request
+	channel := make(chan *MessageBody, 1)
+	closeSignal := make(chan struct{})
+
+	n.Requests.Store(body.RequestNonce, &RequestState{
+		data:        channel,
+		closeSignal: closeSignal,
+	})
+
+	// stop tracking the request
+	defer close(closeSignal)
+	defer n.Requests.Delete(body.RequestNonce)
+
+	select {
+	case res := <-channel:
+		return res, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 func (n *Node) GetIdentityAdapter() IdentityAdapter {
