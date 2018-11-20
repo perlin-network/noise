@@ -63,10 +63,6 @@ func makeMessageBody(serviceID int, msg *protobuf.Message) *protocol.MessageBody
 	return body
 }
 
-type ChatRequestAdapter struct {
-	Node *protocol.Node
-}
-
 func main() {
 	// process other flags
 	portFlag := flag.Int("port", 3000, "port to listen to")

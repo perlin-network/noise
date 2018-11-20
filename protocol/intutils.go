@@ -17,6 +17,6 @@ func writeUint16(buf *[]byte, x uint16) {
 
 func writeUint64(buf *[]byte, x uint64) {
 	endPos := len(*buf)
-	*buf = append(*buf, make([]byte, 4)...)
+	*buf = append(*buf, make([]byte, 8)...)
 	binary.LittleEndian.PutUint64((*buf)[endPos:], x)
 }

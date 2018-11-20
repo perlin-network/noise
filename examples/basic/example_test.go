@@ -2,14 +2,15 @@ package basic
 
 import (
 	"fmt"
-	"net"
-	"time"
-
 	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
+	"github.com/pkg/errors"
+	"net"
+	"time"
 )
 
 const (
@@ -26,18 +27,16 @@ type BasicNode struct {
 	ConnAdapter protocol.ConnectionAdapter
 }
 
-func (n *BasicNode) service(message *protocol.Message) {
-	if message.Body.Service != serviceID {
-		return
-	}
+func (n *BasicNode) receiveHandler(message *protocol.Message) (*protocol.Message, error) {
 	if len(message.Body.Payload) == 0 {
-		return
+		return nil, errors.New("Empty payload")
 	}
 	var basicMessage messages.BasicMessage
 	if err := proto.Unmarshal(message.Body.Payload, &basicMessage); err != nil {
-		return
+		return nil, errors.Wrap(err, "Unable to unmarshal payload")
 	}
 	n.Mailbox <- &basicMessage
+	return nil, nil
 }
 
 func makeMessageBody(value string) *protocol.MessageBody {
@@ -88,7 +87,7 @@ func ExampleBasic() {
 			ConnAdapter: connAdapter,
 		}
 
-		node.Node.AddService(serviceID, node.service)
+		node.Node.AddService(serviceID, node.receiveHandler)
 
 		node.Node.Start()
 
@@ -102,7 +101,7 @@ func ExampleBasic() {
 				continue
 			}
 			peerID := otherNode.Node.GetIdentityAdapter().MyIdentity()
-			srcNode.ConnAdapter.AddConnection(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
+			srcNode.ConnAdapter.AddPeerID(peer.CreateID(fmt.Sprintf("%s:%d", host, startPort+j), peerID))
 		}
 	}
 

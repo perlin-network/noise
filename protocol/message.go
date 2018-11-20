@@ -31,7 +31,7 @@ func (b *MessageBody) Serialize() []byte {
 func DeserializeMessageBody(reader io.Reader) (*MessageBody, error) {
 	ret := &MessageBody{}
 	serviceBuf := make([]byte, 2)
-	requestNonceBuf := make([]byte, 4)
+	requestNonceBuf := make([]byte, 8)
 
 	if _, err := io.ReadFull(reader, serviceBuf); err != nil {
 		return nil, err
