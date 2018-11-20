@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/base"
-	"github.com/perlin-network/noise/base/discovery"
 	"github.com/perlin-network/noise/examples/chat/messages"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
@@ -46,11 +45,15 @@ func (n *ChatNode) ReceiveHandler(message *protocol.Message) {
 	if len(message.Body.Payload) == 0 {
 		return
 	}
-	var msg messages.ChatMessage
-	if err := proto.Unmarshal(message.Body.Payload, &msg); err != nil {
+	var pm protobuf.Message
+	if err := proto.Unmarshal(message.Body.Payload, &pm); err != nil {
 		return
 	}
-	log.Info().Msgf("<%s> %s", n.Address, msg.Message)
+	var mc messages.ChatMessage
+	if err := proto.Unmarshal(pm.Message, &mc); err != nil {
+		return
+	}
+	log.Info().Msgf("<%s> %s", n.Address, mc.Message)
 }
 
 func makeMessageBody(serviceID int, msg *protobuf.Message) *protocol.MessageBody {
@@ -140,14 +143,14 @@ func main() {
 	}
 
 	node.Node.AddService(chatServiceID, node.ReceiveHandler)
+	/*
+		discoveryService := discovery.NewService(
+			&ChatRequestAdapter{Node: node.Node},
+			peer.CreateID(addr, idAdapter.GetKeyPair().PublicKey),
+		)
 
-	discoveryService := discovery.NewService(
-		&ChatRequestAdapter{Node: node.Node},
-		peer.CreateID(addr, idAdapter.GetKeyPair().PublicKey),
-	)
-
-	node.Node.AddService(discovery.DiscoveryServiceID, discoveryService.ReceiveHandler)
-
+		node.Node.AddService(discovery.DiscoveryServiceID, discoveryService.ReceiveHandler)
+	*/
 	if len(peers) > 0 {
 		for _, peerKV := range peers {
 			if len(peerKV) == 0 {

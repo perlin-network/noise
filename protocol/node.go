@@ -213,13 +213,14 @@ func (n *Node) Broadcast(body *MessageBody) error {
 		Sender: n.idAdapter.MyIdentity(),
 		Body:   body,
 	}
-	n.peers.Range(func(key, _ interface{}) bool {
+	for _, peer := range n.connAdapter.GetPeerIDs() {
 		// copy the struct
 		msg := *msgTemplate
-		msg.Recipient = ([]byte)(key.(string))
-		n.Send(&msg)
-		return true
-	})
+		msg.Recipient = peer.PublicKey
+		if err := n.Send(&msg); err != nil {
+			log.Debug().Err(err).Msgf("Unable to broadcast to %v", peer.Address)
+		}
+	}
 	return nil
 }
 
