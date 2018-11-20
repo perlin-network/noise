@@ -63,9 +63,7 @@ func TODOExampleSKademlia() {
 		connAdapter, err := skademlia.NewConnectionAdapter(
 			listener,
 			dialTCP,
-			skademlia.ID{
-				IdentityAdapter: idAdapter,
-				Address:         address},
+			skademlia.NewID(idAdapter.MyIdentity(), address),
 		)
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)

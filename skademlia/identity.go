@@ -30,6 +30,7 @@ type IdentityAdapter struct {
 	Nonce   []byte
 	signer  crypto.SignaturePolicy
 	hasher  crypto.HashPolicy
+	c1, c2  int
 }
 
 // NewIdentityAdapter creates a new SKademlia IdentityAdapter with the given cryptopuzzle constants.
@@ -42,6 +43,8 @@ func NewIdentityAdapter(c1, c2 int) *IdentityAdapter {
 		Nonce:   nonce,
 		signer:  ed25519.New(),
 		hasher:  b,
+		c1:      c1,
+		c2:      c2,
 	}
 }
 
@@ -59,12 +62,18 @@ func NewIdentityFromKeypair(kp *crypto.KeyPair, c1, c2 int) (*IdentityAdapter, e
 		Nonce:   getNonce(id, c2),
 		signer:  ed25519.New(),
 		hasher:  b,
+		c1:      c1,
+		c2:      c2,
 	}, nil
 }
 
 // MyIdentity returns the S/Kademlia public key ID.
 func (a IdentityAdapter) MyIdentity() []byte {
-	return a.keypair.PublicKey
+	var bytes []byte
+	for _, b := range a.keypair.PublicKey {
+		bytes = append(bytes, byte(b))
+	}
+	return bytes
 }
 
 // MyIdentityHex returns the S/Kademlia hex-encoded node's public key.
@@ -161,12 +170,12 @@ func checkDynamicPuzzle(nodeID, x []byte, c int) bool {
 }
 
 // VerifyPuzzle checks whether an ID is a valid S/Kademlia node ID with cryptopuzzle constants c1 and c2.
-func VerifyPuzzle(id *IdentityAdapter, c1, c2 int) bool {
+func VerifyPuzzle(publicKey, id, nonce []byte, c1, c2 int) bool {
 	// check if static puzzle and dynamic puzzle is solved
 	b := blake2b.New()
-	return bytes.Equal(b.HashBytes(id.keypair.PublicKey), id.id()) &&
-		checkHashedBytesPrefixLen(id.id(), c1) &&
-		checkDynamicPuzzle(id.id(), id.Nonce, c2)
+	return bytes.Equal(b.HashBytes(publicKey), id) &&
+		checkHashedBytesPrefixLen(id, c1) &&
+		checkDynamicPuzzle(id, nonce, c2)
 }
 
 // xor performs an xor operation on two byte slices.

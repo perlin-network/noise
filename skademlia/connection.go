@@ -1,10 +1,12 @@
 package skademlia
 
 import (
+	"encoding/hex"
 	"net"
 
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/crypto/blake2b"
+	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 
 	"github.com/pkg/errors"
@@ -32,7 +34,8 @@ func NewConnectionAdapter(listener net.Listener, dialer base.Dialer, id ID) (*Co
 func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
 	ok, id := a.rt.GetPeerFromPublicKey(remote)
 	if !ok {
-		return nil, errors.New("skademlia: remote ID not found in routing table")
+		hexID := hex.EncodeToString(remote)
+		return nil, errors.Errorf("skademlia: remote ID %s not found in routing table", hexID)
 	}
 
 	conn, err := a.baseConn.Dialer(id.Address)
@@ -47,21 +50,26 @@ func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, localID [
 	return a.baseConn.EstablishPassively(c, localID)
 }
 
+// GetConnectionIDs returns the public keys of all connected nodes in the routing table
 func (a *ConnectionAdapter) GetConnectionIDs() [][]byte {
 	results := [][]byte{}
 	for _, peer := range a.rt.GetPeers() {
-		results = append(results, peer.id)
+		results = append(results, peer.PublicKey)
 	}
 	return results
 }
 
-func (a *ConnectionAdapter) GetAddressByID(id []byte) (string, error) {
-	// TODO:
-	return "", errors.New("Not implemented")
+func (a *ConnectionAdapter) GetAddressByID(remote []byte) (string, error) {
+	if ok, peer := a.rt.GetPeer(blake2b.New().HashBytes(remote)); ok {
+		return peer.Address, nil
+	}
+	return "", errors.New("skademlia: peer not found")
 }
 
 func (a *ConnectionAdapter) AddConnection(remote []byte, addr string) {
-	// TODO:
-	id := ID{blake2b.New().HashBytes(remote), addr}
-	a.rt.Update(id)
+	hexID := hex.EncodeToString(remote)
+	log.Debug().
+		Str("local", hex.EncodeToString(a.rt.Self().PublicKey)).
+		Msgf("adding %s to routing table", hexID)
+	a.rt.Update(NewID(remote, addr))
 }

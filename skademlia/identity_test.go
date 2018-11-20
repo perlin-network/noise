@@ -20,7 +20,7 @@ func TestNewIdentityAdapter(t *testing.T) {
 	t.Parallel()
 
 	id := NewIdentityAdapter(DefaultC1, DefaultC2)
-	if !VerifyPuzzle(id, DefaultC1, DefaultC2) {
+	if !VerifyPuzzle(id.MyIdentity(), id.id(), id.Nonce, DefaultC1, DefaultC2) {
 		t.Errorf("GenerateKeyPairAndID() expected ID to be valid")
 	}
 }
@@ -203,7 +203,7 @@ func TestVerifyPuzzle(t *testing.T) {
 			t.Errorf("NewIdentityFromKeypair() expected no error, got: %+v", err)
 		}
 		id.Nonce = nonce
-		ok := VerifyPuzzle(id, 16, 16)
+		ok := VerifyPuzzle(id.MyIdentity(), id.id(), id.Nonce, 16, 16)
 		if ok != tt.valid {
 			t.Errorf("VerifyPuzzle() expected to be %t, got %t", tt.valid, ok)
 		}
