@@ -23,15 +23,16 @@ type SKNode struct {
 	ConnAdapter protocol.ConnectionAdapter
 }
 
-func (n *SKNode) service(message *protocol.Message) {
+func (n *SKNode) service(message *protocol.Message) (*protocol.MessageBody, error) {
 	if message.Body.Service != serviceID {
-		return
+		return nil, nil
 	}
 	if len(message.Body.Payload) == 0 {
-		return
+		return nil, nil
 	}
 	payload := string(message.Body.Payload)
 	n.Mailbox <- payload
+	return nil, nil
 }
 
 func makeMessageBody(value string) *protocol.MessageBody {
@@ -108,7 +109,7 @@ func TestHandshake(t *testing.T) {
 				continue
 			}
 			peerID := otherNode.Node.GetIdentityAdapter().MyIdentity()
-			srcNode.ConnAdapter.AddConnection(peerID, fmt.Sprintf("%s:%d", host, ports[j]))
+			srcNode.ConnAdapter.AddPeerID(peerID, fmt.Sprintf("%s:%d", host, ports[j]))
 		}
 	}
 

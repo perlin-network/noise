@@ -45,14 +45,15 @@ func main() {
 
 	var msgCount uint64
 
-	node.AddService(42, func(message *protocol.Message) {
+	node.AddService(42, func(message *protocol.Message) (*protocol.MessageBody, error) {
 		atomic.AddUint64(&msgCount, 1)
 		//log.Info().Msgf("received payload from %s: %s", hex.EncodeToString(message.Sender), string(message.Body.Payload))
 		/*node.Send(&protocol.Message {
-			Sender: kp.PublicKey,
-			Recipient: message.Sender,
-			Body: message.Body,
-		})*/
+					Sender: kp.PublicKey,
+					Recipient: message.Sender,
+					Body: message.Body,
+		        })*/
+		return nil, nil
 	})
 
 	log.Info().Msgf("started, pubkey = %s", kp.PublicKeyHex())
@@ -63,7 +64,7 @@ func main() {
 			panic(err)
 		}
 		remoteAddr := os.Args[4]
-		connAdapter.AddConnection(peerID, remoteAddr)
+		connAdapter.AddPeerID(peerID, remoteAddr)
 
 		go func() {
 			for {

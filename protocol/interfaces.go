@@ -1,17 +1,13 @@
 package protocol
 
-import (
-	"github.com/perlin-network/noise/peer"
-)
-
 type RecvMessageCallback func(message []byte)
 
 // ConnectionAdapter is an adapter that establishes real/virtual connections (message adapters), both passively and actively.
 type ConnectionAdapter interface {
 	EstablishPassively(c *Controller, local []byte) chan MessageAdapter
 	EstablishActively(c *Controller, local []byte, remote []byte) (MessageAdapter, error)
-	AddPeerID(id peer.ID)
-	GetPeerIDs() []peer.ID
+	AddPeerID(id []byte, addr string)
+	GetPeerIDs() [][]byte
 }
 
 // MessageAdapter is an adapter that sends/receives messages, usually corresponding to a real/virtual connection.

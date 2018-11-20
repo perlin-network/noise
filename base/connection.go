@@ -2,7 +2,6 @@ package base
 
 import (
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
 	"net"
@@ -125,16 +124,15 @@ func (a *ConnectionAdapter) updatePubliclyVisibleAddress(address string) {
 	})
 }
 
-func (a *ConnectionAdapter) AddPeerID(id peer.ID) {
-	a.idToAddress.Store(string(id.PublicKey), id.Address)
+func (a *ConnectionAdapter) AddPeerID(id []byte, addr string) {
+	a.idToAddress.Store(string(id), addr)
 
 }
 
-func (a *ConnectionAdapter) GetPeerIDs() []peer.ID {
-	var results []peer.ID
+func (a *ConnectionAdapter) GetPeerIDs() [][]byte {
+	var results [][]byte
 	a.idToAddress.Range(func(key, value interface{}) bool {
-		peer := peer.CreateID(value.(string), ([]byte)(key.(string)))
-		results = append(results, peer)
+		results = append(results, ([]byte)(key.(string)))
 		return true
 	})
 	return results

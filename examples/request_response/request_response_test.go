@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -84,7 +83,7 @@ func TestRequestResponse(t *testing.T) {
 				continue
 			}
 			peerID := otherNode.Node.GetIdentityAdapter().MyIdentity()
-			srcNode.ConnAdapter.AddPeerID(peer.CreateID(fmt.Sprintf("%s:%d", host, startPort+j), peerID))
+			srcNode.ConnAdapter.AddPeerID(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
 		}
 	}
 

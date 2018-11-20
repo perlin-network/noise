@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"github.com/perlin-network/noise/peer"
 	"net"
 	"strings"
 	"time"
@@ -12,6 +11,10 @@ import (
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/protocol"
 )
+
+func dialTCP(addr string) (net.Conn, error) {
+	return net.DialTimeout("tcp", addr, 10*time.Second)
+}
 
 func main() {
 	// process flags
@@ -33,11 +36,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
-	selfID := peer.CreateID(localAddr, idAdapter.MyIdentity())
-	connAdapter, err := base.NewConnectionAdapter(listener, func(addr string) (net.Conn, error) {
-		return net.DialTimeout("tcp", addr, 10*time.Second)
-	}, selfID)
+	connAdapter, err := base.NewConnectionAdapter(listener, dialTCP)
 	if err != nil {
 		panic(err)
 	}
@@ -48,8 +47,9 @@ func main() {
 		idAdapter,
 	)
 
-	node.AddService(42, func(message *protocol.Message) {
+	node.AddService(42, func(message *protocol.Message) (*protocol.MessageBody, error) {
 		fmt.Printf("received payload from %s: %s\n", hex.EncodeToString(message.Sender), string(message.Body.Payload))
+		return nil, nil
 	})
 
 	if len(peers) > 0 {
@@ -64,7 +64,7 @@ func main() {
 				panic(err)
 			}
 			remoteAddr := p[1]
-			connAdapter.AddPeerID(peer.CreateID(remoteAddr, peerID))
+			connAdapter.AddPeerID(peerID, remoteAddr)
 		}
 	}
 

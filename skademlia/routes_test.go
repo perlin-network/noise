@@ -78,7 +78,7 @@ func TestGetPeer(t *testing.T) {
 	routingTable := CreateRoutingTable(id1)
 	routingTable.Update(id2)
 
-	ok, found := routingTable.GetPeer(id1.ID)
+	found, ok := routingTable.GetPeer(id1.ID)
 	if !ok && found == nil {
 		t.Errorf("GetPeer() expected to find id1")
 	}
@@ -86,12 +86,12 @@ func TestGetPeer(t *testing.T) {
 		t.Fatalf("GetPeer() expected found peer %+v to be equal to id1 %+v", found, id1)
 	}
 
-	ok, found = routingTable.GetPeer(id3.ID)
+	found, ok = routingTable.GetPeer(id3.ID)
 	if ok && found != nil {
 		t.Errorf("GetPeer() expected not to find id3")
 	}
 	routingTable.Update(id3)
-	ok, found = routingTable.GetPeer(id3.ID)
+	found, ok = routingTable.GetPeer(id3.ID)
 	if !ok && found == nil {
 		t.Errorf("GetPeer() expected to find id3")
 	}
@@ -100,7 +100,7 @@ func TestGetPeer(t *testing.T) {
 	}
 
 	routingTable.RemovePeer(id1.ID)
-	ok, found = routingTable.GetPeer(id1.ID)
+	found, ok = routingTable.GetPeer(id1.ID)
 	if ok && found != nil {
 		t.Errorf("GetPeer() expected not to find id1 after deletion")
 	}

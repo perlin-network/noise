@@ -32,7 +32,7 @@ func NewConnectionAdapter(listener net.Listener, dialer base.Dialer, id ID) (*Co
 }
 
 func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
-	ok, id := a.rt.GetPeerFromPublicKey(remote)
+	id, ok := a.rt.GetPeerFromPublicKey(remote)
 	if !ok {
 		hexID := hex.EncodeToString(remote)
 		return nil, errors.Errorf("skademlia: remote ID %s not found in routing table", hexID)
@@ -50,8 +50,8 @@ func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, localID [
 	return a.baseConn.EstablishPassively(c, localID)
 }
 
-// GetConnectionIDs returns the public keys of all connected nodes in the routing table
-func (a *ConnectionAdapter) GetConnectionIDs() [][]byte {
+// GetPeerIDs returns the public keys of all connected nodes in the routing table
+func (a *ConnectionAdapter) GetPeerIDs() [][]byte {
 	results := [][]byte{}
 	for _, peer := range a.rt.GetPeers() {
 		results = append(results, peer.PublicKey)
@@ -60,13 +60,13 @@ func (a *ConnectionAdapter) GetConnectionIDs() [][]byte {
 }
 
 func (a *ConnectionAdapter) GetAddressByID(remote []byte) (string, error) {
-	if ok, peer := a.rt.GetPeer(blake2b.New().HashBytes(remote)); ok {
+	if peer, ok := a.rt.GetPeer(blake2b.New().HashBytes(remote)); ok {
 		return peer.Address, nil
 	}
 	return "", errors.New("skademlia: peer not found")
 }
 
-func (a *ConnectionAdapter) AddConnection(remote []byte, addr string) {
+func (a *ConnectionAdapter) AddPeerID(remote []byte, addr string) {
 	hexID := hex.EncodeToString(remote)
 	log.Debug().
 		Str("local", hex.EncodeToString(a.rt.Self().PublicKey)).

@@ -124,7 +124,7 @@ func main() {
 				panic(err)
 			}
 			remoteAddr := p[1]
-			connAdapter.AddPeerID(peer.CreateID(remoteAddr, peerID))
+			connAdapter.AddPeerID(peerID, remoteAddr)
 		}
 	}
 

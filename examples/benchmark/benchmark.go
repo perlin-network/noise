@@ -97,8 +97,9 @@ func StartInstance(port int) *Instance {
 		keypair:     idAdapter.GetKeyPair(),
 	}
 
-	node.AddService(42, func(message *protocol.Message) {
+	node.AddService(42, func(message *protocol.Message) (*protocol.MessageBody, error) {
 		atomic.AddUint64(&inst.messageCount, 1)
+		return nil, nil
 	})
 
 	node.Start()
@@ -117,7 +118,7 @@ func main() {
 	}
 	for i := 0; i < NumInstances; i++ {
 		for j := 0; j < NumInstances; j++ {
-			instances[i].connAdapter.AddConnection(instances[j].keypair.PublicKey, instances[j].address)
+			instances[i].connAdapter.AddPeerID(instances[j].keypair.PublicKey, instances[j].address)
 		}
 	}
 

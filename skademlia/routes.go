@@ -111,7 +111,7 @@ func (t *RoutingTable) Update(target ID) {
 }
 
 // GetPeer retrieves the ID struct in the routing table given a peer ID if found.
-func (t *RoutingTable) GetPeer(id []byte) (bool, *ID) {
+func (t *RoutingTable) GetPeer(id []byte) (*ID, bool) {
 	bucketID := prefixLen(xor(id, t.self.ID))
 	bucket := t.Bucket(bucketID)
 
@@ -122,15 +122,15 @@ func (t *RoutingTable) GetPeer(id []byte) (bool, *ID) {
 	for e := bucket.Front(); e != nil; e = e.Next() {
 		found := e.Value.(ID)
 		if bytes.Equal(found.ID, id) {
-			return true, &found
+			return &found, true
 		}
 	}
 
-	return false, nil
+	return nil, false
 }
 
 // GetPeerFromPublicKey retrieves the ID struct in the routing table given a peer's public key if found.
-func (t *RoutingTable) GetPeerFromPublicKey(publicKey []byte) (bool, *ID) {
+func (t *RoutingTable) GetPeerFromPublicKey(publicKey []byte) (*ID, bool) {
 	id := blake2b.New().HashBytes(publicKey)
 	return t.GetPeer(id)
 }

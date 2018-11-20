@@ -3,6 +3,7 @@ package protocol
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	_ "fmt"
 	"github.com/monnand/dhkx"
 	"github.com/perlin-network/noise/log"
@@ -250,12 +251,12 @@ func (n *Node) Broadcast(body *MessageBody) error {
 		Sender: n.idAdapter.MyIdentity(),
 		Body:   body,
 	}
-	for _, peer := range n.connAdapter.GetPeerIDs() {
+	for _, peerPublicKey := range n.connAdapter.GetPeerIDs() {
 		// copy the struct
 		msg := *msgTemplate
-		msg.Recipient = peer.PublicKey
+		msg.Recipient = peerPublicKey
 		if err := n.Send(&msg); err != nil {
-			log.Debug().Err(err).Msgf("Unable to broadcast to %v", peer.Address)
+			log.Debug().Err(err).Msgf("Unable to broadcast to %v", hex.EncodeToString(peerPublicKey))
 		}
 	}
 	return nil
