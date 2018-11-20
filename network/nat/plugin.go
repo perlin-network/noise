@@ -74,7 +74,7 @@ func (p *plugin) Startup(n *network.Network) {
 		Str("external_ip", p.externalIP.String()).
 		Msg("")
 
-	p.externalPort, err = gateway.AddPortMapping("tcp", p.internalPort, "noise", 60*time.Second)
+	p.externalPort, err = gateway.AddPortMapping("tcp", p.internalPort, "noise", 30*time.Second)
 
 	if err != nil {
 		log.Warn().
@@ -98,16 +98,6 @@ func (p *plugin) Startup(n *network.Network) {
 	// Set peer information based off of port mapping info.
 	n.Address = info.String()
 	n.ID = peer.CreateID(n.Address, n.GetKeys().PublicKey)
-
-	go func() {
-		for {
-			time.Sleep(60 * time.Second)
-			_, err = gateway.AddPortMapping("tcp", p.internalPort, "noise", 60*time.Second)
-			if err != nil {
-				log.Error().Err(err).Msg("")
-			}
-		}
-	}()
 }
 
 func (p *plugin) Cleanup(n *network.Network) {
