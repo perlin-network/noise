@@ -1,10 +1,8 @@
 package discovery
 
 import (
-	"context"
 	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/internal/protobuf"
-	"github.com/perlin-network/noise/peer"
 	"github.com/pkg/errors"
 )
 
@@ -15,11 +13,6 @@ const (
 	opCodeLookupRequest  = 3
 	opCodeLookupResponse = 4
 )
-
-type RequestAdapter interface {
-	Request(ctx context.Context, target peer.ID, body *protobuf.Message) (*protobuf.Message, error)
-	Reply(ctx context.Context, target peer.ID, body *protobuf.Message) error
-}
 
 func toProtobufMessage(opcode int, content proto.Message) (*protobuf.Message, error) {
 	raw, err := proto.Marshal(content)

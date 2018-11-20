@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/base"
+	"github.com/perlin-network/noise/base/discovery"
 	"github.com/perlin-network/noise/examples/chat/messages"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
@@ -35,7 +36,7 @@ type ChatNode struct {
 	ConnAdapter protocol.ConnectionAdapter
 }
 
-func (n *ChatNode) ReceiveHandler(request *protocol.Message) (*protocol.Message, error) {
+func (n *ChatNode) ReceiveHandler(request *protocol.Message) (*protocol.MessageBody, error) {
 	if len(request.Body.Payload) == 0 {
 		return nil, errors.New("Empty payload")
 	}
@@ -103,14 +104,14 @@ func main() {
 	}
 
 	node.Node.AddService(chatServiceID, node.ReceiveHandler)
-	/*
-		discoveryService := discovery.NewService(
-			&ChatRequestAdapter{Node: node.Node},
-			peer.CreateID(addr, idAdapter.GetKeyPair().PublicKey),
-		)
 
-		node.Node.AddService(discovery.DiscoveryServiceID, discoveryService.ReceiveHandler)
-	*/
+	discoveryService := discovery.NewService(
+		node.Node,
+		peer.CreateID(addr, idAdapter.GetKeyPair().PublicKey),
+	)
+
+	node.Node.AddService(discovery.DiscoveryServiceID, discoveryService.ReceiveHandler)
+
 	if len(peers) > 0 {
 		for _, peerKV := range peers {
 			if len(peerKV) == 0 {

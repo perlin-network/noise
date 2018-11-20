@@ -1,7 +1,6 @@
 package discovery
 
 import (
-	"context"
 	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/internal/protobuf"
@@ -17,53 +16,55 @@ type Service struct {
 	DisablePong   bool
 	DisableLookup bool
 
-	Routes         *dht.RoutingTable
-	requestAdapter RequestAdapter
+	Routes *dht.RoutingTable
+	Node   *protocol.Node
 }
 
 // NewService creates a new instance of the Discovery Service
-func NewService(requestAdapter RequestAdapter, selfID peer.ID) *Service {
+func NewService(node *protocol.Node, selfID peer.ID) *Service {
 	return &Service{
-		Routes:         dht.CreateRoutingTable(selfID),
-		requestAdapter: requestAdapter,
+		Routes: dht.CreateRoutingTable(selfID),
+		Node:   node,
 	}
 }
 
 // ReceiveHandler is the handler when a message is received
-func (s *Service) ReceiveHandler(message *protocol.Message) {
+func (s *Service) ReceiveHandler(message *protocol.Message) (*protocol.MessageBody, error) {
 
 	if message == nil || message.Body == nil || message.Body.Service != DiscoveryServiceID {
 		// corrupt message so ignore
-		return
+		return nil, errors.New("Message is corrupt")
 	}
 	if len(message.Body.Payload) == 0 {
 		// corrupt payload so ignore
-		return
+		return nil, errors.New("Message body is missing")
 	}
 
 	sender, ok := s.Routes.LookupRemoteAddress(message.Sender)
 	if !ok {
-		// TODO: handle known peer
-		return
+		return nil, errors.New("Unable to lookup sender")
 	}
 	target, ok := s.Routes.LookupRemoteAddress(message.Recipient)
 	if !ok {
 		// TODO: handle known peer
-		return
+		return nil, errors.New("Unable to lookup recipient")
 	}
 
 	var msg protobuf.Message
 	if err := proto.Unmarshal(message.Body.Payload, &msg); err != nil {
 		// unknown type so ignore
-		return
+		return nil, errors.Wrap(err, "Unable to parse message")
 	}
 
-	if err := s.receive(*sender, *target, msg); err != nil {
-		log.Warn().Err(err).Msg("")
+	reply, err := s.receive(*sender, *target, msg)
+	if err != nil {
+		return nil, err
 	}
+
+	return reply, nil
 }
 
-func (s *Service) receive(sender peer.ID, target peer.ID, msg protobuf.Message) error {
+func (s *Service) receive(sender peer.ID, target peer.ID, msg protobuf.Message) (*protocol.MessageBody, error) {
 	// update the routes on every message
 	s.Routes.Update(sender)
 
@@ -73,14 +74,12 @@ func (s *Service) receive(sender peer.ID, target peer.ID, msg protobuf.Message) 
 			break
 		}
 		// send the pong to the peer
-		if err := s.reply(sender, msg.RequestNonce, opCodePong, &protobuf.Pong{}); err != nil {
-			return err
-		}
+		return makeMessageBody(opCodePong, &protobuf.Pong{})
 	case opCodePong:
 		if s.DisablePong {
 			break
 		}
-		peers := FindNode(s.Routes, s.requestAdapter, sender, dht.BucketSize, 8)
+		peers := FindNode(s.Routes, s.Node, sender, dht.BucketSize, 8)
 
 		// Update routing table w/ closest peers to self.
 		for _, peerID := range peers {
@@ -104,13 +103,11 @@ func (s *Service) receive(sender peer.ID, target peer.ID, msg protobuf.Message) 
 			response.Peers = append(response.Peers, &id)
 		}
 
-		if err := s.reply(sender, msg.RequestNonce, opCodeLookupResponse, response); err != nil {
-			return err
-		}
+		return makeMessageBody(opCodeLookupResponse, response)
 	default:
-		return errors.Errorf("Unknown message opcode type: %d", msg.Opcode)
+		return nil, errors.Errorf("Unknown message opcode type: %d", msg.Opcode)
 	}
-	return nil
+	return nil, nil
 }
 
 // PeerDisconnect handles updating the routing table on disconnect
@@ -126,12 +123,17 @@ func (s *Service) PeerDisconnect(target peer.ID) {
 	}
 }
 
-func (s *Service) reply(target peer.ID, requestNonce uint64, opcode int, content proto.Message) error {
+func makeMessageBody(opcode int, content proto.Message) (*protocol.MessageBody, error) {
 	msg, err := toProtobufMessage(opcode, content)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	msg.ReplyFlag = true
-	msg.RequestNonce = requestNonce
-	return s.requestAdapter.Reply(context.Background(), target, msg)
+	msgBytes, err := proto.Marshal(msg)
+	if err != nil {
+		return nil, errors.Wrap(err, "Unable to marshal")
+	}
+	return &protocol.MessageBody{
+		Service: DiscoveryServiceID,
+		Payload: msgBytes,
+	}, nil
 }
