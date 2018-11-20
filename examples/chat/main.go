@@ -81,13 +81,13 @@ func (c *ChatRequestAdapter) Request(ctx context.Context, target peer.ID, body *
 	if err := c.Node.Send(msg); err != nil {
 		return nil, err
 	}
+
 	select {
 	case reply := <-replyChan:
 		return reply, nil
 	case <-time.After(3 * time.Second):
 		return nil, errors.New("Timed out")
 	}
-	return nil, errors.New("Unexpected")
 }
 
 func (c *ChatRequestAdapter) Reply(ctx context.Context, target peer.ID, body *protobuf.Message) error {
