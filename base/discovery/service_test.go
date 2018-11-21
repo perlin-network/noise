@@ -2,6 +2,7 @@ package discovery_test
 
 import (
 	"context"
+	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/base/discovery"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/peer"
@@ -63,4 +64,39 @@ func TestDiscoveryPong(t *testing.T) {
 	})
 	assert.Nil(t, err)
 	assert.Nil(t, reply)
+}
+
+func TestDiscoveryLookupRequest(t *testing.T) {
+	s := discovery.NewService(nil, peer.CreateID("selfAddr", ([]byte)("self")))
+	assert.NotNil(t, s)
+	s.Routes.Update(peer.CreateID("senderAddr", ([]byte)("sender")))
+	s.Routes.Update(peer.CreateID("recipientAddr", ([]byte)("recipient")))
+
+	content := &protobuf.LookupNodeRequest{}
+	body, err := discovery.ToMessageBody(discovery.ServiceID, discovery.OpCodeLookupRequest, content)
+	assert.Nil(t, err)
+	reply, err := s.ReceiveHandler(&protocol.Message{
+		Sender:    ([]byte)("sender"),
+		Recipient: ([]byte)("recipient"),
+		Body:      body,
+	})
+	assert.Nil(t, err)
+
+	respBody, err := discovery.ParseMessageBody(reply)
+	assert.Nil(t, err)
+	assert.Equal(t, discovery.OpCodeLookupResponse, int(respBody.Opcode))
+
+	var respMsg protobuf.LookupNodeResponse
+	assert.Nil(t, proto.Unmarshal(respBody.Message, &respMsg))
+	assert.Equal(t, 3, len(respMsg.Peers))
+	for _, addr := range []string{"selfAddr", "recipientAddr", "senderAddr"} {
+		found := false
+		for _, peer := range respMsg.Peers {
+			if peer.Address == addr {
+				found = true
+				break
+			}
+		}
+		assert.Truef(t, found, "Unable to find address in list: %s", addr)
+	}
 }
