@@ -12,16 +12,12 @@ import (
 	"sync/atomic"
 )
 
-// Service receives all messages for a registered service id
-//  and returns the reply or error
-type Service func(request *Message) (*MessageBody, error)
-
 type Node struct {
 	controller               *Controller
 	connAdapter              ConnectionAdapter
 	idAdapter                IdentityAdapter
 	peers                    sync.Map // string -> *PendingPeer | *EstablishedPeer
-	services                 map[uint16]Service
+	services                 []ServiceInterface
 	dhGroup                  *dhkx.DHGroup
 	dhKeypair                *dhkx.DHKey
 	customHandshakeProcessor HandshakeProcessor
@@ -52,7 +48,7 @@ func NewNode(c *Controller, ca ConnectionAdapter, id IdentityAdapter) *Node {
 		controller:   c,
 		connAdapter:  ca,
 		idAdapter:    id,
-		services:     make(map[uint16]Service),
+		services:     []ServiceInterface{},
 		dhGroup:      g,
 		dhKeypair:    privKey,
 		RequestNonce: 0,
@@ -63,8 +59,8 @@ func (n *Node) SetCustomHandshakeProcessor(p HandshakeProcessor) {
 	n.customHandshakeProcessor = p
 }
 
-func (n *Node) AddService(id uint16, s Service) {
-	n.services[id] = s
+func (n *Node) AddService(s ServiceInterface) {
+	n.services = append(n.services, s)
 }
 
 func (n *Node) removePeer(id []byte) {
@@ -76,6 +72,10 @@ func (n *Node) removePeer(id []byte) {
 		}
 		n.peers.Delete(string(id))
 		//fmt.Printf("deleting peer: %b\n", id)
+
+		for _, svc := range n.services {
+			svc.PeerDisconnect(id)
+		}
 	}
 }
 
@@ -105,8 +105,8 @@ func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) error 
 		return nil
 	}
 
-	if svc, ok := n.services[body.Service]; ok {
-		replyBody, err := svc(&Message{
+	for _, svc := range n.services {
+		replyBody, err := svc.Receive(&Message{
 			Sender:    peer.adapter.RemoteEndpoint(),
 			Recipient: n.idAdapter.MyIdentity(),
 			Body:      body,
@@ -124,20 +124,26 @@ func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) error 
 				return errors.Wrapf(err, "Error replying to request for service=%d", body.Service)
 			}
 		}
-	} else {
-		log.Debug().Msgf("message to unknown service %d dropped", body.Service)
 	}
 	return nil
 }
 
 func (n *Node) Start() {
 	go func() {
+		// call startup on all the nodes first
+		for _, svc := range n.services {
+			svc.Startup(n)
+		}
+
 		for adapter := range n.connAdapter.EstablishPassively(n.controller, n.idAdapter.MyIdentity()) {
 			adapter := adapter // the outer adapter is shared?
 			peer, err := EstablishPeerWithMessageAdapter(n.controller, n.dhGroup, n.dhKeypair, n.idAdapter, adapter, true)
 			if err != nil {
 				log.Error().Err(err).Msg("cannot establish peer")
 				continue
+			}
+			for _, svc := range n.services {
+				svc.PeerConnect(adapter.RemoteEndpoint())
 			}
 
 			n.peers.Store(string(adapter.RemoteEndpoint()), peer)
@@ -305,4 +311,8 @@ func (n *Node) Request(ctx context.Context, target []byte, body *MessageBody) (*
 
 func (n *Node) GetIdentityAdapter() IdentityAdapter {
 	return n.idAdapter
+}
+
+func (n *Node) GetConnectionAdapter() ConnectionAdapter {
+	return n.connAdapter
 }

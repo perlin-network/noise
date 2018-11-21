@@ -19,14 +19,17 @@ const (
 	host      = "localhost"
 )
 
-// BasicNode buffers all messages into a mailbox for this test.
-type BasicNode struct {
-	Node        *protocol.Node
-	Mailbox     chan *messages.BasicMessage
-	ConnAdapter protocol.ConnectionAdapter
+// BasicService buffers all messages into a mailbox for this test.
+type BasicService struct {
+	protocol.Service
+	Mailbox chan *messages.BasicMessage
 }
 
-func (n *BasicNode) receiveHandler(message *protocol.Message) (*protocol.MessageBody, error) {
+func (n *BasicService) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
+	if message.Body.Service != serviceID {
+		// early exit if not the matching service
+		return nil, nil
+	}
 	if len(message.Body.Payload) == 0 {
 		return nil, errors.New("Empty payload")
 	}
@@ -60,7 +63,8 @@ func dialTCP(addr string) (net.Conn, error) {
 // ExampleBasic demonstrates how to broadcast a message to a set of peers that discover
 // each other through peer discovery.
 func ExampleBasic() {
-	var nodes []*BasicNode
+	var services []*BasicService
+	var nodes []*protocol.Node
 
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
@@ -76,21 +80,19 @@ func ExampleBasic() {
 			log.Fatal().Msgf("%+v", err)
 		}
 
-		node := &BasicNode{
-			Node: protocol.NewNode(
-				protocol.NewController(),
-				connAdapter,
-				idAdapter,
-			),
-			Mailbox:     make(chan *messages.BasicMessage, 1),
-			ConnAdapter: connAdapter,
+		node := protocol.NewNode(
+			protocol.NewController(),
+			connAdapter,
+			idAdapter,
+		)
+		service := &BasicService{
+			Mailbox: make(chan *messages.BasicMessage, 1),
 		}
 
-		node.Node.AddService(serviceID, node.receiveHandler)
-
-		node.Node.Start()
+		node.AddService(service)
 
 		nodes = append(nodes, node)
+		services = append(services, service)
 	}
 
 	// Connect all the node routing tables
@@ -99,27 +101,33 @@ func ExampleBasic() {
 			if i == j {
 				continue
 			}
-			peerID := otherNode.Node.GetIdentityAdapter().MyIdentity()
-			srcNode.ConnAdapter.AddPeerID(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
+			peerID := otherNode.GetIdentityAdapter().MyIdentity()
+			srcNode.GetConnectionAdapter().AddPeerID(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
 		}
 	}
 
+	for _, node := range nodes {
+		node.Start()
+	}
+
+	time.Sleep(time.Duration(len(nodes)*100) * time.Millisecond)
+
 	// Broadcast out a message from Node 0.
 	expected := "This is a broadcasted message from Node 0."
-	nodes[0].Node.Broadcast(makeMessageBody(expected))
+	nodes[0].Broadcast(makeMessageBody(expected))
 
 	fmt.Println("Node 0 sent out a message.")
 
 	// Check if message was received by other nodes.
-	for i := 1; i < len(nodes); i++ {
+	for i := 1; i < len(services); i++ {
 		select {
-		case received := <-nodes[i].Mailbox:
+		case received := <-services[i].Mailbox:
 			if received.Message != expected {
 				fmt.Printf("Expected message %s to be received by node %d but got %v\n", expected, i, received.Message)
 			} else {
 				fmt.Printf("Node %d received a message from Node 0.\n", i)
 			}
-		case <-time.After(3 * time.Second):
+		case <-time.After(2 * time.Second):
 			fmt.Printf("Timed out attempting to receive message from Node 0.\n")
 		}
 	}
