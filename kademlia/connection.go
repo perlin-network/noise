@@ -8,7 +8,6 @@ import (
 	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
 	"net"
-	"sync"
 )
 
 const (
@@ -32,8 +31,8 @@ func NewConnectionAdapter(listener net.Listener, dialer Dialer) (*ConnectionAdap
 	}, nil
 }
 
-func (a *ConnectionAdapter) SetHandler(sendHandler discovery.SendHandler, selfID peer.ID) {
-	a.discovery = discovery.NewService(sendHandler, selfID)
+func (a *ConnectionAdapter) SetDiscoveryService(discovery *discovery.Service) {
+	a.discovery = discovery
 }
 
 func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {

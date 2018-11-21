@@ -12,6 +12,8 @@ import (
 
 // Service is a service that handles periodic lookups of remote peers
 type Service struct {
+	protocol.Service
+
 	DisablePing   bool
 	DisablePong   bool
 	DisableLookup bool
@@ -29,7 +31,7 @@ func NewService(sendHandler SendHandler, selfID peer.ID) *Service {
 }
 
 // ReceiveHandler is the handler when a message is received
-func (s *Service) ReceiveHandler(message *protocol.Message) (*protocol.MessageBody, error) {
+func (s *Service) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
 
 	if message == nil || message.Body == nil || message.Body.Service != ServiceID {
 		// corrupt message so ignore
@@ -111,14 +113,15 @@ func (s *Service) receive(sender peer.ID, target peer.ID, msg protobuf.Message) 
 }
 
 // PeerDisconnect handles updating the routing table on disconnect
-func (s *Service) PeerDisconnect(target peer.ID) {
+func (s *Service) PeerDisconnect(target []byte) {
+	t := peer.CreateID("", target)
 	// Delete peer if in routing table.
-	if s.Routes.PeerExists(target) {
-		s.Routes.RemovePeer(target)
+	if s.Routes.PeerExists(t) {
+		s.Routes.RemovePeer(t)
 
 		log.Debug().
 			Str("address", s.Routes.Self().Address).
-			Str("peer_address", target.Address).
+			Str("peer_pub_key", t.PublicKeyHex()).
 			Msg("Peer has disconnected.")
 	}
 }
