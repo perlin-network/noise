@@ -7,11 +7,9 @@ import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/base"
-	"github.com/perlin-network/noise/base/discovery"
 	"github.com/perlin-network/noise/examples/chat/messages"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
 	"net"
@@ -104,13 +102,6 @@ func main() {
 	}
 
 	node.Node.AddService(chatServiceID, node.ReceiveHandler)
-
-	discoveryService := discovery.NewService(
-		node.Node,
-		peer.CreateID(addr, idAdapter.GetKeyPair().PublicKey),
-	)
-
-	node.Node.AddService(discovery.ServiceID, discoveryService.ReceiveHandler)
 
 	if len(peers) > 0 {
 		for _, peerKV := range peers {

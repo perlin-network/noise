@@ -21,7 +21,7 @@ type MessageAdapter struct {
 	finalizerNotifier chan struct{}
 }
 
-func NewMessageAdapter(connAdapter *ConnectionAdapter, conn net.Conn, local, remote []byte, remoteAddr string, passive bool) (*MessageAdapter, error) {
+func NewMessageAdapter(connAdapter protocol.ConnectionAdapter, conn net.Conn, local, remote []byte, remoteAddr string, passive bool) (*MessageAdapter, error) {
 	if len(local) > 255 || len(remote) > 255 {
 		return nil, errors.New("local or remote id too long")
 	}
@@ -57,8 +57,10 @@ func NewMessageAdapter(connAdapter *ConnectionAdapter, conn net.Conn, local, rem
 				return nil, err
 			}
 			pva := string(pvaBytes)
-			connAdapter.updatePubliclyVisibleAddress(pva)
-			//log.Debug().Msgf("Current publicly visible address: %s", connAdapter.getPubliclyVisibleAddress())
+			if ca, ok := connAdapter.(*ConnectionAdapter); ok {
+				ca.updatePubliclyVisibleAddress(pva)
+				//log.Debug().Msgf("Current publicly visible address: %s", connAdapter.getPubliclyVisibleAddress())
+			}
 		}
 	} else {
 		_, err := conn.Write(local)

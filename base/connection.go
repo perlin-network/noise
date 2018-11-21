@@ -138,7 +138,6 @@ func (a *ConnectionAdapter) GetPeerIDs() [][]byte {
 	return results
 }
 
-// TODO: replace this with the routes table
 func (a *ConnectionAdapter) lookupAddressByID(id []byte) (string, error) {
 	if v, ok := a.idToAddress.Load(string(id)); ok {
 		return v.(string), nil

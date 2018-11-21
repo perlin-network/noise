@@ -3,8 +3,8 @@ package discovery_test
 import (
 	"context"
 	"github.com/gogo/protobuf/proto"
-	"github.com/perlin-network/noise/base/discovery"
 	"github.com/perlin-network/noise/internal/protobuf"
+	"github.com/perlin-network/noise/kademlia/discovery"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/stretchr/testify/assert"
