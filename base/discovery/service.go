@@ -16,15 +16,15 @@ type Service struct {
 	DisablePong   bool
 	DisableLookup bool
 
-	Routes *dht.RoutingTable
-	Node   *protocol.Node
+	Routes      *dht.RoutingTable
+	sendHandler SendHandler
 }
 
 // NewService creates a new instance of the Discovery Service
-func NewService(node *protocol.Node, selfID peer.ID) *Service {
+func NewService(sendHandler SendHandler, selfID peer.ID) *Service {
 	return &Service{
-		Routes: dht.CreateRoutingTable(selfID),
-		Node:   node,
+		Routes:      dht.CreateRoutingTable(selfID),
+		sendHandler: sendHandler,
 	}
 }
 
@@ -79,7 +79,7 @@ func (s *Service) receive(sender peer.ID, target peer.ID, msg protobuf.Message) 
 		if s.DisablePong {
 			break
 		}
-		peers := FindNode(s.Routes, s.Node, sender, dht.BucketSize, 8)
+		peers := FindNode(s.Routes, s.sendHandler, sender, dht.BucketSize, 8)
 
 		// Update routing table w/ closest peers to self.
 		for _, peerID := range peers {

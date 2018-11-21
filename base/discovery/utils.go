@@ -1,8 +1,10 @@
 package discovery
 
 import (
+	"context"
 	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/internal/protobuf"
+	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
 )
 
@@ -14,6 +16,10 @@ const (
 	opCodeLookupResponse = 4
 )
 
+type SendHandler interface {
+	Request(ctx context.Context, target []byte, body *protocol.MessageBody) (*protocol.MessageBody, error)
+}
+
 func toProtobufMessage(opcode int, content proto.Message) (*protobuf.Message, error) {
 	raw, err := proto.Marshal(content)
 	if err != nil {
@@ -24,14 +30,4 @@ func toProtobufMessage(opcode int, content proto.Message) (*protobuf.Message, er
 		Opcode:  uint32(opcode),
 	}
 	return msg, nil
-}
-
-func fromProtobufMessage(msg *protobuf.Message) (proto.Message, error) {
-
-	var content proto.Message
-	if err := proto.Unmarshal(msg.Message, content); err != nil {
-		return nil, errors.Wrap(err, "Unable to unmarshal type")
-	}
-
-	return content, nil
 }
