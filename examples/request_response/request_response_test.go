@@ -76,26 +76,34 @@ func TestRequestResponse(t *testing.T) {
 		nodes = append(nodes, node)
 	}
 
-	// Connect all the node routing tables
-	for i, srcNode := range nodes {
-		for j, otherNode := range nodes {
-			if i == j {
-				continue
-			}
-			peerID := otherNode.Node.GetIdentityAdapter().MyIdentity()
-			srcNode.ConnAdapter.AddPeerID(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
+	// Connect node 0's routing table
+	i, srcNode := 0, nodes[0]
+	for j, otherNode := range nodes {
+		if i == j {
+			continue
 		}
+		peerID := otherNode.Node.GetIdentityAdapter().MyIdentity()
+		srcNode.ConnAdapter.AddPeerID(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
 	}
 
-	reqMsg := "This is a request response message from Node 0."
+	reqMsg0 := "Request response message from Node 0 to Node 1."
 	resp, err := nodes[0].Node.Request(context.Background(),
 		nodes[1].Node.GetIdentityAdapter().MyIdentity(),
 		&protocol.MessageBody{
 			Service: serviceID,
-			Payload: ([]byte)(reqMsg),
+			Payload: ([]byte)(reqMsg0),
 		},
 	)
-
 	assert.Nil(t, err)
-	assert.Equal(t, fmt.Sprintf("%s reply", reqMsg), string(resp.Payload))
+	assert.Equal(t, fmt.Sprintf("%s reply", reqMsg0), string(resp.Payload))
+
+	reqMsg1 := "Request response message from Node 1 to Node 2."
+	resp, err = nodes[1].Node.Request(context.Background(),
+		nodes[2].Node.GetIdentityAdapter().MyIdentity(),
+		&protocol.MessageBody{
+			Service: serviceID,
+			Payload: ([]byte)(reqMsg1),
+		},
+	)
+	assert.NotNil(t, err, "Should fail, nodes are not connected")
 }
