@@ -28,13 +28,15 @@ var (
 	reqResponse sync.Map
 )
 
-type ChatNode struct {
-	Node        *protocol.Node
-	Address     string
-	ConnAdapter protocol.ConnectionAdapter
+type ChatService struct {
+	protocol.Service
+	Address string
 }
 
-func (n *ChatNode) ReceiveHandler(request *protocol.Message) (*protocol.MessageBody, error) {
+func (n *ChatService) ReceiveHandler(request *protocol.Message) (*protocol.MessageBody, error) {
+	if request.Body.Service != chatServiceID {
+		return nil, nil
+	}
 	if len(request.Body.Payload) == 0 {
 		return nil, errors.New("Empty payload")
 	}
@@ -91,17 +93,17 @@ func main() {
 		panic(err)
 	}
 
-	node := &ChatNode{
-		Node: protocol.NewNode(
-			protocol.NewController(),
-			connAdapter,
-			idAdapter,
-		),
-		Address:     addr,
-		ConnAdapter: connAdapter,
+	node := protocol.NewNode(
+		protocol.NewController(),
+		connAdapter,
+		idAdapter,
+	)
+
+	service := &ChatService{
+		Address: addr,
 	}
 
-	node.Node.AddService(chatServiceID, node.ReceiveHandler)
+	node.AddService(service)
 
 	if len(peers) > 0 {
 		for _, peerKV := range peers {
@@ -119,7 +121,7 @@ func main() {
 		}
 	}
 
-	node.Node.Start()
+	node.Start()
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -139,6 +141,6 @@ func main() {
 		msg := &protobuf.Message{
 			Message: bytes,
 		}
-		node.Node.Broadcast(makeMessageBody(chatServiceID, msg))
+		node.Broadcast(makeMessageBody(chatServiceID, msg))
 	}
 }

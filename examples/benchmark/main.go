@@ -21,6 +21,7 @@ const (
 )
 
 type Instance struct {
+	protocol.Service
 	address      string
 	connAdapter  protocol.ConnectionAdapter
 	node         *protocol.Node
@@ -97,14 +98,16 @@ func StartInstance(port int) *Instance {
 		keypair:     idAdapter.GetKeyPair(),
 	}
 
-	node.AddService(42, func(message *protocol.Message) (*protocol.MessageBody, error) {
-		atomic.AddUint64(&inst.messageCount, 1)
-		return nil, nil
-	})
+	node.AddService(inst)
 
 	node.Start()
 
 	return inst
+}
+
+func (s *Instance) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
+	atomic.AddUint64(&s.messageCount, 1)
+	return nil, nil
 }
 
 func (inst *Instance) ReadMessageCount() uint64 {
