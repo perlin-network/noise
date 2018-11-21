@@ -40,11 +40,11 @@ func (s *Service) ReceiveHandler(message *protocol.Message) (*protocol.MessageBo
 		return nil, errors.New("Message body is missing")
 	}
 
-	sender, ok := s.Routes.LookupRemoteAddress(message.Sender)
+	sender, ok := s.Routes.LookupPeer(message.Sender)
 	if !ok {
 		return nil, errors.New("Unable to lookup sender")
 	}
-	target, ok := s.Routes.LookupRemoteAddress(message.Recipient)
+	target, ok := s.Routes.LookupPeer(message.Recipient)
 	if !ok {
 		// TODO: handle known peer
 		return nil, errors.New("Unable to lookup recipient")
