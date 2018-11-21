@@ -77,7 +77,7 @@ func TestDiscovery(t *testing.T) {
 			peer.CreateID(addr, idAdapter.GetKeyPair().PublicKey),
 		)
 
-		node.Node.AddService(discovery.DiscoveryServiceID, discoveryService.ReceiveHandler)
+		node.Node.AddService(discovery.ServiceID, discoveryService.ReceiveHandler)
 
 		nodes = append(nodes, node)
 	}

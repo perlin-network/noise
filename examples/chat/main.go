@@ -110,7 +110,7 @@ func main() {
 		peer.CreateID(addr, idAdapter.GetKeyPair().PublicKey),
 	)
 
-	node.Node.AddService(discovery.DiscoveryServiceID, discoveryService.ReceiveHandler)
+	node.Node.AddService(discovery.ServiceID, discoveryService.ReceiveHandler)
 
 	if len(peers) > 0 {
 		for _, peerKV := range peers {

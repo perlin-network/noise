@@ -8,7 +8,6 @@ import (
 	"github.com/perlin-network/noise/peer"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -25,33 +24,35 @@ func queryPeerByID(sendHandler SendHandler, peerID peer.ID, targetID peer.ID, re
 
 	content := &protobuf.LookupNodeRequest{Target: &targetProtoID}
 
-	msg, err := makeMessageBody(opCodeLookupRequest, content)
+	reqBody, err := ToMessageBody(ServiceID, OpCodeLookupRequest, content)
 	if err != nil {
 		responses <- []*protobuf.ID{}
 		return
 	}
-	msg.RequestNonce = atomic.AddUint64(&reqNonce, 1)
 
 	ctx, cancel := context.WithTimeout(context.Background(), reqTimeoutInSec*time.Second)
 	defer cancel()
 
-	response, err := sendHandler.Request(ctx, peerID.PublicKey, msg)
+	response, err := sendHandler.Request(ctx, peerID.PublicKey, reqBody)
 	if err != nil {
 		responses <- []*protobuf.ID{}
 		return
 	}
 
-	var resp proto.Message
-	if err := proto.Unmarshal(response.Payload, resp); err != nil {
+	resp, err := ParseMessageBody(response)
+	if err != nil || resp.Opcode != OpCodeLookupResponse {
 		responses <- []*protobuf.ID{}
 		return
 	}
 
-	if resp, ok := resp.(*protobuf.LookupNodeResponse); ok {
-		responses <- resp.Peers
-	} else {
+	var respMsg protobuf.LookupNodeResponse
+	if err := proto.Unmarshal(resp.Message, &respMsg); err != nil {
 		responses <- []*protobuf.ID{}
+		return
 	}
+
+	// update the responses with the peers
+	responses <- respMsg.Peers
 }
 
 type lookupBucket struct {

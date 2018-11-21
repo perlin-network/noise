@@ -31,7 +31,7 @@ func NewService(sendHandler SendHandler, selfID peer.ID) *Service {
 // ReceiveHandler is the handler when a message is received
 func (s *Service) ReceiveHandler(message *protocol.Message) (*protocol.MessageBody, error) {
 
-	if message == nil || message.Body == nil || message.Body.Service != DiscoveryServiceID {
+	if message == nil || message.Body == nil || message.Body.Service != ServiceID {
 		// corrupt message so ignore
 		return nil, errors.New("Message is corrupt")
 	}
@@ -69,13 +69,13 @@ func (s *Service) receive(sender peer.ID, target peer.ID, msg protobuf.Message) 
 	s.Routes.Update(sender)
 
 	switch msg.Opcode {
-	case opCodePing:
+	case OpCodePing:
 		if s.DisablePing {
 			break
 		}
 		// send the pong to the peer
-		return makeMessageBody(opCodePong, &protobuf.Pong{})
-	case opCodePong:
+		return ToMessageBody(ServiceID, OpCodePong, &protobuf.Pong{})
+	case OpCodePong:
 		if s.DisablePong {
 			break
 		}
@@ -89,7 +89,7 @@ func (s *Service) receive(sender peer.ID, target peer.ID, msg protobuf.Message) 
 		log.Info().
 			Strs("peers", s.Routes.GetPeerAddresses()).
 			Msg("Bootstrapped w/ peer(s).")
-	case opCodeLookupRequest:
+	case OpCodeLookupRequest:
 		if s.DisableLookup {
 			break
 		}
@@ -103,7 +103,7 @@ func (s *Service) receive(sender peer.ID, target peer.ID, msg protobuf.Message) 
 			response.Peers = append(response.Peers, &id)
 		}
 
-		return makeMessageBody(opCodeLookupResponse, response)
+		return ToMessageBody(ServiceID, OpCodeLookupResponse, response)
 	default:
 		return nil, errors.Errorf("Unknown message opcode type: %d", msg.Opcode)
 	}
@@ -121,19 +121,4 @@ func (s *Service) PeerDisconnect(target peer.ID) {
 			Str("peer_address", target.Address).
 			Msg("Peer has disconnected.")
 	}
-}
-
-func makeMessageBody(opcode int, content proto.Message) (*protocol.MessageBody, error) {
-	msg, err := toProtobufMessage(opcode, content)
-	if err != nil {
-		return nil, err
-	}
-	msgBytes, err := proto.Marshal(msg)
-	if err != nil {
-		return nil, errors.Wrap(err, "Unable to marshal")
-	}
-	return &protocol.MessageBody{
-		Service: DiscoveryServiceID,
-		Payload: msgBytes,
-	}, nil
 }

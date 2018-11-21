@@ -9,25 +9,44 @@ import (
 )
 
 const (
-	DiscoveryServiceID   = 5
-	opCodePing           = 1
-	opCodePong           = 2
-	opCodeLookupRequest  = 3
-	opCodeLookupResponse = 4
+	ServiceID            = 5
+	OpCodePing           = 1
+	OpCodePong           = 2
+	OpCodeLookupRequest  = 3
+	OpCodeLookupResponse = 4
 )
 
 type SendHandler interface {
 	Request(ctx context.Context, target []byte, body *protocol.MessageBody) (*protocol.MessageBody, error)
 }
 
-func toProtobufMessage(opcode int, content proto.Message) (*protobuf.Message, error) {
+func ToMessageBody(serviceID int, opcode int, content proto.Message) (*protocol.MessageBody, error) {
 	raw, err := proto.Marshal(content)
 	if err != nil {
-		return nil, errors.Wrap(err, "Unable to unmarshal reply")
+		return nil, errors.Wrap(err, "Unable to marshal content")
 	}
 	msg := &protobuf.Message{
 		Message: raw,
 		Opcode:  uint32(opcode),
 	}
-	return msg, nil
+	msgBytes, err := msg.Marshal()
+	if err != nil {
+		return nil, errors.Wrap(err, "Unable to marshal message")
+	}
+	body := &protocol.MessageBody{
+		Service: uint16(serviceID),
+		Payload: msgBytes,
+	}
+	return body, nil
+}
+
+func ParseMessageBody(body *protocol.MessageBody) (*protobuf.Message, error) {
+	if body == nil || len(body.Payload) == 0 {
+		return nil, errors.New("body is empty")
+	}
+	var msg protobuf.Message
+	if err := proto.Unmarshal(body.Payload, &msg); err != nil {
+		return nil, errors.Wrap(err, "unable to unmarshal payload")
+	}
+	return &msg, nil
 }
