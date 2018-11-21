@@ -12,6 +12,15 @@ import (
 	"github.com/perlin-network/noise/protocol"
 )
 
+type StarterService struct {
+	protocol.Service
+}
+
+func (s *StarterService) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
+	fmt.Printf("received payload from %s: %s\n", hex.EncodeToString(message.Sender), string(message.Body.Payload))
+	return nil, nil
+}
+
 func dialTCP(addr string) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
@@ -47,10 +56,7 @@ func main() {
 		idAdapter,
 	)
 
-	node.AddService(42, func(message *protocol.Message) (*protocol.MessageBody, error) {
-		fmt.Printf("received payload from %s: %s\n", hex.EncodeToString(message.Sender), string(message.Body.Payload))
-		return nil, nil
-	})
+	node.AddService(&StarterService{})
 
 	if len(peers) > 0 {
 		for _, peerKV := range peers {
