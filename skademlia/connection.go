@@ -43,7 +43,7 @@ func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []by
 		return nil, err
 	}
 
-	return base.NewMessageAdapter(a.baseConn, conn, local, remote, id.Address, false)
+	return base.NewMessageAdapter(a.baseConn, conn, local, remote, a.rt.Self().Address, id.Address, false)
 }
 
 func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, localID []byte) chan protocol.MessageAdapter {

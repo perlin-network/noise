@@ -7,6 +7,7 @@ import (
 	"github.com/perlin-network/noise/kademlia/discovery"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -17,6 +18,10 @@ type MockSendHandler struct {
 
 func (m *MockSendHandler) Request(ctx context.Context, target []byte, body *protocol.MessageBody) (*protocol.MessageBody, error) {
 	return m.RequestCallback(target, body)
+}
+
+func (m *MockSendHandler) Broadcast(body *protocol.MessageBody) error {
+	return errors.New("Not implemented")
 }
 
 func TestDiscoveryPing(t *testing.T) {
@@ -72,7 +77,8 @@ func TestDiscoveryLookupRequest(t *testing.T) {
 	s.Routes.Update(peer.CreateID("senderAddr", ([]byte)("sender")))
 	s.Routes.Update(peer.CreateID("recipientAddr", ([]byte)("recipient")))
 
-	content := &protobuf.LookupNodeRequest{}
+	reqTargetID := protobuf.ID(peer.CreateID("senderAddr", ([]byte)("sender")))
+	content := &protobuf.LookupNodeRequest{Target: &reqTargetID}
 	body, err := discovery.ToMessageBody(discovery.ServiceID, discovery.OpCodeLookupRequest, content)
 	assert.Nil(t, err)
 	reply, err := s.Receive(&protocol.Message{

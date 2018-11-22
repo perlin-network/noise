@@ -92,12 +92,13 @@ func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Messag
 		if err := proto.Unmarshal(msg.Message, &reqMsg); err != nil {
 			return nil, errors.Wrap(err, "Unable to marse lookup request")
 		}
+		reqTargetID := peer.ID(*reqMsg.Target)
 
 		// Prepare response
 		response := &protobuf.LookupNodeResponse{}
 
 		// Respond back with closest peers to a provided target.
-		for _, peerID := range s.Routes.FindClosestPeers(peer.ID(*reqMsg.Target), dht.BucketSize) {
+		for _, peerID := range s.Routes.FindClosestPeers(reqTargetID, dht.BucketSize) {
 			id := protobuf.ID(peerID)
 			response.Peers = append(response.Peers, &id)
 		}
