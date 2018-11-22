@@ -45,8 +45,7 @@ func dialTCP(addr string) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
-// TestDiscovery demonstrates using request response.
-func TestDiscovery(t *testing.T) {
+func TODOTestDiscovery(t *testing.T) {
 	var nodes []*protocol.Node
 	var services []*MessageService
 
