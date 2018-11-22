@@ -96,11 +96,6 @@ func (a *ConnectionAdapter) AddPeerID(id []byte, addr string) {
 	if a.discovery == nil || len(id) == 0 || len(addr) == 0 {
 		return
 	}
-	log.Debug().
-		Str("src", a.listener.Addr().String()).
-		Str("peer_addr", addr).
-		Str("peer_key", hex.EncodeToString(id)).
-		Msg("Adding peer")
 	a.discovery.Routes.Update(peer.CreateID(addr, id))
 }
 

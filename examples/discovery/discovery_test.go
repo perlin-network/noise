@@ -113,7 +113,7 @@ func TestDiscovery(t *testing.T) {
 		d.Bootstrap()
 	}
 
-	time.Sleep(time.Duration(len(nodes)*100) * time.Millisecond)
+	time.Sleep(time.Duration(len(nodes)) * time.Second)
 
 	// Broadcast out a message from Node 0.
 	expected := "This is a broadcasted message from Node 0."
@@ -126,9 +126,9 @@ func TestDiscovery(t *testing.T) {
 	for i := 1; i < len(msgServices); i++ {
 		select {
 		case received := <-msgServices[i].Mailbox:
-			assert.Equalf(t, received, expected, "Expected message %s to be received by node %d but got %v\n", expected, i, received)
+			assert.Equalf(t, expected, received, "Expected message '%s' to be received by node %d but got '%v'", expected, i, received)
 		case <-time.After(2 * time.Second):
-			assert.Fail(t, "Timed out attempting to receive message from Node 0.\n")
+			assert.Failf(t, "Timed out attempting to receive message", "from Node 0 for Node %d", i)
 		}
 	}
 }
