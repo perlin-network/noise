@@ -17,6 +17,16 @@ func dialTCP(addr string) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, DialTimeout)
 }
 
+type CountService struct {
+	protocol.Service
+	MsgCount uint64
+}
+
+func (s *CountService) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
+	atomic.AddUint64(&s.MsgCount, 1)
+	return nil, nil
+}
+
 /*
   Usage:
 	[terminal 1] go run main.go localhost:8000 wait
@@ -43,18 +53,9 @@ func main() {
 	)
 	node.Start()
 
-	var msgCount uint64
+	svc := &CountService{}
 
-	node.AddService(42, func(message *protocol.Message) (*protocol.MessageBody, error) {
-		atomic.AddUint64(&msgCount, 1)
-		//log.Info().Msgf("received payload from %s: %s", hex.EncodeToString(message.Sender), string(message.Body.Payload))
-		/*node.Send(&protocol.Message {
-					Sender: kp.PublicKey,
-					Recipient: message.Sender,
-					Body: message.Body,
-		        })*/
-		return nil, nil
-	})
+	node.AddService(svc)
 
 	log.Info().Msgf("started, pubkey = %s", kp.PublicKeyHex())
 
@@ -83,7 +84,7 @@ func main() {
 	}
 
 	for range time.Tick(10 * time.Second) {
-		count := atomic.SwapUint64(&msgCount, 0)
+		count := atomic.SwapUint64(&svc.MsgCount, 0)
 		log.Info().Msgf("message count = %d", count)
 	}
 

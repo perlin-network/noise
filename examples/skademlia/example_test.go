@@ -18,13 +18,12 @@ const (
 )
 
 // SKNode buffers all messages into a mailbox for this test.
-type SKNode struct {
-	Node        *protocol.Node
-	Mailbox     chan string
-	ConnAdapter protocol.ConnectionAdapter
+type SKService struct {
+	protocol.Service
+	Mailbox chan string
 }
 
-func (n *SKNode) service(message *protocol.Message) (*protocol.MessageBody, error) {
+func (n *SKService) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
 	if message.Body.Service != serviceID {
 		return nil, nil
 	}
@@ -49,7 +48,8 @@ func dialTCP(addr string) (net.Conn, error) {
 
 // ExampleSKademlia demonstrates a simple example using SKademlia
 func TODOExampleSKademlia() {
-	var nodes []*SKNode
+	var nodes []*protocol.Node
+	var services []*SKService
 
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
@@ -70,21 +70,21 @@ func TODOExampleSKademlia() {
 			log.Fatal().Msgf("%+v", err)
 		}
 
-		node := &SKNode{
-			Node: protocol.NewNode(
-				protocol.NewController(),
-				connAdapter,
-				idAdapter,
-			),
-			Mailbox:     make(chan string, 1),
-			ConnAdapter: connAdapter,
+		node := protocol.NewNode(
+			protocol.NewController(),
+			connAdapter,
+			idAdapter,
+		)
+		svc := &SKService{
+			Mailbox: make(chan string, 1),
 		}
 
-		node.Node.AddService(serviceID, node.service)
+		node.AddService(svc)
 
-		node.Node.Start()
+		node.Start()
 
 		nodes = append(nodes, node)
+		services = append(services, svc)
 	}
 
 	// Connect all the node routing tables
@@ -93,21 +93,21 @@ func TODOExampleSKademlia() {
 			if i == j {
 				continue
 			}
-			peerID := otherNode.Node.GetIdentityAdapter().MyIdentity()
-			srcNode.ConnAdapter.AddPeerID(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
+			peerID := otherNode.GetIdentityAdapter().MyIdentity()
+			srcNode.GetConnectionAdapter().AddPeerID(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
 		}
 	}
 
 	// Broadcast out a message from Node 0.
 	expected := "This is a broadcasted message from Node 0."
-	nodes[0].Node.Broadcast(makeMessageBody(expected))
+	nodes[0].Broadcast(makeMessageBody(expected))
 
 	fmt.Println("Node 0 sent out a message.")
 
 	// Check if message was received by other nodes.
-	for i := 1; i < len(nodes); i++ {
+	for i := 1; i < len(services); i++ {
 		select {
-		case received := <-nodes[i].Mailbox:
+		case received := <-services[i].Mailbox:
 			if received != expected {
 				fmt.Printf("Expected message %s to be received by node %d but got %v\n", expected, i, received)
 			} else {
@@ -120,17 +120,17 @@ func TODOExampleSKademlia() {
 
 	// disconnect a node
 	// HACK: why is node[1] node 2?
-	nodes[0].Node.ManuallyRemovePeer(nodes[numNodes-2].Node.GetIdentityAdapter().MyIdentity())
+	nodes[0].ManuallyRemovePeer(nodes[numNodes-2].GetIdentityAdapter().MyIdentity())
 
 	expected = "This is a second broadcasted message from Node 0."
-	nodes[0].Node.Broadcast(makeMessageBody(expected))
+	nodes[0].Broadcast(makeMessageBody(expected))
 
 	fmt.Println("Node 0 sent out a second message.")
 
 	// Check if message was received by other nodes.
-	for i := 1; i < len(nodes); i++ {
+	for i := 1; i < len(services); i++ {
 		select {
-		case received := <-nodes[i].Mailbox:
+		case received := <-services[i].Mailbox:
 			if received != expected {
 				fmt.Printf("Expected message %s to be received by node %d but got %v\n", expected, i, received)
 			} else {

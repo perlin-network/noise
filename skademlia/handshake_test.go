@@ -16,14 +16,13 @@ const (
 	host      = "localhost"
 )
 
-// SKNode buffers all messages into a mailbox for this test.
-type SKNode struct {
-	Node        *protocol.Node
-	Mailbox     chan string
-	ConnAdapter protocol.ConnectionAdapter
+// SKService buffers all messages into a mailbox for this test.
+type SKService struct {
+	protocol.Service
+	Mailbox chan string
 }
 
-func (n *SKNode) service(message *protocol.Message) (*protocol.MessageBody, error) {
+func (n *SKService) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
 	if message.Body.Service != serviceID {
 		return nil, nil
 	}
@@ -47,7 +46,8 @@ func dialTCP(addr string) (net.Conn, error) {
 }
 
 func TestHandshake(t *testing.T) {
-	var nodes []*SKNode
+	var nodes []*protocol.Node
+	var services []*SKService
 	var ports []int
 	numNodes := 3
 
@@ -78,24 +78,23 @@ func TestHandshake(t *testing.T) {
 			log.Fatal().Msgf("%+v", err)
 		}
 
-		pNode := protocol.NewNode(
+		node := protocol.NewNode(
 			protocol.NewController(),
 			connAdapter,
 			idAdapter,
 		)
-		pNode.SetCustomHandshakeProcessor(NewHandshakeProcessor(idAdapter))
+		node.SetCustomHandshakeProcessor(NewHandshakeProcessor(idAdapter))
 
-		node := &SKNode{
-			Node:        pNode,
-			Mailbox:     make(chan string, 1),
-			ConnAdapter: connAdapter,
+		service := &SKService{
+			Mailbox: make(chan string, 1),
 		}
 
-		node.Node.AddService(serviceID, node.service)
+		node.AddService(service)
 
-		node.Node.Start()
+		node.Start()
 
 		nodes = append(nodes, node)
+		services = append(services, service)
 	}
 
 	nodeA := nodes[0]
@@ -108,41 +107,41 @@ func TestHandshake(t *testing.T) {
 			if i == j {
 				continue
 			}
-			peerID := otherNode.Node.GetIdentityAdapter().MyIdentity()
-			srcNode.ConnAdapter.AddPeerID(peerID, fmt.Sprintf("%s:%d", host, ports[j]))
+			peerID := otherNode.GetIdentityAdapter().MyIdentity()
+			srcNode.GetConnectionAdapter().AddPeerID(peerID, fmt.Sprintf("%s:%d", host, ports[j]))
 		}
 	}
 
 	body := makeMessageBody("hello")
 	msg := protocol.Message{
-		Sender:    nodeA.Node.GetIdentityAdapter().MyIdentity(),
-		Recipient: nodeB.Node.GetIdentityAdapter().MyIdentity(),
+		Sender:    nodeA.GetIdentityAdapter().MyIdentity(),
+		Recipient: nodeB.GetIdentityAdapter().MyIdentity(),
 		Body:      body,
 	}
-	err := nodeA.Node.Send(&msg)
+	err := nodeA.Send(&msg)
 	if err != nil {
 		t.Errorf("Send() expected no error, got: %+v", err)
 	}
 
 	// nodeC sending to nodeA should error
-	msg.Sender = nodeC.Node.GetIdentityAdapter().MyIdentity()
-	msg.Recipient = nodeA.Node.GetIdentityAdapter().MyIdentity()
-	err = nodeC.Node.Send(&msg)
+	msg.Sender = nodeC.GetIdentityAdapter().MyIdentity()
+	msg.Recipient = nodeA.GetIdentityAdapter().MyIdentity()
+	err = nodeC.Send(&msg)
 	if err == nil {
 		t.Errorf("Send() expected error")
 	}
 
 	// nodeA sending to nodeC should fail handshake
-	msg.Sender = nodeA.Node.GetIdentityAdapter().MyIdentity()
-	msg.Recipient = nodeC.Node.GetIdentityAdapter().MyIdentity()
-	err = nodeA.Node.Send(&msg)
+	msg.Sender = nodeA.GetIdentityAdapter().MyIdentity()
+	msg.Recipient = nodeC.GetIdentityAdapter().MyIdentity()
+	err = nodeA.Send(&msg)
 	if err == nil {
 		t.Errorf("Send() expected error")
 	}
 
 	// nodeB sending to nodeC should fail handshake
-	msg.Sender = nodeB.Node.GetIdentityAdapter().MyIdentity()
-	err = nodeB.Node.Send(&msg)
+	msg.Sender = nodeB.GetIdentityAdapter().MyIdentity()
+	err = nodeB.Send(&msg)
 	if err == nil {
 		t.Errorf("Send() expected error")
 	}

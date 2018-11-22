@@ -27,7 +27,7 @@ func TestDiscoveryPing(t *testing.T) {
 
 	body, err := discovery.ToMessageBody(discovery.ServiceID, discovery.OpCodePing, &protobuf.Ping{})
 	assert.Nil(t, err)
-	reply, err := s.ReceiveHandler(&protocol.Message{
+	reply, err := s.Receive(&protocol.Message{
 		Sender:    ([]byte)("sender"),
 		Recipient: ([]byte)("recipient"),
 		Body:      body,
@@ -57,7 +57,7 @@ func TestDiscoveryPong(t *testing.T) {
 	content := &protobuf.Pong{}
 	body, err := discovery.ToMessageBody(discovery.ServiceID, discovery.OpCodePong, content)
 	assert.Nil(t, err)
-	reply, err := s.ReceiveHandler(&protocol.Message{
+	reply, err := s.Receive(&protocol.Message{
 		Sender:    ([]byte)("sender"),
 		Recipient: ([]byte)("recipient"),
 		Body:      body,
@@ -75,7 +75,7 @@ func TestDiscoveryLookupRequest(t *testing.T) {
 	content := &protobuf.LookupNodeRequest{}
 	body, err := discovery.ToMessageBody(discovery.ServiceID, discovery.OpCodeLookupRequest, content)
 	assert.Nil(t, err)
-	reply, err := s.ReceiveHandler(&protocol.Message{
+	reply, err := s.Receive(&protocol.Message{
 		Sender:    ([]byte)("sender"),
 		Recipient: ([]byte)("recipient"),
 		Body:      body,
