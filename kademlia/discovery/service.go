@@ -30,27 +30,19 @@ func NewService(sendHandler SendHandler, selfID peer.ID) *Service {
 	}
 }
 
-// ReceiveHandler is the handler when a message is received
+// Receive is the handler when a message is received
 func (s *Service) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
-
-	if message == nil || message.Body == nil || message.Body.Service != ServiceID {
-		// corrupt message so ignore
-		return nil, errors.New("Message is corrupt")
+	if message.Body.Service != ServiceID {
+		return nil, nil
 	}
-	if len(message.Body.Payload) == 0 {
+
+	if message == nil || message.Body == nil || len(message.Body.Payload) == 0 {
 		// corrupt payload so ignore
-		return nil, errors.New("Message body is missing")
+		return nil, errors.New("Message body is corrupt")
 	}
 
-	sender, ok := s.Routes.LookupPeer(message.Sender)
-	if !ok {
-		return nil, errors.New("Unable to lookup sender")
-	}
-	target, ok := s.Routes.LookupPeer(message.Recipient)
-	if !ok {
-		// TODO: handle known peer
-		return nil, errors.New("Unable to lookup recipient")
-	}
+	sender := peer.CreateID(message.Metadata["remoteAddr"], message.Sender)
+	target := s.Routes.Self()
 
 	var msg protobuf.Message
 	if err := proto.Unmarshal(message.Body.Payload, &msg); err != nil {
@@ -58,7 +50,7 @@ func (s *Service) Receive(message *protocol.Message) (*protocol.MessageBody, err
 		return nil, errors.Wrap(err, "Unable to parse message")
 	}
 
-	reply, err := s.receive(*sender, *target, msg)
+	reply, err := s.processMsg(sender, target, msg)
 	if err != nil {
 		return nil, err
 	}
@@ -66,8 +58,7 @@ func (s *Service) Receive(message *protocol.Message) (*protocol.MessageBody, err
 	return reply, nil
 }
 
-func (s *Service) receive(sender peer.ID, target peer.ID, msg protobuf.Message) (*protocol.MessageBody, error) {
-	// update the routes on every message
+func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Message) (*protocol.MessageBody, error) {
 	s.Routes.Update(sender)
 
 	switch msg.Opcode {
@@ -89,6 +80,7 @@ func (s *Service) receive(sender peer.ID, target peer.ID, msg protobuf.Message) 
 		}
 
 		log.Info().
+			Str("self", s.Routes.Self().Address).
 			Strs("peers", s.Routes.GetPeerAddresses()).
 			Msg("Bootstrapped w/ peer(s).")
 	case OpCodeLookupRequest:
@@ -107,7 +99,7 @@ func (s *Service) receive(sender peer.ID, target peer.ID, msg protobuf.Message) 
 
 		return ToMessageBody(ServiceID, OpCodeLookupResponse, response)
 	default:
-		return nil, errors.Errorf("Unknown message opcode type: %d", msg.Opcode)
+		// ignore
 	}
 	return nil, nil
 }
@@ -124,4 +116,12 @@ func (s *Service) PeerDisconnect(target []byte) {
 			Str("peer_pub_key", t.PublicKeyHex()).
 			Msg("Peer has disconnected.")
 	}
+}
+
+func (s *Service) Bootstrap() error {
+	body, err := ToMessageBody(ServiceID, OpCodePing, &protobuf.Ping{})
+	if err != nil {
+		return err
+	}
+	return s.sendHandler.Broadcast(body)
 }

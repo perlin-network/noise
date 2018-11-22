@@ -12,6 +12,9 @@ type Message struct {
 	Sender    []byte
 	Recipient []byte
 	Body      *MessageBody
+
+	// metadata populated locally on clients
+	Metadata map[string]string
 }
 
 type MessageBody struct {

@@ -33,7 +33,7 @@ type ChatService struct {
 	Address string
 }
 
-func (n *ChatService) ReceiveHandler(request *protocol.Message) (*protocol.MessageBody, error) {
+func (n *ChatService) Receive(request *protocol.Message) (*protocol.MessageBody, error) {
 	if request.Body.Service != chatServiceID {
 		return nil, nil
 	}

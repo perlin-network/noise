@@ -1,6 +1,7 @@
 package discovery_test
 
 import (
+	"encoding/hex"
 	"fmt"
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/kademlia"
@@ -45,14 +46,20 @@ func dialTCP(addr string) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
-func TODOTestDiscovery(t *testing.T) {
+func TestDiscovery(t *testing.T) {
 	var nodes []*protocol.Node
-	var services []*MessageService
+	var msgServices []*MessageService
+	var discoveries []*discovery.Service
 
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
 		idAdapter := base.NewIdentityAdapter()
 		addr := fmt.Sprintf("%s:%d", host, startPort+i)
+
+		log.Info().
+			Str("addr", addr).
+			Str("pub_key", hex.EncodeToString(idAdapter.MyIdentity())).
+			Msgf("Setting up node %d", i)
 
 		listener, err := net.Listen("tcp", addr)
 		if err != nil {
@@ -70,11 +77,11 @@ func TODOTestDiscovery(t *testing.T) {
 			idAdapter,
 		)
 
-		service := &MessageService{
+		msgService := &MessageService{
 			Mailbox: make(chan string, 1),
 		}
 
-		node.AddService(service)
+		node.AddService(msgService)
 
 		discoveryService := discovery.NewService(
 			node,
@@ -85,8 +92,11 @@ func TODOTestDiscovery(t *testing.T) {
 
 		node.AddService(discoveryService)
 
+		node.Start()
+
 		nodes = append(nodes, node)
-		services = append(services, service)
+		msgServices = append(msgServices, msgService)
+		discoveries = append(discoveries, discoveryService)
 	}
 
 	// Connect everyone to node 0
@@ -99,8 +109,8 @@ func TODOTestDiscovery(t *testing.T) {
 		nodes[i].GetConnectionAdapter().AddPeerID(node0ID, fmt.Sprintf("%s:%d", host, startPort+0))
 	}
 
-	for _, node := range nodes {
-		node.Start()
+	for _, d := range discoveries {
+		d.Bootstrap()
 	}
 
 	time.Sleep(time.Duration(len(nodes)*100) * time.Millisecond)
@@ -113,9 +123,9 @@ func TODOTestDiscovery(t *testing.T) {
 	})
 
 	// Check if message was received by other nodes.
-	for i := 1; i < len(services); i++ {
+	for i := 1; i < len(msgServices); i++ {
 		select {
-		case received := <-services[i].Mailbox:
+		case received := <-msgServices[i].Mailbox:
 			assert.Equalf(t, received, expected, "Expected message %s to be received by node %d but got %v\n", expected, i, received)
 		case <-time.After(2 * time.Second):
 			assert.Fail(t, "Timed out attempting to receive message from Node 0.\n")

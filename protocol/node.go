@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	_ "fmt"
 	"github.com/monnand/dhkx"
 	"github.com/perlin-network/noise/log"
 	"github.com/pkg/errors"
@@ -105,12 +104,14 @@ func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) error 
 		return nil
 	}
 
+	msg := &Message{
+		Sender:    peer.adapter.RemoteEndpoint(),
+		Recipient: n.idAdapter.MyIdentity(),
+		Body:      body,
+		Metadata:  peer.adapter.Metadata(),
+	}
 	for _, svc := range n.services {
-		replyBody, err := svc.Receive(&Message{
-			Sender:    peer.adapter.RemoteEndpoint(),
-			Recipient: n.idAdapter.MyIdentity(),
-			Body:      body,
-		})
+		replyBody, err := svc.Receive(msg)
 		if err != nil {
 			return errors.Wrapf(err, "Error processing request for service=%d", body.Service)
 		}
@@ -153,7 +154,7 @@ func (n *Node) Start() {
 					n.removePeer(adapter.RemoteEndpoint())
 				} else {
 					if err := n.dispatchIncomingMessage(peer, message); err != nil {
-						log.Warn().Msgf("%v", err)
+						log.Warn().Msgf("%+v", err)
 					}
 				}
 			})
@@ -180,7 +181,7 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 		} else {
 			msgAdapter, err := n.connAdapter.EstablishActively(n.controller, n.idAdapter.MyIdentity(), remote)
 			if err != nil {
-				log.Error().Err(err).Msg("unable to establish connection actively")
+				log.Error().Msgf("unable to establish connection actively: %+v", err)
 				msgAdapter = nil
 			}
 

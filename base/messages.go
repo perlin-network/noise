@@ -19,9 +19,10 @@ type MessageAdapter struct {
 	local             []byte
 	remote            []byte
 	finalizerNotifier chan struct{}
+	metadata          map[string]string
 }
 
-func NewMessageAdapter(connAdapter protocol.ConnectionAdapter, conn net.Conn, local, remote []byte, remoteAddr string, passive bool) (*MessageAdapter, error) {
+func NewMessageAdapter(connAdapter protocol.ConnectionAdapter, conn net.Conn, local, remote []byte, localAddr string, remoteAddr string, passive bool) (*MessageAdapter, error) {
 	if len(local) > 255 || len(remote) > 255 {
 		return nil, errors.New("local or remote id too long")
 	}
@@ -61,6 +62,24 @@ func NewMessageAdapter(connAdapter protocol.ConnectionAdapter, conn net.Conn, lo
 				ca.updatePubliclyVisibleAddress(pva)
 				//log.Debug().Msgf("Current publicly visible address: %s", connAdapter.getPubliclyVisibleAddress())
 			}
+			localAddr = pva
+		}
+
+		_, err = io.ReadFull(conn, byteBuf)
+		if err != nil {
+			conn.Close()
+			return nil, err
+		}
+
+		remoteLen := int(byteBuf[0])
+		if remoteLen > 0 {
+			remoteBytes := make([]byte, remoteLen)
+			_, err = io.ReadFull(conn, remoteBytes)
+			if err != nil {
+				conn.Close()
+				return nil, err
+			}
+			remoteAddr = string(remoteBytes)
 		}
 	} else {
 		_, err := conn.Write(local)
@@ -89,6 +108,17 @@ func NewMessageAdapter(connAdapter protocol.ConnectionAdapter, conn net.Conn, lo
 			conn.Close()
 			return nil, err
 		}
+
+		if len(localAddr) > 255 {
+			conn.Close()
+			return nil, errors.Errorf("local address is too long")
+		}
+
+		_, err = conn.Write(append([]byte{byte(len(localAddr))}, []byte(localAddr)...))
+		if err != nil {
+			conn.Close()
+			return nil, err
+		}
 	}
 
 	adapter := &MessageAdapter{
@@ -96,6 +126,10 @@ func NewMessageAdapter(connAdapter protocol.ConnectionAdapter, conn net.Conn, lo
 		local:             local,
 		remote:            remote,
 		finalizerNotifier: make(chan struct{}),
+		metadata: map[string]string{
+			"localAddr":  localAddr,
+			"remoteAddr": remoteAddr,
+		},
 	}
 
 	return adapter, nil
@@ -108,6 +142,10 @@ func (a *MessageAdapter) Close() {
 
 func (a *MessageAdapter) RemoteEndpoint() []byte {
 	return a.remote
+}
+
+func (a *MessageAdapter) Metadata() map[string]string {
+	return a.metadata
 }
 
 func (a *MessageAdapter) SendMessage(c *protocol.Controller, message []byte) error {

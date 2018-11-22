@@ -230,8 +230,12 @@ func (t *RoutingTable) Bucket(id int) *Bucket {
 
 // LookupPeer returns the peer.ID associated with the input public key
 func (t *RoutingTable) LookupPeer(pubKey []byte) (*peer.ID, bool) {
-	for b := 0; b < BucketSize; b++ {
-		bucket := t.Bucket(b)
+	if string(t.Self().PublicKey) == string(pubKey) {
+		self := t.Self()
+		return &self, true
+	}
+
+	for _, bucket := range t.buckets {
 		if bucket == nil {
 			continue
 		}

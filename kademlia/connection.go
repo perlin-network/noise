@@ -1,6 +1,7 @@
 package kademlia
 
 import (
+	"encoding/hex"
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/kademlia/discovery"
 	"github.com/perlin-network/noise/log"
@@ -39,9 +40,12 @@ func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []by
 	if a.discovery == nil {
 		return nil, errors.New("Connection not setup with discovery")
 	}
+
+	localPeer := a.discovery.Routes.Self()
+
 	remotePeer, ok := a.discovery.Routes.LookupPeer(remote)
 	if !ok {
-		return nil, errors.Errorf("peer not found: %s", string(remote))
+		return nil, errors.Errorf("peer cannot be looked up: %s", hex.EncodeToString(remote))
 	}
 
 	conn, err := a.Dialer(remotePeer.Address)
@@ -49,10 +53,14 @@ func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []by
 		return nil, err
 	}
 
-	return base.NewMessageAdapter(a, conn, local, remote, remotePeer.Address, false)
+	return base.NewMessageAdapter(a, conn, localPeer.PublicKey, remotePeer.PublicKey, localPeer.Address, remotePeer.Address, false)
 }
 
 func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []byte) chan protocol.MessageAdapter {
+	if a.discovery == nil {
+		return nil
+	}
+	localPeer := a.discovery.Routes.Self()
 	ch := make(chan protocol.MessageAdapter)
 	go func() {
 		defer close(ch)
@@ -69,11 +77,14 @@ func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []b
 				continue
 			}
 
-			adapter, err := base.NewMessageAdapter(a, conn, local, nil, "", true)
+			adapter, err := base.NewMessageAdapter(a, conn, local, nil, localPeer.Address, "", true)
 			if err != nil {
 				log.Error().Err(err).Msg("unable to start message adapter")
 				continue
 			}
+
+			// update the local peer address
+			localPeer.Address = adapter.Metadata()["localAddr"]
 
 			ch <- adapter
 		}
@@ -82,9 +93,14 @@ func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []b
 }
 
 func (a *ConnectionAdapter) AddPeerID(id []byte, addr string) {
-	if a.discovery == nil {
+	if a.discovery == nil || len(id) == 0 || len(addr) == 0 {
 		return
 	}
+	log.Debug().
+		Str("src", a.listener.Addr().String()).
+		Str("peer_addr", addr).
+		Str("peer_key", hex.EncodeToString(id)).
+		Msg("Adding peer")
 	a.discovery.Routes.Update(peer.CreateID(addr, id))
 }
 

@@ -18,6 +18,7 @@ const (
 
 type SendHandler interface {
 	Request(ctx context.Context, target []byte, body *protocol.MessageBody) (*protocol.MessageBody, error)
+	Broadcast(body *protocol.MessageBody) error
 }
 
 func ToMessageBody(serviceID int, opcode int, content proto.Message) (*protocol.MessageBody, error) {

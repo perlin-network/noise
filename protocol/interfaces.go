@@ -13,6 +13,7 @@ type ConnectionAdapter interface {
 // MessageAdapter is an adapter that sends/receives messages, usually corresponding to a real/virtual connection.
 type MessageAdapter interface {
 	RemoteEndpoint() []byte
+	Metadata() map[string]string
 	StartRecvMessage(c *Controller, callback RecvMessageCallback)
 	SendMessage(c *Controller, message []byte) error
 	Close()
