@@ -41,11 +41,19 @@ func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []by
 		return nil, errors.New("Connection not setup with discovery")
 	}
 
+	if string(local) == string(remote) {
+		return nil, errors.New("Skip connecting to self pk")
+	}
+
 	localPeer := a.discovery.Routes.Self()
 
 	remotePeer, ok := a.discovery.Routes.LookupPeer(remote)
 	if !ok {
 		return nil, errors.Errorf("peer cannot be looked up: %s", hex.EncodeToString(remote))
+	}
+
+	if localPeer.Address == remotePeer.Address {
+		return nil, errors.New("Skip connecting to self address")
 	}
 
 	conn, err := a.Dialer(remotePeer.Address)
@@ -77,7 +85,7 @@ func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []b
 				continue
 			}
 
-			adapter, err := base.NewMessageAdapter(a, conn, local, nil, localPeer.Address, "", true)
+			adapter, err := base.NewMessageAdapter(a, conn, localPeer.PublicKey, nil, localPeer.Address, "", true)
 			if err != nil {
 				log.Error().Err(err).Msg("unable to start message adapter")
 				continue

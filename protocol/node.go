@@ -234,7 +234,7 @@ func (n *Node) ManuallyRemovePeer(remote []byte) {
 }
 
 func (n *Node) Send(message *Message) error {
-	if !bytes.Equal(message.Sender, n.idAdapter.MyIdentity()) {
+	if string(message.Recipient) == string(n.idAdapter.MyIdentity()) {
 		return errors.New("sender mismatch")
 	}
 
@@ -259,6 +259,11 @@ func (n *Node) Broadcast(body *MessageBody) error {
 		Body:   body,
 	}
 	for _, peerPublicKey := range n.connAdapter.GetPeerIDs() {
+		if string(peerPublicKey) == string(n.idAdapter.MyIdentity()) {
+			// don't sent to yourself
+			continue
+		}
+
 		// copy the struct
 		msg := *msgTemplate
 		msg.Recipient = peerPublicKey

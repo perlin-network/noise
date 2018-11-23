@@ -57,12 +57,11 @@ func NewMessageAdapter(connAdapter protocol.ConnectionAdapter, conn net.Conn, lo
 				conn.Close()
 				return nil, err
 			}
-			pva := string(pvaBytes)
+			localAddr := string(pvaBytes)
 			if ca, ok := connAdapter.(*ConnectionAdapter); ok {
-				ca.updatePubliclyVisibleAddress(pva)
+				ca.updatePubliclyVisibleAddress(localAddr)
 				//log.Debug().Msgf("Current publicly visible address: %s", connAdapter.getPubliclyVisibleAddress())
 			}
-			localAddr = pva
 		}
 
 		_, err = io.ReadFull(conn, byteBuf)
