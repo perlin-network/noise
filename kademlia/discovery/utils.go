@@ -41,13 +41,16 @@ func ToMessageBody(serviceID int, opcode int, content proto.Message) (*protocol.
 	return body, nil
 }
 
-func ParseMessageBody(body *protocol.MessageBody) (*protobuf.Message, error) {
+func ParseMessageBody(body *protocol.MessageBody, dest proto.Message) (int, error) {
 	if body == nil || len(body.Payload) == 0 {
-		return nil, errors.New("body is empty")
+		return -1, errors.New("body is empty")
 	}
 	var msg protobuf.Message
 	if err := proto.Unmarshal(body.Payload, &msg); err != nil {
-		return nil, errors.Wrap(err, "unable to unmarshal payload")
+		return -1, errors.Wrap(err, "unable to unmarshal payload")
 	}
-	return &msg, nil
+	if err := proto.Unmarshal(msg.Message, dest); err != nil {
+		return -1, errors.Wrap(err, "unable to unmarshal message")
+	}
+	return int(msg.Opcode), nil
 }

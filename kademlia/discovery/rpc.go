@@ -2,7 +2,6 @@ package discovery
 
 import (
 	"context"
-	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/peer"
@@ -39,14 +38,8 @@ func queryPeerByID(sendHandler SendHandler, peerID peer.ID, targetID peer.ID, re
 		return
 	}
 
-	resp, err := ParseMessageBody(response)
-	if err != nil || resp.Opcode != OpCodeLookupResponse {
-		responses <- []*protobuf.ID{}
-		return
-	}
-
 	var respMsg protobuf.LookupNodeResponse
-	if err := proto.Unmarshal(resp.Message, &respMsg); err != nil {
+	if opCode, err := ParseMessageBody(response, &respMsg); err != nil || opCode != OpCodeLookupResponse {
 		responses <- []*protobuf.ID{}
 		return
 	}

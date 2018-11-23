@@ -2,7 +2,6 @@ package discovery_test
 
 import (
 	"context"
-	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/kademlia/discovery"
 	"github.com/perlin-network/noise/peer"
@@ -38,17 +37,20 @@ func TestDiscoveryPing(t *testing.T) {
 		Body:      body,
 	})
 	assert.Nil(t, err)
-	response, err := discovery.ParseMessageBody(reply)
+
+	var respMsg protobuf.Pong
+	opCode, err := discovery.ParseMessageBody(reply, &respMsg)
 	assert.Nil(t, err)
-	assert.Equal(t, int(response.Opcode), discovery.OpCodePong)
+	assert.Equal(t, discovery.OpCodePong, opCode)
 }
 
 func TestDiscoveryPong(t *testing.T) {
 	msh := &MockSendHandler{
 		RequestCallback: func(target []byte, reqBody *protocol.MessageBody) (*protocol.MessageBody, error) {
-			req, err := discovery.ParseMessageBody(reqBody)
+			var respMsg protobuf.LookupNodeRequest
+			opCode, err := discovery.ParseMessageBody(reqBody, &respMsg)
 			assert.Nil(t, err)
-			assert.Equal(t, discovery.OpCodeLookupRequest, int(req.Opcode))
+			assert.Equal(t, discovery.OpCodeLookupRequest, opCode)
 			respBody, err := discovery.ToMessageBody(discovery.ServiceID, discovery.OpCodeLookupResponse, &protobuf.LookupNodeResponse{})
 			assert.Nil(t, err)
 			return respBody, nil
@@ -88,12 +90,11 @@ func TestDiscoveryLookupRequest(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
-	respBody, err := discovery.ParseMessageBody(reply)
-	assert.Nil(t, err)
-	assert.Equal(t, discovery.OpCodeLookupResponse, int(respBody.Opcode))
-
 	var respMsg protobuf.LookupNodeResponse
-	assert.Nil(t, proto.Unmarshal(respBody.Message, &respMsg))
+	opCode, err := discovery.ParseMessageBody(reply, &respMsg)
+	assert.Nil(t, err)
+	assert.Equal(t, discovery.OpCodeLookupResponse, opCode)
+
 	assert.Equal(t, 3, len(respMsg.Peers))
 	for _, addr := range []string{"selfAddr", "recipientAddr", "senderAddr"} {
 		found := false
