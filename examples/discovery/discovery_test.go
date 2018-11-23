@@ -46,7 +46,7 @@ func dialTCP(addr string) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
-func TODOTestDiscovery(t *testing.T) {
+func TestDiscovery(t *testing.T) {
 	var nodes []*protocol.Node
 	var msgServices []*MessageService
 	var discoveries []*discovery.Service
@@ -115,20 +115,25 @@ func TODOTestDiscovery(t *testing.T) {
 
 	time.Sleep(time.Duration(len(nodes)) * time.Second)
 
-	// Broadcast out a message from Node 0.
-	expected := "This is a broadcasted message from Node 0."
-	nodes[0].Broadcast(&protocol.MessageBody{
-		Service: serviceID,
-		Payload: ([]byte)(expected),
-	})
+	for i := 0; i < 1; i++ {
+		// Broadcast out a message from Node 0.
+		expected := fmt.Sprintf("This is a broadcasted message from Node %d.", i)
+		nodes[i].Broadcast(&protocol.MessageBody{
+			Service: serviceID,
+			Payload: ([]byte)(expected),
+		})
 
-	// Check if message was received by other nodes.
-	for i := 1; i < len(msgServices); i++ {
-		select {
-		case received := <-msgServices[i].Mailbox:
-			assert.Equalf(t, expected, received, "Expected message '%s' to be received by node %d but got '%v'", expected, i, received)
-		case <-time.After(2 * time.Second):
-			assert.Failf(t, "Timed out attempting to receive message", "from Node 0 for Node %d", i)
+		// Check if message was received by other nodes.
+		for j := 0; j < len(msgServices); j++ {
+			if i == j {
+				continue
+			}
+			select {
+			case received := <-msgServices[j].Mailbox:
+				assert.Equalf(t, expected, received, "Expected message '%s' to be received by node %d but got '%v'", expected, j, received)
+			case <-time.After(2 * time.Second):
+				assert.Failf(t, "Timed out attempting to receive message", "from Node %d for Node %d", i, j)
+			}
 		}
 	}
 }
