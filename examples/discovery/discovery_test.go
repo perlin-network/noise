@@ -115,7 +115,7 @@ func TestDiscovery(t *testing.T) {
 
 	time.Sleep(time.Duration(len(nodes)) * time.Second)
 
-	for i := 0; i < 1; i++ {
+	for i := 0; i < len(nodes); i++ {
 		// Broadcast out a message from Node 0.
 		expected := fmt.Sprintf("This is a broadcasted message from Node %d.", i)
 		nodes[i].Broadcast(&protocol.MessageBody{
