@@ -136,6 +136,8 @@ func (n *Node) Start() {
 			svc.Startup(n)
 		}
 
+		log.Debug().Str("PubKey", hex.EncodeToString(n.idAdapter.MyIdentity())[:10]).Msg("Starting node, listening for connections.")
+
 		for adapter := range n.connAdapter.EstablishPassively(n.controller, n.idAdapter.MyIdentity()) {
 			adapter := adapter // the outer adapter is shared?
 			peer, err := EstablishPeerWithMessageAdapter(n.controller, n.dhGroup, n.dhKeypair, n.idAdapter, adapter, true)
@@ -258,14 +260,11 @@ func (n *Node) Broadcast(body *MessageBody) error {
 		Sender: n.idAdapter.MyIdentity(),
 		Body:   body,
 	}
-	var debugPeers []string
 	for _, peerPublicKey := range n.connAdapter.GetPeerIDs() {
 		if string(peerPublicKey) == string(n.idAdapter.MyIdentity()) {
 			// don't sent to yourself
 			continue
 		}
-
-		debugPeers = append(debugPeers, hex.EncodeToString(peerPublicKey)[:10])
 
 		// copy the struct
 		msg := *msgTemplate
@@ -274,8 +273,6 @@ func (n *Node) Broadcast(body *MessageBody) error {
 			log.Debug().Err(err).Msgf("Unable to broadcast to %v", hex.EncodeToString(peerPublicKey))
 		}
 	}
-
-	log.Debug().Str("self", hex.EncodeToString(n.idAdapter.MyIdentity())[:10]).Strs("peers", debugPeers).Msgf("broadcast")
 
 	return nil
 }

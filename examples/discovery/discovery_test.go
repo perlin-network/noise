@@ -43,6 +43,7 @@ func (s *MessageService) Receive(message *protocol.Message) (*protocol.MessageBo
 }
 
 func dialTCP(addr string) (net.Conn, error) {
+	log.Info().Str("Address", addr).Msg("Listening for peers")
 	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
@@ -108,6 +109,8 @@ func TestDiscovery(t *testing.T) {
 		node0ID := nodes[0].GetIdentityAdapter().MyIdentity()
 		nodes[i].GetConnectionAdapter().AddPeerID(node0ID, fmt.Sprintf("%s:%d", host, startPort+0))
 	}
+
+	time.Sleep(time.Duration(len(nodes)) * time.Second)
 
 	for _, d := range discoveries {
 		d.Bootstrap()

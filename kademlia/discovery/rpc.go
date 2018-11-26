@@ -34,6 +34,7 @@ func queryPeerByID(sendHandler SendHandler, peerID peer.ID, targetID peer.ID, re
 	defer cancel()
 
 	log.Debug().
+		Str("peer", peerID.Address).
 		Str("target", targetID.Address).
 		Msg("Requesting LookupNodeResponse")
 
@@ -42,6 +43,7 @@ func queryPeerByID(sendHandler SendHandler, peerID peer.ID, targetID peer.ID, re
 		responses <- []*protobuf.ID{}
 
 		log.Debug().
+			Str("peer", peerID.Address).
 			Str("target", targetID.Address).
 			Msgf("error gettin request: %+v", err)
 
@@ -49,8 +51,9 @@ func queryPeerByID(sendHandler SendHandler, peerID peer.ID, targetID peer.ID, re
 	}
 
 	log.Debug().
+		Str("peer", peerID.Address).
 		Str("target", targetID.Address).
-		Msg("Receiving LookupNodeResponse 0")
+		Msg("Receiving LookupNodeResponse ok")
 
 	var respMsg protobuf.LookupNodeResponse
 	if opCode, err := ParseMessageBody(response, &respMsg); err != nil || opCode != OpCodeLookupResponse {
@@ -131,9 +134,15 @@ func (lookup *lookupBucket) performLookup(sendHandler SendHandler, targetID peer
 // Queries at most #ALPHA nodes at a time per lookup, and returns all peer IDs closest to a target peer ID.
 func FindNode(rt *dht.RoutingTable, sendHandler SendHandler, targetID peer.ID, alpha int, disjointPaths int) (results []peer.ID) {
 
+	log.Debug().Str("self", rt.Self().Address).Str("target", targetID.Address).Msg("Finding node start")
+
+	defer log.Debug().Str("self", rt.Self().Address).Str("target", targetID.Address).Msg("Finding node end")
+
 	visited := new(sync.Map)
 
 	var lookups []*lookupBucket
+
+	var debugQueue []string
 
 	// Start searching for target from #ALPHA peers closest to target by queuing
 	// them up and marking them as visited.
@@ -146,9 +155,12 @@ func FindNode(rt *dht.RoutingTable, sendHandler SendHandler, targetID peer.ID, a
 
 		lookup := lookups[i%disjointPaths]
 		lookup.queue = append(lookup.queue, peerID)
+		debugQueue = append(debugQueue, peerID.Address)
 
 		results = append(results, peerID)
 	}
+
+	log.Debug().Str("self", rt.Self().Address).Interface("debugQueue", debugQueue).Msg("Finding node build queue")
 
 	wait, mutex := &sync.WaitGroup{}, &sync.Mutex{}
 
