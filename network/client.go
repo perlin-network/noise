@@ -14,12 +14,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
-	defaultRequestTimeout = 5 * time.Second
-)
-
 // PeerClient represents a single incoming peers client.
 type PeerClient struct {
+	sync.Once
+
 	Network *Network
 
 	ID      *peer.ID

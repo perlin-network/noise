@@ -31,8 +31,7 @@ func main() {
 
 	keys := ed25519.RandomKeyPair()
 
-	log.Info().Str("private_key", keys.PrivateKeyHex()).Msg("")
-	log.Info().Str("public_key", keys.PublicKeyHex()).Msg("")
+	log.Info().Str("private_key", keys.PrivateKeyHex()).Str("public_key", keys.PublicKeyHex()).Msg("Generated keypair.")
 
 	builder := network.NewBuilder()
 	builder.SetKeys(keys)
