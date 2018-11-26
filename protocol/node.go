@@ -258,11 +258,14 @@ func (n *Node) Broadcast(body *MessageBody) error {
 		Sender: n.idAdapter.MyIdentity(),
 		Body:   body,
 	}
+	var debugPeers []string
 	for _, peerPublicKey := range n.connAdapter.GetPeerIDs() {
 		if string(peerPublicKey) == string(n.idAdapter.MyIdentity()) {
 			// don't sent to yourself
 			continue
 		}
+
+		debugPeers = append(debugPeers, hex.EncodeToString(peerPublicKey)[:10])
 
 		// copy the struct
 		msg := *msgTemplate
@@ -271,6 +274,9 @@ func (n *Node) Broadcast(body *MessageBody) error {
 			log.Debug().Err(err).Msgf("Unable to broadcast to %v", hex.EncodeToString(peerPublicKey))
 		}
 	}
+
+	log.Debug().Str("self", hex.EncodeToString(n.idAdapter.MyIdentity())[:10]).Strs("peers", debugPeers).Msgf("broadcast")
+
 	return nil
 }
 
@@ -281,6 +287,9 @@ func (n *Node) Request(ctx context.Context, target []byte, body *MessageBody) (*
 	}
 	if body.Service == 0 {
 		return nil, errors.New("missing service in message body")
+	}
+	if string(target) == string(n.idAdapter.MyIdentity()) {
+		return nil, errors.New("making request to itself")
 	}
 	body.RequestNonce = atomic.AddUint64(&n.RequestNonce, 1)
 	msg := &Message{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/perlin-network/noise/dht"
 	"github.com/perlin-network/noise/internal/protobuf"
+	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
 	"sort"
 	"sync"
@@ -32,17 +33,40 @@ func queryPeerByID(sendHandler SendHandler, peerID peer.ID, targetID peer.ID, re
 	ctx, cancel := context.WithTimeout(context.Background(), reqTimeoutInSec*time.Second)
 	defer cancel()
 
+	log.Debug().
+		Str("target", targetID.Address).
+		Msg("Requesting LookupNodeResponse")
+
 	response, err := sendHandler.Request(ctx, peerID.PublicKey, reqBody)
 	if err != nil {
 		responses <- []*protobuf.ID{}
+
+		log.Debug().
+			Str("target", targetID.Address).
+			Msgf("error gettin request: %+v", err)
+
 		return
 	}
+
+	log.Debug().
+		Str("target", targetID.Address).
+		Msg("Receiving LookupNodeResponse 0")
 
 	var respMsg protobuf.LookupNodeResponse
 	if opCode, err := ParseMessageBody(response, &respMsg); err != nil || opCode != OpCodeLookupResponse {
 		responses <- []*protobuf.ID{}
 		return
 	}
+
+	var respAddr []string
+	for _, peer := range respMsg.Peers {
+		respAddr = append(respAddr, peer.Address)
+	}
+	log.Debug().
+		Str("target", targetID.Address).
+		Str("peer", peerID.Address).
+		Strs("peers", respAddr).
+		Msg("Receiving LookupNodeResponse")
 
 	// update the responses with the peers
 	responses <- respMsg.Peers

@@ -74,14 +74,18 @@ func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Messag
 		}
 		peers := FindNode(s.Routes, s.sendHandler, sender, dht.BucketSize, 8)
 
+		var debugPeers []string
+
 		// Update routing table w/ closest peers to self.
 		for _, peerID := range peers {
 			s.Routes.Update(peerID)
+			debugPeers = append(debugPeers, peerID.Address)
 		}
 
 		log.Info().
 			Str("self", s.Routes.Self().Address).
 			Strs("peers", s.Routes.GetPeerAddresses()).
+			Strs("debugPeers", debugPeers).
 			Msg("Bootstrapped w/ peer(s).")
 	case OpCodeLookupRequest:
 		if s.DisableLookup {
@@ -96,12 +100,19 @@ func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Messag
 
 		// Prepare response
 		response := &protobuf.LookupNodeResponse{}
+		var respAddr []string
 
 		// Respond back with closest peers to a provided target.
 		for _, peerID := range s.Routes.FindClosestPeers(reqTargetID, dht.BucketSize) {
 			id := protobuf.ID(peerID)
 			response.Peers = append(response.Peers, &id)
+			respAddr = append(respAddr, peerID.Address)
 		}
+
+		log.Debug().
+			Str("self", s.Routes.Self().Address).
+			Strs("peers", respAddr).
+			Msg("Replying LookupNodeResponse")
 
 		return ToMessageBody(ServiceID, OpCodeLookupResponse, response)
 	default:
