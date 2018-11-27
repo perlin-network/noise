@@ -136,8 +136,6 @@ func (n *Node) Start() {
 			svc.Startup(n)
 		}
 
-		log.Debug().Str("PubKey", hex.EncodeToString(n.idAdapter.MyIdentity())[:10]).Msg("Starting node, listening for connections.")
-
 		for adapter := range n.connAdapter.EstablishPassively(n.controller, n.idAdapter.MyIdentity()) {
 			adapter := adapter // the outer adapter is shared?
 			peer, err := EstablishPeerWithMessageAdapter(n.controller, n.dhGroup, n.dhKeypair, n.idAdapter, adapter, true)
@@ -155,9 +153,11 @@ func (n *Node) Start() {
 					//fmt.Printf("message is nil, removing peer: %b\n", adapter.RemoteEndpoint())
 					n.removePeer(adapter.RemoteEndpoint())
 				} else {
-					if err := n.dispatchIncomingMessage(peer, message); err != nil {
-						log.Warn().Msgf("%+v", err)
-					}
+					go func() {
+						if err := n.dispatchIncomingMessage(peer, message); err != nil {
+							log.Warn().Msgf("%+v", err)
+						}
+					}()
 				}
 			})
 		}
@@ -201,7 +201,11 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 							//fmt.Printf("getPeer removing since nil\n")
 							n.removePeer(remote)
 						} else {
-							n.dispatchIncomingMessage(established, message)
+							go func() {
+								if err := n.dispatchIncomingMessage(established, message); err != nil {
+									log.Warn().Msgf("%+v", err)
+								}
+							}()
 						}
 					})
 				}
@@ -270,7 +274,7 @@ func (n *Node) Broadcast(body *MessageBody) error {
 		msg := *msgTemplate
 		msg.Recipient = peerPublicKey
 		if err := n.Send(&msg); err != nil {
-			log.Debug().Err(err).Msgf("Unable to broadcast to %v", hex.EncodeToString(peerPublicKey))
+			log.Warn().Msgf("Unable to broadcast to %v: %v", hex.EncodeToString(peerPublicKey), err)
 		}
 	}
 
@@ -317,7 +321,7 @@ func (n *Node) Request(ctx context.Context, target []byte, body *MessageBody) (*
 	case res := <-channel:
 		return res, nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, errors.Wrap(ctx.Err(), "Did not receive response")
 	}
 }
 
