@@ -79,6 +79,15 @@ func (n *Node) removePeer(id []byte) {
 }
 
 func (n *Node) dispatchIncomingMessageAsync(peer *EstablishedPeer, raw []byte) {
+	if peer.kxState != KeyExchange_Done {
+		err := peer.continueKeyExchange(n.controller, n.idAdapter, n.customHandshakeProcessor, raw)
+		if err != nil {
+			n.removePeer(peer.RemoteEndpoint())
+			log.Error().Msgf("cannot continue key exchange: %v", err)
+		}
+		return
+	}
+
 	go func() {
 		if err := n.dispatchIncomingMessage(peer, raw); err != nil {
 			log.Warn().Msgf("%+v", err)
@@ -87,15 +96,6 @@ func (n *Node) dispatchIncomingMessageAsync(peer *EstablishedPeer, raw []byte) {
 }
 
 func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) error {
-	if peer.kxState != KeyExchange_Done {
-		err := peer.continueKeyExchange(n.controller, n.idAdapter, n.customHandshakeProcessor, raw)
-		if err != nil {
-			n.removePeer(peer.RemoteEndpoint())
-			return errors.Wrap(err, "cannot continue key exchange")
-		}
-		return nil
-	}
-
 	_body, err := peer.UnwrapMessage(n.controller, raw)
 	if err != nil {
 		return errors.Wrap(err, "cannot unwrap message")
