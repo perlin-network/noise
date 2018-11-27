@@ -43,7 +43,6 @@ func (s *MessageService) Receive(message *protocol.Message) (*protocol.MessageBo
 }
 
 func dialTCP(addr string) (net.Conn, error) {
-	log.Info().Str("Address", addr).Msg("Listening for peers")
 	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
@@ -100,7 +99,7 @@ func TestDiscovery(t *testing.T) {
 		discoveries = append(discoveries, discoveryService)
 	}
 
-	// Connect everyone to node 0
+	// Connect other nodes to node 0
 	for i := 1; i < len(nodes); i++ {
 		if i == 0 {
 			// skip node 0
@@ -110,14 +109,18 @@ func TestDiscovery(t *testing.T) {
 		nodes[i].GetConnectionAdapter().AddPeerID(node0ID, fmt.Sprintf("%s:%d", host, startPort+0))
 	}
 
+	// make sure all the nodes can listen for incoming connections
 	time.Sleep(time.Duration(len(nodes)) * time.Second)
 
+	// being discovery process to connect nodes to each other
 	for _, d := range discoveries {
 		d.Bootstrap()
 	}
 
+	// make sure nodes are connected
 	time.Sleep(time.Duration(len(nodes)) * time.Second)
 
+	// assert broadcasts goes to everyone
 	for i := 0; i < len(nodes); i++ {
 		// Broadcast out a message from Node 0.
 		expected := fmt.Sprintf("This is a broadcasted message from Node %d.", i)

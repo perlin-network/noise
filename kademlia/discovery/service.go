@@ -74,18 +74,14 @@ func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Messag
 		}
 		peers := FindNode(s.Routes, s.sendHandler, sender, dht.BucketSize, 8)
 
-		var debugPeers []string
-
 		// Update routing table w/ closest peers to self.
 		for _, peerID := range peers {
 			s.Routes.Update(peerID)
-			debugPeers = append(debugPeers, peerID.Address)
 		}
 
 		log.Info().
 			Str("self", s.Routes.Self().Address).
 			Strs("peers", s.Routes.GetPeerAddresses()).
-			Strs("debugPeers", debugPeers).
 			Msg("Bootstrapped w/ peer(s).")
 	case OpCodeLookupRequest:
 		if s.DisableLookup {
