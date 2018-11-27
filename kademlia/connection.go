@@ -47,12 +47,12 @@ func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []by
 
 	localPeer := a.discovery.Routes.Self()
 	if string(local) != string(localPeer.PublicKey) {
-		return nil, errors.New("Invalid local peer")
+		return nil, errors.Errorf("Invalid local peer: %s != %s", hex.EncodeToString(local), localPeer.PublicKeyHex())
 	}
 
 	remotePeer, ok := a.discovery.Routes.LookupPeer(remote)
 	if !ok {
-		return nil, errors.Errorf("peer cannot be looked up: %s: self: %s peers: %v", hex.EncodeToString(remote), a.discovery.Routes.Self().Address, a.discovery.Routes.GetPeerAddresses())
+		return nil, errors.Errorf("peer cannot be looked up: %s", hex.EncodeToString(remote))
 	}
 
 	if localPeer.Address == remotePeer.Address {

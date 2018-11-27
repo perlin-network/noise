@@ -78,6 +78,14 @@ func (n *Node) removePeer(id []byte) {
 	}
 }
 
+func (n *Node) dispatchIncomingMessageAsync(peer *EstablishedPeer, raw []byte) {
+	go func() {
+		if err := n.dispatchIncomingMessage(peer, raw); err != nil {
+			log.Warn().Msgf("%+v", err)
+		}
+	}()
+}
+
 func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) error {
 	if peer.kxState != KeyExchange_Done {
 		err := peer.continueKeyExchange(n.controller, n.idAdapter, n.customHandshakeProcessor, raw)
@@ -153,11 +161,7 @@ func (n *Node) Start() {
 					//fmt.Printf("message is nil, removing peer: %b\n", adapter.RemoteEndpoint())
 					n.removePeer(adapter.RemoteEndpoint())
 				} else {
-					go func() {
-						if err := n.dispatchIncomingMessage(peer, message); err != nil {
-							log.Warn().Msgf("%+v", err)
-						}
-					}()
+					n.dispatchIncomingMessageAsync(peer, message)
 				}
 			})
 		}
@@ -201,11 +205,7 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 							//fmt.Printf("getPeer removing since nil\n")
 							n.removePeer(remote)
 						} else {
-							go func() {
-								if err := n.dispatchIncomingMessage(established, message); err != nil {
-									log.Warn().Msgf("%+v", err)
-								}
-							}()
+							n.dispatchIncomingMessageAsync(established, message)
 						}
 					})
 				}
