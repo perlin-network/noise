@@ -39,6 +39,7 @@ func (n *Network) sendMessage(w io.Writer, message *protobuf.Message, writerMute
 	bw, isBuffered := w.(*bufio.Writer)
 	if isBuffered && (bw.Buffered() > 0) && (bw.Available() < totalSize) {
 		if err := bw.Flush(); err != nil {
+			writerMutex.Unlock()
 			return err
 		}
 	}
