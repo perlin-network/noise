@@ -99,6 +99,9 @@ func TestDiscovery(t *testing.T) {
 		discoveries = append(discoveries, discoveryService)
 	}
 
+	// make sure all the nodes can listen for incoming connections
+	time.Sleep(time.Duration(len(nodes)) * time.Second)
+
 	// Connect other nodes to node 0
 	for i := 1; i < len(nodes); i++ {
 		if i == 0 {
@@ -108,9 +111,6 @@ func TestDiscovery(t *testing.T) {
 		node0ID := nodes[0].GetIdentityAdapter().MyIdentity()
 		nodes[i].GetConnectionAdapter().AddPeerID(node0ID, fmt.Sprintf("%s:%d", host, startPort+0))
 	}
-
-	// make sure all the nodes can listen for incoming connections
-	time.Sleep(time.Duration(len(nodes)) * time.Second)
 
 	// being discovery process to connect nodes to each other
 	for _, d := range discoveries {

@@ -96,19 +96,12 @@ func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Messag
 
 		// Prepare response
 		response := &protobuf.LookupNodeResponse{}
-		var respAddr []string
 
 		// Respond back with closest peers to a provided target.
 		for _, peerID := range s.Routes.FindClosestPeers(reqTargetID, dht.BucketSize) {
 			id := protobuf.ID(peerID)
 			response.Peers = append(response.Peers, &id)
-			respAddr = append(respAddr, peerID.Address)
 		}
-
-		log.Debug().
-			Str("self", s.Routes.Self().Address).
-			Strs("peers", respAddr).
-			Msg("Replying LookupNodeResponse")
 
 		return ToMessageBody(ServiceID, OpCodeLookupResponse, response)
 	default:
