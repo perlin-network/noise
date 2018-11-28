@@ -6,7 +6,7 @@ type RecvMessageCallback func(message []byte)
 type ConnectionAdapter interface {
 	EstablishPassively(c *Controller, local []byte) chan MessageAdapter
 	EstablishActively(c *Controller, local []byte, remote []byte) (MessageAdapter, error)
-	AddPeerID(id []byte, addr string)
+	AddPeerID(id []byte, addr string) error
 	GetPeerIDs() [][]byte
 }
 

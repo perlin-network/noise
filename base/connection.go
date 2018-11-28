@@ -124,9 +124,9 @@ func (a *ConnectionAdapter) updatePubliclyVisibleAddress(address string) {
 	})
 }
 
-func (a *ConnectionAdapter) AddPeerID(id []byte, addr string) {
+func (a *ConnectionAdapter) AddPeerID(id []byte, addr string) error {
 	a.idToAddress.Store(string(id), addr)
-
+	return nil
 }
 
 func (a *ConnectionAdapter) GetPeerIDs() [][]byte {

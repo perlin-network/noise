@@ -119,7 +119,7 @@ func (a *ConnectionAdapter) GetAddressByID(remote []byte) (string, error) {
 	return "", errors.New("skademlia: peer not found")
 }
 
-func (a *ConnectionAdapter) AddPeerID(remote []byte, addr string) {
+func (a *ConnectionAdapter) AddPeerID(remote []byte, addr string) error {
 	hexID := hex.EncodeToString(remote)
 	log.Debug().
 		Str("local", hex.EncodeToString(a.svc.Routes.Self().PublicKey)).
@@ -128,7 +128,8 @@ func (a *ConnectionAdapter) AddPeerID(remote []byte, addr string) {
 	err := a.svc.Routes.Update(id)
 	if err == ErrBucketFull {
 		if ok, _ := a.svc.EvictLastSeenPeer(id.Id); ok {
-			a.svc.Routes.Update(id)
+			return a.svc.Routes.Update(id)
 		}
 	}
+	return nil
 }

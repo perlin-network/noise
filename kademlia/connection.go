@@ -103,11 +103,12 @@ func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []b
 	return ch
 }
 
-func (a *ConnectionAdapter) AddPeerID(id []byte, addr string) {
+func (a *ConnectionAdapter) AddPeerID(id []byte, addr string) error {
 	if a.discovery == nil || len(id) == 0 || len(addr) == 0 {
-		return
+		return errors.New("kademlia: invalid peer ID")
 	}
 	a.discovery.Routes.Update(peer.CreateID(addr, id))
+	return nil
 }
 
 func (a *ConnectionAdapter) GetPeerIDs() [][]byte {

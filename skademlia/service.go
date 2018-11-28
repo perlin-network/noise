@@ -15,7 +15,9 @@ import (
 
 const (
 	pingTimeout = 4 * time.Second
+)
 
+var (
 	ErrRemovePeerFailed = errors.New("skademlia: failed to remove last seen peer")
 )
 
