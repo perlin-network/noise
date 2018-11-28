@@ -18,6 +18,7 @@ var (
 	id1 peer.ID
 	id2 peer.ID
 	id3 peer.ID
+	id4 peer.ID
 
 	idBytes []byte
 )
@@ -26,6 +27,7 @@ func init() {
 	id1 = NewID(NewIdentityAdapter(8, 8).MyIdentity(), "0000")
 	id2 = NewID(NewIdentityAdapter(8, 8).MyIdentity(), "0001")
 	id3 = NewID(NewIdentityAdapter(8, 8).MyIdentity(), "0002")
+	id4 = NewID(NewIdentityAdapter(8, 8).MyIdentity(), "0003")
 
 	idBytes = id1.Id
 }
@@ -139,7 +141,39 @@ func TestRemovePeer(t *testing.T) {
 	if !reflect.DeepEqual(tester, testee) {
 		t.Fatalf("testremovepeer() failed got: %v, expected : %v", routingTable.GetPeerAddresses(), testee)
 	}
+}
 
+func TestUpdate(t *testing.T) {
+	t.Parallel()
+
+	// key generates bucket id 255
+	idKey1 := []byte{124, 224, 147, 208, 211, 103, 166, 113, 153, 104, 83, 62, 61, 145, 8, 211, 144, 164, 224, 191, 177, 205, 198, 94, 92, 35, 76, 83, 229, 46, 219, 110}
+	id1 := NewID(idKey1, "0001")
+
+	// key generates bucket id 8
+	idKey2 := []byte{210, 127, 212, 137, 47, 66, 40, 189, 231, 239, 210, 168, 52, 15, 223, 66, 199, 199, 156, 61, 132, 56, 102, 223, 32, 175, 169, 241, 156, 46, 83, 98}
+	id2 := NewID(idKey2, "0002")
+
+	// key generates bucket id 8
+	idKey3 := []byte{228, 61, 230, 169, 243, 78, 244, 44, 82, 76, 54, 56, 98, 135, 227, 158, 114, 251, 56, 160, 208, 60, 121, 41, 197, 63, 235, 41, 236, 66, 222, 219}
+	id3 := NewID(idKey3, "0003")
+
+	routingTable := CreateRoutingTable(id1)
+	routingTable.bucketSize = 1
+	err := routingTable.Update(id2)
+	if err != nil {
+		t.Errorf("Update() expected no error, got: %+v", err)
+	}
+	err = routingTable.Update(id3)
+	if err != ErrBucketFull {
+		t.Errorf("Update() expected error ErrBucketFull, got: %+v", err)
+	}
+
+	routingTable.bucketSize = 2
+	err = routingTable.Update(id3)
+	if err != nil {
+		t.Errorf("Update() expected no error, got: %+v", err)
+	}
 }
 
 /*

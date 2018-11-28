@@ -10,17 +10,25 @@ import (
 	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
+
+	"github.com/pkg/errors"
 )
 
 // BucketSize defines the NodeID, Key, and routing table data structures.
 const BucketSize = 16
+
+var (
+	// ErrBucketFull returns if specified operation fails due to the bucket being full
+	ErrBucketFull = errors.New("skademlia: cannot add element, bucket is full")
+)
 
 // RoutingTable contains one bucket list for lookups.
 type RoutingTable struct {
 	// Current node's ID.
 	self peer.ID
 
-	buckets []*Bucket
+	buckets    []*Bucket
+	bucketSize int
 }
 
 // NewID returns a new ID
@@ -52,8 +60,9 @@ func CreateRoutingTable(id peer.ID) *RoutingTable {
 		log.Fatal().Msg("id cannot have a nil PublicKey, please use NewID to create new IDs")
 	}
 	table := &RoutingTable{
-		self:    id,
-		buckets: make([]*Bucket, len(id.Id)*8),
+		self:       id,
+		buckets:    make([]*Bucket, len(id.Id)*8),
+		bucketSize: BucketSize,
 	}
 	for i := 0; i < len(id.Id)*8; i++ {
 		table.buckets[i] = NewBucket()
@@ -70,18 +79,21 @@ func (t *RoutingTable) Self() peer.ID {
 }
 
 // Update moves a peer to the front of a bucket in the routing table.
-func (t *RoutingTable) Update(target peer.ID) {
+func (t *RoutingTable) Update(target peer.ID) error {
 	if len(t.self.Id) != len(target.Id) {
-		return
+		return nil
 	}
 
 	bucketID := prefixLen(xor(target.Id, t.self.Id))
 	bucket := t.Bucket(bucketID)
 
+	log.Debug().Msgf("bucket id: %d", bucketID)
+
 	var element *list.Element
 
 	// Find current peer in bucket.
 	bucket.mutex.Lock()
+	defer bucket.mutex.Unlock()
 
 	for e := bucket.Front(); e != nil; e = e.Next() {
 		id := e.Value.(peer.ID)
@@ -93,14 +105,16 @@ func (t *RoutingTable) Update(target peer.ID) {
 
 	if element == nil {
 		// Populate bucket if its not full.
-		if bucket.Len() <= BucketSize {
+		if bucket.Len() < t.bucketSize {
 			bucket.PushFront(target)
+		} else {
+			return ErrBucketFull
 		}
 	} else {
 		bucket.MoveToFront(element)
 	}
 
-	bucket.mutex.Unlock()
+	return nil
 }
 
 // GetPeer retrieves the ID struct in the routing table given a peer ID if found.
