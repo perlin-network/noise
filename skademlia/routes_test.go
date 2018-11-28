@@ -160,6 +160,14 @@ func TestUpdate(t *testing.T) {
 
 	routingTable := CreateRoutingTable(id1)
 	routingTable.bucketSize = 1
+
+	bucketID2 := routingTable.GetBucketID(idKey2)
+	bucketID3 := routingTable.GetBucketID(idKey3)
+
+	if bucketID2 != bucketID3 {
+		t.Errorf("GetBucketID() expected to be equal")
+	}
+
 	err := routingTable.Update(id2)
 	if err != nil {
 		t.Errorf("Update() expected no error, got: %+v", err)
@@ -176,26 +184,29 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-/*
 func TestFindClosestPeers(t *testing.T) {
 	t.Parallel()
 
-	nodes := []peer.Id{}
+	nodes := []*peer.ID{}
 
 	nodes = append(nodes,
-		peer.Id{Address: "0000", Id: []byte("12345678901234567890123456789010")},
-		peer.Id{Address: "0001", Id: []byte("12345678901234567890123456789011")},
-		peer.Id{Address: "0002", Id: []byte("12345678901234567890123456789012")},
-		peer.Id{Address: "0003", Id: []byte("12345678901234567890123456789013")},
-		peer.Id{Address: "0004", Id: []byte("12345678901234567890123456789014")},
-		peer.Id{Address: "0005", Id: []byte("00000000000000000000000000000000")},
+		&peer.ID{Address: "0000", Id: []byte("12345678901234567890123456789010")},
+		&peer.ID{Address: "0001", Id: []byte("12345678901234567890123456789011")},
+		&peer.ID{Address: "0002", Id: []byte("12345678901234567890123456789012")},
+		&peer.ID{Address: "0003", Id: []byte("12345678901234567890123456789013")},
+		&peer.ID{Address: "0004", Id: []byte("12345678901234567890123456789014")},
+		&peer.ID{Address: "0005", Id: []byte("00000000000000000000000000000000")},
 	)
-	routingTable := CreateRoutingTable(nodes[0])
-	for i := 1; i <= 5; i++ {
-		routingTable.Update(nodes[i])
+	for _, node := range nodes {
+		node.PublicKey = node.Id
 	}
-	testee := []peer.Id{}
-	for _, peer := range routingTable.FindClosestPeers(nodes[5], 3) {
+
+	routingTable := CreateRoutingTable(*nodes[0])
+	for i := 1; i <= 5; i++ {
+		routingTable.Update(*nodes[i])
+	}
+	testee := []peer.ID{}
+	for _, peer := range routingTable.FindClosestPeers(*nodes[5], 3) {
 		testee = append(testee, peer)
 	}
 	if len(testee) != 3 {
@@ -209,8 +220,8 @@ func TestFindClosestPeers(t *testing.T) {
 		}
 	}
 
-	testee = []peer.Id{}
-	for _, peer := range routingTable.FindClosestPeers(nodes[4], 2) {
+	testee = []peer.ID{}
+	for _, peer := range routingTable.FindClosestPeers(*nodes[4], 2) {
 		testee = append(testee, peer)
 	}
 	if len(testee) != 2 {
@@ -225,7 +236,6 @@ func TestFindClosestPeers(t *testing.T) {
 	}
 
 }
-*/
 
 func TestRoutingTable(t *testing.T) {
 	t.Parallel()

@@ -84,10 +84,7 @@ func (t *RoutingTable) Update(target peer.ID) error {
 		return nil
 	}
 
-	bucketID := prefixLen(xor(target.Id, t.self.Id))
-	bucket := t.Bucket(bucketID)
-
-	log.Debug().Msgf("bucket id: %d", bucketID)
+	bucket := t.Bucket(t.GetBucketID(target.Id))
 
 	var element *list.Element
 
@@ -119,8 +116,7 @@ func (t *RoutingTable) Update(target peer.ID) error {
 
 // GetPeer retrieves the ID struct in the routing table given a peer ID if found.
 func (t *RoutingTable) GetPeer(id []byte) (*peer.ID, bool) {
-	bucketID := prefixLen(xor(id, t.self.Id))
-	bucket := t.Bucket(bucketID)
+	bucket := t.Bucket(t.GetBucketID(id))
 
 	bucket.mutex.RLock()
 
@@ -190,8 +186,7 @@ func (t *RoutingTable) GetPeerAddresses() (peers []string) {
 
 // RemovePeer removes a peer from the routing table given the peer ID with O(bucket_size) time complexity.
 func (t *RoutingTable) RemovePeer(id []byte) bool {
-	bucketID := prefixLen(xor(id, t.self.Id))
-	bucket := t.Bucket(bucketID)
+	bucket := t.Bucket(t.GetBucketID(id))
 
 	bucket.mutex.Lock()
 
@@ -259,6 +254,11 @@ func (t *RoutingTable) FindClosestPeers(target peer.ID, count int) (peers []peer
 	}
 
 	return peers
+}
+
+// BucketID returns the corresponding bucket ID based on the ID.
+func (t *RoutingTable) GetBucketID(id []byte) int {
+	return prefixLen(xor(id, t.self.Id))
 }
 
 // Bucket returns a specific Bucket by ID.

@@ -59,7 +59,10 @@ func (s *Service) Receive(message *protocol.Message) (*protocol.MessageBody, err
 }
 
 func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Message) (*protocol.MessageBody, error) {
-	s.Routes.Update(sender)
+	err := s.Routes.Update(sender)
+	if err == ErrBucketFull {
+		// TODO: update routing table accordingly
+	}
 
 	switch msg.Opcode {
 	case OpCodePing:
