@@ -1,10 +1,12 @@
 package skademlia
 
 import (
-	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
+
+	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -21,7 +23,7 @@ type Service struct {
 }
 
 // NewService creates a new instance of the Discovery Service
-func NewService(sendHandler SendHandler, selfID ID) *Service {
+func NewService(sendHandler SendHandler, selfID peer.ID) *Service {
 	return &Service{
 		Routes:      CreateRoutingTable(selfID),
 		sendHandler: sendHandler,
@@ -39,7 +41,7 @@ func (s *Service) Receive(message *protocol.Message) (*protocol.MessageBody, err
 		return nil, errors.New("Message body is corrupt")
 	}
 
-	sender := NewID(message.Sender, message.Metadata["remoteAddr"])
+	sender := peer.CreateID(message.Metadata["remoteAddr"], message.Sender)
 	target := s.Routes.Self()
 
 	var msg protobuf.Message
@@ -56,7 +58,7 @@ func (s *Service) Receive(message *protocol.Message) (*protocol.MessageBody, err
 	return reply, nil
 }
 
-func (s *Service) processMsg(sender ID, target ID, msg protobuf.Message) (*protocol.MessageBody, error) {
+func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Message) (*protocol.MessageBody, error) {
 	s.Routes.Update(sender)
 
 	switch msg.Opcode {
@@ -70,7 +72,7 @@ func (s *Service) processMsg(sender ID, target ID, msg protobuf.Message) (*proto
 		if s.DisablePong {
 			break
 		}
-		peers := FindNode(s.Routes, s.sendHandler, sender, dht.BucketSize, 8)
+		peers := FindNode(s.Routes, s.sendHandler, sender, BucketSize, 8)
 
 		// Update routing table w/ closest peers to self.
 		for _, peerID := range peers {
@@ -96,7 +98,7 @@ func (s *Service) processMsg(sender ID, target ID, msg protobuf.Message) (*proto
 		response := &protobuf.LookupNodeResponse{}
 
 		// Respond back with closest peers to a provided target.
-		for _, peerID := range s.Routes.FindClosestPeers(reqTargetID, dht.BucketSize) {
+		for _, peerID := range s.Routes.FindClosestPeers(reqTargetID, BucketSize) {
 			id := protobuf.ID(peerID)
 			response.Peers = append(response.Peers, &id)
 		}
@@ -112,8 +114,8 @@ func (s *Service) processMsg(sender ID, target ID, msg protobuf.Message) (*proto
 func (s *Service) PeerDisconnect(target []byte) {
 	t := peer.CreateID("", target)
 	// Delete peer if in routing table.
-	if s.Routes.PeerExists(t) {
-		s.Routes.RemovePeer(t)
+	if _, ok := s.Routes.GetPeer(t.Id); ok {
+		s.Routes.RemovePeer(t.Id)
 
 		log.Debug().
 			Str("address", s.Routes.Self().Address).

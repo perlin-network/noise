@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/perlin-network/noise/internal/protobuf"
+	"github.com/perlin-network/noise/peer"
 )
 
 const (
@@ -17,7 +18,7 @@ var (
 	reqNonce = uint64(1)
 )
 
-func queryPeerByID(sendHandler SendHandler, rt *RoutingTable, peerID ID, targetID ID, responses chan []*protobuf.ID) {
+func queryPeerByID(sendHandler SendHandler, rt *RoutingTable, peerID peer.ID, targetID peer.ID, responses chan []*protobuf.ID) {
 	// makes sure any new peers are added to the routing table before it makes the request
 	rt.Update(peerID)
 
@@ -52,10 +53,10 @@ func queryPeerByID(sendHandler SendHandler, rt *RoutingTable, peerID ID, targetI
 
 type lookupBucket struct {
 	pending int
-	queue   []ID
+	queue   []peer.ID
 }
 
-func (lookup *lookupBucket) performLookup(sendHandler SendHandler, rt *RoutingTable, targetID ID, alpha int, visited *sync.Map) (results []ID) {
+func (lookup *lookupBucket) performLookup(sendHandler SendHandler, rt *RoutingTable, targetID peer.ID, alpha int, visited *sync.Map) (results []peer.ID) {
 	responses := make(chan []*protobuf.ID)
 
 	// Go through every peer in the entire queue and queue up what peers believe
@@ -107,7 +108,7 @@ func (lookup *lookupBucket) performLookup(sendHandler SendHandler, rt *RoutingTa
 // All lookups are done under a number of disjoint lookups in parallel.
 //
 // Queries at most #ALPHA nodes at a time per lookup, and returns all peer IDs closest to a target peer ID.
-func FindNode(rt *RoutingTable, sendHandler SendHandler, targetID ID, alpha int, disjointPaths int) (results []ID) {
+func FindNode(rt *RoutingTable, sendHandler SendHandler, targetID peer.ID, alpha int, disjointPaths int) (results []peer.ID) {
 
 	visited := new(sync.Map)
 
@@ -153,9 +154,9 @@ func FindNode(rt *RoutingTable, sendHandler SendHandler, targetID ID, alpha int,
 	})
 
 	// Cut off list of results to only have the routing table focus on the
-	// #dht.BucketSize closest peers to the current node.
-	if len(results) > dht.BucketSize {
-		results = results[:dht.BucketSize]
+	// #BucketSize closest peers to the current node.
+	if len(results) > BucketSize {
+		results = results[:BucketSize]
 	}
 
 	return

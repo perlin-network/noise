@@ -7,6 +7,7 @@ import (
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
 
 	"github.com/pkg/errors"
@@ -19,7 +20,7 @@ type ConnectionAdapter struct {
 	rt       RoutingTable
 }
 
-func NewConnectionAdapter(listener net.Listener, dialer base.Dialer, id ID) (*ConnectionAdapter, error) {
+func NewConnectionAdapter(listener net.Listener, dialer base.Dialer, id peer.ID) (*ConnectionAdapter, error) {
 	baseConn, err := base.NewConnectionAdapter(listener, dialer)
 	if err != nil {
 		return nil, err
