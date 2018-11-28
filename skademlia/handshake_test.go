@@ -69,14 +69,17 @@ func TestHandshake(t *testing.T) {
 			log.Fatal().Msgf("%+v", err)
 		}
 
+		id := NewID(idAdapter.MyIdentity(), address)
+		s := NewService(nil, id)
 		connAdapter, err := NewConnectionAdapter(
 			listener,
 			dialTCP,
-			NewID(idAdapter.MyIdentity(), address),
+			id,
 		)
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
+		connAdapter.SetSKademliaService(s)
 
 		node := protocol.NewNode(
 			protocol.NewController(),

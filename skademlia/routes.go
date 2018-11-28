@@ -108,9 +108,9 @@ func (t *RoutingTable) GetPeer(id []byte) (*peer.ID, bool) {
 	bucketID := prefixLen(xor(id, t.self.Id))
 	bucket := t.Bucket(bucketID)
 
-	bucket.mutex.Lock()
+	bucket.mutex.RLock()
 
-	defer bucket.mutex.Unlock()
+	defer bucket.mutex.RUnlock()
 
 	for e := bucket.Front(); e != nil; e = e.Next() {
 		found := e.Value.(peer.ID)
