@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type Node struct {
@@ -31,6 +32,7 @@ type Node struct {
 type RequestState struct {
 	data        chan *MessageBody
 	closeSignal chan struct{}
+	requestTime time.Time
 }
 
 func NewNode(c *Controller, ca ConnectionAdapter, id IdentityAdapter) *Node {
@@ -307,6 +309,7 @@ func (n *Node) Request(ctx context.Context, target []byte, body *MessageBody) (*
 	n.Requests.Store(makeRequestReplyKey(msg.Recipient, body.RequestNonce), &RequestState{
 		data:        channel,
 		closeSignal: closeSignal,
+		requestTime: time.Now(),
 	})
 
 	// send the message
