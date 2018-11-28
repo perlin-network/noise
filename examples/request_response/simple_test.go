@@ -14,35 +14,16 @@ import (
 )
 
 const (
-	serviceID = 42
-	numNodes  = 3
-	startPort = 5000
-	host      = "localhost"
+	simpleServiceID = 50
+	numNodes        = 3
+	host            = "localhost"
 )
-
-// RequestResponseNode buffers all messages into a mailbox for this test.
-type RequestResponseService struct {
-	protocol.Service
-}
-
-func (n *RequestResponseService) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
-	if len(message.Body.Payload) == 0 {
-		return nil, errors.New("Empty payload")
-	}
-	reqMsg := string(message.Body.Payload)
-
-	return &protocol.MessageBody{
-		Service: serviceID,
-		Payload: ([]byte)(fmt.Sprintf("%s reply", reqMsg)),
-	}, nil
-}
 
 func dialTCP(addr string) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
-// TestRequestResponse demonstrates using request response.
-func TestRequestResponse(t *testing.T) {
+func setupNodes(startPort int) []*protocol.Node {
 	var nodes []*protocol.Node
 
 	// setup all the nodes
@@ -65,9 +46,41 @@ func TestRequestResponse(t *testing.T) {
 			idAdapter,
 		)
 
-		node.AddService(&RequestResponseService{})
+		node.Start()
 
 		nodes = append(nodes, node)
+	}
+
+	return nodes
+}
+
+type SimpleService struct {
+	protocol.Service
+}
+
+func (n *SimpleService) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
+	if message.Body.Service != simpleServiceID {
+		// not the matching service id
+		return nil, nil
+	}
+	if len(message.Body.Payload) == 0 {
+		return nil, errors.New("Empty payload")
+	}
+	reqMsg := string(message.Body.Payload)
+
+	return &protocol.MessageBody{
+		Service: simpleServiceID,
+		Payload: ([]byte)(fmt.Sprintf("%s reply", reqMsg)),
+	}, nil
+}
+
+func TestSimpleRequestResponse(t *testing.T) {
+	startPort := 5000
+
+	nodes := setupNodes(startPort)
+
+	for _, node := range nodes {
+		node.AddService(&SimpleService{})
 	}
 
 	// Connect node 0's routing table
@@ -80,15 +93,11 @@ func TestRequestResponse(t *testing.T) {
 		srcNode.GetConnectionAdapter().AddPeerID(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
 	}
 
-	for _, node := range nodes {
-		node.Start()
-	}
-
 	reqMsg0 := "Request response message from Node 0 to Node 1."
 	resp, err := nodes[0].Request(context.Background(),
 		nodes[1].GetIdentityAdapter().MyIdentity(),
 		&protocol.MessageBody{
-			Service: serviceID,
+			Service: simpleServiceID,
 			Payload: ([]byte)(reqMsg0),
 		},
 	)
@@ -99,7 +108,7 @@ func TestRequestResponse(t *testing.T) {
 	resp, err = nodes[1].Request(context.Background(),
 		nodes[2].GetIdentityAdapter().MyIdentity(),
 		&protocol.MessageBody{
-			Service: serviceID,
+			Service: simpleServiceID,
 			Payload: ([]byte)(reqMsg1),
 		},
 	)

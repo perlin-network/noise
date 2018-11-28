@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"github.com/monnand/dhkx"
 	"github.com/perlin-network/noise/log"
 	"github.com/pkg/errors"
@@ -106,7 +107,7 @@ func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) error 
 		return errors.Wrap(err, "cannot deserialize message body")
 	}
 
-	if rq, ok := n.Requests.Load(body.RequestNonce); ok {
+	if rq, ok := n.Requests.Load(makeRequestReplyKey(peer.adapter.RemoteEndpoint(), body.RequestNonce)); ok {
 		rq := rq.(*RequestState)
 		rq.data <- body
 		return nil
@@ -303,7 +304,7 @@ func (n *Node) Request(ctx context.Context, target []byte, body *MessageBody) (*
 	channel := make(chan *MessageBody, 1)
 	closeSignal := make(chan struct{})
 
-	n.Requests.Store(body.RequestNonce, &RequestState{
+	n.Requests.Store(makeRequestReplyKey(msg.Recipient, body.RequestNonce), &RequestState{
 		data:        channel,
 		closeSignal: closeSignal,
 	})
@@ -315,7 +316,7 @@ func (n *Node) Request(ctx context.Context, target []byte, body *MessageBody) (*
 
 	// stop tracking the request
 	defer close(closeSignal)
-	defer n.Requests.Delete(body.RequestNonce)
+	defer n.Requests.Delete(makeRequestReplyKey(msg.Recipient, body.RequestNonce))
 
 	select {
 	case res := <-channel:
@@ -323,6 +324,10 @@ func (n *Node) Request(ctx context.Context, target []byte, body *MessageBody) (*
 	case <-ctx.Done():
 		return nil, errors.Wrap(ctx.Err(), "Did not receive response")
 	}
+}
+
+func makeRequestReplyKey(receiver []byte, nonce uint64) string {
+	return fmt.Sprintf("%s-%d", hex.EncodeToString(receiver), nonce)
 }
 
 func (n *Node) GetIdentityAdapter() IdentityAdapter {
