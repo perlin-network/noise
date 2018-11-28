@@ -15,6 +15,8 @@ import (
 
 const (
 	pingTimeout = 4 * time.Second
+
+	ErrRemovePeerFailed = errors.New("skademlia: failed to remove last seen peer")
 )
 
 // Service is a service that handles periodic lookups of remote peers
@@ -68,23 +70,8 @@ func (s *Service) Receive(message *protocol.Message) (*protocol.MessageBody, err
 func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Message) (*protocol.MessageBody, error) {
 	err := s.Routes.Update(sender)
 	if err == ErrBucketFull {
-		// bucket is full, ping the least-seen node
-		bucketID := s.Routes.GetBucketID(sender.Id)
-		bucket := s.Routes.Bucket(bucketID)
-		lastSeen := bucket.Back().Value.(peer.ID)
-		body, err := ToMessageBody(ServiceID, OpCodePing, &protobuf.Ping{})
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to ")
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
-		defer cancel()
-		reply, err := s.sendHandler.Request(ctx, lastSeen.Id, body)
-		if err != nil || reply == nil {
-			bucket.Remove(bucket.Back())
-		}
-		err = s.Routes.Update(sender)
-		if err != nil {
-			log.Error().Msg("skademlia: failed to update bucket even after eviction")
+		if ok, _ := s.EvictLastSeenPeer(sender.Id); ok {
+			s.Routes.Update(sender)
 		}
 	}
 
@@ -157,4 +144,23 @@ func (s *Service) Bootstrap() error {
 		return err
 	}
 	return s.sendHandler.Broadcast(body)
+}
+
+func (s *Service) EvictLastSeenPeer(id []byte) (bool, error) {
+	// bucket is full, ping the least-seen node
+	bucketID := s.Routes.GetBucketID(id)
+	bucket := s.Routes.Bucket(bucketID)
+	lastSeen := bucket.Back().Value.(peer.ID)
+	body, err := ToMessageBody(ServiceID, OpCodePing, &protobuf.Ping{})
+	if err != nil {
+		return false, ErrRemovePeerFailed
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
+	defer cancel()
+	reply, err := s.sendHandler.Request(ctx, lastSeen.Id, body)
+	if err != nil || reply == nil {
+		bucket.Remove(bucket.Back())
+		return true, nil
+	}
+	return false, ErrRemovePeerFailed
 }

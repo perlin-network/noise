@@ -124,5 +124,11 @@ func (a *ConnectionAdapter) AddPeerID(remote []byte, addr string) {
 	log.Debug().
 		Str("local", hex.EncodeToString(a.svc.Routes.Self().PublicKey)).
 		Msgf("adding %s to routing table", hexID)
-	a.svc.Routes.Update(NewID(remote, addr))
+	id := NewID(remote, addr)
+	err := a.svc.Routes.Update(id)
+	if err == ErrBucketFull {
+		if ok, _ := a.svc.EvictLastSeenPeer(id.Id); ok {
+			a.svc.Routes.Update(id)
+		}
+	}
 }
