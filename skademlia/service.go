@@ -1,6 +1,9 @@
 package skademlia
 
 import (
+	"context"
+	"time"
+
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
@@ -8,6 +11,10 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
+)
+
+const (
+	pingTimeout = 4 * time.Second
 )
 
 // Service is a service that handles periodic lookups of remote peers
@@ -61,7 +68,24 @@ func (s *Service) Receive(message *protocol.Message) (*protocol.MessageBody, err
 func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Message) (*protocol.MessageBody, error) {
 	err := s.Routes.Update(sender)
 	if err == ErrBucketFull {
-		// TODO: update routing table accordingly
+		// bucket is full, ping the least-seen node
+		bucketID := s.Routes.GetBucketID(sender.Id)
+		bucket := s.Routes.Bucket(bucketID)
+		lastSeen := bucket.Back().Value.(peer.ID)
+		body, err := ToMessageBody(ServiceID, OpCodePing, &protobuf.Ping{})
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to ")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
+		defer cancel()
+		reply, err := s.sendHandler.Request(ctx, lastSeen.Id, body)
+		if err != nil || reply == nil {
+			bucket.Remove(bucket.Back())
+		}
+		err = s.Routes.Update(sender)
+		if err != nil {
+			log.Error().Msg("skademlia: failed to update bucket even after eviction")
+		}
 	}
 
 	switch msg.Opcode {
