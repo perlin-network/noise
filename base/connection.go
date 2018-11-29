@@ -46,7 +46,12 @@ func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []by
 		return nil, err
 	}
 
-	return NewMessageAdapter(a, conn, local, remote, a.getPubliclyVisibleAddress(), remoteAddr, false)
+	msgAdapter, err := NewMessageAdapter(a, conn, local, remote, a.getPubliclyVisibleAddress(), remoteAddr, false)
+	if err != nil {
+		return nil, err
+	}
+	a.updatePubliclyVisibleAddress(msgAdapter.Metadata()["localAddr"])
+	return msgAdapter, nil
 }
 
 func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []byte) chan protocol.MessageAdapter {
@@ -71,6 +76,7 @@ func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []b
 				log.Error().Err(err).Msg("unable to start message adapter")
 				continue
 			}
+			a.updatePubliclyVisibleAddress(adapter.Metadata()["localAddr"])
 
 			ch <- adapter
 		}
