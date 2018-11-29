@@ -44,7 +44,7 @@ func dialTCP(addr string) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
-func TestSKademlia(t *testing.T) {
+func TestSKademliaSimple(t *testing.T) {
 	var nodes []*protocol.Node
 	var msgServices []*MessageService
 	var skServices []*skademlia.Service
