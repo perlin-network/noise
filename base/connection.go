@@ -1,11 +1,13 @@
 package base
 
 import (
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/protocol"
-	"github.com/pkg/errors"
 	"net"
 	"sync"
+
+	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/protocol"
+
+	"github.com/pkg/errors"
 )
 
 const MaxPublicVisibleAddressCandidates = 8
