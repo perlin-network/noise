@@ -155,7 +155,8 @@ func (s *Service) EvictLastSeenPeer(id []byte) (bool, error) {
 	// bucket is full, ping the least-seen node
 	bucketID := s.Routes.GetBucketID(id)
 	bucket := s.Routes.Bucket(bucketID)
-	lastSeen := bucket.Back().Value.(peer.ID)
+	element := bucket.Back()
+	lastSeen := element.Value.(peer.ID)
 	body, err := ToMessageBody(ServiceID, OpCodePing, &protobuf.Ping{})
 	if err != nil {
 		return false, ErrRemovePeerFailed
@@ -164,8 +165,10 @@ func (s *Service) EvictLastSeenPeer(id []byte) (bool, error) {
 	defer cancel()
 	reply, err := s.sendHandler.Request(ctx, lastSeen.Id, body)
 	if err != nil || reply == nil {
-		bucket.Remove(bucket.Back())
+		bucket.Remove(element)
 		return true, nil
 	}
+	// last-seen has replied, move to the front
+	bucket.MoveToFront(element)
 	return false, ErrRemovePeerFailed
 }

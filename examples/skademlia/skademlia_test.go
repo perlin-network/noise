@@ -2,15 +2,16 @@ package skademlia_test
 
 import (
 	"fmt"
-	"github.com/perlin-network/noise/skademlia"
-	"github.com/stretchr/testify/assert"
 	"net"
 	"testing"
 	"time"
 
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/skademlia"
 	"github.com/perlin-network/noise/utils"
+
+	"github.com/stretchr/testify/assert"
 )
 
 const (
