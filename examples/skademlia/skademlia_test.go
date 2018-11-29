@@ -154,7 +154,7 @@ func TestSKademliaBasic(t *testing.T) {
 	}
 }
 
-func TODOTestSKademliaBootstrap(t *testing.T) {
+func TestSKademliaBootstrap(t *testing.T) {
 	var nodes []*protocol.Node
 	var msgServices []*MsgService
 	var discoveryServices []*skademlia.Service
@@ -199,6 +199,7 @@ func TODOTestSKademliaBootstrap(t *testing.T) {
 		}
 
 		node.AddService(msgSvc)
+		node.AddService(skSvc)
 
 		node.Start()
 

@@ -67,7 +67,7 @@ func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []by
 	return base.NewMessageAdapter(a, conn, local, remote, localPeer.Address, remotePeer.Address, false)
 }
 
-func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, localID []byte) chan protocol.MessageAdapter {
+func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []byte) chan protocol.MessageAdapter {
 	if a.svc == nil {
 		return nil
 	}
@@ -123,6 +123,7 @@ func (a *ConnectionAdapter) AddPeerID(remote []byte, addr string) error {
 	hexID := hex.EncodeToString(remote)
 	log.Debug().
 		Str("local", hex.EncodeToString(a.svc.Routes.Self().PublicKey)).
+		Str("address", addr).
 		Msgf("adding %s to routing table", hexID)
 	id := NewID(remote, addr)
 	err := a.svc.Routes.Update(id)

@@ -2,6 +2,7 @@ package skademlia
 
 import (
 	"context"
+	"encoding/hex"
 	"time"
 
 	"github.com/perlin-network/noise/internal/protobuf"
@@ -124,6 +125,13 @@ func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Messag
 		// ignore
 	}
 	return nil, nil
+}
+
+func (s *Service) PeerConnect(id []byte) {
+	log.Debug().
+		Str("peer", hex.EncodeToString(id)).
+		Str("self", s.Routes.Self().Address).
+		Msg("Peer has connected.")
 }
 
 // PeerDisconnect handles updating the routing table on disconnect
