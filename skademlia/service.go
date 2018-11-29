@@ -130,12 +130,12 @@ func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Messag
 func (s *Service) PeerDisconnect(target []byte) {
 	t := peer.CreateID("", target)
 	// Delete peer if in routing table.
-	if _, ok := s.Routes.GetPeer(t.Id); ok {
+	if other, ok := s.Routes.GetPeer(t.Id); ok {
 		s.Routes.RemovePeer(t.Id)
 
 		log.Debug().
-			Str("address", s.Routes.Self().Address).
-			Str("peer_pub_key", t.PublicKeyHex()).
+			Str("peer", other.Address).
+			Str("self", s.Routes.Self().Address).
 			Msg("Peer has disconnected.")
 	}
 }
