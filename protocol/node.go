@@ -243,7 +243,7 @@ func (n *Node) ManuallyRemovePeer(remote []byte) {
 }
 
 func (n *Node) Send(message *Message) error {
-	if string(message.Recipient) == string(n.idAdapter.MyIdentity()) {
+	if bytes.Equal(message.Recipient, n.idAdapter.MyIdentity()) {
 		return errors.New("sender mismatch")
 	}
 
@@ -268,7 +268,7 @@ func (n *Node) Broadcast(body *MessageBody) error {
 		Body:   body,
 	}
 	for _, peerPublicKey := range n.connAdapter.GetPeerIDs() {
-		if string(peerPublicKey) == string(n.idAdapter.MyIdentity()) {
+		if bytes.Equal(peerPublicKey, n.idAdapter.MyIdentity()) {
 			// don't sent to yourself
 			continue
 		}
