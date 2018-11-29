@@ -141,6 +141,9 @@ func (s *Service) PeerDisconnect(target []byte) {
 }
 
 func (s *Service) Bootstrap() error {
+	if s.sendHandler == nil {
+		return errors.New("SendHandler not set")
+	}
 	body, err := ToMessageBody(ServiceID, OpCodePing, &protobuf.Ping{})
 	if err != nil {
 		return err
