@@ -3,23 +3,25 @@ package discovery_test
 import (
 	"encoding/hex"
 	"fmt"
+	"net"
+	"testing"
+	"time"
+
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/kademlia"
 	"github.com/perlin-network/noise/kademlia/discovery"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/utils"
+
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	"net"
-	"testing"
-	"time"
 )
 
 const (
 	serviceID = 56
 	numNodes  = 3
-	startPort = 5000
 	host      = "localhost"
 )
 
@@ -50,11 +52,14 @@ func TestDiscovery(t *testing.T) {
 	var nodes []*protocol.Node
 	var msgServices []*MessageService
 	var discoveries []*discovery.Service
+	var ports []int
 
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
 		idAdapter := base.NewIdentityAdapter()
-		addr := fmt.Sprintf("%s:%d", host, startPort+i)
+		port := utils.GetRandomUnusedPort()
+		ports = append(ports, port)
+		addr := fmt.Sprintf("%s:%d", host, port)
 
 		log.Info().
 			Str("addr", addr).
@@ -109,7 +114,7 @@ func TestDiscovery(t *testing.T) {
 			continue
 		}
 		node0ID := nodes[0].GetIdentityAdapter().MyIdentity()
-		nodes[i].GetConnectionAdapter().AddPeerID(node0ID, fmt.Sprintf("%s:%d", host, startPort+0))
+		nodes[i].GetConnectionAdapter().AddPeerID(node0ID, fmt.Sprintf("%s:%d", host, ports[0]))
 	}
 
 	// being discovery process to connect nodes to each other
