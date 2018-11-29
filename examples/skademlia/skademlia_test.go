@@ -1,42 +1,39 @@
 package skademlia_test
 
 import (
-	"encoding/hex"
 	"fmt"
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/peer"
-	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/skademlia"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/utils"
 )
 
 const (
-	serviceID = 66
-	numNodes  = 3
-	startPort = 5000
+	serviceID = 42
 	host      = "localhost"
+	numNodes  = 3
 )
 
-// MessageService buffers all messages into a mailbox for this test.
-type MessageService struct {
+// MsgService buffers all messages into a mailbox for this test.
+type MsgService struct {
 	protocol.Service
 	Mailbox chan string
 }
 
-func (s *MessageService) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
+func (n *MsgService) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
 	if message.Body.Service != serviceID {
 		return nil, nil
 	}
 	if len(message.Body.Payload) == 0 {
-		return nil, errors.New("Empty payload")
+		return nil, nil
 	}
-	reqMsg := string(message.Body.Payload)
-
-	s.Mailbox <- reqMsg
+	payload := string(message.Body.Payload)
+	n.Mailbox <- payload
 	return nil, nil
 }
 
@@ -44,91 +41,75 @@ func dialTCP(addr string) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
-func TestSKademliaSimple(t *testing.T) {
+func TestSKademliaBasic(t *testing.T) {
 	var nodes []*protocol.Node
-	var msgServices []*MessageService
-	var skServices []*skademlia.Service
+	var msgServices []*MsgService
+	var discoveryServices []*skademlia.Service
+	var ports []int
 
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
+		//var idAdapter *IdentityAdapter
 		idAdapter := skademlia.NewIdentityAdapter(8, 8)
-		addr := fmt.Sprintf("%s:%d", host, startPort+i)
 
-		log.Info().
-			Str("addr", addr).
-			Str("pub_key", hex.EncodeToString(idAdapter.MyIdentity())).
-			Msgf("Setting up node %d", i)
-
-		listener, err := net.Listen("tcp", addr)
+		port := utils.GetRandomUnusedPort()
+		ports = append(ports, port)
+		address := fmt.Sprintf("%s:%d", host, port)
+		listener, err := net.Listen("tcp", address)
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
 
+		id := skademlia.NewID(idAdapter.MyIdentity(), address)
+		skSvc := skademlia.NewService(nil, id)
 		connAdapter, err := skademlia.NewConnectionAdapter(
 			listener,
 			dialTCP,
-			skademlia.NewID(idAdapter.MyIdentity(), addr))
+			id,
+		)
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
+		connAdapter.SetSKademliaService(skSvc)
 
 		node := protocol.NewNode(
 			protocol.NewController(),
 			connAdapter,
 			idAdapter,
 		)
+		node.SetCustomHandshakeProcessor(skademlia.NewHandshakeProcessor(idAdapter))
 
-		msgSvc := &MessageService{
+		msgSvc := &MsgService{
 			Mailbox: make(chan string, 1),
 		}
 
 		node.AddService(msgSvc)
 
-		skSvc := skademlia.NewService(
-			node,
-			peer.CreateID(addr, idAdapter.MyIdentity()),
-		)
-
-		connAdapter.SetSKademliaService(skSvc)
-
-		node.AddService(skSvc)
-
 		node.Start()
 
 		nodes = append(nodes, node)
 		msgServices = append(msgServices, msgSvc)
-		skServices = append(skServices, skSvc)
+		discoveryServices = append(discoveryServices, skSvc)
 	}
 
-	// make sure all the nodes can listen for incoming connections
-	time.Sleep(time.Duration(len(nodes)) * time.Second)
-
-	// Connect other nodes to node 0
-	for i := 1; i < len(nodes); i++ {
-		if i == 0 {
-			// skip node 0
-			continue
+	// Connect all the node routing tables
+	for i, srcNode := range nodes {
+		for j, otherNode := range nodes {
+			if i == j {
+				continue
+			}
+			peerID := otherNode.GetIdentityAdapter().MyIdentity()
+			srcNode.GetConnectionAdapter().AddPeerID(peerID, fmt.Sprintf("%s:%d", host, ports[j]))
 		}
-		node0ID := nodes[0].GetIdentityAdapter().MyIdentity()
-		nodes[i].GetConnectionAdapter().AddPeerID(node0ID, fmt.Sprintf("%s:%d", host, startPort+0))
 	}
-
-	// being discovery process to connect nodes to each other
-	for _, sk := range skServices {
-		sk.Bootstrap()
-	}
-
-	// make sure nodes are connected
-	time.Sleep(time.Duration(len(nodes)) * time.Second)
 
 	// assert broadcasts goes to everyone
 	for i := 0; i < len(nodes); i++ {
-		// Broadcast out a message from Node 0.
 		expected := fmt.Sprintf("This is a broadcasted message from Node %d.", i)
-		nodes[i].Broadcast(&protocol.MessageBody{
+		assert.Nil(t, nodes[i].Broadcast(&protocol.MessageBody{
 			Service: serviceID,
 			Payload: ([]byte)(expected),
-		})
+		}))
 
 		// Check if message was received by other nodes.
 		for j := 0; j < len(msgServices); j++ {
@@ -144,40 +125,27 @@ func TestSKademliaSimple(t *testing.T) {
 		}
 	}
 
-	// disconnect a node 1 from node 0
-	disconnect := []int{0, 1}
-	nodes[disconnect[0]].ManuallyRemovePeer(nodes[disconnect[1]].GetIdentityAdapter().MyIdentity())
-
-	// assert broadcasts goes to everyone
+	// sends can go to everyone
 	for i := 0; i < len(nodes); i++ {
-		// Broadcast out a message from Node 0.
-		expected := fmt.Sprintf("This is a broadcasted message from Node %d.", i)
-		nodes[i].Broadcast(&protocol.MessageBody{
-			Service: serviceID,
-			Payload: ([]byte)(expected),
-		})
-
 		// Check if message was received by other nodes.
 		for j := 0; j < len(msgServices); j++ {
 			if i == j {
 				continue
 			}
-			if (i == disconnect[0] && j == disconnect[1]) || (i == disconnect[1] && j == disconnect[0]) {
-				// this is a disconnected situation, should not deliver message
-				select {
-				case received := <-msgServices[j].Mailbox:
-					assert.Failf(t, "Should not have received message", "from Node %d for Node %d but got '%v'", i, j, received)
-				case <-time.After(2 * time.Second):
-					// success, no message should have passed
-				}
-			} else {
-				// message should have been delivered
-				select {
-				case received := <-msgServices[j].Mailbox:
-					assert.Equalf(t, expected, received, "Expected message '%s' to be received by node %d but got '%v'", expected, j, received)
-				case <-time.After(2 * time.Second):
-					assert.Failf(t, "Timed out attempting to receive message", "from Node %d for Node %d", i, j)
-				}
+			expected := fmt.Sprintf("Sending a msg message from Node %d to Node %d.", i, j)
+			assert.Nil(t, nodes[i].Send(&protocol.Message{
+				Sender:    nodes[i].GetIdentityAdapter().MyIdentity(),
+				Recipient: nodes[j].GetIdentityAdapter().MyIdentity(),
+				Body: &protocol.MessageBody{
+					Service: serviceID,
+					Payload: ([]byte)(expected),
+				},
+			}))
+			select {
+			case received := <-msgServices[j].Mailbox:
+				assert.Equalf(t, expected, received, "Expected message '%s' to be received by node %d but got '%v'", expected, j, received)
+			case <-time.After(2 * time.Second):
+				assert.Failf(t, "Timed out attempting to receive message", "from Node %d for Node %d", i, j)
 			}
 		}
 	}
