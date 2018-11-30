@@ -17,7 +17,6 @@ import (
 const (
 	serviceID = 42
 	host      = "localhost"
-	numNodes  = 3
 )
 
 // MsgService buffers all messages into a mailbox for this test.
@@ -43,57 +42,8 @@ func dialTCP(addr string) (net.Conn, error) {
 }
 
 func TestSKademliaBasic(t *testing.T) {
-	var nodes []*protocol.Node
-	var msgServices []*MsgService
-	var discoveryServices []*skademlia.Service
-	var ports []int
-
-	// setup all the nodes
-	for i := 0; i < numNodes; i++ {
-		//var idAdapter *IdentityAdapter
-		idAdapter := skademlia.NewIdentityAdapter(8, 8)
-
-		port := utils.GetRandomUnusedPort()
-		ports = append(ports, port)
-		address := fmt.Sprintf("%s:%d", host, port)
-		listener, err := net.Listen("tcp", address)
-		if err != nil {
-			log.Fatal().Msgf("%+v", err)
-		}
-
-		id := skademlia.NewID(idAdapter.MyIdentity(), address)
-
-		connAdapter, err := skademlia.NewConnectionAdapter(
-			listener,
-			dialTCP,
-			id,
-		)
-		if err != nil {
-			log.Fatal().Msgf("%+v", err)
-		}
-
-		node := protocol.NewNode(
-			protocol.NewController(),
-			connAdapter,
-			idAdapter,
-		)
-		node.SetCustomHandshakeProcessor(skademlia.NewHandshakeProcessor(idAdapter))
-
-		skSvc := skademlia.NewService(node, id)
-		connAdapter.SetSKademliaService(skSvc)
-
-		msgSvc := &MsgService{
-			Mailbox: make(chan string, 1),
-		}
-
-		node.AddService(msgSvc)
-
-		node.Start()
-
-		nodes = append(nodes, node)
-		msgServices = append(msgServices, msgSvc)
-		discoveryServices = append(discoveryServices, skSvc)
-	}
+	numNodes := 3
+	nodes, msgServices, _, ports := makeNodes(numNodes)
 
 	// Connect all the node routing tables
 	for i, srcNode := range nodes {
@@ -155,58 +105,8 @@ func TestSKademliaBasic(t *testing.T) {
 }
 
 func TestSKademliaBootstrap(t *testing.T) {
-	var nodes []*protocol.Node
-	var msgServices []*MsgService
-	var discoveryServices []*skademlia.Service
-	var ports []int
-
-	// setup all the nodes
-	for i := 0; i < numNodes; i++ {
-		//var idAdapter *IdentityAdapter
-		idAdapter := skademlia.NewIdentityAdapter(8, 8)
-
-		port := utils.GetRandomUnusedPort()
-		ports = append(ports, port)
-		address := fmt.Sprintf("%s:%d", host, port)
-		listener, err := net.Listen("tcp", address)
-		if err != nil {
-			log.Fatal().Msgf("%+v", err)
-		}
-
-		id := skademlia.NewID(idAdapter.MyIdentity(), address)
-
-		connAdapter, err := skademlia.NewConnectionAdapter(
-			listener,
-			dialTCP,
-			id,
-		)
-		if err != nil {
-			log.Fatal().Msgf("%+v", err)
-		}
-
-		node := protocol.NewNode(
-			protocol.NewController(),
-			connAdapter,
-			idAdapter,
-		)
-		node.SetCustomHandshakeProcessor(skademlia.NewHandshakeProcessor(idAdapter))
-
-		skSvc := skademlia.NewService(node, id)
-		connAdapter.SetSKademliaService(skSvc)
-
-		msgSvc := &MsgService{
-			Mailbox: make(chan string, 1),
-		}
-
-		node.AddService(msgSvc)
-		node.AddService(skSvc)
-
-		node.Start()
-
-		nodes = append(nodes, node)
-		msgServices = append(msgServices, msgSvc)
-		discoveryServices = append(discoveryServices, skSvc)
-	}
+	numNodes := 3
+	nodes, msgServices, discoveryServices, ports := makeNodes(numNodes)
 
 	// Connect other nodes to node 0
 	for i := 1; i < len(nodes); i++ {
@@ -247,4 +147,60 @@ func TestSKademliaBootstrap(t *testing.T) {
 			}
 		}
 	}
+}
+
+func makeNodes(numNodes int) ([]*protocol.Node, []*MsgService, []*skademlia.Service, []int) {
+	var nodes []*protocol.Node
+	var msgServices []*MsgService
+	var discoveryServices []*skademlia.Service
+	var ports []int
+
+	// setup all the nodes
+	for i := 0; i < numNodes; i++ {
+		idAdapter := skademlia.NewIdentityAdapter(8, 8)
+
+		port := utils.GetRandomUnusedPort()
+		address := fmt.Sprintf("%s:%d", host, port)
+		listener, err := net.Listen("tcp", address)
+		if err != nil {
+			log.Fatal().Msgf("%+v", err)
+		}
+
+		id := skademlia.NewID(idAdapter.MyIdentity(), address)
+
+		connAdapter, err := skademlia.NewConnectionAdapter(
+			listener,
+			dialTCP,
+			id,
+		)
+		if err != nil {
+			log.Fatal().Msgf("%+v", err)
+		}
+
+		node := protocol.NewNode(
+			protocol.NewController(),
+			connAdapter,
+			idAdapter,
+		)
+		node.SetCustomHandshakeProcessor(skademlia.NewHandshakeProcessor(idAdapter))
+
+		skSvc := skademlia.NewService(node, id)
+		connAdapter.SetSKademliaService(skSvc)
+
+		msgSvc := &MsgService{
+			Mailbox: make(chan string, 1),
+		}
+
+		node.AddService(msgSvc)
+		node.AddService(skSvc)
+
+		node.Start()
+
+		nodes = append(nodes, node)
+		msgServices = append(msgServices, msgSvc)
+		discoveryServices = append(discoveryServices, skSvc)
+		ports = append(ports, port)
+	}
+
+	return nodes, msgServices, discoveryServices, ports
 }
