@@ -5,9 +5,12 @@ import (
 	"crypto/cipher"
 	"crypto/sha256"
 	"encoding/binary"
+	"sync"
+
+	"github.com/perlin-network/noise/log"
+
 	"github.com/monnand/dhkx"
 	"github.com/pkg/errors"
-	"sync"
 )
 
 type PendingPeer struct {
@@ -194,6 +197,8 @@ func (p *EstablishedPeer) continueKeyExchange(c *Controller, idAdapter IdentityA
 	case KeyExchange_Failed:
 		return errors.New("failed previously")
 	default:
+		// FIXME: possible race condition, can receive KeyExchange_Done state and fail here
+		log.Fatal().Msgf("unexpected key exchange state: %v", p.kxState)
 		panic("unexpected key exchange state")
 	}
 }

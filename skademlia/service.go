@@ -37,7 +37,7 @@ type Service struct {
 // NewService creates a new instance of the Discovery Service
 func NewService(sendAdapter protocol.SendAdapter, selfID peer.ID) *Service {
 	return &Service{
-		Routes:      CreateRoutingTable(selfID),
+		Routes:      NewRoutingTable(selfID),
 		sendAdapter: sendAdapter,
 	}
 }
@@ -90,7 +90,7 @@ func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Messag
 		if s.DisablePong {
 			break
 		}
-		peers := FindNode(s.Routes, s.sendAdapter, sender, BucketSize, 8)
+		peers := FindNode(s.Routes, s.sendAdapter, sender, s.Routes.opts.bucketSize, 8)
 
 		// Update routing table w/ closest peers to self.
 		for _, peerID := range peers {
@@ -116,7 +116,7 @@ func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Messag
 		response := &protobuf.LookupNodeResponse{}
 
 		// Respond back with closest peers to a provided target.
-		for _, peerID := range s.Routes.FindClosestPeers(reqTargetID, BucketSize) {
+		for _, peerID := range s.Routes.FindClosestPeers(reqTargetID, s.Routes.opts.bucketSize) {
 			id := protobuf.ID(peerID)
 			response.Peers = append(response.Peers, &id)
 		}

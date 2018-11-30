@@ -152,13 +152,13 @@ func TestSKademliaBootstrap(t *testing.T) {
 
 func generateBucketIDs(id *skademlia.IdentityAdapter, n int) []*skademlia.IdentityAdapter {
 	self := skademlia.NewID(id.MyIdentity(), "")
-	rt := skademlia.CreateRoutingTable(self)
+	rt := skademlia.NewRoutingTable(self)
 
 	var ids []*skademlia.IdentityAdapter
 
 	for len(ids) < n {
 		id := skademlia.NewIdentityAdapter(8, 8)
-		if rt.GetBucketID(id.MyIdentity()) == 4 {
+		if rt.GetBucketID(skademlia.NewID(id.MyIdentity(), "").Id) == 4 {
 			ids = append(ids, id)
 		}
 	}
@@ -168,9 +168,14 @@ func generateBucketIDs(id *skademlia.IdentityAdapter, n int) []*skademlia.Identi
 func TestSKademliaEviction(t *testing.T) {
 	self := skademlia.NewIdentityAdapter(8, 8)
 	ids := []*skademlia.IdentityAdapter{self}
-	peers := generateBucketIDs(self, 4)
+	// create 5 peers, last peer should not be in table
+	peers := generateBucketIDs(self, 5)
 	ids = append(ids, peers...)
-	nodes, msgServices, discoveryServices, ports := makeNodesFromIDs(ids)
+	// make max bucket size 4
+	nodes, msgServices, discoveryServices, ports := makeNodesFromIDs(ids, 4)
+
+	node0ID := nodes[0].GetIdentityAdapter().MyIdentity()
+	rt := discoveryServices[0].Routes
 
 	// Connect other nodes to node 0
 	for i := 1; i < len(nodes); i++ {
@@ -178,7 +183,6 @@ func TestSKademliaEviction(t *testing.T) {
 			// skip node 0
 			continue
 		}
-		node0ID := nodes[0].GetIdentityAdapter().MyIdentity()
 		assert.Nil(t, nodes[i].GetConnectionAdapter().AddPeerID(node0ID, fmt.Sprintf("%s:%d", host, ports[0])))
 	}
 
@@ -188,7 +192,16 @@ func TestSKademliaEviction(t *testing.T) {
 	}
 
 	// make sure nodes are connected
-	time.Sleep(time.Duration(len(nodes)) * time.Second)
+	time.Sleep(250 * time.Duration(len(nodes)) * time.Millisecond)
+
+	skademliaID := skademlia.NewID(ids[1].MyIdentity(), "")
+	expectedBucketID := rt.GetBucketID(skademliaID.Id)
+	for i := 2; i < len(nodes); i++ {
+		skademliaID = skademlia.NewID(ids[i].MyIdentity(), "")
+		bucketID := rt.GetBucketID(skademliaID.Id)
+		assert.Equalf(t, expectedBucketID, bucketID, "expected bucket ID to be %d, got %d", expectedBucketID, bucketID)
+		fmt.Printf("bucket id: %d\n", bucketID)
+	}
 
 	// assert broadcasts goes to everyone
 	for i := 0; i < len(nodes); i++ {
@@ -211,9 +224,13 @@ func TestSKademliaEviction(t *testing.T) {
 			}
 		}
 	}
+
+	expectedLen := 4
+	bucket := discoveryServices[0].Routes.Bucket(expectedBucketID)
+	assert.Equalf(t, expectedLen, bucket.Len(), "expected bucket size to be %d, got %d", expectedLen, bucket.Len())
 }
 
-func makeNodesFromIDs(ids []*skademlia.IdentityAdapter) ([]*protocol.Node, []*MsgService, []*skademlia.Service, []int) {
+func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int) ([]*protocol.Node, []*MsgService, []*skademlia.Service, []int) {
 	var nodes []*protocol.Node
 	var msgServices []*MsgService
 	var discoveryServices []*skademlia.Service
@@ -249,6 +266,8 @@ func makeNodesFromIDs(ids []*skademlia.IdentityAdapter) ([]*protocol.Node, []*Ms
 		node.SetCustomHandshakeProcessor(skademlia.NewHandshakeProcessor(idAdapter))
 
 		skSvc := skademlia.NewService(node, id)
+		rt := skademlia.NewRoutingTableWithOptions(id, skademlia.WithBucketSize(bucketSize))
+		skSvc.Routes = rt
 		connAdapter.SetSKademliaService(skSvc)
 
 		msgSvc := &MsgService{

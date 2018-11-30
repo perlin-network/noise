@@ -156,8 +156,8 @@ func FindNode(rt *RoutingTable, sendAdapter protocol.SendAdapter, targetID peer.
 
 	// Cut off list of results to only have the routing table focus on the
 	// #BucketSize closest peers to the current node.
-	if len(results) > BucketSize {
-		results = results[:BucketSize]
+	if len(results) > rt.opts.bucketSize {
+		results = results[:rt.opts.bucketSize]
 	}
 
 	return

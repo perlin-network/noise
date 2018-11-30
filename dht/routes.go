@@ -33,8 +33,8 @@ func NewBucket() *Bucket {
 	}
 }
 
-// CreateRoutingTable is a Factory method of RoutingTable containing empty buckets.
-func CreateRoutingTable(id peer.ID) *RoutingTable {
+// NewRoutingTable is a Factory method of RoutingTable containing empty buckets.
+func NewRoutingTable(id peer.ID) *RoutingTable {
 	table := &RoutingTable{
 		self:    id,
 		buckets: make([]*Bucket, len(id.Id)*8),

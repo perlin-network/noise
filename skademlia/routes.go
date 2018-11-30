@@ -14,8 +14,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-// BucketSize defines the NodeID, Key, and routing table data structures.
-const BucketSize = 16
+// defaultBucketSize defines the NodeID, Key, and routing table data structures.
+const defaultBucketSize = 16
 
 var (
 	// ErrBucketFull returns if specified operation fails due to the bucket being full
@@ -24,11 +24,12 @@ var (
 
 // RoutingTable contains one bucket list for lookups.
 type RoutingTable struct {
+	opts routingTableOptions
+
 	// Current node's ID.
 	self peer.ID
 
-	buckets    []*Bucket
-	bucketSize int
+	buckets []*Bucket
 }
 
 // NewID returns a new ID
@@ -54,15 +55,15 @@ func NewBucket() *Bucket {
 	}
 }
 
-// CreateRoutingTable is a Factory method of RoutingTable containing empty buckets.
-func CreateRoutingTable(id peer.ID) *RoutingTable {
+// NewRoutingTable is a Factory method of RoutingTable containing empty buckets.
+func NewRoutingTable(id peer.ID) *RoutingTable {
 	if id.PublicKey == nil {
 		log.Fatal().Msg("id cannot have a nil PublicKey, please use NewID to create new IDs")
 	}
 	table := &RoutingTable{
-		self:       id,
-		buckets:    make([]*Bucket, len(id.Id)*8),
-		bucketSize: BucketSize,
+		opts:    defaultRoutingTableOptions,
+		self:    id,
+		buckets: make([]*Bucket, len(id.Id)*8),
 	}
 	for i := 0; i < len(id.Id)*8; i++ {
 		table.buckets[i] = NewBucket()
@@ -71,6 +72,34 @@ func CreateRoutingTable(id peer.ID) *RoutingTable {
 	table.Update(id)
 
 	return table
+}
+
+type routingTableOptions struct {
+	bucketSize int
+}
+
+var defaultRoutingTableOptions = routingTableOptions{
+	bucketSize: defaultBucketSize,
+}
+
+type RoutingTableOption func(*routingTableOptions)
+
+// WithBucketSize sets the number of peers per bucket
+func WithBucketSize(n int) RoutingTableOption {
+	return func(o *routingTableOptions) {
+		o.bucketSize = n
+	}
+}
+
+// NewRoutingTableWithOptions returns a new routing table with specified options
+func NewRoutingTableWithOptions(self peer.ID, opts ...RoutingTableOption) *RoutingTable {
+	rt := NewRoutingTable(self)
+
+	for _, o := range opts {
+		o(&rt.opts)
+	}
+
+	return rt
 }
 
 // Self returns the ID of the node hosting the current routing table instance.
@@ -102,7 +131,7 @@ func (t *RoutingTable) Update(target peer.ID) error {
 
 	if element == nil {
 		// Populate bucket if its not full.
-		if bucket.Len() < t.bucketSize {
+		if bucket.Len() < t.opts.bucketSize {
 			bucket.PushFront(target)
 		} else {
 			return ErrBucketFull

@@ -47,7 +47,7 @@ func RandByte() byte {
 func TestSelf(t *testing.T) {
 	t.Parallel()
 
-	routingTable := CreateRoutingTable(id1)
+	routingTable := NewRoutingTable(id1)
 	routingTable.Update(id2)
 	routingTable.Update(id3)
 
@@ -62,7 +62,7 @@ func TestSelf(t *testing.T) {
 func TestPeerExists(t *testing.T) {
 	t.Parallel()
 
-	routingTable := CreateRoutingTable(id1)
+	routingTable := NewRoutingTable(id1)
 	routingTable.Update(id2)
 	routingTable.Update(id3)
 
@@ -76,7 +76,7 @@ func TestPeerExists(t *testing.T) {
 func TestGetPeerAddresses(t *testing.T) {
 	t.Parallel()
 
-	routingTable := CreateRoutingTable(id1)
+	routingTable := NewRoutingTable(id1)
 	routingTable.Update(id2)
 	routingTable.Update(id3)
 
@@ -92,7 +92,7 @@ func TestGetPeerAddresses(t *testing.T) {
 func TestGetPeers(t *testing.T) {
 	t.Parallel()
 
-	routingTable := CreateRoutingTable(id1)
+	routingTable := NewRoutingTable(id1)
 	routingTable.Update(id2)
 
 	peers := routingTable.GetPeers()
@@ -108,7 +108,7 @@ func TestGetPeers(t *testing.T) {
 func TestRemovePeer(t *testing.T) {
 	t.Parallel()
 
-	routingTable := CreateRoutingTable(id1)
+	routingTable := NewRoutingTable(id1)
 	routingTable.Update(id2)
 	routingTable.Update(id3)
 
@@ -136,7 +136,7 @@ func TestFindClosestPeers(t *testing.T) {
 		peer.ID{Address: "0004", Id: []byte("12345678901234567890123456789014")},
 		peer.ID{Address: "0005", Id: []byte("00000000000000000000000000000000")},
 	)
-	routingTable := CreateRoutingTable(nodes[0])
+	routingTable := NewRoutingTable(nodes[0])
 	for i := 1; i <= 5; i++ {
 		routingTable.Update(nodes[i])
 	}
@@ -181,7 +181,7 @@ func TestRoutingTable(t *testing.T) {
 	pk0 := MustReadRand(32)
 	ids := make([]unsafe.Pointer, IDPoolSize) // Element type: *peer.ID
 
-	table := CreateRoutingTable(peer.CreateID("000", pk0))
+	table := NewRoutingTable(peer.CreateID("000", pk0))
 
 	wg := &sync.WaitGroup{}
 	wg.Add(concurrentCount)
