@@ -150,6 +150,125 @@ func TestSKademliaBootstrap(t *testing.T) {
 	}
 }
 
+func generateBucketIDs(id *skademlia.IdentityAdapter, n int) []*skademlia.IdentityAdapter {
+	self := skademlia.NewID(id.MyIdentity(), "")
+	rt := skademlia.CreateRoutingTable(self)
+
+	var ids []*skademlia.IdentityAdapter
+
+	for len(ids) < n {
+		id := skademlia.NewIdentityAdapter(8, 8)
+		if rt.GetBucketID(id.MyIdentity()) == 4 {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+func TestSKademliaEviction(t *testing.T) {
+	self := skademlia.NewIdentityAdapter(8, 8)
+	ids := []*skademlia.IdentityAdapter{self}
+	peers := generateBucketIDs(self, 4)
+	ids = append(ids, peers...)
+	nodes, msgServices, discoveryServices, ports := makeNodesFromIDs(ids)
+
+	// Connect other nodes to node 0
+	for i := 1; i < len(nodes); i++ {
+		if i == 0 {
+			// skip node 0
+			continue
+		}
+		node0ID := nodes[0].GetIdentityAdapter().MyIdentity()
+		assert.Nil(t, nodes[i].GetConnectionAdapter().AddPeerID(node0ID, fmt.Sprintf("%s:%d", host, ports[0])))
+	}
+
+	// being discovery process to connect nodes to each other
+	for _, d := range discoveryServices {
+		assert.Nil(t, d.Bootstrap())
+	}
+
+	// make sure nodes are connected
+	time.Sleep(time.Duration(len(nodes)) * time.Second)
+
+	// assert broadcasts goes to everyone
+	for i := 0; i < len(nodes); i++ {
+		expected := fmt.Sprintf("This is a broadcasted message from Node %d.", i)
+		assert.Nil(t, nodes[i].Broadcast(context.Background(), &protocol.MessageBody{
+			Service: serviceID,
+			Payload: ([]byte)(expected),
+		}))
+
+		// Check if message was received by other nodes.
+		for j := 0; j < len(msgServices); j++ {
+			if i == j {
+				continue
+			}
+			select {
+			case received := <-msgServices[j].Mailbox:
+				assert.Equalf(t, expected, received, "Expected message '%s' to be received by node %d but got '%v'", expected, j, received)
+			case <-time.After(2 * time.Second):
+				assert.Failf(t, "Timed out attempting to receive message", "from Node %d for Node %d", i, j)
+			}
+		}
+	}
+}
+
+func makeNodesFromIDs(ids []*skademlia.IdentityAdapter) ([]*protocol.Node, []*MsgService, []*skademlia.Service, []int) {
+	var nodes []*protocol.Node
+	var msgServices []*MsgService
+	var discoveryServices []*skademlia.Service
+	var ports []int
+
+	// setup all the nodes
+	for i := 0; i < len(ids); i++ {
+		idAdapter := ids[i]
+
+		port := utils.GetRandomUnusedPort()
+		address := fmt.Sprintf("%s:%d", host, port)
+		listener, err := net.Listen("tcp", address)
+		if err != nil {
+			log.Fatal().Msgf("%+v", err)
+		}
+
+		id := skademlia.NewID(idAdapter.MyIdentity(), address)
+
+		connAdapter, err := skademlia.NewConnectionAdapter(
+			listener,
+			dialTCP,
+			id,
+		)
+		if err != nil {
+			log.Fatal().Msgf("%+v", err)
+		}
+
+		node := protocol.NewNode(
+			protocol.NewController(),
+			connAdapter,
+			idAdapter,
+		)
+		node.SetCustomHandshakeProcessor(skademlia.NewHandshakeProcessor(idAdapter))
+
+		skSvc := skademlia.NewService(node, id)
+		connAdapter.SetSKademliaService(skSvc)
+
+		msgSvc := &MsgService{
+			Mailbox: make(chan string, 1),
+		}
+
+		node.AddService(msgSvc)
+		node.AddService(skSvc)
+
+		node.Start()
+
+		nodes = append(nodes, node)
+		msgServices = append(msgServices, msgSvc)
+		discoveryServices = append(discoveryServices, skSvc)
+		ports = append(ports, port)
+	}
+
+	return nodes, msgServices, discoveryServices, ports
+}
+
 func makeNodes(numNodes int) ([]*protocol.Node, []*MsgService, []*skademlia.Service, []int) {
 	var nodes []*protocol.Node
 	var msgServices []*MsgService

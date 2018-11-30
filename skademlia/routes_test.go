@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"reflect"
 	"sort"
 	"sync"
@@ -146,7 +147,7 @@ func TestRemovePeer(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	t.Parallel()
 
-	// key generates bucket id 255
+	// self key generates bucket id 255
 	idKey1 := []byte{124, 224, 147, 208, 211, 103, 166, 113, 153, 104, 83, 62, 61, 145, 8, 211, 144, 164, 224, 191, 177, 205, 198, 94, 92, 35, 76, 83, 229, 46, 219, 110}
 	id1 := NewID(idKey1, "0001")
 
