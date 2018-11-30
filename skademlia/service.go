@@ -19,7 +19,7 @@ const (
 )
 
 var (
-	ErrRemovePeerFailed = errors.New("skademlia: failed to remove last seen peer")
+	errRemovePeerFailed = errors.New("skademlia: failed to remove last seen peer")
 )
 
 // Service is a service that handles periodic lookups of remote peers
@@ -43,7 +43,7 @@ func NewService(sendAdapter protocol.SendAdapter, selfID peer.ID) *Service {
 }
 
 // Receive is the handler when a message is received
-func (s *Service) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
+func (s *Service) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
 	if message.Body.Service != ServiceID {
 		return nil, nil
 	}
@@ -157,7 +157,7 @@ func (s *Service) Bootstrap() error {
 	if err != nil {
 		return err
 	}
-	return s.sendAdapter.Broadcast(body)
+	return s.sendAdapter.Broadcast(context.Background(), body)
 }
 
 func (s *Service) EvictLastSeenPeer(id []byte) (bool, error) {
@@ -168,7 +168,7 @@ func (s *Service) EvictLastSeenPeer(id []byte) (bool, error) {
 	lastSeen := element.Value.(peer.ID)
 	body, err := ToMessageBody(ServiceID, OpCodePing, &protobuf.Ping{})
 	if err != nil {
-		return false, ErrRemovePeerFailed
+		return false, errRemovePeerFailed
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 	defer cancel()
@@ -179,5 +179,5 @@ func (s *Service) EvictLastSeenPeer(id []byte) (bool, error) {
 	}
 	// last-seen has replied, move to the front
 	bucket.MoveToFront(element)
-	return false, ErrRemovePeerFailed
+	return false, errRemovePeerFailed
 }

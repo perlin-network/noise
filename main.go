@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/hex"
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/log"
@@ -22,7 +23,7 @@ type CountService struct {
 	MsgCount uint64
 }
 
-func (s *CountService) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
+func (s *CountService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
 	atomic.AddUint64(&s.MsgCount, 1)
 	return nil, nil
 }
@@ -69,7 +70,7 @@ func main() {
 
 		go func() {
 			for {
-				node.Send(&protocol.Message{
+				node.Send(context.Background(), &protocol.Message{
 					Sender:    kp.PublicKey,
 					Recipient: peerID,
 					Body: &protocol.MessageBody{

@@ -27,7 +27,7 @@ type NestedService struct {
 	responseCount int
 }
 
-func (n *NestedService) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
+func (n *NestedService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
 	if message.Body.Service != nestedServiceID {
 		// not the matching service id
 		return nil, nil

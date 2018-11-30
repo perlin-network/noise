@@ -4,7 +4,7 @@ import (
 	"context"
 )
 
-type RecvMessageCallback func(message []byte)
+type RecvMessageCallback func(ctx context.Context, message []byte)
 
 // ConnectionAdapter is an adapter that establishes real/virtual connections (message adapters), both passively and actively.
 type ConnectionAdapter interface {
@@ -49,7 +49,7 @@ type HandshakeProcessor interface {
 
 // SendAdapter is an adapter that manages sending messages
 type SendAdapter interface {
-	Send(message *Message) error
+	Send(ctx context.Context, message *Message) error
 	Request(ctx context.Context, target []byte, body *MessageBody) (*MessageBody, error)
-	Broadcast(body *MessageBody) error
+	Broadcast(ctx context.Context, body *MessageBody) error
 }

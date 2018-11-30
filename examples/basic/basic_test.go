@@ -1,6 +1,7 @@
 package basic
 
 import (
+	"context"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/base"
@@ -25,7 +26,7 @@ type BasicService struct {
 	Mailbox chan *messages.BasicMessage
 }
 
-func (n *BasicService) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
+func (n *BasicService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
 	if message.Body.Service != serviceID {
 		// early exit if not the matching service
 		return nil, nil
@@ -114,7 +115,7 @@ func ExampleBasic() {
 
 	// Broadcast out a message from Node 0.
 	expected := "This is a broadcasted message from Node 0."
-	nodes[0].Broadcast(makeMessageBody(expected))
+	nodes[0].Broadcast(context.Background(), makeMessageBody(expected))
 
 	fmt.Println("Node 0 sent out a message.")
 

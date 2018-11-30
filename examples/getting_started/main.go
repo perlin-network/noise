@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -16,7 +17,7 @@ type StarterService struct {
 	protocol.Service
 }
 
-func (s *StarterService) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
+func (s *StarterService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
 	fmt.Printf("received payload from %s: %s\n", hex.EncodeToString(message.Sender), string(message.Body.Payload))
 	return nil, nil
 }

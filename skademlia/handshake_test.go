@@ -1,6 +1,7 @@
 package skademlia
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -22,7 +23,7 @@ type SKService struct {
 	Mailbox chan string
 }
 
-func (n *SKService) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
+func (n *SKService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
 	if message.Body.Service != serviceID {
 		return nil, nil
 	}
@@ -121,7 +122,7 @@ func TestHandshake(t *testing.T) {
 		Recipient: nodeB.GetIdentityAdapter().MyIdentity(),
 		Body:      body,
 	}
-	err := nodeA.Send(&msg)
+	err := nodeA.Send(context.Background(), &msg)
 	if err != nil {
 		t.Errorf("Send() expected no error, got: %+v", err)
 	}
@@ -129,7 +130,7 @@ func TestHandshake(t *testing.T) {
 	// nodeC sending to nodeA should error
 	msg.Sender = nodeC.GetIdentityAdapter().MyIdentity()
 	msg.Recipient = nodeA.GetIdentityAdapter().MyIdentity()
-	err = nodeC.Send(&msg)
+	err = nodeC.Send(context.Background(), &msg)
 	if err == nil {
 		t.Errorf("Send() expected error")
 	}
@@ -137,14 +138,14 @@ func TestHandshake(t *testing.T) {
 	// nodeA sending to nodeC should fail handshake
 	msg.Sender = nodeA.GetIdentityAdapter().MyIdentity()
 	msg.Recipient = nodeC.GetIdentityAdapter().MyIdentity()
-	err = nodeA.Send(&msg)
+	err = nodeA.Send(context.Background(), &msg)
 	if err == nil {
 		t.Errorf("Send() expected error")
 	}
 
 	// nodeB sending to nodeC should fail handshake
 	msg.Sender = nodeB.GetIdentityAdapter().MyIdentity()
-	err = nodeB.Send(&msg)
+	err = nodeB.Send(context.Background(), &msg)
 	if err == nil {
 		t.Errorf("Send() expected error")
 	}

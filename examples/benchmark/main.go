@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/crypto"
@@ -105,7 +106,7 @@ func StartInstance(port int) *Instance {
 	return inst
 }
 
-func (s *Instance) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
+func (s *Instance) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
 	atomic.AddUint64(&s.messageCount, 1)
 	return nil, nil
 }
@@ -137,7 +138,7 @@ func main() {
 				selected := instances[selectedN].keypair.PublicKey
 
 				for {
-					err := current.node.Send(&protocol.Message{
+					err := current.node.Send(context.Background(), &protocol.Message{
 						Sender:    current.keypair.PublicKey,
 						Recipient: selected,
 						Body: &protocol.MessageBody{

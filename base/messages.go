@@ -3,6 +3,7 @@ package base
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"github.com/perlin-network/noise/log"
@@ -185,8 +186,8 @@ func runRecvWorker(finalizerNotifier chan struct{}, conn net.Conn, callback prot
 			break
 		}
 
-		callback(buf)
+		callback(context.Background(), buf)
 	}
 
-	callback(nil)
+	callback(context.Background(), nil)
 }

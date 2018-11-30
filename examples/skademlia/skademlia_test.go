@@ -1,6 +1,7 @@
 package skademlia_test
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -25,7 +26,7 @@ type MsgService struct {
 	Mailbox chan string
 }
 
-func (n *MsgService) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
+func (n *MsgService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
 	if message.Body.Service != serviceID {
 		return nil, nil
 	}
@@ -59,7 +60,7 @@ func TestSKademliaBasic(t *testing.T) {
 	// assert broadcasts goes to everyone
 	for i := 0; i < len(nodes); i++ {
 		expected := fmt.Sprintf("This is a broadcasted message from Node %d.", i)
-		assert.Nil(t, nodes[i].Broadcast(&protocol.MessageBody{
+		assert.Nil(t, nodes[i].Broadcast(context.Background(), &protocol.MessageBody{
 			Service: serviceID,
 			Payload: ([]byte)(expected),
 		}))
@@ -86,7 +87,7 @@ func TestSKademliaBasic(t *testing.T) {
 				continue
 			}
 			expected := fmt.Sprintf("Sending a msg message from Node %d to Node %d.", i, j)
-			assert.Nil(t, nodes[i].Send(&protocol.Message{
+			assert.Nil(t, nodes[i].Send(context.Background(), &protocol.Message{
 				Sender:    nodes[i].GetIdentityAdapter().MyIdentity(),
 				Recipient: nodes[j].GetIdentityAdapter().MyIdentity(),
 				Body: &protocol.MessageBody{
@@ -129,7 +130,7 @@ func TestSKademliaBootstrap(t *testing.T) {
 	// assert broadcasts goes to everyone
 	for i := 0; i < len(nodes); i++ {
 		expected := fmt.Sprintf("This is a broadcasted message from Node %d.", i)
-		assert.Nil(t, nodes[i].Broadcast(&protocol.MessageBody{
+		assert.Nil(t, nodes[i].Broadcast(context.Background(), &protocol.MessageBody{
 			Service: serviceID,
 			Payload: ([]byte)(expected),
 		}))

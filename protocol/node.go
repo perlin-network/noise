@@ -13,7 +13,10 @@ import (
 	"time"
 )
 
-var _ SendAdapter = (*Node)(nil)
+var (
+	_                     SendAdapter = (*Node)(nil)
+	errKeyExchangeNotDone             = errors.New("key exchange not done")
+)
 
 type Node struct {
 	controller               *Controller
@@ -83,24 +86,28 @@ func (n *Node) removePeer(id []byte) {
 	}
 }
 
-func (n *Node) dispatchIncomingMessageAsync(peer *EstablishedPeer, raw []byte) {
-	if peer.kxState != KeyExchange_Done {
-		err := peer.continueKeyExchange(n.controller, n.idAdapter, n.customHandshakeProcessor, raw)
-		if err != nil {
-			n.removePeer(peer.RemoteEndpoint())
-			log.Error().Msgf("cannot continue key exchange: %v", err)
-		}
-		return
-	}
-
+func (n *Node) dispatchIncomingMessageAsync(ctx context.Context, peer *EstablishedPeer, raw []byte) {
 	go func() {
-		if err := n.dispatchIncomingMessage(peer, raw); err != nil {
+		if err := n.dispatchIncomingMessage(ctx, peer, raw); err != nil {
+			if err == errKeyExchangeNotDone {
+				// no need to log this error
+				return
+			}
+
 			log.Warn().Msgf("%+v", err)
 		}
 	}()
 }
 
-func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) error {
+func (n *Node) dispatchIncomingMessage(ctx context.Context, peer *EstablishedPeer, raw []byte) error {
+	if peer.kxState != KeyExchange_Done {
+		if err := peer.continueKeyExchange(n.controller, n.idAdapter, n.customHandshakeProcessor, raw); err != nil {
+			n.removePeer(peer.RemoteEndpoint())
+			return errors.Wrap(err, "cannot continue key exchange")
+		}
+		return errKeyExchangeNotDone
+	}
+
 	_body, err := peer.UnwrapMessage(n.controller, raw)
 	if err != nil {
 		return errors.Wrap(err, "cannot unwrap message")
@@ -111,6 +118,7 @@ func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) error 
 		return errors.Wrap(err, "cannot deserialize message body")
 	}
 
+	// see if there is a matching request/response waiting for this nonce
 	if rq, ok := n.Requests.Load(makeRequestReplyKey(peer.adapter.RemoteEndpoint(), body.RequestNonce)); ok {
 		rq := rq.(*RequestState)
 		rq.data <- body
@@ -123,14 +131,16 @@ func (n *Node) dispatchIncomingMessage(peer *EstablishedPeer, raw []byte) error 
 		Body:      body,
 		Metadata:  peer.adapter.Metadata(),
 	}
+
+	// forward the message to the services
 	for _, svc := range n.services {
-		replyBody, err := svc.Receive(msg)
+		replyBody, err := svc.Receive(ctx, msg)
 		if err != nil {
 			return errors.Wrapf(err, "Error processing request for service=%d", body.Service)
 		}
 		if replyBody != nil {
 			replyBody.RequestNonce = body.RequestNonce
-			if err := n.Send(&Message{
+			if err := n.Send(context.Background(), &Message{
 				Sender:    n.idAdapter.MyIdentity(),
 				Recipient: peer.adapter.RemoteEndpoint(),
 				Body:      replyBody,
@@ -149,24 +159,24 @@ func (n *Node) Start() {
 			svc.Startup(n)
 		}
 
-		for adapter := range n.connAdapter.EstablishPassively(n.controller, n.idAdapter.MyIdentity()) {
-			adapter := adapter // the outer adapter is shared?
-			peer, err := EstablishPeerWithMessageAdapter(n.controller, n.dhGroup, n.dhKeypair, n.idAdapter, adapter, true)
+		for msgAdapter := range n.connAdapter.EstablishPassively(n.controller, n.idAdapter.MyIdentity()) {
+			msgAdapter := msgAdapter // the outer adapter is shared?
+			peer, err := EstablishPeerWithMessageAdapter(n.controller, n.dhGroup, n.dhKeypair, n.idAdapter, msgAdapter, true)
 			if err != nil {
 				log.Error().Err(err).Msg("cannot establish peer")
 				continue
 			}
 			for _, svc := range n.services {
-				svc.PeerConnect(adapter.RemoteEndpoint())
+				svc.PeerConnect(msgAdapter.RemoteEndpoint())
 			}
 
-			n.peers.Store(string(adapter.RemoteEndpoint()), peer)
-			adapter.StartRecvMessage(n.controller, func(message []byte) {
+			n.peers.Store(string(msgAdapter.RemoteEndpoint()), peer)
+			msgAdapter.StartRecvMessage(n.controller, func(ctx context.Context, message []byte) {
 				if message == nil {
 					//fmt.Printf("message is nil, removing peer: %b\n", adapter.RemoteEndpoint())
-					n.removePeer(adapter.RemoteEndpoint())
+					n.removePeer(msgAdapter.RemoteEndpoint())
 				} else {
-					n.dispatchIncomingMessageAsync(peer, message)
+					n.dispatchIncomingMessageAsync(ctx, peer, message)
 				}
 			})
 		}
@@ -205,12 +215,12 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 					log.Error().Err(err).Msg("cannot establish peer")
 				} else {
 					n.peers.Store(string(remote), established)
-					msgAdapter.StartRecvMessage(n.controller, func(message []byte) {
+					msgAdapter.StartRecvMessage(n.controller, func(ctx context.Context, message []byte) {
 						if message == nil {
 							//fmt.Printf("getPeer removing since nil\n")
 							n.removePeer(remote)
 						} else {
-							n.dispatchIncomingMessageAsync(established, message)
+							n.dispatchIncomingMessageAsync(ctx, established, message)
 						}
 					})
 				}
@@ -244,7 +254,8 @@ func (n *Node) ManuallyRemovePeer(remote []byte) {
 	n.removePeer(remote)
 }
 
-func (n *Node) Send(message *Message) error {
+// Send will send a message to the recipient in the message field
+func (n *Node) Send(ctx context.Context, message *Message) error {
 	if bytes.Equal(message.Recipient, n.idAdapter.MyIdentity()) {
 		return errors.New("sender mismatch")
 	}
@@ -264,7 +275,7 @@ func (n *Node) Send(message *Message) error {
 }
 
 // Broadcast sends a message body to all it's peers
-func (n *Node) Broadcast(body *MessageBody) error {
+func (n *Node) Broadcast(ctx context.Context, body *MessageBody) error {
 	msgTemplate := &Message{
 		Sender: n.idAdapter.MyIdentity(),
 		Body:   body,
@@ -278,7 +289,7 @@ func (n *Node) Broadcast(body *MessageBody) error {
 		// copy the struct
 		msg := *msgTemplate
 		msg.Recipient = peerPublicKey
-		if err := n.Send(&msg); err != nil {
+		if err := n.Send(ctx, &msg); err != nil {
 			log.Warn().Msgf("Unable to broadcast to %v: %v", hex.EncodeToString(peerPublicKey), err)
 		}
 	}
@@ -315,7 +326,7 @@ func (n *Node) Request(ctx context.Context, target []byte, body *MessageBody) (*
 	})
 
 	// send the message
-	if err := n.Send(msg); err != nil {
+	if err := n.Send(ctx, msg); err != nil {
 		return nil, err
 	}
 
@@ -331,6 +342,7 @@ func (n *Node) Request(ctx context.Context, target []byte, body *MessageBody) (*
 	}
 }
 
+// makeRequestReplyKey generates a key to map a request reply
 func makeRequestReplyKey(receiver []byte, nonce uint64) string {
 	return fmt.Sprintf("%s-%d", hex.EncodeToString(receiver), nonce)
 }

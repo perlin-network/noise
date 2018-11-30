@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -33,7 +34,7 @@ type ChatService struct {
 	Address string
 }
 
-func (n *ChatService) Receive(request *protocol.Message) (*protocol.MessageBody, error) {
+func (n *ChatService) Receive(ctx context.Context, request *protocol.Message) (*protocol.MessageBody, error) {
 	if request.Body.Service != chatServiceID {
 		return nil, nil
 	}
@@ -141,6 +142,6 @@ func main() {
 		msg := &protobuf.Message{
 			Message: bytes,
 		}
-		node.Broadcast(makeMessageBody(chatServiceID, msg))
+		node.Broadcast(context.Background(), makeMessageBody(chatServiceID, msg))
 	}
 }

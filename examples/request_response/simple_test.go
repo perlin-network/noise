@@ -58,7 +58,7 @@ type SimpleService struct {
 	protocol.Service
 }
 
-func (n *SimpleService) Receive(message *protocol.Message) (*protocol.MessageBody, error) {
+func (n *SimpleService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
 	if message.Body.Service != simpleServiceID {
 		// not the matching service id
 		return nil, nil

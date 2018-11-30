@@ -1,5 +1,9 @@
 package protocol
 
+import (
+	"context"
+)
+
 // ServiceInterface is used to proxy callbacks to a particular Plugin instance.
 type ServiceInterface interface {
 	// Callback for when the network starts listening for peers.
@@ -7,7 +11,7 @@ type ServiceInterface interface {
 
 	// Callback for when an incoming message is received.
 	// Returns a message body to reply or whether there was an error.
-	Receive(request *Message) (*MessageBody, error)
+	Receive(ctx context.Context, request *Message) (*MessageBody, error)
 
 	// Callback for when the network stops listening for peers.
 	Cleanup(node *Node)
@@ -28,7 +32,7 @@ type Service struct{}
 func (*Service) Startup(node *Node) {}
 
 // Receive is called every time when messages are received
-func (*Service) Receive(request *Message) (*MessageBody, error) { return nil, nil }
+func (*Service) Receive(ctx context.Context, request *Message) (*MessageBody, error) { return nil, nil }
 
 // Cleanup is called only once after network stops listening
 func (*Service) Cleanup(node *Node) {}
