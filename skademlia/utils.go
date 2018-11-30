@@ -1,8 +1,6 @@
 package skademlia
 
 import (
-	"context"
-
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/protocol"
 
@@ -17,11 +15,6 @@ const (
 	OpCodeLookupRequest  = 3
 	OpCodeLookupResponse = 4
 )
-
-type SendHandler interface {
-	Request(ctx context.Context, target []byte, body *protocol.MessageBody) (*protocol.MessageBody, error)
-	Broadcast(body *protocol.MessageBody) error
-}
 
 func ToMessageBody(serviceID int, opcode int, content proto.Message) (*protocol.MessageBody, error) {
 	raw, err := proto.Marshal(content)

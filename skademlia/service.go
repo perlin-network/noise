@@ -31,14 +31,14 @@ type Service struct {
 	DisableLookup bool
 
 	Routes      *RoutingTable
-	sendHandler SendHandler
+	sendAdapter protocol.SendAdapter
 }
 
 // NewService creates a new instance of the Discovery Service
-func NewService(sendHandler SendHandler, selfID peer.ID) *Service {
+func NewService(sendAdapter protocol.SendAdapter, selfID peer.ID) *Service {
 	return &Service{
 		Routes:      CreateRoutingTable(selfID),
-		sendHandler: sendHandler,
+		sendAdapter: sendAdapter,
 	}
 }
 
@@ -73,6 +73,7 @@ func (s *Service) Receive(message *protocol.Message) (*protocol.MessageBody, err
 func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Message) (*protocol.MessageBody, error) {
 	err := s.Routes.Update(sender)
 	if err == ErrBucketFull {
+		// TODO: don't block the code path in every call
 		if ok, _ := s.EvictLastSeenPeer(sender.Id); ok {
 			s.Routes.Update(sender)
 		}
@@ -89,7 +90,7 @@ func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Messag
 		if s.DisablePong {
 			break
 		}
-		peers := FindNode(s.Routes, s.sendHandler, sender, BucketSize, 8)
+		peers := FindNode(s.Routes, s.sendAdapter, sender, BucketSize, 8)
 
 		// Update routing table w/ closest peers to self.
 		for _, peerID := range peers {
@@ -149,14 +150,14 @@ func (s *Service) PeerDisconnect(target []byte) {
 }
 
 func (s *Service) Bootstrap() error {
-	if s.sendHandler == nil {
-		return errors.New("SendHandler not set")
+	if s.sendAdapter == nil {
+		return errors.New("SendAdapter not set")
 	}
 	body, err := ToMessageBody(ServiceID, OpCodePing, &protobuf.Ping{})
 	if err != nil {
 		return err
 	}
-	return s.sendHandler.Broadcast(body)
+	return s.sendAdapter.Broadcast(body)
 }
 
 func (s *Service) EvictLastSeenPeer(id []byte) (bool, error) {
@@ -171,7 +172,7 @@ func (s *Service) EvictLastSeenPeer(id []byte) (bool, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 	defer cancel()
-	reply, err := s.sendHandler.Request(ctx, lastSeen.Id, body)
+	reply, err := s.sendAdapter.Request(ctx, lastSeen.Id, body)
 	if err != nil || reply == nil {
 		bucket.Remove(element)
 		return true, nil

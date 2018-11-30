@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+var _ SendAdapter = (*Node)(nil)
+
 type Node struct {
 	controller               *Controller
 	connAdapter              ConnectionAdapter

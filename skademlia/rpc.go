@@ -8,6 +8,7 @@ import (
 
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/peer"
+	"github.com/perlin-network/noise/protocol"
 )
 
 const (
@@ -18,7 +19,7 @@ var (
 	reqNonce = uint64(1)
 )
 
-func queryPeerByID(sendHandler SendHandler, rt *RoutingTable, peerID peer.ID, targetID peer.ID, responses chan []*protobuf.ID) {
+func queryPeerByID(sendAdapter protocol.SendAdapter, rt *RoutingTable, peerID peer.ID, targetID peer.ID, responses chan []*protobuf.ID) {
 	// makes sure any new peers are added to the routing table before it makes the request
 	rt.Update(peerID)
 
@@ -35,7 +36,7 @@ func queryPeerByID(sendHandler SendHandler, rt *RoutingTable, peerID peer.ID, ta
 	ctx, cancel := context.WithTimeout(context.Background(), reqTimeoutInSec*time.Second)
 	defer cancel()
 
-	response, err := sendHandler.Request(ctx, peerID.PublicKey, reqBody)
+	response, err := sendAdapter.Request(ctx, peerID.PublicKey, reqBody)
 	if err != nil {
 		responses <- []*protobuf.ID{}
 		return
@@ -56,14 +57,14 @@ type lookupBucket struct {
 	queue   []peer.ID
 }
 
-func (lookup *lookupBucket) performLookup(sendHandler SendHandler, rt *RoutingTable, targetID peer.ID, alpha int, visited *sync.Map) (results []peer.ID) {
+func (lookup *lookupBucket) performLookup(sendAdapter protocol.SendAdapter, rt *RoutingTable, targetID peer.ID, alpha int, visited *sync.Map) (results []peer.ID) {
 	responses := make(chan []*protobuf.ID)
 
 	// Go through every peer in the entire queue and queue up what peers believe
 	// is closest to a target ID.
 
 	for ; lookup.pending < alpha && len(lookup.queue) > 0; lookup.pending++ {
-		go queryPeerByID(sendHandler, rt, lookup.queue[0], targetID, responses)
+		go queryPeerByID(sendAdapter, rt, lookup.queue[0], targetID, responses)
 
 		results = append(results, lookup.queue[0])
 		lookup.queue = lookup.queue[1:]
@@ -91,7 +92,7 @@ func (lookup *lookupBucket) performLookup(sendHandler SendHandler, rt *RoutingTa
 
 		// Queue and request for #ALPHA closest peers to target ID from expanded results.
 		for ; lookup.pending < alpha && len(lookup.queue) > 0; lookup.pending++ {
-			go queryPeerByID(sendHandler, rt, lookup.queue[0], targetID, responses)
+			go queryPeerByID(sendAdapter, rt, lookup.queue[0], targetID, responses)
 			lookup.queue = lookup.queue[1:]
 		}
 
@@ -108,7 +109,7 @@ func (lookup *lookupBucket) performLookup(sendHandler SendHandler, rt *RoutingTa
 // All lookups are done under a number of disjoint lookups in parallel.
 //
 // Queries at most #ALPHA nodes at a time per lookup, and returns all peer IDs closest to a target peer ID.
-func FindNode(rt *RoutingTable, sendHandler SendHandler, targetID peer.ID, alpha int, disjointPaths int) (results []peer.ID) {
+func FindNode(rt *RoutingTable, sendAdapter protocol.SendAdapter, targetID peer.ID, alpha int, disjointPaths int) (results []peer.ID) {
 
 	visited := new(sync.Map)
 
@@ -134,7 +135,7 @@ func FindNode(rt *RoutingTable, sendHandler SendHandler, targetID peer.ID, alpha
 	for _, lookup := range lookups {
 		go func(lookup *lookupBucket) {
 			mutex.Lock()
-			results = append(results, lookup.performLookup(sendHandler, rt, targetID, alpha, visited)...)
+			results = append(results, lookup.performLookup(sendAdapter, rt, targetID, alpha, visited)...)
 			mutex.Unlock()
 
 			wait.Done()

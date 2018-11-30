@@ -13,15 +13,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type MockSendHandler struct {
+type MockSendAdapter struct {
 	RequestCallback func(target []byte, body *protocol.MessageBody) (*protocol.MessageBody, error)
 }
 
-func (m *MockSendHandler) Request(ctx context.Context, target []byte, body *protocol.MessageBody) (*protocol.MessageBody, error) {
+func (m *MockSendAdapter) Send(message *protocol.Message) error {
+	return errors.New("Not implemented")
+}
+
+func (m *MockSendAdapter) Request(ctx context.Context, target []byte, body *protocol.MessageBody) (*protocol.MessageBody, error) {
 	return m.RequestCallback(target, body)
 }
 
-func (m *MockSendHandler) Broadcast(body *protocol.MessageBody) error {
+func (m *MockSendAdapter) Broadcast(body *protocol.MessageBody) error {
 	return errors.New("Not implemented")
 }
 
@@ -47,7 +51,7 @@ func TestDiscoveryPing(t *testing.T) {
 }
 
 func TestDiscoveryPong(t *testing.T) {
-	msh := &MockSendHandler{
+	msh := &MockSendAdapter{
 		RequestCallback: func(target []byte, reqBody *protocol.MessageBody) (*protocol.MessageBody, error) {
 			var respMsg protobuf.LookupNodeRequest
 			opCode, err := skademlia.ParseMessageBody(reqBody, &respMsg)

@@ -1,5 +1,9 @@
 package protocol
 
+import (
+	"context"
+)
+
 type RecvMessageCallback func(message []byte)
 
 // ConnectionAdapter is an adapter that establishes real/virtual connections (message adapters), both passively and actively.
@@ -41,4 +45,11 @@ type HandshakeProcessor interface {
 	ActivelyInitHandshake() ([]byte, interface{}, error)                                   // (message, state, err)
 	PassivelyInitHandshake() (interface{}, error)                                          // (state, err)
 	ProcessHandshakeMessage(state interface{}, payload []byte) ([]byte, DoneAction, error) // (message, doneAction, err)
+}
+
+// SendAdapter is an adapter that manages sending messages
+type SendAdapter interface {
+	Send(message *Message) error
+	Request(ctx context.Context, target []byte, body *MessageBody) (*MessageBody, error)
+	Broadcast(body *MessageBody) error
 }
