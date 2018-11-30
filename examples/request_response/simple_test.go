@@ -3,14 +3,17 @@ package requestresponse
 import (
 	"context"
 	"fmt"
-	"github.com/perlin-network/noise/base"
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/protocol"
-	"github.com/pkg/errors"
-	"github.com/stretchr/testify/assert"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/perlin-network/noise/base"
+	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/utils"
+
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -23,14 +26,18 @@ func dialTCP(addr string) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
-func setupNodes(startPort int) []*protocol.Node {
+func setupNodes() ([]*protocol.Node, []int) {
 	var nodes []*protocol.Node
+	var ports []int
 
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
 		idAdapter := base.NewIdentityAdapter()
 
-		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, startPort+i))
+		port := utils.GetRandomUnusedPort()
+		ports = append(ports, port)
+		address := fmt.Sprintf("%s:%d", host, port)
+		listener, err := net.Listen("tcp", address)
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
@@ -51,7 +58,7 @@ func setupNodes(startPort int) []*protocol.Node {
 		nodes = append(nodes, node)
 	}
 
-	return nodes
+	return nodes, ports
 }
 
 type SimpleService struct {
@@ -75,9 +82,7 @@ func (n *SimpleService) Receive(ctx context.Context, message *protocol.Message) 
 }
 
 func TestSimpleRequestResponse(t *testing.T) {
-	startPort := 5000
-
-	nodes := setupNodes(startPort)
+	nodes, ports := setupNodes()
 
 	for _, node := range nodes {
 		node.AddService(&SimpleService{})
@@ -90,7 +95,7 @@ func TestSimpleRequestResponse(t *testing.T) {
 			continue
 		}
 		peerID := otherNode.GetIdentityAdapter().MyIdentity()
-		srcNode.GetConnectionAdapter().AddPeerID(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
+		srcNode.GetConnectionAdapter().AddPeerID(peerID, fmt.Sprintf("%s:%d", host, ports[j]))
 	}
 
 	reqMsg0 := "Request response message from Node 0 to Node 1."

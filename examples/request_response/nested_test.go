@@ -68,8 +68,7 @@ func (n *NestedService) Receive(ctx context.Context, message *protocol.Message) 
 }
 
 func TestNestedRequestResponse(t *testing.T) {
-	startPort := 5100
-	nodes := setupNodes(startPort)
+	nodes, ports := setupNodes()
 
 	for i, node := range nodes {
 		node.AddService(&NestedService{
@@ -85,7 +84,7 @@ func TestNestedRequestResponse(t *testing.T) {
 			if i == j {
 				continue
 			}
-			node.GetConnectionAdapter().AddPeerID(keys[j], fmt.Sprintf("%s:%d", host, startPort+j))
+			node.GetConnectionAdapter().AddPeerID(keys[j], fmt.Sprintf("%s:%d", host, ports[j]))
 		}
 	}
 
