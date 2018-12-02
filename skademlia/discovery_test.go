@@ -30,7 +30,7 @@ func (m *MockSendAdapter) Broadcast(ctx context.Context, body *protocol.MessageB
 }
 
 func TestDiscoveryPing(t *testing.T) {
-	s := skademlia.NewService(nil, peer.CreateID("selfAddr", ([]byte)("self")))
+	s := skademlia.NewDiscoveryService(nil, peer.CreateID("selfAddr", ([]byte)("self")))
 	assert.NotNil(t, s)
 	s.Routes.Update(peer.CreateID("senderAddr", ([]byte)("sender")))
 	s.Routes.Update(peer.CreateID("recipientAddr", ([]byte)("recipient")))
@@ -62,7 +62,7 @@ func TestDiscoveryPong(t *testing.T) {
 			return respBody, nil
 		},
 	}
-	s := skademlia.NewService(msh, peer.CreateID("selfAddr", ([]byte)("self")))
+	s := skademlia.NewDiscoveryService(msh, peer.CreateID("selfAddr", ([]byte)("self")))
 	assert.NotNil(t, s)
 	s.Routes.Update(peer.CreateID("senderAddr", ([]byte)("sender")))
 	s.Routes.Update(peer.CreateID("recipientAddr", ([]byte)("recipient")))
@@ -80,7 +80,7 @@ func TestDiscoveryPong(t *testing.T) {
 }
 
 func TestDiscoveryLookupRequest(t *testing.T) {
-	s := skademlia.NewService(nil, peer.CreateID("selfAddr", ([]byte)("self")))
+	s := skademlia.NewDiscoveryService(nil, peer.CreateID("selfAddr", ([]byte)("self")))
 	assert.NotNil(t, s)
 	s.Routes.Update(peer.CreateID("senderAddr", ([]byte)("sender")))
 	s.Routes.Update(peer.CreateID("recipientAddr", ([]byte)("recipient")))

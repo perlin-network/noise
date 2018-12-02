@@ -22,8 +22,8 @@ var (
 	errRemovePeerFailed = errors.New("skademlia: failed to remove last seen peer")
 )
 
-// Service is a service that handles periodic lookups of remote peers
-type Service struct {
+// DiscoveryService is a service that handles periodic lookups of remote peers
+type DiscoveryService struct {
 	protocol.Service
 
 	DisablePing   bool
@@ -34,16 +34,16 @@ type Service struct {
 	sendAdapter protocol.SendAdapter
 }
 
-// NewService creates a new instance of the Discovery Service
-func NewService(sendAdapter protocol.SendAdapter, selfID peer.ID) *Service {
-	return &Service{
+// NewDiscoveryService creates a new instance of the Discovery Service
+func NewDiscoveryService(sendAdapter protocol.SendAdapter, selfID peer.ID) *DiscoveryService {
+	return &DiscoveryService{
 		Routes:      NewRoutingTable(selfID),
 		sendAdapter: sendAdapter,
 	}
 }
 
 // Receive is the handler when a message is received
-func (s *Service) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
+func (s *DiscoveryService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
 	if message.Body.Service != ServiceID {
 		return nil, nil
 	}
@@ -70,7 +70,7 @@ func (s *Service) Receive(ctx context.Context, message *protocol.Message) (*prot
 	return reply, nil
 }
 
-func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Message) (*protocol.MessageBody, error) {
+func (s *DiscoveryService) processMsg(sender peer.ID, target peer.ID, msg protobuf.Message) (*protocol.MessageBody, error) {
 	err := s.Routes.Update(sender)
 	if err == ErrBucketFull {
 		// TODO: don't block the code path in every call
@@ -128,7 +128,7 @@ func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Messag
 	return nil, nil
 }
 
-func (s *Service) PeerConnect(id []byte) {
+func (s *DiscoveryService) PeerConnect(id []byte) {
 	log.Debug().
 		Str("peer", hex.EncodeToString(id)).
 		Str("self", s.Routes.Self().Address).
@@ -136,7 +136,7 @@ func (s *Service) PeerConnect(id []byte) {
 }
 
 // PeerDisconnect handles updating the routing table on disconnect
-func (s *Service) PeerDisconnect(target []byte) {
+func (s *DiscoveryService) PeerDisconnect(target []byte) {
 	t := peer.CreateID("", target)
 	// Delete peer if in routing table.
 	if other, ok := s.Routes.GetPeer(t.Id); ok {
@@ -149,18 +149,7 @@ func (s *Service) PeerDisconnect(target []byte) {
 	}
 }
 
-func (s *Service) Bootstrap() error {
-	if s.sendAdapter == nil {
-		return errors.New("SendAdapter not set")
-	}
-	body, err := ToMessageBody(ServiceID, OpCodePing, &protobuf.Ping{})
-	if err != nil {
-		return err
-	}
-	return s.sendAdapter.Broadcast(context.Background(), body)
-}
-
-func (s *Service) EvictLastSeenPeer(id []byte) (bool, error) {
+func (s *DiscoveryService) EvictLastSeenPeer(id []byte) (bool, error) {
 	// bucket is full, ping the least-seen node
 	bucketID := s.Routes.GetBucketID(id)
 	bucket := s.Routes.Bucket(bucketID)

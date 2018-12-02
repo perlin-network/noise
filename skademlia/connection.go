@@ -23,7 +23,7 @@ type Dialer func(address string) (net.Conn, error)
 type ConnectionAdapter struct {
 	listener  net.Listener
 	dialer    Dialer
-	discovery *Service
+	discovery *DiscoveryService
 	node      *protocol.Node
 }
 
@@ -36,7 +36,7 @@ func NewConnectionAdapter(listener net.Listener, dialer Dialer) (*ConnectionAdap
 
 func (a *ConnectionAdapter) RegisterNode(node *protocol.Node, id peer.ID) {
 	a.node = node
-	a.discovery = NewService(node, id)
+	a.discovery = NewDiscoveryService(node, id)
 
 	if ia, ok := node.GetIdentityAdapter().(*IdentityAdapter); ok {
 		node.SetCustomHandshakeProcessor(NewHandshakeProcessor(ia))
