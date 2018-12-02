@@ -40,30 +40,35 @@ type RequestState struct {
 	requestTime time.Time
 }
 
-func NewNode(c *Controller, ca ConnectionAdapter, id IdentityAdapter) *Node {
-	g, err := dhkx.GetGroup(0)
+func NewNode(c *Controller, id IdentityAdapter) *Node {
+	dhGroup, err := dhkx.GetGroup(0)
 	if err != nil {
 		panic(err)
 	}
 
-	privKey, err := g.GeneratePrivateKey(nil)
+	dhKeypair, err := dhGroup.GeneratePrivateKey(nil)
 	if err != nil {
 		panic(err)
 	}
 
 	return &Node{
 		controller:   c,
-		connAdapter:  ca,
 		idAdapter:    id,
 		services:     []ServiceInterface{},
-		dhGroup:      g,
-		dhKeypair:    privKey,
+		dhGroup:      dhGroup,
+		dhKeypair:    dhKeypair,
 		RequestNonce: 0,
 	}
 }
 
-func (n *Node) SetCustomHandshakeProcessor(p HandshakeProcessor) {
+func (n *Node) SetConnectionAdapter(ca ConnectionAdapter) *Node {
+	n.connAdapter = ca
+	return n
+}
+
+func (n *Node) SetCustomHandshakeProcessor(p HandshakeProcessor) *Node {
 	n.customHandshakeProcessor = p
+	return n
 }
 
 func (n *Node) AddService(s ServiceInterface) {
@@ -152,7 +157,10 @@ func (n *Node) dispatchIncomingMessage(ctx context.Context, peer *EstablishedPee
 	return nil
 }
 
-func (n *Node) Start() {
+func (n *Node) Listen() {
+	if n.connAdapter == nil {
+		log.Fatal().Msg("connection adapter not setup")
+	}
 	go func() {
 		// call startup on all the nodes first
 		for _, svc := range n.services {

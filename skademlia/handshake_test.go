@@ -62,6 +62,11 @@ func TestHandshake(t *testing.T) {
 			idAdapter = NewIdentityAdapter(4, 4)
 		}
 
+		node := protocol.NewNode(
+			protocol.NewController(),
+			idAdapter,
+		)
+
 		port := utils.GetRandomUnusedPort()
 		ports = append(ports, port)
 		address := fmt.Sprintf("%s:%d", host, port)
@@ -70,24 +75,14 @@ func TestHandshake(t *testing.T) {
 			log.Fatal().Msgf("%+v", err)
 		}
 
-		id := NewID(idAdapter.MyIdentity(), address)
-		s := NewService(nil, id)
 		connAdapter, err := NewConnectionAdapter(
 			listener,
 			dialTCP,
-			id,
 		)
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
-		connAdapter.SetSKademliaService(s)
-
-		node := protocol.NewNode(
-			protocol.NewController(),
-			connAdapter,
-			idAdapter,
-		)
-		node.SetCustomHandshakeProcessor(NewHandshakeProcessor(idAdapter))
+		connAdapter.RegisterNode(node, NewID(idAdapter.MyIdentity(), address))
 
 		service := &SKService{
 			Mailbox: make(chan string, 1),
@@ -95,7 +90,7 @@ func TestHandshake(t *testing.T) {
 
 		node.AddService(service)
 
-		node.Start()
+		node.Listen()
 
 		nodes = append(nodes, node)
 		services = append(services, service)

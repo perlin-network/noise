@@ -87,9 +87,9 @@ func StartInstance(port int) *Instance {
 
 	node := protocol.NewNode(
 		protocol.NewController(),
-		connAdapter,
 		idAdapter,
 	)
+	node.SetConnectionAdapter(connAdapter)
 	node.SetCustomHandshakeProcessor((*SimpleHandshakeProcessor)(nil))
 
 	inst := &Instance{
@@ -101,7 +101,7 @@ func StartInstance(port int) *Instance {
 
 	node.AddService(inst)
 
-	node.Start()
+	node.Listen()
 
 	return inst
 }

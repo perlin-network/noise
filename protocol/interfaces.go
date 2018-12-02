@@ -4,8 +4,6 @@ import (
 	"context"
 )
 
-type RecvMessageCallback func(ctx context.Context, message []byte)
-
 // ConnectionAdapter is an adapter that establishes real/virtual connections (message adapters), both passively and actively.
 type ConnectionAdapter interface {
 	EstablishPassively(c *Controller, local []byte) chan MessageAdapter
@@ -13,6 +11,9 @@ type ConnectionAdapter interface {
 	AddPeerID(id []byte, addr string) error
 	GetPeerIDs() [][]byte
 }
+
+// RecvMessageCallback is a callback when a message is received from a peer
+type RecvMessageCallback func(ctx context.Context, message []byte)
 
 // MessageAdapter is an adapter that sends/receives messages, usually corresponding to a real/virtual connection.
 type MessageAdapter interface {

@@ -2,7 +2,9 @@ package skademlia
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
+	"github.com/perlin-network/noise/internal/protobuf"
 	"net"
 
 	"github.com/perlin-network/noise/base"
@@ -19,24 +21,34 @@ var _ protocol.ConnectionAdapter = (*ConnectionAdapter)(nil)
 type Dialer func(address string) (net.Conn, error)
 
 type ConnectionAdapter struct {
-	listener net.Listener
-	dialer   Dialer
-	svc      *Service
+	listener  net.Listener
+	dialer    Dialer
+	discovery *Service
+	node      *protocol.Node
 }
 
-func NewConnectionAdapter(listener net.Listener, dialer Dialer, id peer.ID) (*ConnectionAdapter, error) {
+func NewConnectionAdapter(listener net.Listener, dialer Dialer) (*ConnectionAdapter, error) {
 	return &ConnectionAdapter{
 		listener: listener,
 		dialer:   dialer,
 	}, nil
 }
 
-func (a *ConnectionAdapter) SetSKademliaService(service *Service) {
-	a.svc = service
+func (a *ConnectionAdapter) RegisterNode(node *protocol.Node, id peer.ID) {
+	a.node = node
+	a.discovery = NewService(node, id)
+
+	if ia, ok := node.GetIdentityAdapter().(*IdentityAdapter); ok {
+		node.SetCustomHandshakeProcessor(NewHandshakeProcessor(ia))
+	} else {
+		log.Fatal().Msg("Node identity adapter type should be skademlia type")
+	}
+	node.SetConnectionAdapter(a)
+	a.node.AddService(a.discovery)
 }
 
 func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
-	if a.svc == nil {
+	if a.discovery == nil {
 		return nil, errors.New("skademlia: connection not setup with a service")
 	}
 
@@ -44,12 +56,12 @@ func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []by
 		return nil, errors.New("skademlia: skip connecting to self pk")
 	}
 
-	localPeer := a.svc.Routes.self
+	localPeer := a.discovery.Routes.self
 	if !bytes.Equal(local, localPeer.PublicKey) {
-		return nil, errors.Errorf("skademlia: invalid local peer: %s != %s", hex.EncodeToString(local), a.svc.Routes.self.PublicKeyHex())
+		return nil, errors.Errorf("skademlia: invalid local peer: %s != %s", hex.EncodeToString(local), a.discovery.Routes.self.PublicKeyHex())
 	}
 
-	remotePeer, ok := a.svc.Routes.GetPeerFromPublicKey(remote)
+	remotePeer, ok := a.discovery.Routes.GetPeerFromPublicKey(remote)
 	if !ok {
 		hexID := hex.EncodeToString(remote)
 		return nil, errors.Errorf("skademlia: remote ID %s not found in routing table", hexID)
@@ -68,10 +80,10 @@ func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []by
 }
 
 func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []byte) chan protocol.MessageAdapter {
-	if a.svc == nil {
+	if a.discovery == nil {
 		return nil
 	}
-	localPeer := a.svc.Routes.self
+	localPeer := a.discovery.Routes.self
 	ch := make(chan protocol.MessageAdapter)
 	go func() {
 		defer close(ch)
@@ -106,14 +118,14 @@ func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []b
 // GetPeerIDs returns the public keys of all connected nodes in the routing table
 func (a *ConnectionAdapter) GetPeerIDs() [][]byte {
 	results := [][]byte{}
-	for _, peer := range a.svc.Routes.GetPeers() {
+	for _, peer := range a.discovery.Routes.GetPeers() {
 		results = append(results, peer.PublicKey)
 	}
 	return results
 }
 
 func (a *ConnectionAdapter) GetAddressByID(remote []byte) (string, error) {
-	if peer, ok := a.svc.Routes.GetPeer(blake2b.New().HashBytes(remote)); ok {
+	if peer, ok := a.discovery.Routes.GetPeer(blake2b.New().HashBytes(remote)); ok {
 		return peer.Address, nil
 	}
 	return "", errors.New("skademlia: peer not found")
@@ -122,15 +134,39 @@ func (a *ConnectionAdapter) GetAddressByID(remote []byte) (string, error) {
 func (a *ConnectionAdapter) AddPeerID(remote []byte, addr string) error {
 	hexID := hex.EncodeToString(remote)
 	log.Debug().
-		Str("local", hex.EncodeToString(a.svc.Routes.Self().PublicKey)).
+		Str("local", hex.EncodeToString(a.discovery.Routes.Self().PublicKey)).
 		Str("address", addr).
 		Msgf("adding %s to routing table", hexID)
 	id := NewID(remote, addr)
-	err := a.svc.Routes.Update(id)
+	err := a.discovery.Routes.Update(id)
 	if err == ErrBucketFull {
-		if ok, _ := a.svc.EvictLastSeenPeer(id.Id); ok {
-			return a.svc.Routes.Update(id)
+		if ok, _ := a.discovery.EvictLastSeenPeer(id.Id); ok {
+			return a.discovery.Routes.Update(id)
 		}
 	}
 	return nil
+}
+
+func (a *ConnectionAdapter) Bootstrap(peers ...peer.ID) error {
+	if a.node == nil {
+		return errors.New("node not setup properly")
+	}
+	if a.discovery == nil {
+		return errors.New("discovery not setup properly")
+	}
+	if len(peers) == 0 {
+		return nil
+	}
+	// add all the peers
+	for _, peer := range peers {
+		if err := a.AddPeerID(peer.PublicKey, peer.Address); err != nil {
+			return err
+		}
+	}
+	body, err := ToMessageBody(ServiceID, OpCodePing, &protobuf.Ping{})
+	if err != nil {
+		return err
+	}
+	// broadcast a ping to all the peers
+	return a.node.Broadcast(context.Background(), body)
 }

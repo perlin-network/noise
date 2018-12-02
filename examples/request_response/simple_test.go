@@ -49,11 +49,10 @@ func setupNodes() ([]*protocol.Node, []int) {
 
 		node := protocol.NewNode(
 			protocol.NewController(),
-			connAdapter,
 			idAdapter,
 		)
-
-		node.Start()
+		node.SetConnectionAdapter(connAdapter)
+		node.Listen()
 
 		nodes = append(nodes, node)
 	}

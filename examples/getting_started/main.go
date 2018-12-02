@@ -53,10 +53,9 @@ func main() {
 
 	node := protocol.NewNode(
 		protocol.NewController(),
-		connAdapter,
 		idAdapter,
 	)
-
+	node.SetConnectionAdapter(connAdapter)
 	node.AddService(&StarterService{})
 
 	if len(peers) > 0 {
@@ -75,7 +74,7 @@ func main() {
 		}
 	}
 
-	node.Start()
+	node.Listen()
 
 	select {}
 

@@ -83,9 +83,10 @@ func ExampleBasic() {
 
 		node := protocol.NewNode(
 			protocol.NewController(),
-			connAdapter,
 			idAdapter,
 		)
+		node.SetConnectionAdapter(connAdapter)
+
 		service := &BasicService{
 			Mailbox: make(chan *messages.BasicMessage, 1),
 		}
@@ -108,7 +109,7 @@ func ExampleBasic() {
 	}
 
 	for _, node := range nodes {
-		node.Start()
+		node.Listen()
 	}
 
 	time.Sleep(time.Duration(len(nodes)*100) * time.Millisecond)

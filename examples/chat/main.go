@@ -96,9 +96,9 @@ func main() {
 
 	node := protocol.NewNode(
 		protocol.NewController(),
-		connAdapter,
 		idAdapter,
 	)
+	node.SetConnectionAdapter(connAdapter)
 
 	service := &ChatService{
 		Address: addr,
@@ -122,7 +122,7 @@ func main() {
 		}
 	}
 
-	node.Start()
+	node.Listen()
 
 	reader := bufio.NewReader(os.Stdin)
 	for {

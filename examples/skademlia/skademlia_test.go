@@ -20,31 +20,9 @@ const (
 	host      = "localhost"
 )
 
-// MsgService buffers all messages into a mailbox for this test.
-type MsgService struct {
-	protocol.Service
-	Mailbox chan string
-}
-
-func (n *MsgService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
-	if message.Body.Service != serviceID {
-		return nil, nil
-	}
-	if len(message.Body.Payload) == 0 {
-		return nil, nil
-	}
-	payload := string(message.Body.Payload)
-	n.Mailbox <- payload
-	return nil, nil
-}
-
-func dialTCP(addr string) (net.Conn, error) {
-	return net.DialTimeout("tcp", addr, 10*time.Second)
-}
-
-func TestSKademliaBasic(t *testing.T) {
+func TestSKademliaFixedPeers(t *testing.T) {
 	numNodes := 3
-	nodes, msgServices, _, ports := makeNodes(numNodes)
+	nodes, msgServices, ports := makeNodes(numNodes)
 
 	// Connect all the node routing tables
 	for i, srcNode := range nodes {
@@ -107,21 +85,15 @@ func TestSKademliaBasic(t *testing.T) {
 
 func TestSKademliaBootstrap(t *testing.T) {
 	numNodes := 3
-	nodes, msgServices, discoveryServices, ports := makeNodes(numNodes)
+	nodes, msgServices, ports := makeNodes(numNodes)
+
+	peer0 := skademlia.NewID(nodes[0].GetIdentityAdapter().MyIdentity(), fmt.Sprintf("%s:%d", host, ports[0]))
 
 	// Connect other nodes to node 0
-	for i := 1; i < len(nodes); i++ {
-		if i == 0 {
-			// skip node 0
-			continue
-		}
-		node0ID := nodes[0].GetIdentityAdapter().MyIdentity()
-		assert.Nil(t, nodes[i].GetConnectionAdapter().AddPeerID(node0ID, fmt.Sprintf("%s:%d", host, ports[0])))
-	}
-
-	// being discovery process to connect nodes to each other
-	for _, d := range discoveryServices {
-		assert.Nil(t, d.Bootstrap())
+	for _, node := range nodes {
+		ca, ok := node.GetConnectionAdapter().(*skademlia.ConnectionAdapter)
+		assert.True(t, ok)
+		assert.Nil(t, ca.Bootstrap(peer0))
 	}
 
 	// make sure nodes are connected
@@ -150,10 +122,30 @@ func TestSKademliaBootstrap(t *testing.T) {
 	}
 }
 
-func makeNodes(numNodes int) ([]*protocol.Node, []*MsgService, []*skademlia.Service, []int) {
+type MsgService struct {
+	protocol.Service
+	Mailbox chan string
+}
+
+func (n *MsgService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
+	if message.Body.Service != serviceID {
+		return nil, nil
+	}
+	if len(message.Body.Payload) == 0 {
+		return nil, nil
+	}
+	payload := string(message.Body.Payload)
+	n.Mailbox <- payload
+	return nil, nil
+}
+
+func dialTCP(addr string) (net.Conn, error) {
+	return net.DialTimeout("tcp", addr, 10*time.Second)
+}
+
+func makeNodes(numNodes int) ([]*protocol.Node, []*MsgService, []int) {
 	var nodes []*protocol.Node
 	var msgServices []*MsgService
-	var discoveryServices []*skademlia.Service
 	var ports []int
 
 	// setup all the nodes
@@ -167,41 +159,32 @@ func makeNodes(numNodes int) ([]*protocol.Node, []*MsgService, []*skademlia.Serv
 			log.Fatal().Msgf("%+v", err)
 		}
 
-		id := skademlia.NewID(idAdapter.MyIdentity(), address)
+		node := protocol.NewNode(
+			protocol.NewController(),
+			idAdapter,
+		)
 
 		connAdapter, err := skademlia.NewConnectionAdapter(
 			listener,
 			dialTCP,
-			id,
 		)
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
-
-		node := protocol.NewNode(
-			protocol.NewController(),
-			connAdapter,
-			idAdapter,
-		)
-		node.SetCustomHandshakeProcessor(skademlia.NewHandshakeProcessor(idAdapter))
-
-		skSvc := skademlia.NewService(node, id)
-		connAdapter.SetSKademliaService(skSvc)
+		connAdapter.RegisterNode(node, skademlia.NewID(idAdapter.MyIdentity(), address))
 
 		msgSvc := &MsgService{
 			Mailbox: make(chan string, 1),
 		}
 
 		node.AddService(msgSvc)
-		node.AddService(skSvc)
 
-		node.Start()
+		node.Listen()
 
 		nodes = append(nodes, node)
 		msgServices = append(msgServices, msgSvc)
-		discoveryServices = append(discoveryServices, skSvc)
 		ports = append(ports, port)
 	}
 
-	return nodes, msgServices, discoveryServices, ports
+	return nodes, msgServices, ports
 }
