@@ -69,6 +69,8 @@ func ExampleBasic() {
 
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
+
+		// setup the node
 		idAdapter := base.NewIdentityAdapter()
 		node := protocol.NewNode(
 			protocol.NewController(),
@@ -80,15 +82,15 @@ func ExampleBasic() {
 			log.Fatal().Msgf("%+v", err)
 		}
 
+		// setup the connection adapter
 		if _, err := base.NewConnectionAdapter(listener, dialTCP, node); err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
 
+		// create service
 		service := &BasicService{
 			Mailbox: make(chan *messages.BasicMessage, 1),
 		}
-
-		// add the service to handle requests
 		node.AddService(service)
 
 		// Start listening for connections
@@ -108,8 +110,6 @@ func ExampleBasic() {
 			srcNode.GetConnectionAdapter().AddPeerID(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
 		}
 	}
-
-	time.Sleep(time.Duration(len(nodes)*100) * time.Millisecond)
 
 	// Broadcast out a message from Node 0.
 	expected := "This is a broadcasted message from Node 0."

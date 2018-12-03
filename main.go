@@ -34,7 +34,10 @@ func (s *CountService) Receive(ctx context.Context, message *protocol.Message) (
 	[terminal 2] go run main.go localhost:8001 send (peerID from terminal 1) localhost:8000
 */
 func main() {
-	listener, err := net.Listen("tcp", os.Args[1])
+	argListenAddr := os.Args[1]
+	argCmd := os.Args[2]
+
+	listener, err := net.Listen("tcp", argListenAddr)
 	if err != nil {
 		panic(err)
 	}
@@ -59,13 +62,16 @@ func main() {
 
 	log.Info().Msgf("started, pubkey = %s", kp.PublicKeyHex())
 
-	if os.Args[2] == "send" {
-		peerID, err := hex.DecodeString(os.Args[3])
+	if argCmd == "send" {
+		argRemotePK := os.Args[3]
+		argRemoteAddr := os.Args[4]
+
+		peerID, err := hex.DecodeString(argRemotePK)
 		if err != nil {
 			panic(err)
 		}
-		remoteAddr := os.Args[4]
-		node.GetConnectionAdapter().AddPeerID(peerID, remoteAddr)
+
+		node.GetConnectionAdapter().AddPeerID(peerID, argRemoteAddr)
 
 		go func() {
 			for {
