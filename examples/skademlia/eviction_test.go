@@ -11,22 +11,23 @@ import (
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/skademlia"
-	"github.com/perlin-network/noise/utils"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TODOTestSKademliaEviction(t *testing.T) {
+	bucketSize := 4
+	startPort := 5500
+
 	self := skademlia.NewIdentityAdapter(8, 8)
 	ids := []*skademlia.IdentityAdapter{self}
 	// create 5 peers, last peer should not be in table
 	peers := generateBucketIDs(self, 5)
 	ids = append(ids, peers...)
-	// make max bucket size 4
-	nodes, msgServices, ports := makeNodesFromIDs(ids, 4)
+	nodes, msgServices := makeNodesFromIDs(ids, bucketSize, startPort)
 
 	// being discovery process to connect nodes to each other
-	peer0 := skademlia.NewID(nodes[0].GetIdentityAdapter().MyIdentity(), fmt.Sprintf("%s:%d", host, ports[0]))
+	peer0 := skademlia.NewID(nodes[0].GetIdentityAdapter().MyIdentity(), fmt.Sprintf("%s:%d", host, startPort))
 
 	var discoveryServices []*skademlia.DiscoveryService
 
@@ -105,16 +106,15 @@ func generateBucketIDs(id *skademlia.IdentityAdapter, n int) []*skademlia.Identi
 	return ids
 }
 
-func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int) ([]*protocol.Node, []*MsgService, []int) {
+func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int, startPort int) ([]*protocol.Node, []*MsgService) {
 	var nodes []*protocol.Node
 	var msgServices []*MsgService
-	var ports []int
 
 	// setup all the nodes
 	for i := 0; i < len(ids); i++ {
 		idAdapter := ids[i]
 
-		port := utils.GetRandomUnusedPort()
+		port := startPort + i
 		address := fmt.Sprintf("%s:%d", host, port)
 		listener, err := net.Listen("tcp", address)
 		if err != nil {
@@ -126,17 +126,14 @@ func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int) ([]*prot
 			idAdapter,
 		)
 
-		connAdapter, err := skademlia.NewConnectionAdapter(
-			listener,
-			dialTCP,
-			node,
-			address,
-		)
+		connAdapter, err := skademlia.NewConnectionAdapter(listener, dialTCP, node, address)
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
 
-		rt := skademlia.NewRoutingTableWithOptions(skademlia.NewID(idAdapter.MyIdentity(), address), skademlia.WithBucketSize(bucketSize))
+		// override the routes with one with a different bucket size
+		peerID := skademlia.NewID(idAdapter.MyIdentity(), address)
+		rt := skademlia.NewRoutingTableWithOptions(peerID, skademlia.WithBucketSize(bucketSize))
 		connAdapter.Discovery.Routes = rt
 
 		msgSvc := &MsgService{
@@ -149,8 +146,7 @@ func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int) ([]*prot
 
 		nodes = append(nodes, node)
 		msgServices = append(msgServices, msgSvc)
-		ports = append(ports, port)
 	}
 
-	return nodes, msgServices, ports
+	return nodes, msgServices
 }
