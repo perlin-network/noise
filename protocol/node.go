@@ -103,6 +103,17 @@ func (n *Node) removePeer(id []byte) {
 	}
 }
 
+// DEBUG: to figure out a connection issue
+func (n *Node) DumpPeers() []string {
+	var retVal []string
+	n.peers.Range(func(remote interface{}, _ interface{}) bool {
+		r := ([]byte)(remote.(string))
+		retVal = append(retVal, hex.EncodeToString(r)[:10])
+		return true
+	})
+	return retVal
+}
+
 func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 	var established *EstablishedPeer
 
