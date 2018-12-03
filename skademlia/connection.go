@@ -75,7 +75,7 @@ func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []by
 		return nil, err
 	}
 
-	return base.NewMessageAdapter(a, conn, local, remote, localPeer.Address, remotePeer.Address, false)
+	return base.NewMessageAdapterActive(a, conn, local, remote, localPeer.Address, remotePeer.Address)
 }
 
 func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []byte) chan protocol.MessageAdapter {
@@ -99,7 +99,7 @@ func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []b
 				continue
 			}
 
-			adapter, err := base.NewMessageAdapter(a, conn, localPeer.PublicKey, nil, localPeer.Address, "", true)
+			adapter, err := base.NewMessageAdapterPassive(a, conn, localPeer.PublicKey, localPeer.Address)
 			if err != nil {
 				log.Error().Err(err).Msg("unable to start message adapter")
 				continue

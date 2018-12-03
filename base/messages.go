@@ -17,112 +17,130 @@ var _ protocol.MessageAdapter = (*MessageAdapter)(nil)
 
 type MessageAdapter struct {
 	conn              net.Conn
-	local             []byte
-	remote            []byte
 	finalizerNotifier chan struct{}
 	metadata          map[string]string
 }
 
-func NewMessageAdapter(connAdapter protocol.ConnectionAdapter, conn net.Conn, local, remote []byte, localAddr string, remoteAddr string, passive bool) (*MessageAdapter, error) {
-	if len(local) > 255 || len(remote) > 255 {
+func NewMessageAdapterPassive(connAdapter protocol.ConnectionAdapter, conn net.Conn, local []byte, localAddr string) (*MessageAdapter, error) {
+
+	if len(local) > 255 {
 		return nil, errors.New("local or remote id too long")
 	}
 	byteBuf := make([]byte, 1)
 
-	if passive {
-		remote = make([]byte, len(local))
+	remote := make([]byte, len(local))
 
-		_, err := io.ReadFull(conn, remote)
+	_, err := io.ReadFull(conn, remote)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+
+	_, err = conn.Write(local)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+
+	_, err = io.ReadFull(conn, byteBuf)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+
+	localLen := int(byteBuf[0])
+	if localLen > 0 {
+		localBytes := make([]byte, localLen)
+		_, err = io.ReadFull(conn, localBytes)
 		if err != nil {
 			conn.Close()
 			return nil, err
 		}
+		localAddr = string(localBytes)
+	}
 
-		_, err = conn.Write(local)
+	_, err = io.ReadFull(conn, byteBuf)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+
+	var remoteAddr string
+	remoteLen := int(byteBuf[0])
+	if remoteLen > 0 {
+		remoteBytes := make([]byte, remoteLen)
+		_, err = io.ReadFull(conn, remoteBytes)
 		if err != nil {
 			conn.Close()
 			return nil, err
 		}
-
-		_, err = io.ReadFull(conn, byteBuf)
-		if err != nil {
-			conn.Close()
-			return nil, err
-		}
-
-		localLen := int(byteBuf[0])
-		if localLen > 0 {
-			localBytes := make([]byte, localLen)
-			_, err = io.ReadFull(conn, localBytes)
-			if err != nil {
-				conn.Close()
-				return nil, err
-			}
-			localAddr = string(localBytes)
-		}
-
-		_, err = io.ReadFull(conn, byteBuf)
-		if err != nil {
-			conn.Close()
-			return nil, err
-		}
-
-		remoteLen := int(byteBuf[0])
-		if remoteLen > 0 {
-			remoteBytes := make([]byte, remoteLen)
-			_, err = io.ReadFull(conn, remoteBytes)
-			if err != nil {
-				conn.Close()
-				return nil, err
-			}
-			remoteAddr = string(remoteBytes)
-		}
-	} else {
-		_, err := conn.Write(local)
-		if err != nil {
-			conn.Close()
-			return nil, err
-		}
-		recvRemote := make([]byte, len(local))
-		_, err = io.ReadFull(conn, recvRemote)
-		if err != nil {
-			conn.Close()
-			return nil, err
-		}
-		if !bytes.Equal(recvRemote, remote) {
-			conn.Close()
-			return nil, errors.Errorf("inconsistent remotes %s and %s", hex.EncodeToString(recvRemote), hex.EncodeToString(remote))
-		}
-
-		if len(remoteAddr) > 255 {
-			conn.Close()
-			return nil, errors.Errorf("remote address is too long")
-		}
-
-		_, err = conn.Write(append([]byte{byte(len(remoteAddr))}, []byte(remoteAddr)...))
-		if err != nil {
-			conn.Close()
-			return nil, err
-		}
-
-		if len(localAddr) > 255 {
-			conn.Close()
-			return nil, errors.Errorf("local address is too long")
-		}
-
-		_, err = conn.Write(append([]byte{byte(len(localAddr))}, []byte(localAddr)...))
-		if err != nil {
-			conn.Close()
-			return nil, err
-		}
+		remoteAddr = string(remoteBytes)
 	}
 
 	adapter := &MessageAdapter{
 		conn:              conn,
-		local:             local,
-		remote:            remote,
 		finalizerNotifier: make(chan struct{}),
 		metadata: map[string]string{
+			"local":      string(local),
+			"remote":     string(remote),
+			"localAddr":  localAddr,
+			"remoteAddr": remoteAddr,
+		},
+	}
+
+	return adapter, nil
+}
+
+func NewMessageAdapterActive(connAdapter protocol.ConnectionAdapter, conn net.Conn, local, remote []byte, localAddr, remoteAddr string) (*MessageAdapter, error) {
+
+	if len(local) > 255 || len(remote) > 255 {
+		return nil, errors.New("local or remote id too long")
+	}
+
+	_, err := conn.Write(local)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	recvRemote := make([]byte, len(local))
+	_, err = io.ReadFull(conn, recvRemote)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	if !bytes.Equal(recvRemote, remote) {
+		conn.Close()
+		return nil, errors.Errorf("inconsistent remotes %s and %s", hex.EncodeToString(recvRemote), hex.EncodeToString(remote))
+	}
+
+	if len(remoteAddr) > 255 {
+		conn.Close()
+		return nil, errors.Errorf("remote address is too long")
+	}
+
+	_, err = conn.Write(append([]byte{byte(len(remoteAddr))}, []byte(remoteAddr)...))
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+
+	if len(localAddr) > 255 {
+		conn.Close()
+		return nil, errors.Errorf("local address is too long")
+	}
+
+	_, err = conn.Write(append([]byte{byte(len(localAddr))}, []byte(localAddr)...))
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+
+	adapter := &MessageAdapter{
+		conn:              conn,
+		finalizerNotifier: make(chan struct{}),
+		metadata: map[string]string{
+			"local":      string(local),
+			"remote":     string(remote),
 			"localAddr":  localAddr,
 			"remoteAddr": remoteAddr,
 		},
@@ -137,7 +155,7 @@ func (a *MessageAdapter) Close() {
 }
 
 func (a *MessageAdapter) RemoteEndpoint() []byte {
-	return a.remote
+	return []byte(a.metadata["remote"])
 }
 
 func (a *MessageAdapter) Metadata() map[string]string {

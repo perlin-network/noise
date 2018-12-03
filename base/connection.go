@@ -50,7 +50,7 @@ func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []by
 		return nil, err
 	}
 
-	msgAdapter, err := NewMessageAdapter(a, conn, local, remote, a.getPubliclyVisibleAddress(), remoteAddr, false)
+	msgAdapter, err := NewMessageAdapterActive(a, conn, local, remote, a.getPubliclyVisibleAddress(), remoteAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []b
 				continue
 			}
 
-			adapter, err := NewMessageAdapter(a, conn, local, nil, a.getPubliclyVisibleAddress(), "", true)
+			adapter, err := NewMessageAdapterPassive(a, conn, local, a.getPubliclyVisibleAddress())
 			if err != nil {
 				log.Error().Err(err).Msg("unable to start message adapter")
 				continue
