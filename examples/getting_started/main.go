@@ -55,7 +55,7 @@ func main() {
 		protocol.NewController(),
 		idAdapter,
 	)
-	node.SetConnectionAdapter(connAdapter)
+	connAdapter.RegisterNode(node)
 	node.AddService(&StarterService{})
 
 	if len(peers) > 0 {

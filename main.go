@@ -51,7 +51,7 @@ func main() {
 		protocol.NewController(),
 		idAdapter,
 	)
-	node.SetConnectionAdapter(connAdapter)
+	connAdapter.RegisterNode(node)
 	node.Listen()
 
 	svc := &CountService{}

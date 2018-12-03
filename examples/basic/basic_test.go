@@ -85,7 +85,7 @@ func ExampleBasic() {
 			protocol.NewController(),
 			idAdapter,
 		)
-		node.SetConnectionAdapter(connAdapter)
+		connAdapter.RegisterNode(node)
 
 		service := &BasicService{
 			Mailbox: make(chan *messages.BasicMessage, 1),

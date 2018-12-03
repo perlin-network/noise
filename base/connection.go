@@ -37,6 +37,10 @@ func NewConnectionAdapter(listener net.Listener, dialer Dialer) (*ConnectionAdap
 	}, nil
 }
 
+func (a *ConnectionAdapter) RegisterNode(node *protocol.Node) {
+	node.SetConnectionAdapter(a)
+}
+
 func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
 	remoteAddr, err := a.lookupAddressByID(remote)
 	if err != nil {

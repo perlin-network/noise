@@ -98,7 +98,7 @@ func main() {
 		protocol.NewController(),
 		idAdapter,
 	)
-	node.SetConnectionAdapter(connAdapter)
+	connAdapter.RegisterNode(node)
 
 	service := &ChatService{
 		Address: addr,

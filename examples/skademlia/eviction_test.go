@@ -137,9 +137,8 @@ func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int) ([]*prot
 		id := skademlia.NewID(idAdapter.MyIdentity(), address)
 		connAdapter.RegisterNode(node, id)
 
-		// TODO: Fix this
-		//rt := skademlia.NewRoutingTableWithOptions(id, skademlia.WithBucketSize(bucketSize))
-		//skSvc.Routes = rt
+		rt := skademlia.NewRoutingTableWithOptions(id, skademlia.WithBucketSize(bucketSize))
+		connAdapter.Discovery.Routes = rt
 
 		msgSvc := &MsgService{
 			Mailbox: make(chan string, 1),
