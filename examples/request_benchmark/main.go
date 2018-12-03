@@ -1,0 +1,113 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"github.com/perlin-network/noise/base"
+	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/protocol"
+	"net"
+	"sync/atomic"
+	"time"
+)
+
+const (
+	serviceID    = 42
+	host         = "localhost"
+	startPort    = 3000
+	numNodes     = 2
+	sendingNodes = 1
+)
+
+func dialTCP(addr string) (net.Conn, error) {
+	return net.DialTimeout("tcp", addr, 10*time.Second)
+}
+
+type countService struct {
+	protocol.Service
+	MsgCount uint64
+}
+
+func (s *countService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
+	if message.Body.Service != serviceID {
+		return nil, nil
+	}
+	atomic.AddUint64(&s.MsgCount, 1)
+	return nil, nil
+}
+
+func main() {
+	var services []*countService
+	var nodes []*protocol.Node
+
+	// setup all the nodes
+	for i := 0; i < numNodes; i++ {
+
+		// setup the node
+		idAdapter := base.NewIdentityAdapter()
+		node := protocol.NewNode(
+			protocol.NewController(),
+			idAdapter,
+		)
+
+		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, startPort+i))
+		if err != nil {
+			log.Fatal().Msgf("%+v", err)
+		}
+
+		// setup the connection adapter
+		if _, err := base.NewConnectionAdapter(listener, dialTCP, node); err != nil {
+			log.Fatal().Msgf("%+v", err)
+		}
+
+		// create service
+		service := &countService{}
+		node.AddService(service)
+
+		// Start listening for connections
+		node.Start()
+
+		nodes = append(nodes, node)
+		services = append(services, service)
+	}
+
+	// Connect all the node routing tables
+	for i, srcNode := range nodes {
+		for j, otherNode := range nodes {
+			if i == j {
+				continue
+			}
+			peerID := otherNode.GetIdentityAdapter().MyIdentity()
+			srcNode.GetConnectionAdapter().AddPeerID(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
+		}
+	}
+
+	// have every node send to the next one as quickly as possible
+	for i := 0; i < sendingNodes; i++ {
+		go func(senderIdx int) {
+			receiverIdx := (senderIdx + 1) % numNodes
+			msg := &protocol.Message{
+				Sender:    nodes[senderIdx].GetIdentityAdapter().MyIdentity(),
+				Recipient: nodes[receiverIdx].GetIdentityAdapter().MyIdentity(),
+				Body: &protocol.MessageBody{
+					Service: serviceID,
+					Payload: []byte(fmt.Sprintf("From node %d to node %d", senderIdx, receiverIdx)),
+				},
+			}
+			for {
+				nodes[senderIdx].Send(context.Background(), msg)
+			}
+		}(i)
+	}
+
+	// dump the counts per second
+	for range time.Tick(10 * time.Second) {
+		var count uint64
+		for _, svc := range services {
+			atomic.AddUint64(&count, atomic.SwapUint64(&svc.MsgCount, 0))
+		}
+		log.Info().Msgf("message count = %d", count)
+	}
+
+	select {}
+}
