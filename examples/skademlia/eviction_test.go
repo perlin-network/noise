@@ -129,15 +129,14 @@ func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int) ([]*prot
 		connAdapter, err := skademlia.NewConnectionAdapter(
 			listener,
 			dialTCP,
+			node,
+			address,
 		)
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
 
-		id := skademlia.NewID(idAdapter.MyIdentity(), address)
-		connAdapter.RegisterNode(node, id)
-
-		rt := skademlia.NewRoutingTableWithOptions(id, skademlia.WithBucketSize(bucketSize))
+		rt := skademlia.NewRoutingTableWithOptions(skademlia.NewID(idAdapter.MyIdentity(), address), skademlia.WithBucketSize(bucketSize))
 		connAdapter.Discovery.Routes = rt
 
 		msgSvc := &MsgService{

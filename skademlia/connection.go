@@ -21,30 +21,29 @@ var _ protocol.ConnectionAdapter = (*ConnectionAdapter)(nil)
 type Dialer func(address string) (net.Conn, error)
 
 type ConnectionAdapter struct {
-	listener  net.Listener
-	dialer    Dialer
-	Discovery *DiscoveryService
-	node      *protocol.Node
+	listener    net.Listener
+	dialer      Dialer
+	Discovery   *DiscoveryService
+	sendAdapter protocol.SendAdapter
 }
 
-func NewConnectionAdapter(listener net.Listener, dialer Dialer) (*ConnectionAdapter, error) {
-	return &ConnectionAdapter{
-		listener: listener,
-		dialer:   dialer,
-	}, nil
-}
-
-func (a *ConnectionAdapter) RegisterNode(node *protocol.Node, id peer.ID) {
-	a.node = node
-	a.Discovery = NewDiscoveryService(node, id)
+func NewConnectionAdapter(listener net.Listener, dialer Dialer, node *protocol.Node, localAddr string) (*ConnectionAdapter, error) {
+	a := &ConnectionAdapter{
+		listener:    listener,
+		dialer:      dialer,
+		sendAdapter: node,
+		Discovery:   NewDiscoveryService(node, NewID(node.GetIdentityAdapter().MyIdentity(), localAddr)),
+	}
 
 	if ia, ok := node.GetIdentityAdapter().(*IdentityAdapter); ok {
 		node.SetCustomHandshakeProcessor(NewHandshakeProcessor(ia))
 	} else {
-		log.Fatal().Msg("Node identity adapter type should be skademlia type")
+		return nil, errors.New("Node identity adapter type should be skademlia type")
 	}
 	node.SetConnectionAdapter(a)
-	a.node.AddService(a.Discovery)
+	node.AddService(a.Discovery)
+
+	return a, nil
 }
 
 func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
@@ -148,7 +147,7 @@ func (a *ConnectionAdapter) AddPeerID(remote []byte, addr string) error {
 }
 
 func (a *ConnectionAdapter) Bootstrap(peers ...peer.ID) error {
-	if a.node == nil {
+	if a.sendAdapter == nil {
 		return errors.New("node not setup properly")
 	}
 	if a.Discovery == nil {
@@ -168,5 +167,5 @@ func (a *ConnectionAdapter) Bootstrap(peers ...peer.ID) error {
 		return err
 	}
 	// broadcast a ping to all the peers
-	return a.node.Broadcast(context.Background(), body)
+	return a.sendAdapter.Broadcast(context.Background(), body)
 }

@@ -75,14 +75,14 @@ func TestHandshake(t *testing.T) {
 			log.Fatal().Msgf("%+v", err)
 		}
 
-		connAdapter, err := NewConnectionAdapter(
+		if _, err := NewConnectionAdapter(
 			listener,
 			dialTCP,
-		)
-		if err != nil {
+			node,
+			address,
+		); err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
-		connAdapter.RegisterNode(node, NewID(idAdapter.MyIdentity(), address))
 
 		service := &SKService{
 			Mailbox: make(chan string, 1),

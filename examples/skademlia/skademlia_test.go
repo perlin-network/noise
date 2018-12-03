@@ -164,14 +164,14 @@ func makeNodes(numNodes int) ([]*protocol.Node, []*MsgService, []int) {
 			idAdapter,
 		)
 
-		connAdapter, err := skademlia.NewConnectionAdapter(
+		if _, err := skademlia.NewConnectionAdapter(
 			listener,
 			dialTCP,
-		)
-		if err != nil {
+			node,
+			address,
+		); err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
-		connAdapter.RegisterNode(node, skademlia.NewID(idAdapter.MyIdentity(), address))
 
 		msgSvc := &MsgService{
 			Mailbox: make(chan string, 1),
