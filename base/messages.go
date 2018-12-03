@@ -176,7 +176,7 @@ func (a *MessageAdapter) SendMessage(c *protocol.Controller, message []byte) err
 	return nil
 }
 
-func (a *MessageAdapter) StartRecvMessage(c *protocol.Controller, callback protocol.RecvMessageCallback) {
+func (a *MessageAdapter) OnRecvMessage(c *protocol.Controller, callback protocol.RecvMessageCallback) {
 	go runRecvWorker(a.finalizerNotifier, a.conn, callback)
 }
 

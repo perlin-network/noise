@@ -6,8 +6,8 @@ import (
 
 // ConnectionAdapter is an adapter that establishes real/virtual connections (message adapters), both passively and actively.
 type ConnectionAdapter interface {
-	EstablishPassively(c *Controller, local []byte) chan MessageAdapter
-	EstablishActively(c *Controller, local []byte, remote []byte) (MessageAdapter, error)
+	Accept(c *Controller, local []byte) chan MessageAdapter
+	Dial(c *Controller, local []byte, remote []byte) (MessageAdapter, error)
 	AddPeerID(id []byte, addr string) error
 	GetPeerIDs() [][]byte
 }
@@ -19,7 +19,7 @@ type RecvMessageCallback func(ctx context.Context, message []byte)
 type MessageAdapter interface {
 	RemoteEndpoint() []byte
 	Metadata() map[string]string
-	StartRecvMessage(c *Controller, callback RecvMessageCallback)
+	OnRecvMessage(c *Controller, callback RecvMessageCallback)
 	SendMessage(c *Controller, message []byte) error
 	Close()
 }

@@ -46,7 +46,7 @@ func NewConnectionAdapter(listener net.Listener, dialer Dialer, node *protocol.N
 	return a, nil
 }
 
-func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
+func (a *ConnectionAdapter) Dial(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
 	if a.Discovery == nil {
 		return nil, errors.New("skademlia: connection not setup with a service")
 	}
@@ -78,7 +78,7 @@ func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []by
 	return base.NewMessageAdapterActive(a, conn, local, remote, localPeer.Address, remotePeer.Address)
 }
 
-func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []byte) chan protocol.MessageAdapter {
+func (a *ConnectionAdapter) Accept(c *protocol.Controller, local []byte) chan protocol.MessageAdapter {
 	if a.Discovery == nil {
 		return nil
 	}

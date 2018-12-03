@@ -131,7 +131,7 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 				return nil, errors.New("cancelled")
 			}
 		} else {
-			msgAdapter, err := n.connAdapter.EstablishActively(n.controller, n.idAdapter.MyIdentity(), remote)
+			msgAdapter, err := n.connAdapter.Dial(n.controller, n.idAdapter.MyIdentity(), remote)
 			if err != nil {
 				log.Error().Msgf("unable to establish connection actively: %+v", err)
 				msgAdapter = nil
@@ -146,7 +146,7 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 					log.Error().Err(err).Msg("cannot establish peer")
 				} else {
 					n.peers.Store(string(remote), established)
-					msgAdapter.StartRecvMessage(n.controller, func(ctx context.Context, message []byte) {
+					msgAdapter.OnRecvMessage(n.controller, func(ctx context.Context, message []byte) {
 						if message == nil {
 							n.removePeer(remote)
 						} else {
@@ -255,7 +255,7 @@ func (n *Node) Start() {
 			svc.Startup(n)
 		}
 
-		for msgAdapter := range n.connAdapter.EstablishPassively(n.controller, n.idAdapter.MyIdentity()) {
+		for msgAdapter := range n.connAdapter.Accept(n.controller, n.idAdapter.MyIdentity()) {
 			msgAdapter := msgAdapter // the outer adapter is shared?
 			peer, err := EstablishPeerWithMessageAdapter(n.controller, n.dhGroup, n.dhKeypair, n.idAdapter, msgAdapter, true)
 			if err != nil {
@@ -267,7 +267,7 @@ func (n *Node) Start() {
 			}
 
 			n.peers.Store(string(msgAdapter.RemoteEndpoint()), peer)
-			msgAdapter.StartRecvMessage(n.controller, func(ctx context.Context, message []byte) {
+			msgAdapter.OnRecvMessage(n.controller, func(ctx context.Context, message []byte) {
 				if message == nil {
 					//fmt.Printf("message is nil, removing peer: %b\n", adapter.RemoteEndpoint())
 					n.removePeer(msgAdapter.RemoteEndpoint())

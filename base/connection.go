@@ -39,7 +39,7 @@ func NewConnectionAdapter(listener net.Listener, dialer Dialer, node *protocol.N
 	return adapter, nil
 }
 
-func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
+func (a *ConnectionAdapter) Dial(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {
 	remoteAddr, err := a.lookupAddressByID(remote)
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []by
 	return msgAdapter, nil
 }
 
-func (a *ConnectionAdapter) EstablishPassively(c *protocol.Controller, local []byte) chan protocol.MessageAdapter {
+func (a *ConnectionAdapter) Accept(c *protocol.Controller, local []byte) chan protocol.MessageAdapter {
 	ch := make(chan protocol.MessageAdapter)
 	go func() {
 		defer close(ch)
