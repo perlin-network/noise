@@ -164,12 +164,7 @@ func makeNodes(numNodes int) ([]*protocol.Node, []*MsgService, []int) {
 			idAdapter,
 		)
 
-		if _, err := skademlia.NewConnectionAdapter(
-			listener,
-			dialTCP,
-			node,
-			address,
-		); err != nil {
+		if _, err := skademlia.NewConnectionAdapter(listener, dialTCP, node, address); err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
 

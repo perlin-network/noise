@@ -21,6 +21,10 @@ const (
 	DialTimeout  = 10 * time.Second
 )
 
+var (
+	_ protocol.HandshakeProcessor = (*SimpleHandshakeProcessor)(nil)
+)
+
 type Instance struct {
 	protocol.Service
 	address      string
@@ -35,12 +39,6 @@ type SimpleHandshakeProcessor struct{}
 type SimpleHandshakeState struct {
 	passive bool
 }
-
-/*
-	ActivelyInitHandshake() ([]byte, interface{}, error) // (message, state, err)
-	PassivelyInitHandshake() (interface{}, error) // (state, err)
-	ProcessHandshakeMessage(state interface{}, payload []byte) ([]byte, DoneAction, error) // (message, doneAction, err)
-*/
 
 func (*SimpleHandshakeProcessor) ActivelyInitHandshake() ([]byte, interface{}, error) {
 	return []byte("init"), &SimpleHandshakeState{passive: false}, nil

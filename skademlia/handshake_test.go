@@ -75,12 +75,7 @@ func TestHandshake(t *testing.T) {
 			log.Fatal().Msgf("%+v", err)
 		}
 
-		if _, err := NewConnectionAdapter(
-			listener,
-			dialTCP,
-			node,
-			address,
-		); err != nil {
+		if _, err := NewConnectionAdapter(listener, dialTCP, node, address); err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
 
