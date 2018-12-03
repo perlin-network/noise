@@ -146,7 +146,7 @@ func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int) ([]*prot
 
 		node.AddService(msgSvc)
 
-		node.Listen()
+		node.Start()
 
 		nodes = append(nodes, node)
 		msgServices = append(msgServices, msgSvc)

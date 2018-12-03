@@ -70,28 +70,29 @@ func ExampleBasic() {
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
 		idAdapter := base.NewIdentityAdapter()
+		node := protocol.NewNode(
+			protocol.NewController(),
+			idAdapter,
+		)
 
 		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, startPort+i))
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
 
-		connAdapter, err := base.NewConnectionAdapter(listener, dialTCP)
-		if err != nil {
+		if _, err := base.NewConnectionAdapter(listener, dialTCP, node); err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
-
-		node := protocol.NewNode(
-			protocol.NewController(),
-			idAdapter,
-		)
-		connAdapter.RegisterNode(node)
 
 		service := &BasicService{
 			Mailbox: make(chan *messages.BasicMessage, 1),
 		}
 
+		// add the service to handle requests
 		node.AddService(service)
+
+		// Start listening for connections
+		node.Start()
 
 		nodes = append(nodes, node)
 		services = append(services, service)
@@ -106,10 +107,6 @@ func ExampleBasic() {
 			peerID := otherNode.GetIdentityAdapter().MyIdentity()
 			srcNode.GetConnectionAdapter().AddPeerID(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
 		}
-	}
-
-	for _, node := range nodes {
-		node.Listen()
 	}
 
 	time.Sleep(time.Duration(len(nodes)*100) * time.Millisecond)

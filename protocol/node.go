@@ -157,7 +157,7 @@ func (n *Node) dispatchIncomingMessage(ctx context.Context, peer *EstablishedPee
 	return nil
 }
 
-func (n *Node) Listen() {
+func (n *Node) Start() {
 	if n.connAdapter == nil {
 		log.Fatal().Msg("connection adapter not setup")
 	}

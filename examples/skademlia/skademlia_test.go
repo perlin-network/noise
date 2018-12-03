@@ -179,7 +179,7 @@ func makeNodes(numNodes int) ([]*protocol.Node, []*MsgService, []int) {
 
 		node.AddService(msgSvc)
 
-		node.Listen()
+		node.Start()
 
 		nodes = append(nodes, node)
 		msgServices = append(msgServices, msgSvc)

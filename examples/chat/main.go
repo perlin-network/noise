@@ -65,6 +65,10 @@ func makeMessageBody(serviceID int, msg *protobuf.Message) *protocol.MessageBody
 	return body
 }
 
+func dialTCP(addr string) (net.Conn, error) {
+	return net.DialTimeout("tcp", addr, 10*time.Second)
+}
+
 func main() {
 	// process other flags
 	portFlag := flag.Int("port", 3000, "port to listen to")
@@ -87,24 +91,22 @@ func main() {
 		panic(err)
 	}
 
-	connAdapter, err := base.NewConnectionAdapter(listener, func(addr string) (net.Conn, error) {
-		return net.DialTimeout("tcp", addr, 10*time.Second)
-	})
-	if err != nil {
-		panic(err)
-	}
-
 	node := protocol.NewNode(
 		protocol.NewController(),
 		idAdapter,
 	)
-	connAdapter.RegisterNode(node)
+
+	if _, err := base.NewConnectionAdapter(listener, dialTCP, node); err != nil {
+		panic(err)
+	}
 
 	service := &ChatService{
 		Address: addr,
 	}
 
 	node.AddService(service)
+
+	node.Start()
 
 	if len(peers) > 0 {
 		for _, peerKV := range peers {
@@ -118,11 +120,9 @@ func main() {
 				panic(err)
 			}
 			remoteAddr := p[1]
-			connAdapter.AddPeerID(peerID, remoteAddr)
+			node.GetConnectionAdapter().AddPeerID(peerID, remoteAddr)
 		}
 	}
-
-	node.Listen()
 
 	reader := bufio.NewReader(os.Stdin)
 	for {

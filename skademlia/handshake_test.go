@@ -90,7 +90,7 @@ func TestHandshake(t *testing.T) {
 
 		node.AddService(service)
 
-		node.Listen()
+		node.Start()
 
 		nodes = append(nodes, node)
 		services = append(services, service)

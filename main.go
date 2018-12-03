@@ -39,11 +39,6 @@ func main() {
 		panic(err)
 	}
 
-	connAdapter, err := base.NewConnectionAdapter(listener, dialTCP)
-	if err != nil {
-		panic(err)
-	}
-
 	idAdapter := base.NewIdentityAdapter()
 	kp := idAdapter.GetKeyPair()
 
@@ -51,12 +46,16 @@ func main() {
 		protocol.NewController(),
 		idAdapter,
 	)
-	connAdapter.RegisterNode(node)
-	node.Listen()
+
+	if _, err := base.NewConnectionAdapter(listener, dialTCP, node); err != nil {
+		panic(err)
+	}
 
 	svc := &CountService{}
 
 	node.AddService(svc)
+
+	node.Start()
 
 	log.Info().Msgf("started, pubkey = %s", kp.PublicKeyHex())
 
@@ -66,7 +65,7 @@ func main() {
 			panic(err)
 		}
 		remoteAddr := os.Args[4]
-		connAdapter.AddPeerID(peerID, remoteAddr)
+		node.GetConnectionAdapter().AddPeerID(peerID, remoteAddr)
 
 		go func() {
 			for {

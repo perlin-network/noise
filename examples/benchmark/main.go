@@ -78,19 +78,18 @@ func StartInstance(port int) *Instance {
 		panic(err)
 	}
 
-	connAdapter, err := base.NewConnectionAdapter(listener, dialTCP)
-	if err != nil {
-		panic(err)
-	}
-
 	idAdapter := base.NewIdentityAdapter()
 
 	node := protocol.NewNode(
 		protocol.NewController(),
 		idAdapter,
 	)
-	connAdapter.RegisterNode(node)
 	node.SetCustomHandshakeProcessor((*SimpleHandshakeProcessor)(nil))
+
+	connAdapter, err := base.NewConnectionAdapter(listener, dialTCP, node)
+	if err != nil {
+		panic(err)
+	}
 
 	inst := &Instance{
 		address:     addr,
@@ -101,7 +100,7 @@ func StartInstance(port int) *Instance {
 
 	node.AddService(inst)
 
-	node.Listen()
+	node.Start()
 
 	return inst
 }

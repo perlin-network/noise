@@ -30,15 +30,13 @@ type PubliclyVisibleAddress struct {
 	count   uint64
 }
 
-func NewConnectionAdapter(listener net.Listener, dialer Dialer) (*ConnectionAdapter, error) {
-	return &ConnectionAdapter{
+func NewConnectionAdapter(listener net.Listener, dialer Dialer, node *protocol.Node) (*ConnectionAdapter, error) {
+	adapter := &ConnectionAdapter{
 		listener: listener,
 		Dialer:   dialer,
-	}, nil
-}
-
-func (a *ConnectionAdapter) RegisterNode(node *protocol.Node) {
-	node.SetConnectionAdapter(a)
+	}
+	node.SetConnectionAdapter(adapter)
+	return adapter, nil
 }
 
 func (a *ConnectionAdapter) EstablishActively(c *protocol.Controller, local []byte, remote []byte) (protocol.MessageAdapter, error) {

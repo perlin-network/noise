@@ -46,17 +46,19 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	connAdapter, err := base.NewConnectionAdapter(listener, dialTCP)
-	if err != nil {
-		panic(err)
-	}
 
 	node := protocol.NewNode(
 		protocol.NewController(),
 		idAdapter,
 	)
-	connAdapter.RegisterNode(node)
+
+	if _, err := base.NewConnectionAdapter(listener, dialTCP, node); err != nil {
+		panic(err)
+	}
+
 	node.AddService(&StarterService{})
+
+	node.Start()
 
 	if len(peers) > 0 {
 		for _, peerKV := range peers {
@@ -70,11 +72,9 @@ func main() {
 				panic(err)
 			}
 			remoteAddr := p[1]
-			connAdapter.AddPeerID(peerID, remoteAddr)
+			node.GetConnectionAdapter().AddPeerID(peerID, remoteAddr)
 		}
 	}
-
-	node.Listen()
 
 	select {}
 

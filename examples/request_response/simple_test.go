@@ -42,17 +42,16 @@ func setupNodes() ([]*protocol.Node, []int) {
 			log.Fatal().Msgf("%+v", err)
 		}
 
-		connAdapter, err := base.NewConnectionAdapter(listener, dialTCP)
-		if err != nil {
-			log.Fatal().Msgf("%+v", err)
-		}
-
 		node := protocol.NewNode(
 			protocol.NewController(),
 			idAdapter,
 		)
-		connAdapter.RegisterNode(node)
-		node.Listen()
+
+		if _, err := base.NewConnectionAdapter(listener, dialTCP, node); err != nil {
+			log.Fatal().Msgf("%+v", err)
+		}
+
+		node.Start()
 
 		nodes = append(nodes, node)
 	}
