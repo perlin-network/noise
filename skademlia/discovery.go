@@ -161,8 +161,14 @@ func (s *DiscoveryService) EvictLastSeenPeer(id []byte) (bool, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 	defer cancel()
-	reply, err := s.sendAdapter.Request(ctx, lastSeen.Id, body)
+	reply, err := s.sendAdapter.Request(ctx, lastSeen.PublicKey, body)
 	if err != nil || reply == nil {
+		bucket.Remove(element)
+		return true, nil
+	}
+	var respMsg protobuf.Pong
+	opCode, err := ParseMessageBody(reply, &respMsg)
+	if opCode != OpCodePong || err != nil {
 		bucket.Remove(element)
 		return true, nil
 	}

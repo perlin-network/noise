@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"github.com/perlin-network/noise/internal/protobuf"
 	"net"
 
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/crypto/blake2b"
+	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"

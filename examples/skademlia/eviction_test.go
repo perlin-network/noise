@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TODOTestSKademliaEviction(t *testing.T) {
+func TestSKademliaEviction(t *testing.T) {
 	bucketSize := 4
 	startPort := 5500
 
@@ -87,7 +87,11 @@ func TODOTestSKademliaEviction(t *testing.T) {
 			select {
 			case received := <-msgServices[j].Mailbox:
 				assert.Equalf(t, expected, received, "Expected message '%s' to be received by node %d but got '%v'", expected, j, received)
-			case <-time.After(2 * time.Second):
+			case <-time.After(1 * time.Second):
+				if i == 0 && j == 5 {
+					// this case should fail because node 5 is not in node 0's routing table
+					continue
+				}
 				assert.Failf(t, "Timed out attempting to receive message", "from Node %d for Node %d", i, j)
 			}
 		}
@@ -95,6 +99,42 @@ func TODOTestSKademliaEviction(t *testing.T) {
 
 	expectedLen := 4
 	bucket := discoveryServices[0].Routes.Bucket(expectedBucketID)
+	assert.Equalf(t, expectedLen, bucket.Len(), "expected bucket size to be %d, got %d", expectedLen, bucket.Len())
+
+	// stop node 1, bootstrap node 5 and broadcast again
+	nodes[1].Stop()
+	node5, ok := nodes[5].GetConnectionAdapter().(*skademlia.ConnectionAdapter)
+	assert.True(t, ok)
+	assert.Nil(t, node5.Bootstrap(peer0))
+
+	// assert broadcasts goes to everyone
+	for i := 0; i < len(nodes); i++ {
+		expected := fmt.Sprintf("This is a broadcasted message from Node %d.", i)
+		assert.Nil(t, nodes[i].Broadcast(context.Background(), &protocol.MessageBody{
+			Service: serviceID,
+			Payload: ([]byte)(expected),
+		}))
+
+		// Check if message was received by other nodes.
+		for j := 0; j < len(msgServices); j++ {
+			if i == j {
+				continue
+			}
+			select {
+			case received := <-msgServices[j].Mailbox:
+				assert.Equalf(t, expected, received, "Expected message '%s' to be received by node %d but got '%v'", expected, j, received)
+			case <-time.After(1 * time.Second):
+				if i == 1 || j == 1 {
+					// node 1 is disconnected, should not send or receive any messages
+					continue
+				}
+				assert.Failf(t, "Timed out attempting to receive message", "from Node %d for Node %d", i, j)
+			}
+		}
+	}
+
+	// nodes[1] is no longer in node[0]'s routing table, but node[5] is now in it so size is the same
+	expectedLen = 4
 	assert.Equalf(t, expectedLen, bucket.Len(), "expected bucket size to be %d, got %d", expectedLen, bucket.Len())
 }
 

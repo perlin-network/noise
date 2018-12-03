@@ -125,7 +125,7 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 			case <-peer.Done:
 				established = peer.Established
 				if established == nil {
-					return nil, errors.New("cannot establish connection")
+					return nil, errors.New("cannot establish connection, established is nil")
 				}
 			case <-n.controller.Cancellation:
 				return nil, errors.New("cancelled")
@@ -133,7 +133,9 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 		} else {
 			msgAdapter, err := n.connAdapter.Dial(n.controller, n.idAdapter.MyIdentity(), remote)
 			if err != nil {
-				log.Error().Msgf("unable to establish connection actively: %+v", err)
+				log.Error().
+					Err(err).
+					Msgf("unable to establish connection actively")
 				msgAdapter = nil
 			}
 
@@ -161,7 +163,7 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 			close(peer.Done)
 
 			if msgAdapter == nil {
-				return nil, errors.New("cannot establish connection")
+				return nil, errors.New("cannot establish connection, msgAdapter is nil")
 			}
 		}
 	case *EstablishedPeer:
@@ -277,6 +279,22 @@ func (n *Node) Start() {
 			})
 		}
 	}()
+}
+
+// Stop terminates all connections for the node
+func (n *Node) Stop() {
+	n.peers.Range(func(remote interface{}, established interface{}) bool {
+		id := remote.(string)
+		if peer, ok := established.(*EstablishedPeer); ok {
+			peer.Close()
+		}
+		n.peers.Delete(id)
+
+		for _, svc := range n.services {
+			svc.PeerDisconnect([]byte(id))
+		}
+		return true
+	})
 }
 
 // Send will send a message to the recipient in the message field
