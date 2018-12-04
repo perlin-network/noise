@@ -3,20 +3,22 @@ package basic
 import (
 	"context"
 	"fmt"
-	"github.com/gogo/protobuf/proto"
+	"net"
+	"time"
+
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/examples/basic/messages"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/utils"
+
+	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
-	"net"
-	"time"
 )
 
 const (
 	serviceID = 42
 	numNodes  = 3
-	startPort = 5000
 	host      = "localhost"
 )
 
@@ -66,10 +68,10 @@ func dialTCP(addr string) (net.Conn, error) {
 func ExampleBasic() {
 	var services []*BasicService
 	var nodes []*protocol.Node
+	var ports []int
 
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
-
 		// setup the node
 		idAdapter := base.NewIdentityAdapter()
 		node := protocol.NewNode(
@@ -77,7 +79,9 @@ func ExampleBasic() {
 			idAdapter,
 		)
 
-		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, startPort+i))
+		port := utils.GetRandomUnusedPort()
+		ports = append(ports, port)
+		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
@@ -107,7 +111,7 @@ func ExampleBasic() {
 				continue
 			}
 			peerID := otherNode.GetIdentityAdapter().MyIdentity()
-			srcNode.GetConnectionAdapter().AddRemoteID(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
+			srcNode.GetConnectionAdapter().AddRemoteID(peerID, fmt.Sprintf("%s:%d", host, ports[j]))
 		}
 	}
 
