@@ -44,7 +44,7 @@ func TestSKademliaEviction(t *testing.T) {
 	}
 
 	// make sure nodes are connected
-	time.Sleep(250 * time.Duration(len(nodes)) * time.Millisecond)
+	time.Sleep(100 * time.Duration(len(nodes)) * time.Millisecond)
 
 	rt := discoveryServices[0].Routes
 
@@ -87,7 +87,7 @@ func TestSKademliaEviction(t *testing.T) {
 			select {
 			case received := <-msgServices[j].Mailbox:
 				assert.Equalf(t, expected, received, "Expected message '%s' to be received by node %d but got '%v'", expected, j, received)
-			case <-time.After(1 * time.Second):
+			case <-time.After(100 * time.Millisecond):
 				if i == 0 && j == 5 {
 					// this case should fail because node 5 is not in node 0's routing table
 					continue
@@ -106,6 +106,8 @@ func TestSKademliaEviction(t *testing.T) {
 	node5, ok := nodes[5].GetConnectionAdapter().(*skademlia.ConnectionAdapter)
 	assert.True(t, ok)
 	assert.Nil(t, node5.Bootstrap(peer0))
+	// make sure node 0 and node 5 are connected
+	time.Sleep(100 * time.Millisecond)
 
 	// assert broadcasts goes to everyone
 	for i := 0; i < len(nodes); i++ {
@@ -123,7 +125,7 @@ func TestSKademliaEviction(t *testing.T) {
 			select {
 			case received := <-msgServices[j].Mailbox:
 				assert.Equalf(t, expected, received, "Expected message '%s' to be received by node %d but got '%v'", expected, j, received)
-			case <-time.After(1 * time.Second):
+			case <-time.After(100 * time.Millisecond):
 				if i == 1 || j == 1 {
 					// node 1 is disconnected, should not send or receive any messages
 					continue
