@@ -10,6 +10,7 @@ import (
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/skademlia"
+	"github.com/perlin-network/noise/skademlia/dht"
 	"github.com/perlin-network/noise/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -86,7 +87,7 @@ func TestSKademliaBootstrap(t *testing.T) {
 	numNodes := 3
 	nodes, msgServices, ports := makeNodes(numNodes)
 
-	peer0 := skademlia.NewID(nodes[0].GetIdentityAdapter().MyIdentity(), fmt.Sprintf("%s:%d", host, ports[0]))
+	peer0 := dht.NewID(nodes[0].GetIdentityAdapter().MyIdentity(), fmt.Sprintf("%s:%d", host, ports[0]))
 
 	// Connect other nodes to node 0
 	for _, node := range nodes {
