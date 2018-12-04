@@ -8,12 +8,12 @@ import (
 
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/crypto/blake2b"
-	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/skademlia/dht"
 	"github.com/perlin-network/noise/skademlia/discovery"
 	"github.com/perlin-network/noise/skademlia/peer"
+	"github.com/perlin-network/noise/skademlia/protobuf"
 
 	"github.com/pkg/errors"
 )

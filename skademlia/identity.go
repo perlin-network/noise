@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
-	"github.com/perlin-network/noise/skademlia/peer"
 	"math/bits"
 
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/skademlia/peer"
 
 	"github.com/pkg/errors"
 )

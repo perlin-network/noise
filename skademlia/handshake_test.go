@@ -3,7 +3,6 @@ package skademlia
 import (
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"net"
 	"testing"
 	"time"
@@ -11,6 +10,8 @@ import (
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/utils"
+
+	"github.com/stretchr/testify/assert"
 )
 
 const (

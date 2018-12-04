@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/perlin-network/noise/internal/protobuf"
+	"github.com/perlin-network/noise/skademlia/protobuf"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"

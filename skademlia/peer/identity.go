@@ -7,7 +7,7 @@ import (
 	"math/bits"
 
 	"github.com/perlin-network/noise/crypto/blake2b"
-	"github.com/perlin-network/noise/internal/protobuf"
+	"github.com/perlin-network/noise/skademlia/protobuf"
 )
 
 var (

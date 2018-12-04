@@ -9,7 +9,6 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/examples/chat/messages"
-	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
@@ -41,20 +40,16 @@ func (n *ChatService) Receive(ctx context.Context, request *protocol.Message) (*
 	if len(request.Body.Payload) == 0 {
 		return nil, errors.New("Empty payload")
 	}
-	var pm protobuf.Message
-	if err := proto.Unmarshal(request.Body.Payload, &pm); err != nil {
-		return nil, err
-	}
 	var mc messages.ChatMessage
-	if err := proto.Unmarshal(pm.Message, &mc); err != nil {
+	if err := proto.Unmarshal(request.Body.Payload, &mc); err != nil {
 		return nil, err
 	}
 	log.Info().Msgf("<%s> %s", n.Address, mc.Message)
 	return nil, nil
 }
 
-func makeMessageBody(serviceID int, msg *protobuf.Message) *protocol.MessageBody {
-	payload, err := proto.Marshal(msg)
+func makeMessageBody(serviceID int, msg *messages.ChatMessage) *protocol.MessageBody {
+	payload, err := msg.Marshal()
 	if err != nil {
 		return nil
 	}
@@ -73,7 +68,7 @@ func main() {
 	// process other flags
 	portFlag := flag.Int("port", 3000, "port to listen to")
 	hostFlag := flag.String("host", "localhost", "host to listen to")
-	peersFlag := flag.String("peers", "", "peers to connect to in format: peerKeyHash1=host1:port1,peerKeyHash2=host2:port2,...")
+	peersFlag := flag.String("peers", "", "peers to connect to in format: peerPublicKey1=host1:port1,peerPublicKey2=host2:port2,...")
 	flag.Parse()
 
 	port := *portFlag
@@ -138,10 +133,6 @@ func main() {
 		chatMsg := &messages.ChatMessage{
 			Message: input,
 		}
-		bytes, _ := chatMsg.Marshal()
-		msg := &protobuf.Message{
-			Message: bytes,
-		}
-		node.Broadcast(context.Background(), makeMessageBody(chatServiceID, msg))
+		node.Broadcast(context.Background(), makeMessageBody(chatServiceID, chatMsg))
 	}
 }
