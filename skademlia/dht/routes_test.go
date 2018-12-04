@@ -1,17 +1,18 @@
-package skademlia
+package dht_test
 
 import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"github.com/perlin-network/noise/skademlia"
+	"github.com/perlin-network/noise/skademlia/dht"
+	"github.com/perlin-network/noise/skademlia/peer"
 	"reflect"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"unsafe"
-
-	"github.com/perlin-network/noise/peer"
 )
 
 var (
@@ -24,10 +25,10 @@ var (
 )
 
 func init() {
-	id1 = NewID(NewIdentityAdapter(8, 8).MyIdentity(), "0000")
-	id2 = NewID(NewIdentityAdapter(8, 8).MyIdentity(), "0001")
-	id3 = NewID(NewIdentityAdapter(8, 8).MyIdentity(), "0002")
-	id4 = NewID(NewIdentityAdapter(8, 8).MyIdentity(), "0003")
+	id1 = dht.NewID(skademlia.NewIdentityAdapter(8, 8).MyIdentity(), "0000")
+	id2 = dht.NewID(skademlia.NewIdentityAdapter(8, 8).MyIdentity(), "0001")
+	id3 = dht.NewID(skademlia.NewIdentityAdapter(8, 8).MyIdentity(), "0002")
+	id4 = dht.NewID(skademlia.NewIdentityAdapter(8, 8).MyIdentity(), "0003")
 
 	idBytes = id1.Id
 }
@@ -48,7 +49,7 @@ func RandByte() byte {
 func TestSelf(t *testing.T) {
 	t.Parallel()
 
-	routingTable := NewRoutingTable(id1)
+	routingTable := dht.NewRoutingTable(id1)
 	routingTable.Update(id2)
 	routingTable.Update(id3)
 
@@ -63,7 +64,7 @@ func TestSelf(t *testing.T) {
 func TestGetPeerAddresses(t *testing.T) {
 	t.Parallel()
 
-	routingTable := NewRoutingTable(id1)
+	routingTable := dht.NewRoutingTable(id1)
 	routingTable.Update(id2)
 	routingTable.Update(id3)
 
@@ -79,7 +80,7 @@ func TestGetPeerAddresses(t *testing.T) {
 func TestGetPeer(t *testing.T) {
 	t.Parallel()
 
-	routingTable := NewRoutingTable(id1)
+	routingTable := dht.NewRoutingTable(id1)
 	routingTable.Update(id2)
 
 	found, ok := routingTable.GetPeer(id1.Id)
@@ -113,7 +114,7 @@ func TestGetPeer(t *testing.T) {
 func TestGetPeers(t *testing.T) {
 	t.Parallel()
 
-	routingTable := NewRoutingTable(id1)
+	routingTable := dht.NewRoutingTable(id1)
 	routingTable.Update(id2)
 
 	peers := routingTable.GetPeers()
@@ -129,7 +130,7 @@ func TestGetPeers(t *testing.T) {
 func TestRemovePeer(t *testing.T) {
 	t.Parallel()
 
-	routingTable := NewRoutingTable(id1)
+	routingTable := dht.NewRoutingTable(id1)
 	routingTable.Update(id2)
 	routingTable.Update(id3)
 
@@ -148,17 +149,17 @@ func TestUpdate(t *testing.T) {
 
 	// self key generates bucket id 255
 	idKey1 := []byte{124, 224, 147, 208, 211, 103, 166, 113, 153, 104, 83, 62, 61, 145, 8, 211, 144, 164, 224, 191, 177, 205, 198, 94, 92, 35, 76, 83, 229, 46, 219, 110}
-	id1 := NewID(idKey1, "0001")
+	id1 := dht.NewID(idKey1, "0001")
 
 	// key generates bucket id 8
 	idKey2 := []byte{210, 127, 212, 137, 47, 66, 40, 189, 231, 239, 210, 168, 52, 15, 223, 66, 199, 199, 156, 61, 132, 56, 102, 223, 32, 175, 169, 241, 156, 46, 83, 98}
-	id2 := NewID(idKey2, "0002")
+	id2 := dht.NewID(idKey2, "0002")
 
 	// key generates bucket id 8
 	idKey3 := []byte{228, 61, 230, 169, 243, 78, 244, 44, 82, 76, 54, 56, 98, 135, 227, 158, 114, 251, 56, 160, 208, 60, 121, 41, 197, 63, 235, 41, 236, 66, 222, 219}
-	id3 := NewID(idKey3, "0003")
+	id3 := dht.NewID(idKey3, "0003")
 
-	routingTable := NewRoutingTableWithOptions(id1, WithBucketSize(1))
+	routingTable := dht.NewRoutingTableWithOptions(id1, dht.WithBucketSize(1))
 
 	bucketID2 := routingTable.GetBucketID(idKey2)
 	bucketID3 := routingTable.GetBucketID(idKey3)
@@ -172,11 +173,11 @@ func TestUpdate(t *testing.T) {
 		t.Errorf("Update() expected no error, got: %+v", err)
 	}
 	err = routingTable.Update(id3)
-	if err != ErrBucketFull {
+	if err != dht.ErrBucketFull {
 		t.Errorf("Update() expected error ErrBucketFull, got: %+v", err)
 	}
 
-	routingTable.opts.bucketSize = 2
+	routingTable.Opts().BucketSize = 2
 	err = routingTable.Update(id3)
 	if err != nil {
 		t.Errorf("Update() expected no error, got: %+v", err)
@@ -200,7 +201,7 @@ func TestFindClosestPeers(t *testing.T) {
 		node.PublicKey = node.Id
 	}
 
-	routingTable := NewRoutingTable(*nodes[0])
+	routingTable := dht.NewRoutingTable(*nodes[0])
 	for i := 1; i <= 5; i++ {
 		routingTable.Update(*nodes[i])
 	}
@@ -244,8 +245,8 @@ func TestRoutingTable(t *testing.T) {
 
 	ids := make([]unsafe.Pointer, IDPoolSize) // Element type: *peer.Id
 
-	id := NewID(NewIdentityAdapter(8, 8).MyIdentity(), "0000")
-	table := NewRoutingTable(id)
+	id := dht.NewID(skademlia.NewIdentityAdapter(8, 8).MyIdentity(), "0000")
+	table := dht.NewRoutingTable(id)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(concurrentCount)
@@ -264,7 +265,7 @@ func TestRoutingTable(t *testing.T) {
 						addrRaw := MustReadRand(8)
 						addr := hex.EncodeToString(addrRaw)
 
-						id := NewID(NewIdentityAdapter(8, 8).MyIdentity(), addr)
+						id := dht.NewID(skademlia.NewIdentityAdapter(8, 8).MyIdentity(), addr)
 						table.Update(id)
 
 						atomic.StorePointer(&ids[int(RandByte())%IDPoolSize], unsafe.Pointer(&id))

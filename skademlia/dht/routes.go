@@ -1,4 +1,4 @@
-package skademlia
+package dht
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 
 	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/peer"
+	"github.com/perlin-network/noise/skademlia/peer"
 
 	"github.com/pkg/errors"
 )
@@ -24,7 +24,7 @@ var (
 
 // RoutingTable contains one bucket list for lookups.
 type RoutingTable struct {
-	opts routingTableOptions
+	opts RoutingTableOptions
 
 	// Current node's ID.
 	self peer.ID
@@ -74,20 +74,20 @@ func NewRoutingTable(id peer.ID) *RoutingTable {
 	return table
 }
 
-type routingTableOptions struct {
-	bucketSize int
+type RoutingTableOptions struct {
+	BucketSize int
 }
 
-var defaultRoutingTableOptions = routingTableOptions{
-	bucketSize: defaultBucketSize,
+var defaultRoutingTableOptions = RoutingTableOptions{
+	BucketSize: defaultBucketSize,
 }
 
-type RoutingTableOption func(*routingTableOptions)
+type RoutingTableOption func(*RoutingTableOptions)
 
 // WithBucketSize sets the number of peers per bucket
 func WithBucketSize(n int) RoutingTableOption {
-	return func(o *routingTableOptions) {
-		o.bucketSize = n
+	return func(o *RoutingTableOptions) {
+		o.BucketSize = n
 	}
 }
 
@@ -100,6 +100,11 @@ func NewRoutingTableWithOptions(self peer.ID, opts ...RoutingTableOption) *Routi
 	}
 
 	return rt
+}
+
+// Opts returns the routing table's options
+func (t *RoutingTable) Opts() *RoutingTableOptions {
+	return &t.opts
 }
 
 // Self returns the ID of the node hosting the current routing table instance.
@@ -131,7 +136,7 @@ func (t *RoutingTable) Update(target peer.ID) error {
 
 	if element == nil {
 		// Populate bucket if its not full.
-		if bucket.Len() < t.opts.bucketSize {
+		if bucket.Len() < t.Opts().BucketSize {
 			bucket.PushFront(target)
 		} else {
 			return ErrBucketFull
@@ -240,7 +245,7 @@ func (t *RoutingTable) FindClosestPeers(target peer.ID, count int) (peers []peer
 		return []peer.ID{}
 	}
 
-	bucketID := prefixLen(xor(target.Id, t.self.Id))
+	bucketID := peer.PrefixLen(peer.Xor(target.Id, t.self.Id))
 	bucket := t.Bucket(bucketID)
 
 	bucket.mutex.RLock()
@@ -273,8 +278,8 @@ func (t *RoutingTable) FindClosestPeers(target peer.ID, count int) (peers []peer
 
 	// Sort peers by XorID distance.
 	sort.Slice(peers, func(i, j int) bool {
-		left := xor(peers[i].Id, target.Id)
-		right := xor(peers[j].Id, target.Id)
+		left := peer.Xor(peers[i].Id, target.Id)
+		right := peer.Xor(peers[j].Id, target.Id)
 		return bytes.Compare(left, right) == -1
 	})
 
@@ -287,7 +292,7 @@ func (t *RoutingTable) FindClosestPeers(target peer.ID, count int) (peers []peer
 
 // BucketID returns the corresponding bucket ID based on the ID.
 func (t *RoutingTable) GetBucketID(id []byte) int {
-	return prefixLen(xor(id, t.self.Id))
+	return peer.PrefixLen(peer.Xor(id, t.self.Id))
 }
 
 // Bucket returns a specific Bucket by ID.

@@ -78,14 +78,14 @@ func TestXorId(t *testing.T) {
 
 	publicKey1Hash := blake2b.New().HashBytes(publicKey1)
 	publicKey3Hash := blake2b.New().HashBytes(publicKey3)
-	newId := make([]byte, len(publicKey3Hash))
+	newID := make([]byte, len(publicKey3Hash))
 	for i, b := range publicKey1Hash {
-		newId[i] = b ^ publicKey3Hash[i]
+		newID[i] = b ^ publicKey3Hash[i]
 	}
 
 	xor := ID{
 		Address: address,
-		Id:      newId,
+		Id:      newID,
 	}
 
 	result := id1.XorID(id3)
@@ -131,6 +131,42 @@ func TestPrefixLen(t *testing.T) {
 		id := ID{Address: address, Id: publicKey}
 		if id.PrefixLen() != tt.expected {
 			t.Errorf("PrefixLen() expected: %d, value: %d", tt.expected, id.PrefixLen())
+		}
+	}
+}
+
+func TestPeerXor(t *testing.T) {
+	t.Parallel()
+
+	xorResult := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
+
+	result := Xor(idBytes1, idBytes2)
+
+	if !bytes.Equal(xorResult, result) {
+		t.Errorf("Xor() = %v, want %v", xorResult, result)
+	}
+}
+
+func TestPeerPrefixLen(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		publicKeyHash uint32
+		expected      int
+	}{
+		{1, 7},
+		{2, 6},
+		{4, 5},
+		{8, 4},
+		{16, 3},
+		{32, 2},
+		{64, 1},
+	}
+	for _, tt := range testCases {
+		publicKey := make([]byte, 4)
+		binary.LittleEndian.PutUint32(publicKey, tt.publicKeyHash)
+		if PrefixLen(publicKey) != tt.expected {
+			t.Errorf("PrefixLen() expected: %d, value: %d", tt.expected, PrefixLen(publicKey))
 		}
 	}
 }

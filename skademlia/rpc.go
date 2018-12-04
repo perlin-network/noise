@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"github.com/perlin-network/noise/internal/protobuf"
-	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/skademlia/dht"
+	"github.com/perlin-network/noise/skademlia/peer"
 )
 
 const (
@@ -19,7 +20,7 @@ var (
 	reqNonce = uint64(1)
 )
 
-func queryPeerByID(sendAdapter protocol.SendAdapter, rt *RoutingTable, peerID peer.ID, targetID peer.ID, responses chan []*protobuf.ID) {
+func queryPeerByID(sendAdapter protocol.SendAdapter, rt *dht.RoutingTable, peerID peer.ID, targetID peer.ID, responses chan []*protobuf.ID) {
 	// makes sure any new peers are added to the routing table before it makes the request
 	rt.Update(peerID)
 
@@ -57,7 +58,7 @@ type lookupBucket struct {
 	queue   []peer.ID
 }
 
-func (lookup *lookupBucket) performLookup(sendAdapter protocol.SendAdapter, rt *RoutingTable, targetID peer.ID, alpha int, visited *sync.Map) (results []peer.ID) {
+func (lookup *lookupBucket) performLookup(sendAdapter protocol.SendAdapter, rt *dht.RoutingTable, targetID peer.ID, alpha int, visited *sync.Map) (results []peer.ID) {
 	responses := make(chan []*protobuf.ID)
 
 	// Go through every peer in the entire queue and queue up what peers believe
@@ -109,7 +110,7 @@ func (lookup *lookupBucket) performLookup(sendAdapter protocol.SendAdapter, rt *
 // All lookups are done under a number of disjoint lookups in parallel.
 //
 // Queries at most #ALPHA nodes at a time per lookup, and returns all peer IDs closest to a target peer ID.
-func FindNode(rt *RoutingTable, sendAdapter protocol.SendAdapter, targetID peer.ID, alpha int, disjointPaths int) (results []peer.ID) {
+func FindNode(rt *dht.RoutingTable, sendAdapter protocol.SendAdapter, targetID peer.ID, alpha int, disjointPaths int) (results []peer.ID) {
 
 	visited := new(sync.Map)
 
@@ -156,8 +157,8 @@ func FindNode(rt *RoutingTable, sendAdapter protocol.SendAdapter, targetID peer.
 
 	// Cut off list of results to only have the routing table focus on the
 	// #BucketSize closest peers to the current node.
-	if len(results) > rt.opts.bucketSize {
-		results = results[:rt.opts.bucketSize]
+	if len(results) > rt.Opts().BucketSize {
+		results = results[:rt.Opts().BucketSize]
 	}
 
 	return

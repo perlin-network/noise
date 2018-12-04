@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/perlin-network/noise/internal/protobuf"
-	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/skademlia"
+	"github.com/perlin-network/noise/skademlia/peer"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"

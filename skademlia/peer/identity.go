@@ -10,6 +10,11 @@ import (
 	"github.com/perlin-network/noise/internal/protobuf"
 )
 
+var (
+	idBytes1 = []byte("12345678901234567890123456789012")
+	idBytes2 = []byte("12345678901234567890123456789013")
+)
+
 // ID is an identity of nodes, using its public key hash and network address.
 type ID protobuf.ID
 
@@ -69,4 +74,28 @@ func (id ID) PrefixLen() int {
 		}
 	}
 	return len(id.Id)*8 - 1
+}
+
+// Xor performs an xor operation on two byte slices.
+func Xor(a, b []byte) []byte {
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+
+	dst := make([]byte, n)
+	for i := 0; i < n; i++ {
+		dst[i] = a[i] ^ b[i]
+	}
+	return dst
+}
+
+// PrefixLen returns the number of prefixed zeroes in a byte slice.
+func PrefixLen(bytes []byte) int {
+	for i, b := range bytes {
+		if b != 0 {
+			return i*8 + bits.LeadingZeros8(uint8(b))
+		}
+	}
+	return len(bytes)*8 - 1
 }

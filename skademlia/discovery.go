@@ -6,8 +6,9 @@ import (
 
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/skademlia/dht"
+	"github.com/perlin-network/noise/skademlia/peer"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
@@ -29,14 +30,14 @@ type DiscoveryService struct {
 	DisablePong   bool
 	DisableLookup bool
 
-	Routes      *RoutingTable
+	Routes      *dht.RoutingTable
 	sendAdapter protocol.SendAdapter
 }
 
 // NewDiscoveryService creates a new instance of the Discovery Service
 func NewDiscoveryService(sendAdapter protocol.SendAdapter, selfID peer.ID) *DiscoveryService {
 	return &DiscoveryService{
-		Routes:      NewRoutingTable(selfID),
+		Routes:      dht.NewRoutingTable(selfID),
 		sendAdapter: sendAdapter,
 	}
 }
@@ -71,7 +72,7 @@ func (s *DiscoveryService) Receive(ctx context.Context, message *protocol.Messag
 
 func (s *DiscoveryService) processMsg(sender peer.ID, target peer.ID, msg protobuf.Message) (*protocol.MessageBody, error) {
 	err := s.Routes.Update(sender)
-	if err == ErrBucketFull {
+	if err == dht.ErrBucketFull {
 		// TODO: don't block the code path in every call
 		if ok, _ := s.EvictLastSeenPeer(sender.Id); ok {
 			s.Routes.Update(sender)
@@ -89,7 +90,7 @@ func (s *DiscoveryService) processMsg(sender peer.ID, target peer.ID, msg protob
 		if s.DisablePong {
 			break
 		}
-		peers := FindNode(s.Routes, s.sendAdapter, sender, s.Routes.opts.bucketSize, 8)
+		peers := FindNode(s.Routes, s.sendAdapter, sender, s.Routes.Opts().BucketSize, 8)
 
 		// Update routing table w/ closest peers to self.
 		for _, peerID := range peers {
@@ -115,7 +116,7 @@ func (s *DiscoveryService) processMsg(sender peer.ID, target peer.ID, msg protob
 		response := &protobuf.LookupNodeResponse{}
 
 		// Respond back with closest peers to a provided target.
-		for _, peerID := range s.Routes.FindClosestPeers(reqTargetID, s.Routes.opts.bucketSize) {
+		for _, peerID := range s.Routes.FindClosestPeers(reqTargetID, s.Routes.Opts().BucketSize) {
 			id := protobuf.ID(peerID)
 			response.Peers = append(response.Peers, &id)
 		}

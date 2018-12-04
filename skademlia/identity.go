@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"github.com/perlin-network/noise/skademlia/peer"
 	"math/bits"
 
 	"github.com/perlin-network/noise/crypto"
@@ -132,7 +133,7 @@ func generateKeyPairAndNonce(c1, c2 int) (*crypto.KeyPair, []byte) {
 func checkHashedBytesPrefixLen(a []byte, c int) bool {
 	b := blake2b.New()
 	P := b.HashBytes(a)
-	return prefixLen(P) >= c
+	return peer.PrefixLen(P) >= c
 }
 
 // randomBytes generates a random byte slice with specified length.
@@ -165,7 +166,7 @@ func getNonce(nodeID []byte, c int) []byte {
 
 // checkDynamicPuzzle checks whether the nodeID and bytes x solves the S/Kademlia dynamic puzzle for c prefix length.
 func checkDynamicPuzzle(nodeID, x []byte, c int) bool {
-	xored := xor(nodeID, x)
+	xored := peer.Xor(nodeID, x)
 	return checkHashedBytesPrefixLen(xored, c)
 }
 
@@ -178,8 +179,8 @@ func VerifyPuzzle(publicKey, id, nonce []byte, c1, c2 int) bool {
 		checkDynamicPuzzle(id, nonce, c2)
 }
 
-// xor performs an xor operation on two byte slices.
-func xor(a, b []byte) []byte {
+// Xor performs an xor operation on two byte slices.
+func Xor(a, b []byte) []byte {
 	n := len(a)
 	if len(b) < n {
 		n = len(b)
@@ -192,8 +193,8 @@ func xor(a, b []byte) []byte {
 	return dst
 }
 
-// prefixLen returns the number of prefixed zeroes in a byte slice.
-func prefixLen(bytes []byte) int {
+// PrefixLen returns the number of prefixed zeroes in a byte slice.
+func PrefixLen(bytes []byte) int {
 	for i, b := range bytes {
 		if b != 0 {
 			return i*8 + bits.LeadingZeros8(uint8(b))

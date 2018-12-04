@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"github.com/perlin-network/noise/skademlia/dht"
 	"net"
 
 	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/peer"
 	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/skademlia/peer"
 
 	"github.com/pkg/errors"
 )
@@ -32,7 +33,7 @@ func NewConnectionAdapter(listener net.Listener, dialer Dialer, node *protocol.N
 		listener:    listener,
 		dialer:      dialer,
 		sendAdapter: node,
-		Discovery:   NewDiscoveryService(node, NewID(node.GetIdentityAdapter().MyIdentity(), localAddr)),
+		Discovery:   NewDiscoveryService(node, dht.NewID(node.GetIdentityAdapter().MyIdentity(), localAddr)),
 	}
 
 	if ia, ok := node.GetIdentityAdapter().(*IdentityAdapter); ok {
@@ -55,9 +56,9 @@ func (a *ConnectionAdapter) Dial(c *protocol.Controller, local []byte, remote []
 		return nil, errors.New("skademlia: skip connecting to self pk")
 	}
 
-	localPeer := a.Discovery.Routes.self
+	localPeer := a.Discovery.Routes.Self()
 	if !bytes.Equal(local, localPeer.PublicKey) {
-		return nil, errors.Errorf("skademlia: invalid local peer: %s != %s", hex.EncodeToString(local), a.Discovery.Routes.self.PublicKeyHex())
+		return nil, errors.Errorf("skademlia: invalid local peer: %s != %s", hex.EncodeToString(local), a.Discovery.Routes.Self().PublicKeyHex())
 	}
 
 	remotePeer, ok := a.Discovery.Routes.GetPeerFromPublicKey(remote)
@@ -82,7 +83,7 @@ func (a *ConnectionAdapter) Accept(c *protocol.Controller, local []byte) chan pr
 	if a.Discovery == nil {
 		return nil
 	}
-	localPeer := a.Discovery.Routes.self
+	localPeer := a.Discovery.Routes.Self()
 	ch := make(chan protocol.MessageAdapter)
 	go func() {
 		defer close(ch)
@@ -131,9 +132,9 @@ func (a *ConnectionAdapter) GetAddressByID(remote []byte) (string, error) {
 }
 
 func (a *ConnectionAdapter) AddPeerID(remote []byte, addr string) error {
-	id := NewID(remote, addr)
+	id := dht.NewID(remote, addr)
 	err := a.Discovery.Routes.Update(id)
-	if err == ErrBucketFull {
+	if err == dht.ErrBucketFull {
 		if ok, _ := a.Discovery.EvictLastSeenPeer(id.Id); ok {
 			return a.Discovery.Routes.Update(id)
 		}

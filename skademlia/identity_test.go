@@ -1,19 +1,12 @@
 package skademlia
 
 import (
-	"bytes"
-	"encoding/binary"
 	"encoding/hex"
 	"testing"
 
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/crypto/ed25519"
-)
-
-var (
-	idBytes1 = []byte("12345678901234567890123456789012")
-	idBytes2 = []byte("12345678901234567890123456789013")
 )
 
 func TestNewIdentityAdapter(t *testing.T) {
@@ -206,42 +199,6 @@ func TestVerifyPuzzle(t *testing.T) {
 		ok := VerifyPuzzle(id.MyIdentity(), id.id(), id.Nonce, 16, 16)
 		if ok != tt.valid {
 			t.Errorf("VerifyPuzzle() expected to be %t, got %t", tt.valid, ok)
-		}
-	}
-}
-
-func TestXor(t *testing.T) {
-	t.Parallel()
-
-	xorResult := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
-
-	result := xor(idBytes1, idBytes2)
-
-	if !bytes.Equal(xorResult, result) {
-		t.Errorf("Xor() = %v, want %v", xorResult, result)
-	}
-}
-
-func TestPrefixLen(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		publicKeyHash uint32
-		expected      int
-	}{
-		{1, 7},
-		{2, 6},
-		{4, 5},
-		{8, 4},
-		{16, 3},
-		{32, 2},
-		{64, 1},
-	}
-	for _, tt := range testCases {
-		publicKey := make([]byte, 4)
-		binary.LittleEndian.PutUint32(publicKey, tt.publicKeyHash)
-		if prefixLen(publicKey) != tt.expected {
-			t.Errorf("PrefixLen() expected: %d, value: %d", tt.expected, prefixLen(publicKey))
 		}
 	}
 }
