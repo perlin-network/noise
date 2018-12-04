@@ -154,7 +154,7 @@ func (a *MessageAdapter) Close() {
 	close(a.finalizerNotifier)
 }
 
-func (a *MessageAdapter) RemoteEndpoint() []byte {
+func (a *MessageAdapter) RemoteID() []byte {
 	return []byte(a.metadata["remote"])
 }
 

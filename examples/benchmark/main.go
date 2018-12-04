@@ -119,7 +119,7 @@ func main() {
 	}
 	for i := 0; i < NumInstances; i++ {
 		for j := 0; j < NumInstances; j++ {
-			instances[i].connAdapter.AddPeerID(instances[j].keypair.PublicKey, instances[j].address)
+			instances[i].connAdapter.AddRemoteID(instances[j].keypair.PublicKey, instances[j].address)
 		}
 	}
 

@@ -4,7 +4,7 @@ import (
 	"context"
 )
 
-// ServiceInterface is used to proxy callbacks to a particular Plugin instance.
+// ServiceInterface is used to proxy callbacks to a particular Service instance.
 type ServiceInterface interface {
 	// Callback for when the network starts listening for peers.
 	Startup(node *Node)

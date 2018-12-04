@@ -7,7 +7,6 @@ import (
 	"net"
 
 	"github.com/perlin-network/noise/base"
-	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/skademlia/dht"
@@ -117,7 +116,7 @@ func (a *ConnectionAdapter) Accept(c *protocol.Controller, local []byte) chan pr
 }
 
 // GetPeerIDs returns the public keys of all connected nodes in the routing table
-func (a *ConnectionAdapter) GetPeerIDs() [][]byte {
+func (a *ConnectionAdapter) GetRemoteIDs() [][]byte {
 	results := [][]byte{}
 	for _, peer := range a.Discovery.Routes.GetPeers() {
 		results = append(results, peer.PublicKey)
@@ -125,14 +124,7 @@ func (a *ConnectionAdapter) GetPeerIDs() [][]byte {
 	return results
 }
 
-func (a *ConnectionAdapter) GetAddressByID(remote []byte) (string, error) {
-	if peer, ok := a.Discovery.Routes.GetPeer(blake2b.New().HashBytes(remote)); ok {
-		return peer.Address, nil
-	}
-	return "", errors.New("skademlia: peer not found")
-}
-
-func (a *ConnectionAdapter) AddPeerID(remote []byte, addr string) error {
+func (a *ConnectionAdapter) AddRemoteID(remote []byte, addr string) error {
 	id := peer.CreateID(addr, remote)
 	err := a.Discovery.Routes.Update(id)
 	if err == dht.ErrBucketFull {
@@ -143,6 +135,7 @@ func (a *ConnectionAdapter) AddPeerID(remote []byte, addr string) error {
 	return nil
 }
 
+// Bootstrap connects to the input peers to update the kademlia routing table
 func (a *ConnectionAdapter) Bootstrap(peers ...peer.ID) error {
 	if a.sendAdapter == nil {
 		return errors.New("node not setup properly")
@@ -155,7 +148,7 @@ func (a *ConnectionAdapter) Bootstrap(peers ...peer.ID) error {
 	}
 	// add all the peers
 	for _, peer := range peers {
-		if err := a.AddPeerID(peer.PublicKey, peer.Address); err != nil {
+		if err := a.AddRemoteID(peer.PublicKey, peer.Address); err != nil {
 			return err
 		}
 	}

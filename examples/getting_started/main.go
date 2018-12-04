@@ -72,7 +72,7 @@ func main() {
 				panic(err)
 			}
 			remoteAddr := p[1]
-			node.GetConnectionAdapter().AddPeerID(peerID, remoteAddr)
+			node.GetConnectionAdapter().AddRemoteID(peerID, remoteAddr)
 		}
 	}
 

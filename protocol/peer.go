@@ -87,7 +87,7 @@ func (p *EstablishedPeer) continueKeyExchange(c *Controller, idAdapter IdentityA
 
 		sig := raw[:idAdapter.SignatureSize()]
 		rawPubKey := raw[idAdapter.SignatureSize():]
-		if idAdapter.Verify(p.adapter.RemoteEndpoint(), rawPubKey, sig) == false {
+		if idAdapter.Verify(p.adapter.RemoteID(), rawPubKey, sig) == false {
 			p.kxState = KeyExchange_Failed
 			close(p.kxDone)
 			return errors.New("signature verification failed")
@@ -249,6 +249,6 @@ func (p *EstablishedPeer) UnwrapMessage(c *Controller, raw []byte) ([]byte, erro
 	return ret, err
 }
 
-func (p *EstablishedPeer) RemoteEndpoint() []byte {
-	return p.adapter.RemoteEndpoint()
+func (p *EstablishedPeer) RemoteID() []byte {
+	return p.adapter.RemoteID()
 }

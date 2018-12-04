@@ -84,7 +84,7 @@ func TestNestedRequestResponse(t *testing.T) {
 			if i == j {
 				continue
 			}
-			node.GetConnectionAdapter().AddPeerID(keys[j], fmt.Sprintf("%s:%d", host, ports[j]))
+			node.GetConnectionAdapter().AddRemoteID(keys[j], fmt.Sprintf("%s:%d", host, ports[j]))
 		}
 	}
 

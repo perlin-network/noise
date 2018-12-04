@@ -107,7 +107,7 @@ func ExampleBasic() {
 				continue
 			}
 			peerID := otherNode.GetIdentityAdapter().MyIdentity()
-			srcNode.GetConnectionAdapter().AddPeerID(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
+			srcNode.GetConnectionAdapter().AddRemoteID(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
 		}
 	}
 

@@ -175,7 +175,7 @@ func (n *Node) dispatchIncomingMessage(ctx context.Context, peer *EstablishedPee
 	if peer.kxState != KeyExchange_Done {
 		if err := peer.continueKeyExchange(n.controller, n.idAdapter, n.customHandshakeProcessor, raw); err != nil {
 			log.Error().Err(err).Msg("cannot continue key exchange")
-			n.removePeer(peer.RemoteEndpoint())
+			n.removePeer(peer.RemoteID())
 		}
 		return
 	}
@@ -200,14 +200,14 @@ func (n *Node) dispatchIncomingMessage(ctx context.Context, peer *EstablishedPee
 func (n *Node) processMessageBody(ctx context.Context, peer *EstablishedPeer, body *MessageBody) error {
 
 	// see if there is a matching request/response waiting for this nonce
-	if rq, ok := n.Requests.Load(makeRequestReplyKey(peer.adapter.RemoteEndpoint(), body.RequestNonce)); ok {
+	if rq, ok := n.Requests.Load(makeRequestReplyKey(peer.adapter.RemoteID(), body.RequestNonce)); ok {
 		rq := rq.(*RequestState)
 		rq.data <- body
 		return nil
 	}
 
 	msg := &Message{
-		Sender:    peer.adapter.RemoteEndpoint(),
+		Sender:    peer.adapter.RemoteID(),
 		Recipient: n.idAdapter.MyIdentity(),
 		Body:      body,
 		Metadata:  peer.adapter.Metadata(),
@@ -222,7 +222,7 @@ func (n *Node) processMessageBody(ctx context.Context, peer *EstablishedPeer, bo
 		if replyBody != nil {
 			// if there is a reply body, send it back to the sender
 			replyBody.RequestNonce = body.RequestNonce
-			if err := n.Send(context.Background(), peer.adapter.RemoteEndpoint(), replyBody); err != nil {
+			if err := n.Send(context.Background(), peer.adapter.RemoteID(), replyBody); err != nil {
 				return errors.Wrapf(err, "Error replying to request for service=%d", body.Service)
 			}
 		}
@@ -250,14 +250,13 @@ func (n *Node) Start() {
 				continue
 			}
 			for _, svc := range n.services {
-				svc.PeerConnect(msgAdapter.RemoteEndpoint())
+				svc.PeerConnect(msgAdapter.RemoteID())
 			}
 
-			n.peers.Store(string(msgAdapter.RemoteEndpoint()), peer)
+			n.peers.Store(string(msgAdapter.RemoteID()), peer)
 			msgAdapter.OnRecvMessage(n.controller, func(ctx context.Context, message []byte) {
 				if message == nil {
-					//fmt.Printf("message is nil, removing peer: %b\n", adapter.RemoteEndpoint())
-					n.removePeer(msgAdapter.RemoteEndpoint())
+					n.removePeer(msgAdapter.RemoteID())
 				} else {
 					n.dispatchIncomingMessage(ctx, peer, message)
 				}
@@ -315,7 +314,7 @@ func (n *Node) Send(ctx context.Context, recipient []byte, body *MessageBody) er
 
 // Broadcast sends a message body to all it's peers
 func (n *Node) Broadcast(ctx context.Context, body *MessageBody) error {
-	for _, peerPublicKey := range n.connAdapter.GetPeerIDs() {
+	for _, peerPublicKey := range n.connAdapter.GetRemoteIDs() {
 		if bytes.Equal(peerPublicKey, n.idAdapter.MyIdentity()) {
 			// don't sent to yourself
 			continue

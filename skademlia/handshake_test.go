@@ -104,7 +104,7 @@ func TestHandshake(t *testing.T) {
 				continue
 			}
 			peerID := otherNode.GetIdentityAdapter().MyIdentity()
-			srcNode.GetConnectionAdapter().AddPeerID(peerID, fmt.Sprintf("%s:%d", host, ports[j]))
+			srcNode.GetConnectionAdapter().AddRemoteID(peerID, fmt.Sprintf("%s:%d", host, ports[j]))
 		}
 	}
 

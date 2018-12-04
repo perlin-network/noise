@@ -134,12 +134,12 @@ func (a *ConnectionAdapter) updatePubliclyVisibleAddress(address string) {
 	})
 }
 
-func (a *ConnectionAdapter) AddPeerID(id []byte, addr string) error {
+func (a *ConnectionAdapter) AddRemoteID(id []byte, addr string) error {
 	a.idToAddress.Store(string(id), addr)
 	return nil
 }
 
-func (a *ConnectionAdapter) GetPeerIDs() [][]byte {
+func (a *ConnectionAdapter) GetRemoteIDs() [][]byte {
 	var results [][]byte
 	a.idToAddress.Range(func(key, value interface{}) bool {
 		results = append(results, ([]byte)(key.(string)))
