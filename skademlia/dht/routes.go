@@ -32,15 +32,6 @@ type RoutingTable struct {
 	buckets []*Bucket
 }
 
-// NewID returns a new ID
-func NewID(publicKey []byte, address string) peer.ID {
-	return peer.ID{
-		Address:   address,
-		Id:        blake2b.New().HashBytes(publicKey),
-		PublicKey: publicKey,
-	}
-}
-
 // Bucket holds a list of peers of this node.
 type Bucket struct {
 	*list.List

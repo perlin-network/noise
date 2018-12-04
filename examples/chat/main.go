@@ -13,7 +13,6 @@ import (
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/skademlia"
-	"github.com/perlin-network/noise/skademlia/dht"
 	"github.com/perlin-network/noise/skademlia/peer"
 	"github.com/pkg/errors"
 	"net"
@@ -32,11 +31,13 @@ var (
 	reqResponse sync.Map
 )
 
+// ChatService implements the protocol service interface to listen to messages
 type ChatService struct {
 	protocol.Service
 	Address string
 }
 
+// Receive implements the service interface
 func (n *ChatService) Receive(ctx context.Context, request *protocol.Message) (*protocol.MessageBody, error) {
 	if request.Body.Service != chatServiceID {
 		return nil, nil
@@ -52,6 +53,7 @@ func (n *ChatService) Receive(ctx context.Context, request *protocol.Message) (*
 	return nil, nil
 }
 
+// makeMessageBody is a helper to serialize the message type
 func makeMessageBody(serviceID int, msg *messages.ChatMessage) *protocol.MessageBody {
 	payload, err := msg.Marshal()
 	if err != nil {
@@ -72,8 +74,8 @@ func main() {
 	// process other flags
 	portFlag := flag.Int("port", 3000, "port to listen to")
 	hostFlag := flag.String("host", "localhost", "host to listen to")
-	peersFlag := flag.String("peers", "", "peers to connect to in format: publicKey1=host1:port1,publicKey2=host2:port2,...")
-	privateKeyFlag := flag.String("private_key", "", "use an existing public key generated from this private key parameter")
+	peersFlag := flag.String("peers", "", "peers to connect to in format: NodeID=host:port (required if not the first node)")
+	privateKeyFlag := flag.String("private_key", "", "use an existing public key generated from this private key parameter (optional)")
 	flag.Parse()
 
 	port := *portFlag
@@ -82,7 +84,11 @@ func main() {
 	privateKeyHex := *privateKeyFlag
 
 	var idAdapter *skademlia.IdentityAdapter
-	if len(privateKeyHex) > 0 {
+	if len(privateKeyHex) == 0 {
+		// generate a new identity
+		idAdapter = skademlia.NewIdentityAdapterDefault()
+	} else {
+		// if you're reusing a key, then get the keypair
 		kp, err := crypto.FromPrivateKey(ed25519.New(), privateKeyHex)
 		if err != nil {
 			panic(err)
@@ -91,13 +97,13 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-	} else {
-		idAdapter = skademlia.NewIdentityAdapterDefault()
 	}
 
-	log.Info().Msgf("Private Key: %s", idAdapter.GetKeyPair().PrivateKeyHex())
-	log.Info().Msgf("Public Key: %s", idAdapter.MyIdentityHex())
+	// print the identity so you can use the public key for the next node
+	log.Info().Msgf("PrivateKey: %s", idAdapter.GetKeyPair().PrivateKeyHex())
+	log.Info().Msgf("NodeID: %s", idAdapter.MyIdentityHex())
 
+	// setup the node
 	addr := fmt.Sprintf("%s:%d", host, port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -113,15 +119,16 @@ func main() {
 		panic(err)
 	}
 
-	service := &ChatService{
+	// add the service to the node
+	node.AddService(&ChatService{
 		Address: addr,
-	}
+	})
 
-	node.AddService(service)
-
+	// start listening for connections
 	node.Start()
 
 	if len(peers) > 0 {
+		// bootstrap the node to an existing cluster
 		var peerIDs []peer.ID
 		for _, peerKV := range peers {
 			if len(peerKV) == 0 {
@@ -134,12 +141,13 @@ func main() {
 				panic(err)
 			}
 			remoteAddr := p[1]
-			peerIDs = append(peerIDs, dht.NewID(peerPubKey, remoteAddr))
+			peerIDs = append(peerIDs, peer.CreateID(remoteAddr, peerPubKey))
 		}
 
 		node.GetConnectionAdapter().(*skademlia.ConnectionAdapter).Bootstrap(peerIDs...)
 	}
 
+	// broadcast any stdin inputs
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		input, _ := reader.ReadString('\n')
@@ -151,9 +159,9 @@ func main() {
 
 		log.Info().Msgf("<%s> %s", addr, input)
 
-		chatMsg := &messages.ChatMessage{
+		body := makeMessageBody(chatServiceID, &messages.ChatMessage{
 			Message: input,
-		}
-		node.Broadcast(context.Background(), makeMessageBody(chatServiceID, chatMsg))
+		})
+		node.Broadcast(context.Background(), body)
 	}
 }

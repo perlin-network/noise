@@ -12,6 +12,7 @@ import (
 	"github.com/perlin-network/noise/skademlia"
 	"github.com/perlin-network/noise/skademlia/dht"
 	"github.com/perlin-network/noise/skademlia/discovery"
+	"github.com/perlin-network/noise/skademlia/peer"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -28,7 +29,7 @@ func TestSKademliaEviction(t *testing.T) {
 	nodes, msgServices := makeNodesFromIDs(ids, bucketSize, startPort)
 
 	// being discovery process to connect nodes to each other
-	peer0 := dht.NewID(nodes[0].GetIdentityAdapter().MyIdentity(), fmt.Sprintf("%s:%d", host, startPort))
+	peer0 := peer.CreateID(fmt.Sprintf("%s:%d", host, startPort), nodes[0].GetIdentityAdapter().MyIdentity())
 
 	var discoveryServices []*discovery.Service
 
@@ -52,7 +53,7 @@ func TestSKademliaEviction(t *testing.T) {
 	skademliaID := dht.NewID(ids[1].MyIdentity(), "")
 	expectedBucketID := rt.GetBucketID(skademliaID.Id)
 	for i := 2; i < len(nodes); i++ {
-		skademliaID = dht.NewID(ids[i].MyIdentity(), "")
+		skademliaID = peer.CreateID("", ids[i].MyIdentity())
 		bucketID := rt.GetBucketID(skademliaID.Id)
 		assert.Equalf(t, expectedBucketID, bucketID, "expected bucket ID to be %d, got %d", expectedBucketID, bucketID)
 	}
@@ -127,14 +128,14 @@ func TestSKademliaEviction(t *testing.T) {
 }
 
 func generateBucketIDs(id *skademlia.IdentityAdapter, n int) []*skademlia.IdentityAdapter {
-	self := dht.NewID(id.MyIdentity(), "")
+	self := peer.CreateID("", id.MyIdentity())
 	rt := dht.NewRoutingTable(self)
 
 	var ids []*skademlia.IdentityAdapter
 
 	for len(ids) < n {
 		id := skademlia.NewIdentityAdapter(8, 8)
-		if rt.GetBucketID(dht.NewID(id.MyIdentity(), "").Id) == 4 {
+		if rt.GetBucketID(peer.CreateID("", id.MyIdentity()).Id) == 4 {
 			ids = append(ids, id)
 		}
 	}
@@ -167,7 +168,7 @@ func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int, startPor
 		}
 
 		// override the routes with one with a different bucket size
-		peerID := dht.NewID(idAdapter.MyIdentity(), address)
+		peerID := peer.CreateID(address, idAdapter.MyIdentity())
 		rt := dht.NewRoutingTableWithOptions(peerID, dht.WithBucketSize(bucketSize))
 		connAdapter.Discovery.Routes = rt
 

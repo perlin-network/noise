@@ -34,7 +34,7 @@ func NewConnectionAdapter(listener net.Listener, dialer Dialer, node *protocol.N
 		listener:    listener,
 		dialer:      dialer,
 		sendAdapter: node,
-		Discovery:   discovery.NewService(node, dht.NewID(node.GetIdentityAdapter().MyIdentity(), localAddr)),
+		Discovery:   discovery.NewService(node, peer.CreateID(localAddr, node.GetIdentityAdapter().MyIdentity())),
 	}
 
 	if ia, ok := node.GetIdentityAdapter().(*IdentityAdapter); ok {
@@ -133,7 +133,7 @@ func (a *ConnectionAdapter) GetAddressByID(remote []byte) (string, error) {
 }
 
 func (a *ConnectionAdapter) AddPeerID(remote []byte, addr string) error {
-	id := dht.NewID(remote, addr)
+	id := peer.CreateID(addr, remote)
 	err := a.Discovery.Routes.Update(id)
 	if err == dht.ErrBucketFull {
 		if ok, _ := a.Discovery.EvictLastSeenPeer(id.Id); ok {

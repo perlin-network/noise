@@ -20,7 +20,11 @@ type ID protobuf.ID
 
 // CreateID is a factory function creating ID.
 func CreateID(address string, publicKey []byte) ID {
-	return ID{Address: address, PublicKey: publicKey, Id: blake2b.New().HashBytes(publicKey)}
+	return ID{
+		Address:   address,
+		PublicKey: publicKey,
+		Id:        blake2b.New().HashBytes(publicKey),
+	}
 }
 
 // String returns the identity address and public key.

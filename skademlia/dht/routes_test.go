@@ -25,10 +25,10 @@ var (
 )
 
 func init() {
-	id1 = dht.NewID(skademlia.NewIdentityAdapter(8, 8).MyIdentity(), "0000")
-	id2 = dht.NewID(skademlia.NewIdentityAdapter(8, 8).MyIdentity(), "0001")
-	id3 = dht.NewID(skademlia.NewIdentityAdapter(8, 8).MyIdentity(), "0002")
-	id4 = dht.NewID(skademlia.NewIdentityAdapter(8, 8).MyIdentity(), "0003")
+	id1 = peer.CreateID("0000", skademlia.NewIdentityAdapter(8, 8).MyIdentity())
+	id2 = peer.CreateID("0001", skademlia.NewIdentityAdapter(8, 8).MyIdentity())
+	id3 = peer.CreateID("0002", skademlia.NewIdentityAdapter(8, 8).MyIdentity())
+	id4 = peer.CreateID("0003", skademlia.NewIdentityAdapter(8, 8).MyIdentity())
 
 	idBytes = id1.Id
 }
@@ -149,15 +149,15 @@ func TestUpdate(t *testing.T) {
 
 	// self key generates bucket id 255
 	idKey1 := []byte{124, 224, 147, 208, 211, 103, 166, 113, 153, 104, 83, 62, 61, 145, 8, 211, 144, 164, 224, 191, 177, 205, 198, 94, 92, 35, 76, 83, 229, 46, 219, 110}
-	id1 := dht.NewID(idKey1, "0001")
+	id1 := peer.CreateID("0001", idKey1)
 
 	// key generates bucket id 8
 	idKey2 := []byte{210, 127, 212, 137, 47, 66, 40, 189, 231, 239, 210, 168, 52, 15, 223, 66, 199, 199, 156, 61, 132, 56, 102, 223, 32, 175, 169, 241, 156, 46, 83, 98}
-	id2 := dht.NewID(idKey2, "0002")
+	id2 := peer.CreateID("0002", idKey2)
 
 	// key generates bucket id 8
 	idKey3 := []byte{228, 61, 230, 169, 243, 78, 244, 44, 82, 76, 54, 56, 98, 135, 227, 158, 114, 251, 56, 160, 208, 60, 121, 41, 197, 63, 235, 41, 236, 66, 222, 219}
-	id3 := dht.NewID(idKey3, "0003")
+	id3 := peer.CreateID("0003", idKey3)
 
 	routingTable := dht.NewRoutingTableWithOptions(id1, dht.WithBucketSize(1))
 
@@ -245,7 +245,7 @@ func TestRoutingTable(t *testing.T) {
 
 	ids := make([]unsafe.Pointer, IDPoolSize) // Element type: *peer.Id
 
-	id := dht.NewID(skademlia.NewIdentityAdapter(8, 8).MyIdentity(), "0000")
+	id := peer.CreateID("0000", skademlia.NewIdentityAdapter(8, 8).MyIdentity())
 	table := dht.NewRoutingTable(id)
 
 	wg := &sync.WaitGroup{}
@@ -265,7 +265,7 @@ func TestRoutingTable(t *testing.T) {
 						addrRaw := MustReadRand(8)
 						addr := hex.EncodeToString(addrRaw)
 
-						id := dht.NewID(skademlia.NewIdentityAdapter(8, 8).MyIdentity(), addr)
+						id := peer.CreateID(addr, skademlia.NewIdentityAdapter(8, 8).MyIdentity())
 						table.Update(id)
 
 						atomic.StorePointer(&ids[int(RandByte())%IDPoolSize], unsafe.Pointer(&id))
