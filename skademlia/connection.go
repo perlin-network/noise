@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"github.com/perlin-network/noise/skademlia/dht"
 	"net"
 
 	"github.com/perlin-network/noise/base"
@@ -12,6 +11,8 @@ import (
 	"github.com/perlin-network/noise/internal/protobuf"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/skademlia/dht"
+	"github.com/perlin-network/noise/skademlia/discovery"
 	"github.com/perlin-network/noise/skademlia/peer"
 
 	"github.com/pkg/errors"
@@ -24,7 +25,7 @@ type Dialer func(address string) (net.Conn, error)
 type ConnectionAdapter struct {
 	listener    net.Listener
 	dialer      Dialer
-	Discovery   *DiscoveryService
+	Discovery   *discovery.Service
 	sendAdapter protocol.SendAdapter
 }
 
@@ -33,7 +34,7 @@ func NewConnectionAdapter(listener net.Listener, dialer Dialer, node *protocol.N
 		listener:    listener,
 		dialer:      dialer,
 		sendAdapter: node,
-		Discovery:   NewDiscoveryService(node, dht.NewID(node.GetIdentityAdapter().MyIdentity(), localAddr)),
+		Discovery:   discovery.NewService(node, dht.NewID(node.GetIdentityAdapter().MyIdentity(), localAddr)),
 	}
 
 	if ia, ok := node.GetIdentityAdapter().(*IdentityAdapter); ok {
@@ -158,7 +159,7 @@ func (a *ConnectionAdapter) Bootstrap(peers ...peer.ID) error {
 			return err
 		}
 	}
-	body, err := ToMessageBody(ServiceID, OpCodePing, &protobuf.Ping{})
+	body, err := discovery.ToMessageBody(discovery.ServiceID, discovery.OpCodePing, &protobuf.Ping{})
 	if err != nil {
 		return err
 	}

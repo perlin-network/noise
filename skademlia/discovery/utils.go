@@ -1,4 +1,4 @@
-package skademlia
+package discovery
 
 import (
 	"github.com/perlin-network/noise/internal/protobuf"
