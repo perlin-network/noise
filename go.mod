@@ -18,7 +18,7 @@ require (
 	github.com/tjfoc/gmsm v1.0.1 // indirect
 	github.com/uber-go/atomic v1.3.2 // indirect
 	github.com/xtaci/kcp-go v0.0.0-20180203133237-42bc1dfefff5 // indirect
-	github.com/xtaci/smux v1.0.7
+	github.com/xtaci/smux v1.0.7 // indirect
 	go.uber.org/atomic v1.3.2 // indirect
 	golang.org/x/crypto v0.0.0-20180718160520-a2144134853f
 	golang.org/x/net v0.0.0-20180712202826-d0887baf81f4 // indirect
