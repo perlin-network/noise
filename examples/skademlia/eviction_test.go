@@ -3,6 +3,7 @@ package skademlia_test
 import (
 	"context"
 	"fmt"
+	"github.com/perlin-network/noise/utils"
 	"net"
 	"testing"
 	"time"
@@ -19,17 +20,16 @@ import (
 
 func TestSKademliaEviction(t *testing.T) {
 	bucketSize := 4
-	startPort := 5500
 
 	self := skademlia.NewIdentityAdapter(8, 8)
 	ids := []*skademlia.IdentityAdapter{self}
 	// create 5 peers, last peer should not be in table
 	peers := generateBucketIDs(self, 5)
 	ids = append(ids, peers...)
-	nodes, msgServices := makeNodesFromIDs(ids, bucketSize, startPort)
+	nodes, msgServices, ports := makeNodesFromIDs(ids, bucketSize)
 
 	// being discovery process to connect nodes to each other
-	peer0 := peer.CreateID(fmt.Sprintf("%s:%d", host, startPort), nodes[0].GetIdentityAdapter().MyIdentity())
+	peer0 := peer.CreateID(fmt.Sprintf("%s:%d", host, ports[0]), nodes[0].GetIdentityAdapter().MyIdentity())
 
 	var discoveryServices []*discovery.Service
 
@@ -142,15 +142,17 @@ func generateBucketIDs(id *skademlia.IdentityAdapter, n int) []*skademlia.Identi
 	return ids
 }
 
-func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int, startPort int) ([]*protocol.Node, []*MsgService) {
+func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int) ([]*protocol.Node, []*MsgService, []int) {
 	var nodes []*protocol.Node
 	var msgServices []*MsgService
+	var ports []int
 
 	// setup all the nodes
 	for i := 0; i < len(ids); i++ {
 		idAdapter := ids[i]
 
-		port := startPort + i
+		port := utils.GetRandomUnusedPort()
+		ports = append(ports, port)
 		address := fmt.Sprintf("%s:%d", host, port)
 		listener, err := net.Listen("tcp", address)
 		if err != nil {
@@ -184,5 +186,5 @@ func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int, startPor
 		msgServices = append(msgServices, msgSvc)
 	}
 
-	return nodes, msgServices
+	return nodes, msgServices, ports
 }
