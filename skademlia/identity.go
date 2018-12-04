@@ -34,6 +34,11 @@ type IdentityAdapter struct {
 	c1, c2  int
 }
 
+// NewIdentityAdapterDefault creates a new SKademlia IdentityAdapter with sound default values.
+func NewIdentityAdapterDefault() *IdentityAdapter {
+	return NewIdentityAdapter(DefaultC1, DefaultC2)
+}
+
 // NewIdentityAdapter creates a new SKademlia IdentityAdapter with the given cryptopuzzle constants.
 func NewIdentityAdapter(c1, c2 int) *IdentityAdapter {
 	kp, nonce := generateKeyPairAndNonce(c1, c2)

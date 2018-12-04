@@ -121,6 +121,11 @@ func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Messag
 			response.Peers = append(response.Peers, &id)
 		}
 
+		log.Info().
+			Str("self", s.Routes.Self().Address).
+			Strs("peers", s.Routes.GetPeerAddresses()).
+			Msg("Connected to peer(s).")
+
 		return ToMessageBody(ServiceID, OpCodeLookupResponse, response)
 	default:
 		// ignore
