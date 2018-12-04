@@ -3,18 +3,19 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/perlin-network/noise/base"
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/protocol"
 	"net"
 	"sync/atomic"
 	"time"
+
+	"github.com/perlin-network/noise/base"
+	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/utils"
 )
 
 const (
 	serviceID    = 42
 	host         = "localhost"
-	startPort    = 3000
 	numNodes     = 2
 	sendingNodes = 1
 )
@@ -39,10 +40,10 @@ func (s *countService) Receive(ctx context.Context, message *protocol.Message) (
 func main() {
 	var services []*countService
 	var nodes []*protocol.Node
+	var ports []int
 
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
-
 		// setup the node
 		idAdapter := base.NewIdentityAdapter()
 		node := protocol.NewNode(
@@ -50,7 +51,9 @@ func main() {
 			idAdapter,
 		)
 
-		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, startPort+i))
+		port := utils.GetRandomUnusedPort()
+		ports = append(ports, port)
+		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
@@ -78,7 +81,7 @@ func main() {
 				continue
 			}
 			peerID := otherNode.GetIdentityAdapter().MyIdentity()
-			srcNode.GetConnectionAdapter().AddRemoteID(peerID, fmt.Sprintf("%s:%d", host, startPort+j))
+			srcNode.GetConnectionAdapter().AddRemoteID(peerID, fmt.Sprintf("%s:%d", host, ports[j]))
 		}
 	}
 
