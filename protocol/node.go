@@ -222,11 +222,7 @@ func (n *Node) processMessageBody(ctx context.Context, peer *EstablishedPeer, bo
 		if replyBody != nil {
 			// if there is a reply body, send it back to the sender
 			replyBody.RequestNonce = body.RequestNonce
-			if err := n.Send(context.Background(), &Message{
-				Sender:    n.idAdapter.MyIdentity(),
-				Recipient: peer.adapter.RemoteEndpoint(),
-				Body:      replyBody,
-			}); err != nil {
+			if err := n.Send(context.Background(), peer.adapter.RemoteEndpoint(), replyBody); err != nil {
 				return errors.Wrapf(err, "Error replying to request for service=%d", body.Service)
 			}
 		}
@@ -287,9 +283,21 @@ func (n *Node) Stop() {
 }
 
 // Send will send a message to the recipient in the message field
-func (n *Node) Send(ctx context.Context, message *Message) error {
-	if bytes.Equal(message.Recipient, n.idAdapter.MyIdentity()) {
-		return errors.New("sender mismatch")
+func (n *Node) Send(ctx context.Context, recipient []byte, body *MessageBody) error {
+	if body == nil {
+		return errors.New("message body was empty")
+	}
+	if body.Service == 0 {
+		return errors.New("missing service in message body")
+	}
+	if bytes.Equal(recipient, n.idAdapter.MyIdentity()) {
+		return errors.New("sending to itself")
+	}
+
+	message := &Message{
+		Sender:    n.idAdapter.MyIdentity(),
+		Recipient: recipient,
+		Body:      body,
 	}
 
 	peer, err := n.getPeer(message.Recipient)
@@ -297,8 +305,7 @@ func (n *Node) Send(ctx context.Context, message *Message) error {
 		return err
 	}
 
-	err = peer.SendMessage(n.controller, message.Body.Serialize())
-	if err != nil {
+	if err = peer.SendMessage(n.controller, message.Body.Serialize()); err != nil {
 		n.removePeer(message.Recipient)
 		return err
 	}
@@ -308,20 +315,13 @@ func (n *Node) Send(ctx context.Context, message *Message) error {
 
 // Broadcast sends a message body to all it's peers
 func (n *Node) Broadcast(ctx context.Context, body *MessageBody) error {
-	msgTemplate := &Message{
-		Sender: n.idAdapter.MyIdentity(),
-		Body:   body,
-	}
 	for _, peerPublicKey := range n.connAdapter.GetPeerIDs() {
 		if bytes.Equal(peerPublicKey, n.idAdapter.MyIdentity()) {
 			// don't sent to yourself
 			continue
 		}
 
-		// copy the struct
-		msg := *msgTemplate
-		msg.Recipient = peerPublicKey
-		if err := n.Send(ctx, &msg); err != nil {
+		if err := n.Send(ctx, peerPublicKey, body); err != nil {
 			log.Warn().Msgf("Unable to broadcast to %v: %v", hex.EncodeToString(peerPublicKey), err)
 		}
 	}
@@ -330,41 +330,36 @@ func (n *Node) Broadcast(ctx context.Context, body *MessageBody) error {
 }
 
 // Request sends a message and waits for the reply before returning or times out
-func (n *Node) Request(ctx context.Context, target []byte, body *MessageBody) (*MessageBody, error) {
+func (n *Node) Request(ctx context.Context, recipient []byte, body *MessageBody) (*MessageBody, error) {
 	if body == nil {
 		return nil, errors.New("message body was empty")
 	}
 	if body.Service == 0 {
 		return nil, errors.New("missing service in message body")
 	}
-	if string(target) == string(n.idAdapter.MyIdentity()) {
+	if bytes.Equal(recipient, n.idAdapter.MyIdentity()) {
 		return nil, errors.New("making request to itself")
 	}
 	body.RequestNonce = atomic.AddUint64(&n.RequestNonce, 1)
-	msg := &Message{
-		Sender:    n.idAdapter.MyIdentity(),
-		Recipient: target,
-		Body:      body,
-	}
 
 	// start tracking the request
 	channel := make(chan *MessageBody, 1)
 	closeSignal := make(chan struct{})
 
-	n.Requests.Store(makeRequestReplyKey(msg.Recipient, body.RequestNonce), &RequestState{
+	n.Requests.Store(makeRequestReplyKey(recipient, body.RequestNonce), &RequestState{
 		data:        channel,
 		closeSignal: closeSignal,
 		requestTime: time.Now(),
 	})
 
 	// send the message
-	if err := n.Send(ctx, msg); err != nil {
+	if err := n.Send(ctx, recipient, body); err != nil {
 		return nil, err
 	}
 
 	// stop tracking the request
 	defer close(closeSignal)
-	defer n.Requests.Delete(makeRequestReplyKey(msg.Recipient, body.RequestNonce))
+	defer n.Requests.Delete(makeRequestReplyKey(recipient, body.RequestNonce))
 
 	select {
 	case res := <-channel:

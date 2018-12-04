@@ -135,14 +135,12 @@ func main() {
 				selected := instances[selectedN].keypair.PublicKey
 
 				for {
-					err := current.node.Send(context.Background(), &protocol.Message{
-						Sender:    current.keypair.PublicKey,
-						Recipient: selected,
-						Body: &protocol.MessageBody{
+					err := current.node.Send(context.Background(),
+						selected,
+						&protocol.MessageBody{
 							Service: 42,
 							Payload: []byte("Hello world!"),
-						},
-					})
+						})
 					if err == nil {
 						break
 					}

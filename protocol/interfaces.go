@@ -50,7 +50,7 @@ type HandshakeProcessor interface {
 
 // SendAdapter is an adapter that manages sending messages
 type SendAdapter interface {
-	Send(ctx context.Context, message *Message) error
-	Request(ctx context.Context, target []byte, body *MessageBody) (*MessageBody, error)
+	Send(ctx context.Context, recipient []byte, body *MessageBody) error
+	Request(ctx context.Context, recipient []byte, body *MessageBody) (*MessageBody, error)
 	Broadcast(ctx context.Context, body *MessageBody) error
 }

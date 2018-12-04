@@ -65,14 +65,13 @@ func TestSKademliaFixedPeers(t *testing.T) {
 				continue
 			}
 			expected := fmt.Sprintf("Sending a msg message from Node %d to Node %d.", i, j)
-			assert.Nil(t, nodes[i].Send(context.Background(), &protocol.Message{
-				Sender:    nodes[i].GetIdentityAdapter().MyIdentity(),
-				Recipient: nodes[j].GetIdentityAdapter().MyIdentity(),
-				Body: &protocol.MessageBody{
+			assert.Nil(t, nodes[i].Send(context.Background(),
+				nodes[j].GetIdentityAdapter().MyIdentity(),
+				&protocol.MessageBody{
 					Service: serviceID,
 					Payload: ([]byte)(expected),
 				},
-			}))
+			))
 			select {
 			case received := <-msgServices[j].Mailbox:
 				assert.Equalf(t, expected, received, "Expected message '%s' to be received by node %d but got '%v'", expected, j, received)

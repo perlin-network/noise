@@ -14,15 +14,15 @@ import (
 )
 
 type MockSendAdapter struct {
-	RequestCallback func(ctx context.Context, target []byte, body *protocol.MessageBody) (*protocol.MessageBody, error)
+	RequestCallback func(ctx context.Context, recipient []byte, body *protocol.MessageBody) (*protocol.MessageBody, error)
 }
 
-func (m *MockSendAdapter) Send(ctx context.Context, message *protocol.Message) error {
+func (m *MockSendAdapter) Send(ctx context.Context, recipient []byte, body *protocol.MessageBody) error {
 	return errors.New("Not implemented")
 }
 
-func (m *MockSendAdapter) Request(ctx context.Context, target []byte, body *protocol.MessageBody) (*protocol.MessageBody, error) {
-	return m.RequestCallback(ctx, target, body)
+func (m *MockSendAdapter) Request(ctx context.Context, recipient []byte, body *protocol.MessageBody) (*protocol.MessageBody, error) {
+	return m.RequestCallback(ctx, recipient, body)
 }
 
 func (m *MockSendAdapter) Broadcast(ctx context.Context, body *protocol.MessageBody) error {

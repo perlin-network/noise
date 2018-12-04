@@ -3,6 +3,7 @@ package skademlia
 import (
 	"context"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"net"
 	"testing"
 	"time"
@@ -107,36 +108,14 @@ func TestHandshake(t *testing.T) {
 	}
 
 	body := makeMessageBody("hello")
-	msg := protocol.Message{
-		Sender:    nodeA.GetIdentityAdapter().MyIdentity(),
-		Recipient: nodeB.GetIdentityAdapter().MyIdentity(),
-		Body:      body,
-	}
-	err := nodeA.Send(context.Background(), &msg)
-	if err != nil {
-		t.Errorf("Send() expected no error, got: %+v", err)
-	}
+	assert.Nil(t, nodeA.Send(context.Background(), nodeB.GetIdentityAdapter().MyIdentity(), body))
 
 	// nodeC sending to nodeA should error
-	msg.Sender = nodeC.GetIdentityAdapter().MyIdentity()
-	msg.Recipient = nodeA.GetIdentityAdapter().MyIdentity()
-	err = nodeC.Send(context.Background(), &msg)
-	if err == nil {
-		t.Errorf("Send() expected error")
-	}
+	assert.NotNil(t, nodeC.Send(context.Background(), nodeA.GetIdentityAdapter().MyIdentity(), body))
 
 	// nodeA sending to nodeC should fail handshake
-	msg.Sender = nodeA.GetIdentityAdapter().MyIdentity()
-	msg.Recipient = nodeC.GetIdentityAdapter().MyIdentity()
-	err = nodeA.Send(context.Background(), &msg)
-	if err == nil {
-		t.Errorf("Send() expected error")
-	}
+	assert.NotNil(t, nodeA.Send(context.Background(), nodeC.GetIdentityAdapter().MyIdentity(), body))
 
 	// nodeB sending to nodeC should fail handshake
-	msg.Sender = nodeB.GetIdentityAdapter().MyIdentity()
-	err = nodeB.Send(context.Background(), &msg)
-	if err == nil {
-		t.Errorf("Send() expected error")
-	}
+	assert.NotNil(t, nodeB.Send(context.Background(), nodeB.GetIdentityAdapter().MyIdentity(), body))
 }

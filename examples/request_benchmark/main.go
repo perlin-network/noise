@@ -85,17 +85,13 @@ func main() {
 	// have every node send to the next one as quickly as possible
 	for i := 0; i < sendingNodes; i++ {
 		go func(senderIdx int) {
-			receiverIdx := (senderIdx + 1) % numNodes
-			msg := &protocol.Message{
-				Sender:    nodes[senderIdx].GetIdentityAdapter().MyIdentity(),
-				Recipient: nodes[receiverIdx].GetIdentityAdapter().MyIdentity(),
-				Body: &protocol.MessageBody{
-					Service: serviceID,
-					Payload: []byte(fmt.Sprintf("From node %d to node %d", senderIdx, receiverIdx)),
-				},
+			receiver := nodes[(senderIdx+1)%numNodes].GetIdentityAdapter().MyIdentity()
+			body := &protocol.MessageBody{
+				Service: serviceID,
+				Payload: []byte(fmt.Sprintf("From node %d to node %d", senderIdx, (senderIdx+1)%numNodes)),
 			}
 			for {
-				nodes[senderIdx].Send(context.Background(), msg)
+				nodes[senderIdx].Send(context.Background(), receiver, body)
 			}
 		}(i)
 	}
