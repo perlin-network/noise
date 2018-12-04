@@ -50,7 +50,7 @@ func TestSKademliaEviction(t *testing.T) {
 
 	rt := discoveryServices[0].Routes
 
-	skademliaID := dht.NewID(ids[1].MyIdentity(), "")
+	skademliaID := peer.CreateID("", ids[1].MyIdentity())
 	expectedBucketID := rt.GetBucketID(skademliaID.Id)
 	for i := 2; i < len(nodes); i++ {
 		skademliaID = peer.CreateID("", ids[i].MyIdentity())
