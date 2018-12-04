@@ -4,20 +4,22 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/perlin-network/noise/base"
-	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/protocol"
-	"github.com/pkg/errors"
 	"math/rand"
 	"net"
 	"sync/atomic"
 	"time"
+
+	"github.com/perlin-network/noise/base"
+	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/utils"
+
+	"github.com/pkg/errors"
 )
 
 const (
 	NumInstances = 20
-	StartPort    = 7000
 	DialTimeout  = 10 * time.Second
 )
 
@@ -115,7 +117,7 @@ func (inst *Instance) ReadMessageCount() uint64 {
 func main() {
 	instances := make([]*Instance, NumInstances)
 	for i := 0; i < NumInstances; i++ {
-		instances[i] = StartInstance(StartPort + i)
+		instances[i] = StartInstance(utils.GetRandomUnusedPort())
 	}
 	for i := 0; i < NumInstances; i++ {
 		for j := 0; j < NumInstances; j++ {
