@@ -131,11 +131,6 @@ func (a *ConnectionAdapter) GetAddressByID(remote []byte) (string, error) {
 }
 
 func (a *ConnectionAdapter) AddPeerID(remote []byte, addr string) error {
-	hexID := hex.EncodeToString(remote)
-	log.Debug().
-		Str("local", hex.EncodeToString(a.Discovery.Routes.Self().PublicKey)).
-		Str("address", addr).
-		Msgf("adding %s to routing table", hexID)
 	id := NewID(remote, addr)
 	err := a.Discovery.Routes.Update(id)
 	if err == ErrBucketFull {

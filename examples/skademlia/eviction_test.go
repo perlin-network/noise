@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sort"
 	"testing"
 	"time"
 
@@ -54,21 +53,6 @@ func TestSKademliaEviction(t *testing.T) {
 		skademliaID = skademlia.NewID(ids[i].MyIdentity(), "")
 		bucketID := rt.GetBucketID(skademliaID.Id)
 		assert.Equalf(t, expectedBucketID, bucketID, "expected bucket ID to be %d, got %d", expectedBucketID, bucketID)
-		fmt.Printf("bucket id: %d\n", bucketID)
-	}
-
-	// for debugging, print node's peers
-	for i, node := range nodes {
-		connected := node.DumpPeers()
-		sort.Strings(connected)
-		fmt.Printf("Node %d: connected: %v\n", i, connected)
-	}
-
-	// for debugging, print out each node's routes
-	for i := 0; i < len(discoveryServices); i++ {
-		peers := discoveryServices[i].Routes.GetPeerAddresses()
-		sort.Strings(peers)
-		fmt.Printf("Node %d: Self: %s %s Routes: %v\n", i, discoveryServices[i].Routes.Self().Address, discoveryServices[i].Routes.Self().PublicKeyHex()[:10], peers)
 	}
 
 	// assert broadcasts goes to everyone
