@@ -16,6 +16,11 @@ import (
 
 const (
 	pingTimeout = 4 * time.Second
+
+	// prefix needs to differ by a certain number of bytes before adding to table to prevent
+	// attacks which attempt to flood the routing table
+	prefixDiffLength = 128
+	prefixDiffMin    = 32
 )
 
 var (
@@ -71,11 +76,13 @@ func (s *Service) Receive(ctx context.Context, message *protocol.Message) (*prot
 }
 
 func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Message) (*protocol.MessageBody, error) {
-	err := s.Routes.Update(sender)
-	if err == dht.ErrBucketFull {
-		// TODO: don't block the code path in every call
-		if ok, _ := s.EvictLastSeenPeer(sender.Id); ok {
-			s.Routes.Update(sender)
+	if peer.PrefixDiff(sender.Id, target.Id, prefixDiffLength) > prefixDiffMin {
+		err := s.Routes.Update(sender)
+		if err == dht.ErrBucketFull {
+			// TODO: don't block the code path in every call
+			if ok, _ := s.EvictLastSeenPeer(sender.Id); ok {
+				s.Routes.Update(sender)
+			}
 		}
 	}
 

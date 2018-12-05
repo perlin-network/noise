@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/perlin-network/noise/crypto/blake2b"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -169,4 +171,45 @@ func TestPeerPrefixLen(t *testing.T) {
 			t.Errorf("PrefixLen() expected: %d, value: %d", tt.expected, PrefixLen(publicKey))
 		}
 	}
+}
+
+func TestPrefixDiff(t *testing.T) {
+	t.Parallel()
+
+	a := []byte("aa")
+	b := []byte("ab")
+	c := []byte("1e")
+
+	key1 := []byte("2b56bb7556eaa58d2253d33b34d7ce869c54bb3c946164f6b73adc378cb9eccab37a3bf66608246c5791ebd19bd25169f6b243a6668c6635b0b4bc43474b6dbd")
+	key2 := []byte("2b56as84a56a4e5714b0729019a489521199557143ade85e6e6540d90ac80c6578de0d25fdc274cdff7614dc457333fb7738e29f567e4865f453e2e57c180e67")
+
+	diff := PrefixDiff(a, b, 0)
+	assert.Equal(t, 0, diff)
+
+	diff = PrefixDiff(a, b, 8)
+	assert.Equal(t, 0, diff)
+
+	diff = PrefixDiff(a, b, 9)
+	assert.Equal(t, 0, diff)
+
+	diff = PrefixDiff(a, b, 14)
+	assert.Equal(t, 0, diff)
+
+	diff = PrefixDiff(a, b, 15)
+	assert.Equal(t, 1, diff)
+
+	diff = PrefixDiff(a, b, 16)
+	assert.Equal(t, 2, diff)
+
+	diff = PrefixDiff(a, c, 8)
+	assert.Equal(t, 2, diff)
+
+	diff = PrefixDiff(a, c, 14)
+	assert.Equal(t, 3, diff)
+
+	diff = PrefixDiff(a, c, 16)
+	assert.Equal(t, 3, diff)
+
+	diff = PrefixDiff(key1, key2, 192)
+	assert.Equal(t, 52, diff)
 }
