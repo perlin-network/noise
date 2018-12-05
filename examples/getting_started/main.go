@@ -1,66 +1,79 @@
 package main
 
 import (
+	"context"
+	"encoding/hex"
 	"flag"
+	"fmt"
+	"net"
 	"strings"
+	"time"
 
-	"github.com/perlin-network/noise/crypto/ed25519"
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/network/backoff"
-	"github.com/perlin-network/noise/network/discovery"
-	"github.com/perlin-network/noise/network/nat"
+	"github.com/perlin-network/noise/base"
+	"github.com/perlin-network/noise/protocol"
 )
+
+type StarterService struct {
+	protocol.Service
+}
+
+func (s *StarterService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
+	fmt.Printf("received payload from %s: %s\n", hex.EncodeToString(message.Sender), string(message.Body.Payload))
+	return nil, nil
+}
+
+func dialTCP(addr string) (net.Conn, error) {
+	return net.DialTimeout("tcp", addr, 10*time.Second)
+}
 
 func main() {
 	// process flags
 	portFlag := flag.Int("port", 3000, "port to listen to")
 	hostFlag := flag.String("host", "localhost", "host to listen to")
-	protocolFlag := flag.String("protocol", "tcp", "protocol to use (kcp/tcp)")
-	peersFlag := flag.String("peers", "", "peers to connect to")
-	natFlag := flag.Bool("nat", false, "enable nat traversal")
-	reconnectFlag := flag.Bool("reconnect", false, "enable reconnections")
+	peersFlag := flag.String("peers", "", "peers to connect to in format: peerKeyHash1=host1:port1,peerKeyHash2=host2:port2,...")
 	flag.Parse()
 
-	port := uint16(*portFlag)
+	port := *portFlag
 	host := *hostFlag
-	protocol := *protocolFlag
-	natEnabled := *natFlag
-	reconnectEnabled := *reconnectFlag
 	peers := strings.Split(*peersFlag, ",")
 
-	keys := ed25519.RandomKeyPair()
+	idAdapter := base.NewIdentityAdapter()
+	fmt.Printf("private_key: %s\n", idAdapter.GetKeyPair().PrivateKeyHex())
+	fmt.Printf("public_key: %s\n", idAdapter.GetKeyPair().PublicKeyHex())
 
-	log.Info().Str("private_key", keys.PrivateKeyHex()).Msg("")
-	log.Info().Str("public_key", keys.PublicKeyHex()).Msg("")
-
-	builder := network.NewBuilder()
-	builder.SetKeys(keys)
-	builder.SetAddress(network.FormatAddress(protocol, host, port))
-
-	// Register NAT traversal plugin.
-	if natEnabled {
-		nat.RegisterPlugin(builder)
-	}
-
-	// Register the reconnection plugin
-	if reconnectEnabled {
-		builder.AddPlugin(new(backoff.Plugin))
-	}
-
-	// Register peer discovery plugin.
-	builder.AddPlugin(new(discovery.Plugin))
-
-	net, err := builder.Build()
+	localAddr := fmt.Sprintf("%s:%d", host, port)
+	listener, err := net.Listen("tcp", localAddr)
 	if err != nil {
-		log.Fatal().Err(err).Msg("")
-		return
+		panic(err)
 	}
 
-	go net.Listen()
+	node := protocol.NewNode(
+		protocol.NewController(),
+		idAdapter,
+	)
+
+	if _, err := base.NewConnectionAdapter(listener, dialTCP, node); err != nil {
+		panic(err)
+	}
+
+	node.AddService(&StarterService{})
+
+	node.Start()
 
 	if len(peers) > 0 {
-		net.Bootstrap(peers...)
+		for _, peerKV := range peers {
+			if len(peerKV) == 0 {
+				// this is a blank parameter
+				continue
+			}
+			p := strings.Split(peerKV, "=")
+			peerID, err := hex.DecodeString(p[0])
+			if err != nil {
+				panic(err)
+			}
+			remoteAddr := p[1]
+			node.GetConnectionAdapter().AddRemoteID(peerID, remoteAddr)
+		}
 	}
 
 	select {}

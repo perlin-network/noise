@@ -5,9 +5,12 @@ import (
 	"crypto/cipher"
 	"crypto/sha256"
 	"encoding/binary"
+	"sync"
+
+	"github.com/perlin-network/noise/log"
+
 	"github.com/monnand/dhkx"
 	"github.com/pkg/errors"
-	"sync"
 )
 
 type PendingPeer struct {
@@ -84,7 +87,7 @@ func (p *EstablishedPeer) continueKeyExchange(c *Controller, idAdapter IdentityA
 
 		sig := raw[:idAdapter.SignatureSize()]
 		rawPubKey := raw[idAdapter.SignatureSize():]
-		if idAdapter.Verify(p.adapter.RemoteEndpoint(), rawPubKey, sig) == false {
+		if idAdapter.Verify(p.adapter.RemoteID(), rawPubKey, sig) == false {
 			p.kxState = KeyExchange_Failed
 			close(p.kxDone)
 			return errors.New("signature verification failed")
@@ -194,6 +197,8 @@ func (p *EstablishedPeer) continueKeyExchange(c *Controller, idAdapter IdentityA
 	case KeyExchange_Failed:
 		return errors.New("failed previously")
 	default:
+		// FIXME: possible race condition, can receive KeyExchange_Done state and fail here
+		log.Fatal().Msgf("unexpected key exchange state: %v", p.kxState)
 		panic("unexpected key exchange state")
 	}
 }
@@ -244,6 +249,6 @@ func (p *EstablishedPeer) UnwrapMessage(c *Controller, raw []byte) ([]byte, erro
 	return ret, err
 }
 
-func (p *EstablishedPeer) RemoteEndpoint() []byte {
-	return p.adapter.RemoteEndpoint()
+func (p *EstablishedPeer) RemoteID() []byte {
+	return p.adapter.RemoteID()
 }

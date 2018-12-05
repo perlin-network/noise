@@ -2,191 +2,111 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"runtime"
-	"sync"
+	"net"
 	"sync/atomic"
 	"time"
 
-	"github.com/perlin-network/noise/crypto/ed25519"
-	"github.com/perlin-network/noise/examples/request_benchmark/messages"
+	"github.com/perlin-network/noise/base"
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/network/discovery"
-	"github.com/perlin-network/noise/types/opcode"
-
-	"github.com/pkg/errors"
+	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/utils"
 )
 
 const (
-	defaultNumNodes      = 5
-	defaultNumReqPerNode = 50
-	host                 = "localhost"
-	startPort            = 23000
+	serviceID    = 42
+	host         = "localhost"
+	numNodes     = 2
+	sendingNodes = 1
 )
 
-func init() {
-	opcode.RegisterMessageType(opcode.Opcode(1000), &messages.LoadRequest{})
-	opcode.RegisterMessageType(opcode.Opcode(1001), &messages.LoadReply{})
+func dialTCP(addr string) (net.Conn, error) {
+	return net.DialTimeout("tcp", addr, 10*time.Second)
+}
+
+type countService struct {
+	protocol.Service
+	MsgCount uint64
+}
+
+func (s *countService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
+	if message.Body.Service != serviceID {
+		return nil, nil
+	}
+	atomic.AddUint64(&s.MsgCount, 1)
+	return nil, nil
 }
 
 func main() {
-	fmt.Print(run())
-}
+	var services []*countService
+	var nodes []*protocol.Node
+	var ports []int
 
-func run() string {
-
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
-	numReqPerNodeFlag := flag.Int("r", defaultNumReqPerNode, "Number of requests per node")
-	numNodesFlag := flag.Int("n", defaultNumNodes, "Number of nodes")
-
-	flag.Parse()
-
-	numNodes := *numNodesFlag
-	numReqPerNode := *numReqPerNodeFlag
-
-	nets := setupNetworks(host, startPort, numNodes)
-	expectedTotalResp := numReqPerNode * numNodes * (numNodes - 1)
-	var totalPos uint32
-
-	startTime := time.Now()
-
-	wg := &sync.WaitGroup{}
-
-	// sending to all nodes concurrently
-	for r := 0; r < numReqPerNode; r++ {
-		for n, nt := range nets {
-			wg.Add(1)
-			go func(net *network.Network, idx int) {
-				defer wg.Done()
-				positive := sendMsg(net, idx)
-				atomic.AddUint32(&totalPos, positive)
-			}(nt, n+numNodes*r)
-		}
-	}
-	wg.Wait()
-
-	totalTime := time.Since(startTime)
-	reqPerSec := float64(totalPos) / totalTime.Seconds()
-
-	return fmt.Sprintf("Test completed in %s, num nodes = %d, successful requests = %d / %d, requestsPerSec = %f\n",
-		totalTime, numNodes, totalPos, expectedTotalResp, reqPerSec)
-}
-
-func setupNetworks(host string, startPort int, numNodes int) []*network.Network {
-	var nodes []*network.Network
-
+	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
-		builder := network.NewBuilder()
-		builder.SetKeys(ed25519.RandomKeyPair())
-		builder.SetAddress(network.FormatAddress("tcp", host, uint16(startPort+i)))
+		// setup the node
+		idAdapter := base.NewIdentityAdapter()
+		node := protocol.NewNode(
+			protocol.NewController(),
+			idAdapter,
+		)
 
-		builder.AddPlugin(new(discovery.Plugin))
-		builder.AddPlugin(new(loadTestPlugin))
-
-		node, err := builder.Build()
+		port := utils.GetRandomUnusedPort()
+		ports = append(ports, port)
+		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 		if err != nil {
-			fmt.Println(err)
+			log.Fatal().Msgf("%+v", err)
 		}
 
-		go node.Listen()
+		// setup the connection adapter
+		if _, err := base.NewConnectionAdapter(listener, dialTCP, node); err != nil {
+			log.Fatal().Msgf("%+v", err)
+		}
+
+		// create service
+		service := &countService{}
+		node.AddService(service)
+
+		// Start listening for connections
+		node.Start()
 
 		nodes = append(nodes, node)
+		services = append(services, service)
 	}
 
-	// Make sure all nodes are listening for incoming peers.
-	for _, node := range nodes {
-		node.BlockUntilListening()
-	}
-
-	// Bootstrap to Node 0.
-	for i, node := range nodes {
-		if i != 0 {
-			node.Bootstrap(nodes[0].Address)
+	// Connect all the node routing tables
+	for i, srcNode := range nodes {
+		for j, otherNode := range nodes {
+			if i == j {
+				continue
+			}
+			peerID := otherNode.GetIdentityAdapter().MyIdentity()
+			srcNode.GetConnectionAdapter().AddRemoteID(peerID, fmt.Sprintf("%s:%d", host, ports[j]))
 		}
 	}
 
-	// Wait for all nodes to finish discovering other peers.
-	time.Sleep(1 * time.Second)
-
-	return nodes
-}
-
-func sendMsg(net *network.Network, idx int) uint32 {
-	var positiveResponses uint32
-
-	plugin, registered := net.Plugin(discovery.PluginID)
-	if !registered {
-		return 0
-	}
-
-	routes := plugin.(*discovery.Plugin).Routes
-
-	addresses := routes.GetPeerAddresses()
-
-	errs := make(chan error, len(addresses))
-
-	wg := &sync.WaitGroup{}
-
-	for _, address := range addresses {
-		wg.Add(1)
-
-		go func(address string) {
-			defer wg.Done()
-
-			expectedID := fmt.Sprintf("%s:%d->%s", net.Address, idx, address)
-
-			client, err := net.Client(address)
-			if err != nil {
-				errs <- errors.Wrapf(err, "client error for req id %s", expectedID)
-				return
+	// have every node send to the next one as quickly as possible
+	for i := 0; i < sendingNodes; i++ {
+		go func(senderIdx int) {
+			receiver := nodes[(senderIdx+1)%numNodes].GetIdentityAdapter().MyIdentity()
+			body := &protocol.MessageBody{
+				Service: serviceID,
+				Payload: []byte(fmt.Sprintf("From node %d to node %d", senderIdx, (senderIdx+1)%numNodes)),
 			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-			defer cancel()
-			response, err := client.Request(ctx, &messages.LoadRequest{Id: expectedID})
-			if err != nil {
-				errs <- errors.Wrapf(err, "request error for req id %s", expectedID)
-				return
+			for {
+				nodes[senderIdx].Send(context.Background(), receiver, body)
 			}
-
-			if reply, ok := response.(*messages.LoadReply); ok {
-				if reply.Id == expectedID {
-					atomic.AddUint32(&positiveResponses, 1)
-				} else {
-					errs <- errors.Errorf("expected ID=%s got %s", expectedID, reply.Id)
-				}
-			} else {
-				errs <- errors.Errorf("expected messages.LoadReply but got %v", response)
-			}
-
-		}(address)
+		}(i)
 	}
 
-	wg.Wait()
-
-	close(errs)
-
-	for err := range errs {
-		log.Error().Err(err).Msg("")
+	// dump the counts per second
+	for range time.Tick(10 * time.Second) {
+		var count uint64
+		for _, svc := range services {
+			atomic.AddUint64(&count, atomic.SwapUint64(&svc.MsgCount, 0))
+		}
+		log.Info().Msgf("message count = %d", count)
 	}
 
-	return atomic.LoadUint32(&positiveResponses)
-}
-
-type loadTestPlugin struct {
-	*network.Plugin
-}
-
-// Receive takes in *messages.ProxyMessage and replies with *messages.ID
-func (p *loadTestPlugin) Receive(ctx *network.PluginContext) error {
-	switch msg := ctx.Message().(type) {
-	case *messages.LoadRequest:
-		response := &messages.LoadReply{Id: msg.Id}
-		ctx.Reply(context.Background(), response)
-	}
-
-	return nil
+	select {}
 }
