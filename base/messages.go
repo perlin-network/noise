@@ -97,6 +97,16 @@ func NewMessageAdapterActive(connAdapter protocol.ConnectionAdapter, conn net.Co
 		return nil, errors.New("local or remote id too long")
 	}
 
+	if len(remoteAddr) > 255 {
+		conn.Close()
+		return nil, errors.Errorf("remote address is too long")
+	}
+
+	if len(localAddr) > 255 {
+		conn.Close()
+		return nil, errors.Errorf("local address is too long")
+	}
+
 	_, err := conn.Write(local)
 	if err != nil {
 		conn.Close()
@@ -113,20 +123,10 @@ func NewMessageAdapterActive(connAdapter protocol.ConnectionAdapter, conn net.Co
 		return nil, errors.Errorf("inconsistent remotes %s and %s", hex.EncodeToString(recvRemote), hex.EncodeToString(remote))
 	}
 
-	if len(remoteAddr) > 255 {
-		conn.Close()
-		return nil, errors.Errorf("remote address is too long")
-	}
-
 	_, err = conn.Write(append([]byte{byte(len(remoteAddr))}, []byte(remoteAddr)...))
 	if err != nil {
 		conn.Close()
 		return nil, err
-	}
-
-	if len(localAddr) > 255 {
-		conn.Close()
-		return nil, errors.Errorf("local address is too long")
 	}
 
 	_, err = conn.Write(append([]byte{byte(len(localAddr))}, []byte(localAddr)...))

@@ -185,8 +185,8 @@ func main() {
 				}
 				// simulate unstable connection
 				if rand.Intn(dropRate) == 0 {
-					instances[i].node.ManuallyRemovePeer(instances[j].keypair.PublicKey)
-					instances[j].node.ManuallyRemovePeer(instances[i].keypair.PublicKey)
+					instances[i].node.RemovePeer(instances[j].keypair.PublicKey)
+					instances[j].node.RemovePeer(instances[i].keypair.PublicKey)
 				}
 			}
 		}

@@ -85,11 +85,7 @@ func (n *Node) GetConnectionAdapter() ConnectionAdapter {
 	return n.connAdapter
 }
 
-func (n *Node) ManuallyRemovePeer(remote []byte) {
-	n.removePeer(remote)
-}
-
-func (n *Node) removePeer(id []byte) {
+func (n *Node) RemovePeer(id []byte) {
 	peer, ok := n.peers.Load(string(id))
 	if ok {
 		if peer, ok := peer.(*EstablishedPeer); ok {
@@ -133,20 +129,20 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 				if err != nil {
 					established = nil
 					msgAdapter = nil
-					n.removePeer(remote)
+					n.RemovePeer(remote)
 					log.Error().Err(err).Msg("cannot establish peer")
 				} else {
 					n.peers.Store(string(remote), established)
 					msgAdapter.OnRecvMessage(n.controller, func(ctx context.Context, message []byte) {
 						if message == nil {
-							n.removePeer(remote)
+							n.RemovePeer(remote)
 						} else {
 							n.dispatchIncomingMessage(ctx, established, message)
 						}
 					})
 				}
 			} else {
-				n.removePeer(remote)
+				n.RemovePeer(remote)
 			}
 
 			close(peer.Done)
@@ -175,7 +171,7 @@ func (n *Node) dispatchIncomingMessage(ctx context.Context, peer *EstablishedPee
 	if peer.kxState != KeyExchange_Done {
 		if err := peer.continueKeyExchange(n.controller, n.idAdapter, n.customHandshakeProcessor, raw); err != nil {
 			log.Error().Err(err).Msg("cannot continue key exchange")
-			n.removePeer(peer.RemoteID())
+			n.RemovePeer(peer.RemoteID())
 		}
 		return
 	}
@@ -256,7 +252,7 @@ func (n *Node) Start() {
 			n.peers.Store(string(msgAdapter.RemoteID()), peer)
 			msgAdapter.OnRecvMessage(n.controller, func(ctx context.Context, message []byte) {
 				if message == nil {
-					n.removePeer(msgAdapter.RemoteID())
+					n.RemovePeer(msgAdapter.RemoteID())
 				} else {
 					n.dispatchIncomingMessage(ctx, peer, message)
 				}
@@ -305,7 +301,7 @@ func (n *Node) Send(ctx context.Context, recipient []byte, body *MessageBody) er
 	}
 
 	if err = peer.SendMessage(n.controller, message.Body.Serialize()); err != nil {
-		n.removePeer(message.Recipient)
+		n.RemovePeer(message.Recipient)
 		return err
 	}
 
