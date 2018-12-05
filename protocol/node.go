@@ -65,26 +65,32 @@ func NewNode(c *Controller, id IdentityAdapter) *Node {
 	}
 }
 
-func (n *Node) SetConnectionAdapter(ca ConnectionAdapter) {
-	n.connAdapter = ca
-}
-
-func (n *Node) SetCustomHandshakeProcessor(p HandshakeProcessor) {
-	n.customHandshakeProcessor = p
-}
-
+// AddService registers a service to receive all the service callbacks
 func (n *Node) AddService(s ServiceInterface) {
 	n.services = append(n.services, s)
 }
 
-func (n *Node) GetIdentityAdapter() IdentityAdapter {
-	return n.idAdapter
+// SetConnectionAdapter sets the node's connection adatper
+func (n *Node) SetConnectionAdapter(ca ConnectionAdapter) {
+	n.connAdapter = ca
 }
 
+// GetConnectionAdapter returns the node's connection adapter
 func (n *Node) GetConnectionAdapter() ConnectionAdapter {
 	return n.connAdapter
 }
 
+// SetCustomHandshakeProcessor registers a processor when connections are being setup
+func (n *Node) SetCustomHandshakeProcessor(p HandshakeProcessor) {
+	n.customHandshakeProcessor = p
+}
+
+// GetIdentityAdapter returns the node's identity adapter
+func (n *Node) GetIdentityAdapter() IdentityAdapter {
+	return n.idAdapter
+}
+
+// RemovePeer disconnects the peer from the node
 func (n *Node) RemovePeer(id []byte) {
 	peer, ok := n.peers.Load(string(id))
 	if ok {
@@ -99,6 +105,7 @@ func (n *Node) RemovePeer(id []byte) {
 	}
 }
 
+// getPeer returns the local peer connection
 func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 	var established *EstablishedPeer
 
@@ -167,6 +174,7 @@ func (n *Node) getPeer(remote []byte) (*EstablishedPeer, error) {
 	}
 }
 
+// dispatchIncomingMessage will preprocess the received message before asynchronously passing the message to all the services
 func (n *Node) dispatchIncomingMessage(ctx context.Context, peer *EstablishedPeer, raw []byte) {
 	if peer.kxState != KeyExchange_Done {
 		if err := peer.continueKeyExchange(n.controller, n.idAdapter, n.customHandshakeProcessor, raw); err != nil {
@@ -193,6 +201,7 @@ func (n *Node) dispatchIncomingMessage(ctx context.Context, peer *EstablishedPee
 	}()
 }
 
+// processMessageBody will send the message to all the services's Receive callbacks
 func (n *Node) processMessageBody(ctx context.Context, peer *EstablishedPeer, body *MessageBody) error {
 
 	// see if there is a matching request/response waiting for this nonce
@@ -277,7 +286,7 @@ func (n *Node) Stop() {
 	})
 }
 
-// Send will send a message to the recipient in the message field
+// Send will deliver a one way message to the recipient node
 func (n *Node) Send(ctx context.Context, recipient []byte, body *MessageBody) error {
 	if body == nil {
 		return errors.New("message body was empty")
