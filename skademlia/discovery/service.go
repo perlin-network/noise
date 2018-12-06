@@ -17,10 +17,11 @@ import (
 const (
 	pingTimeout = 4 * time.Second
 
-	// prefix needs to differ by a certain number of bytes before adding to table to prevent
-	// attacks which attempt to flood the routing table
+	// prefixDiffLength defines how many bits in the prefix to check for bit diffs
 	prefixDiffLength = 128
-	prefixDiffMin    = 32
+	// prefixDiffMin defines how many bits need to be different in the prefix in order for
+	// the peer to be added to the routing table
+	prefixDiffMin = 32
 )
 
 var (
@@ -76,10 +77,11 @@ func (s *Service) Receive(ctx context.Context, message *protocol.Message) (*prot
 }
 
 func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Message) (*protocol.MessageBody, error) {
+	// prefix needs to differ by a certain number of bits before adding to the routing table to prevent
+	// attacks which attempt to flood the table
 	if peer.PrefixDiff(sender.Id, target.Id, prefixDiffLength) > prefixDiffMin {
 		err := s.Routes.Update(sender)
 		if err == dht.ErrBucketFull {
-			// TODO: don't block the code path in every call
 			if ok, _ := s.EvictLastSeenPeer(sender.Id); ok {
 				s.Routes.Update(sender)
 			}
@@ -101,7 +103,14 @@ func (s *Service) processMsg(sender peer.ID, target peer.ID, msg protobuf.Messag
 
 		// Update routing table w/ closest peers to self.
 		for _, peerID := range peers {
-			s.Routes.Update(peerID)
+			if peer.PrefixDiff(sender.Id, target.Id, prefixDiffLength) > prefixDiffMin {
+				err := s.Routes.Update(peerID)
+				if err == dht.ErrBucketFull {
+					if ok, _ := s.EvictLastSeenPeer(peerID.Id); ok {
+						s.Routes.Update(peerID)
+					}
+				}
+			}
 		}
 
 		log.Info().
