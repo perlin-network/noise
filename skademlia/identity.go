@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
-	"math/bits"
 
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/crypto/blake2b"
@@ -182,28 +181,4 @@ func VerifyPuzzle(publicKey, id, nonce []byte, c1, c2 int) bool {
 	return bytes.Equal(b.HashBytes(publicKey), id) &&
 		checkHashedBytesPrefixLen(id, c1) &&
 		checkDynamicPuzzle(id, nonce, c2)
-}
-
-// Xor performs an xor operation on two byte slices.
-func Xor(a, b []byte) []byte {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
-
-	dst := make([]byte, n)
-	for i := 0; i < n; i++ {
-		dst[i] = a[i] ^ b[i]
-	}
-	return dst
-}
-
-// PrefixLen returns the number of prefixed zeroes in a byte slice.
-func PrefixLen(bytes []byte) int {
-	for i, b := range bytes {
-		if b != 0 {
-			return i*8 + bits.LeadingZeros8(uint8(b))
-		}
-	}
-	return len(bytes)*8 - 1
 }

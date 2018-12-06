@@ -103,3 +103,20 @@ func PrefixLen(bytes []byte) int {
 	}
 	return len(bytes)*8 - 1
 }
+
+// PrefixDiff returns how many bits differ in the first n bits
+func PrefixDiff(a, b []byte, n int) int {
+	xor := Xor(a, b)
+	total := 0
+	bytes := []uint8(xor)
+	for i, b := range bytes {
+		if n <= 8*i {
+			break
+		} else if n > 8*i && n < 8*(i+1) {
+			shift := 8 - uint(n%8)
+			b = b >> shift
+		}
+		total += bits.OnesCount8(uint8(b))
+	}
+	return total
+}
