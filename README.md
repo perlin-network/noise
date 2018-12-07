@@ -63,9 +63,9 @@ go get -u github.com/golang/mock/mockgen
 go generate ./...
 
 # run an example
-[terminal 1] vgo run examples/chat/main.go -port 3000
-[terminal 2] vgo run examples/chat/main.go -port 3001 -peers tcp://localhost:3000
-[terminal 3] vgo run examples/chat/main.go -port 3002 -peers tcp://localhost:3000
+[terminal 1] go run examples/chat/main.go -port 3000 -private_key aefd86bdfefe4e2eca563782682d7612a856191b48844687fec1c8a22dc70f220da80160d6b3686d66a4ad8ac692a322043b0239302c5037988d4bb1e41830f1
+[terminal 2] go run examples/chat/main.go -port 3001 -peers 0da80160d6b3686d66a4ad8ac692a322043b0239302c5037988d4bb1e41830f1=localhost:3000
+[terminal 3] go run examples/chat/main.go -port 3002 -peers 0da80160d6b3686d66a4ad8ac692a322043b0239302c5037988d4bb1e41830f1=localhost:3000
 
 # run test cases
 vgo test -v -count=1 -race ./...

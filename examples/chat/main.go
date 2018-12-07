@@ -49,7 +49,7 @@ func (n *ChatService) Receive(ctx context.Context, request *protocol.Message) (*
 	if err := proto.Unmarshal(request.Body.Payload, &mc); err != nil {
 		return nil, err
 	}
-	log.Info().Msgf("<%s> %s", n.Address, mc.Message)
+	log.Info().Msgf("<%s> %s", hex.EncodeToString(request.Sender)[0:16], mc.Message)
 	return nil, nil
 }
 
@@ -157,7 +157,7 @@ func main() {
 			continue
 		}
 
-		log.Info().Msgf("<%s> %s", addr, input)
+		log.Info().Msgf("<%s> %s", idAdapter.MyIdentityHex()[0:16], input)
 
 		body := makeMessageBody(chatServiceID, &messages.ChatMessage{
 			Message: input,
