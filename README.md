@@ -135,24 +135,31 @@ Services are a way to interface with the lifecycle of your network.
 
 
 ```go
-type YourAwesomePlugin struct {
-    network.Plugin
+type YourAwesomeService struct {
+	protocol.Service
+	Mailbox chan *messages.BasicMessage
 }
 
-func (state *YourAwesomePlugin) Startup(net *network.Network)              {}
-func (state *YourAwesomePlugin) Receive(ctx *network.PluginContext) error  { return nil }
-func (state *YourAwesomePlugin) Cleanup(net *network.Network)              {}
-func (state *YourAwesomePlugin) PeerConnect(client *network.PeerClient)    {}
-func (state *YourAwesomePlugin) PeerDisconnect(client *network.PeerClient) {}
+func (state *YourAwesomeService) Startup(net *network.Network)              {}
+func (state *YourAwesomeService) Receive(ctx context.Context, request *Message) (*MessageBody, error)  { return nil }
+func (state *YourAwesomeService) Cleanup(node *Node)              {}
+func (state *YourAwesomeService) PeerConnect(id []byte)    {}
+func (state *YourAwesomeService) PeerDisconnect(id []byte) {}
 ```
 
-They are registered through `network.Builder` through the following:
+They are registered through `protocol.Node` through the following:
 
 ```go
-builder := network.NewBuilder()
+node := protocol.NewNode(
+    protocol.NewController(),
+    base.NewIdentityAdapter(),
+)
 
-// Add plugin.
-builder.AddPlugin(new(YourAwesomePlugin))
+// Add service.
+service := &BasicService{
+    Mailbox: make(chan *messages.BasicMessage, 1),
+}
+node.AddService(service)
 ```
 
 **noise** comes with three plugins: `discovery.Plugin`, `backoff.Plugin` and
