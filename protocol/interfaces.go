@@ -82,4 +82,7 @@ type SendAdapter interface {
 
 	// Broadcast sends a message to all it's currently connected peers
 	Broadcast(ctx context.Context, body *MessageBody) error
+
+	// BroadcastRandomly sends a message up to maxPeers number of random connected peers
+	BroadcastRandomly(ctx context.Context, body *MessageBody, maxPeers int) error
 }

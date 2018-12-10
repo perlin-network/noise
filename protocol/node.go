@@ -8,6 +8,7 @@ import (
 	"github.com/monnand/dhkx"
 	"github.com/perlin-network/noise/log"
 	"github.com/pkg/errors"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -331,6 +332,39 @@ func (n *Node) Broadcast(ctx context.Context, body *MessageBody) error {
 	}
 
 	return nil
+}
+
+// BroadcastRandomly sends a message up to maxPeers number of random connected peers
+func (n *Node) BroadcastRandomly(ctx context.Context, body *MessageBody, maxPeers int) error {
+	var peerIDs [][]byte
+
+	n.peers.Range(func(remote interface{}, established interface{}) bool {
+		id := remote.(string)
+		if _, ok := established.(*EstablishedPeer); ok {
+			peerIDs = append(peerIDs, []byte(id))
+		}
+
+		// Limit total amount of addresses in case we have a lot of peers.
+		return len(peerIDs) <= maxPeers*3
+	})
+
+	// Flip a coin and shuffle :).
+	rand.Shuffle(len(peerIDs), func(i, j int) {
+		peerIDs[i], peerIDs[j] = peerIDs[j], peerIDs[i]
+	})
+
+	if len(peerIDs) < maxPeers {
+		maxPeers = len(peerIDs)
+	}
+
+	var err error
+	for i := 0; i < maxPeers; i++ {
+		if err = n.Send(ctx, peerIDs[i], body); err != nil {
+			break
+		}
+	}
+
+	return err
 }
 
 // Request sends a message and waits for the reply before returning or times out

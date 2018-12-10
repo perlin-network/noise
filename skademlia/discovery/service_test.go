@@ -29,6 +29,10 @@ func (m *MockSendAdapter) Broadcast(ctx context.Context, body *protocol.MessageB
 	return errors.New("Not implemented")
 }
 
+func (m *MockSendAdapter) BroadcastRandomly(ctx context.Context, body *protocol.MessageBody, maxPeers int) error {
+	return errors.New("Not implemented")
+}
+
 func TestDiscoveryPing(t *testing.T) {
 	s := discovery.NewService(nil, peer.CreateID("selfAddr", ([]byte)("self")))
 	assert.NotNil(t, s)
