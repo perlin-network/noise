@@ -1,15 +1,21 @@
 package noise
 
 import (
+	"context"
+	"fmt"
 	"github.com/perlin-network/noise/base"
+	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/skademlia"
 	"github.com/perlin-network/noise/skademlia/peer"
+	"net"
+	"time"
 )
 
 type CallbackID int
 type NodeID []byte
-type Opcode uint32
+type OpCode uint32
 type StartupCallback func(id NodeID)
 type ReceiveCallback func(ctx context.Context, request *protocol.Message) (*protocol.MessageBody, error)
 type CleanupCallback func(id NodeID)
@@ -18,6 +24,7 @@ type PeerDisconnectCallback func(id NodeID)
 type PeerID peer.ID
 
 type Noise struct {
+	protocol.Service
 	config           *Config
 	node             *protocol.Node
 	onStartup        []StartupCallback
@@ -53,7 +60,7 @@ func NewNoise(config *Config) (*Noise, error) {
 				return nil, err
 			}
 		} else {
-			idAdapter = base.NewIdentityFromKeypair(kp)
+			idAdapter = base.NewIdentityAdapterFromKeypair(kp)
 		}
 	}
 
@@ -78,9 +85,7 @@ func NewNoise(config *Config) (*Noise, error) {
 		}
 	}
 
-	node.Start()
-
-	return &Noise{
+	n := &Noise{
 		config:           config,
 		node:             node,
 		onStartup:        []StartupCallback{},
@@ -88,7 +93,13 @@ func NewNoise(config *Config) (*Noise, error) {
 		onCleanup:        []CleanupCallback{},
 		onPeerConnect:    []PeerConnectCallback{},
 		onPeerDisconnect: []PeerDisconnectCallback{},
-	}, nil
+	}
+
+	node.AddService(n)
+
+	node.Start()
+
+	return n, nil
 }
 
 // Callback for when the network starts listening for peers.
@@ -98,9 +109,9 @@ func (n *Noise) OnStartup(cb StartupCallback) {
 
 // Callback for when an incoming message is received.
 // Returns a message body to reply or whether there was an error.
-func (n *Noise) OnReceive(opCode Opcode, cb ReceiveCallback) {
+func (n *Noise) OnReceive(opCode OpCode, cb ReceiveCallback) {
 	if len(n.onReceive[opCode]) == 0 {
-		n.onReceive[opCode] = make([]ReceiveCallback)
+		n.onReceive[opCode] = []ReceiveCallback{}
 	}
 	n.onReceive[opCode] = append(n.onReceive[opCode], cb)
 }
@@ -132,14 +143,17 @@ func (n *Noise) Bootstrap(peers []PeerID) error {
 	if n.config.EnableSKademlia {
 		var skPeers []peer.ID
 		for _, p := range peers {
-			skPeers = append(skPeers peer.ID(p))
+			skPeers = append(skPeers, peer.ID(p))
 		}
-		n.node.GetConnectionAdapter().(*skademlia.ConnectionAddapter).Bootstrap(skPeers...)
+		return n.node.GetConnectionAdapter().(*skademlia.ConnectionAdapter).Bootstrap(skPeers...)
 	} else {
 		for _, p := range peers {
-			n.node.GetConnectionAdapter().AddRemoteID(p.Id, p.Address)
+			if err := n.node.GetConnectionAdapter().AddRemoteID(p.Id, p.Address); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 func (n *Noise) Messenger() protocol.SendAdapter {
