@@ -3,7 +3,6 @@ package skademlia_test
 import (
 	"context"
 	"fmt"
-	"github.com/perlin-network/noise/utils"
 	"net"
 	"testing"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/perlin-network/noise/skademlia/dht"
 	"github.com/perlin-network/noise/skademlia/discovery"
 	"github.com/perlin-network/noise/skademlia/peer"
+	"github.com/perlin-network/noise/utils"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -149,6 +149,18 @@ func dialTCP(addr string) (net.Conn, error) {
 type EvictService struct {
 	protocol.Service
 	Mailbox chan string
+}
+
+func (n *EvictService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
+	if message.Body.Service != serviceID {
+		return nil, nil
+	}
+	if len(message.Body.Payload) == 0 {
+		return nil, nil
+	}
+	payload := string(message.Body.Payload)
+	n.Mailbox <- payload
+	return nil, nil
 }
 
 func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int) ([]*protocol.Node, []*EvictService, []int) {
