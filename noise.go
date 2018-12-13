@@ -149,9 +149,13 @@ func (n *Noise) Bootstrap(peers ...PeerID) error {
 	if n.config.EnableSKademlia {
 		var skPeers []peer.ID
 		for _, p := range peers {
-			skPeers = append(skPeers, peer.ID(p))
+			if !peer.ID(n.Self()).Equals(peer.ID(p)) {
+				skPeers = append(skPeers, peer.ID(p))
+			}
 		}
-		return n.node.GetConnectionAdapter().(*skademlia.ConnectionAdapter).Bootstrap(skPeers...)
+		if len(skPeers) > 0 {
+			return n.node.GetConnectionAdapter().(*skademlia.ConnectionAdapter).Bootstrap(skPeers...)
+		}
 	} else {
 		for _, p := range peers {
 			if err := n.node.GetConnectionAdapter().AddRemoteID(p.PublicKey, p.Address); err != nil {

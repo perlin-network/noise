@@ -142,9 +142,18 @@ func generateBucketIDs(id *skademlia.IdentityAdapter, n int) []*skademlia.Identi
 	return ids
 }
 
-func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int) ([]*protocol.Node, []*MsgService, []int) {
+func dialTCP(addr string) (net.Conn, error) {
+	return net.DialTimeout("tcp", addr, 10*time.Second)
+}
+
+type EvictService struct {
+	protocol.Service
+	Mailbox chan string
+}
+
+func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int) ([]*protocol.Node, []*EvictService, []int) {
 	var nodes []*protocol.Node
-	var msgServices []*MsgService
+	var services []*EvictService
 	var ports []int
 
 	// setup all the nodes
@@ -174,17 +183,17 @@ func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int) ([]*prot
 		rt := dht.NewRoutingTableWithOptions(peerID, dht.WithBucketSize(bucketSize))
 		connAdapter.Discovery.Routes = rt
 
-		msgSvc := &MsgService{
+		svc := &EvictService{
 			Mailbox: make(chan string, 1),
 		}
 
-		node.AddService(msgSvc)
+		node.AddService(svc)
 
 		node.Start()
 
 		nodes = append(nodes, node)
-		msgServices = append(msgServices, msgSvc)
+		services = append(services, svc)
 	}
 
-	return nodes, msgServices, ports
+	return nodes, services, ports
 }
