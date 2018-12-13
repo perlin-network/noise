@@ -1,11 +1,9 @@
 # Noise
 
-[![GoDoc][1]][2] [![Discord][7]][8] [![Powered][3]][4] [![MIT licensed][5]][6] [![Build Status][9]][10] [![Go Report Card][11]][12] [![Coverage Statusd][13]][14]
+[![GoDoc][1]][2] [![Discord][7]][8] [![MIT licensed][5]][6] [![Build Status][9]][10] [![Go Report Card][11]][12] [![Coverage Statusd][13]][14]
 
 [1]: https://godoc.org/github.com/perlin-network/noise?status.svg
 [2]: https://godoc.org/github.com/perlin-network/noise
-[3]: https://img.shields.io/badge/KCP-Powered-blue.svg
-[4]: https://github.com/skywind3000/kcp
 [5]: https://img.shields.io/badge/license-MIT-blue.svg
 [6]: LICENSE
 [7]: https://img.shields.io/discord/458332417909063682.svg
@@ -30,16 +28,16 @@ production-grade dependencies.
 
 ## Features
 
-- Real-time, bidirectional streaming between peers via
-  [KCP](https://github.com/xtaci/kcp-go)/TCP and
+- Modular design with interfaces for establishing connections, verifying identity/authorization, and sending/receiving messages.
+- Real-time, bidirectional streaming between peers via TCP and
   [Protobufs](https://developers.google.com/protocol-buffers/).
 - NAT traversal/automated port forwarding (NAT-PMP, UPnP).
 - [NaCL/Ed25519](https://tweetnacl.cr.yp.to/) scheme for peer identities and
   signatures.
-- Kademlia DHT-inspired peer discovery.
+- [S/Kademlia](https://ieeexplore.ieee.org/document/4447808) peer identity and discovery.
 - Request/Response and Messaging RPC.
 - Logging via [zerolog](https://github.com/rs/zerolog/log).
-- Plugin system.
+- Plugin system via services.
 
 ## Setup
 
@@ -63,136 +61,105 @@ go get -u github.com/golang/mock/mockgen
 go generate ./...
 
 # run an example
-[terminal 1] vgo run examples/chat/main.go -port 3000
-[terminal 2] vgo run examples/chat/main.go -port 3001 -peers tcp://localhost:3000
-[terminal 3] vgo run examples/chat/main.go -port 3002 -peers tcp://localhost:3000
+[terminal 1] go run examples/chat/main.go -port 3000 -private_key aefd86bdfefe4e2eca563782682d7612a856191b48844687fec1c8a22dc70f220da80160d6b3686d66a4ad8ac692a322043b0239302c5037988d4bb1e41830f1
+[terminal 2] go run examples/chat/main.go -port 3001 -peers 0da80160d6b3686d66a4ad8ac692a322043b0239302c5037988d4bb1e41830f1=localhost:3000
+[terminal 3] go run examples/chat/main.go -port 3002 -peers 0da80160d6b3686d66a4ad8ac692a322043b0239302c5037988d4bb1e41830f1=localhost:3000
 
 # run test cases
-vgo test -v -count=1 -race ./...
+go test -v -count=1 -race ./...
 
 # run test cases short
-vgo test -v -count=1 -race -short ./...
+go test -v -count=1 -race -short ./...
 ```
 
 ## Usage
 
-A peer's cryptographic public/private keys are randomly generated/loaded with
-1 LoC in mind.
+Noise is designed to be modular and splits the networking, node identity, and message sending/receiving into separate interfaces.
+
+Noise provides an identity adapter which randomly generates cryptographic public/private keys using the Ed25519 signature scheme.
 
 ```go
-// Randomly generate a Ed25519 keypair.
-keys := ed25519.RandomKeyPair()
+// Create a new identity adapter and get the Ed25519 keypair.
+idAdapter := base.NewIdentityAdapter()
+keys := idAdapter.GetKeyPair()
 
-// Load a private key through a hex-encoded string.
-keys := crypto.FromPrivateKey(ed25519.New(), "4d5333a68e3a96d0ad935cb6546b97bbb0c0771acf76c868a897f65dad0b7933e1442970cce57b7a35e1803e0e8acceb04dc6abf8a73df52e808ab5d966113ac")
-
-// Load a private key through a provided 64-length byte array (for Ed25519 keypair).
-keys := crypto.FromPrivateKeyBytes(ed25519.New(), []byte{ ...}...)
+// Create an identity adapter from an existing hex-encoded private key.
+keys, _ := crypto.FromPrivateKey(ed25519.New(), "4d5333a68e3a96d0ad935cb6546b97bbb0c0771acf76c868a897f65dad0b7933e1442970cce57b7a35e1803e0e8acceb04dc6abf8a73df52e808ab5d966113ac")
+idAdapter = base.NewIdentityAdapterFromKeypair(keys)
 
 // Print out loaded public/private keys.
 log.Info().
-    Str("private_key", keys.PrivateKeyHex()).
+    Str("private_key", idAdapter.GetKeyPair().PrivateKeyHex()).
     Msg("")
 log.Info().
-    Str("public_key", keys.PublicKeyHex()).
+    Str("public_key", idAdapter.GetKeyPair().PublicKeyHex()).
     Msg("")
-```
-
-You may use the loaded keys to sign/verify messages that are loaded as byte
-arrays.
-
-```go
-msg := []byte{ ... }
-
-// Sign a message.
-signature, err := keys.Sign(ed25519.New(), blake2b.New(), msg)
-if err != nil {
-    panic(err)
-}
-
 log.Info().
-    Str("signature", hex.EncodeToString(signature)).
+    Str("node_id", idAdapter.MyIdentity()).
     Msg("")
-
-// Verify a signature.
-verified := crypto.Verify(ed25519.New(), blake2b.New(), keys.PublicKey, msg, signature)
-
-log.Info().Msgf("Is the signature valid? %b", verified)
 ```
 
 Now that you have your keys, we can start listening and handling messages from
 incoming peers.
 
 ```go
-builder := network.NewBuilder()
+// setup the node with a new identity adapter
+idAdapter := base.NewIdentityAdapter()
+node := protocol.NewNode(
+    protocol.NewController(),
+    idAdapter,
+)
 
-// Set the address which noise will listen on and peers will use to connect to
+// Create the listener which peers will use to connect to
 // you. For example, set the host part to `localhost` if you are testing
 // locally, or your public IP address if you are connected to the internet
 // directly.
-builder.SetAddress("tcp://localhost:3000")
+listener, _ := net.Listen("tcp", "localhost:3000")
 
-// Alternatively...
-builder.SetAddress(network.FormatAddress("tcp", "localhost", 3000))
-
-// Set the cryptographic keys used for your network.
-builder.SetKeys(keys)
-
-// ... add plugins or set any more options here.
-
-// Build the network.
-net, err := builder.Build()
-if err != nil {
-    panic(err)
+// Create the dialer for the connection adapter
+func dialer(addr string) (net.Conn, error) {
+	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
-// Have the server start listening for peers.
-go net.Listen()
+// ... add services for the node here.
 
-// Connect to some peers and form a peer cluster automatically with built-in
-// peer discovery.
-net.Bootstrap("tcp://localhost:3000", "tcp://localhost:3001")
-
-// Alternatively..
-net.Bootstrap([]string{"tcp://localhost:3000", "tcp://localhost:3001"}...)
+// Start the node.
+node.Start()
 ```
-
-If you have any code you want to execute only once the node is ready to listen
-for peers, just run:
-
-```go
-net.BlockUntilListening()
-```
-
-... in any goroutine you desire. The goroutine will block until the server is
-ready to start listening.
 
 See `examples/getting_started` for a full working example to get started with.
 
-## Plugins
+## Services
 
-Plugins are a way to interface with the lifecycle of your network.
+Services are a way to interface with the lifecycle of your network.
 
 
 ```go
-type YourAwesomePlugin struct {
-    network.Plugin
+type YourAwesomeService struct {
+	protocol.Service
+	Mailbox chan *messages.BasicMessage
 }
 
-func (state *YourAwesomePlugin) Startup(net *network.Network)              {}
-func (state *YourAwesomePlugin) Receive(ctx *network.PluginContext) error  { return nil }
-func (state *YourAwesomePlugin) Cleanup(net *network.Network)              {}
-func (state *YourAwesomePlugin) PeerConnect(client *network.PeerClient)    {}
-func (state *YourAwesomePlugin) PeerDisconnect(client *network.PeerClient) {}
+func (state *YourAwesomeService) Startup(net *network.Network)              {}
+func (state *YourAwesomeService) Receive(ctx context.Context, request *Message) (*MessageBody, error)  { return nil }
+func (state *YourAwesomeService) Cleanup(node *Node)              {}
+func (state *YourAwesomeService) PeerConnect(id []byte)    {}
+func (state *YourAwesomeService) PeerDisconnect(id []byte) {}
 ```
 
-They are registered through `network.Builder` through the following:
+They are registered through `protocol.Node` through the following:
 
 ```go
-builder := network.NewBuilder()
+node := protocol.NewNode(
+    protocol.NewController(),
+    base.NewIdentityAdapter(),
+)
 
-// Add plugin.
-builder.AddPlugin(new(YourAwesomePlugin))
+// Add service.
+service := &BasicService{
+    Mailbox: make(chan *messages.BasicMessage, 1),
+}
+node.AddService(service)
 ```
 
 **noise** comes with three plugins: `discovery.Plugin`, `backoff.Plugin` and
