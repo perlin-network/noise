@@ -14,10 +14,9 @@ func (n *Noise) Startup(node *protocol.Node) {
 
 // Receive is called every time when messages are received
 func (n *Noise) Receive(ctx context.Context, request *protocol.Message) (*protocol.MessageBody, error) {
-	// TODO: filter the request message by opcode
-	for _, cbList := range n.onReceive {
-		for _, cb := range cbList {
-			// TODO: change around the interface in case there are multiple handlers for a request/reply
+	opcode := OpCode(request.Body.Service)
+	if onReceive, ok := n.onReceive[opcode]; ok {
+		for _, cb := range onReceive {
 			reply, err := cb(ctx, request)
 			if err != nil {
 				return nil, err

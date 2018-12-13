@@ -3,12 +3,10 @@ package basic
 import (
 	"context"
 	"fmt"
-	"net"
 	"time"
 
-	"github.com/perlin-network/noise/base"
+	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/examples/basic/messages"
-	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/utils"
 
@@ -17,19 +15,19 @@ import (
 )
 
 const (
-	serviceID = 42
-	numNodes  = 3
-	host      = "localhost"
+	opCode   = 43
+	numNodes = 3
+	host     = "localhost"
 )
 
 // BasicService buffers all messages into a mailbox for this test.
 type BasicService struct {
-	protocol.Service
+	*noise.Noise
 	Mailbox chan *messages.BasicMessage
 }
 
 func (n *BasicService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
-	if message.Body.Service != serviceID {
+	if message.Body.Service != opCode {
 		// early exit if not the matching service
 		return nil, nil
 	}
@@ -53,71 +51,56 @@ func makeMessageBody(value string) *protocol.MessageBody {
 		return nil
 	}
 	body := &protocol.MessageBody{
-		Service: serviceID,
+		Service: opCode,
 		Payload: payload,
 	}
 	return body
-}
-
-func dialTCP(addr string) (net.Conn, error) {
-	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
 // ExampleBasic demonstrates how to broadcast a message to a set of peers that discover
 // each other through peer discovery.
 func ExampleBasic() {
 	var services []*BasicService
-	var nodes []*protocol.Node
-	var ports []int
 
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
 		// setup the node
-		idAdapter := base.NewIdentityAdapter()
-		node := protocol.NewNode(
-			protocol.NewController(),
-			idAdapter,
-		)
-
-		port := utils.GetRandomUnusedPort()
-		ports = append(ports, port)
-		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
-		if err != nil {
-			log.Fatal().Msgf("%+v", err)
+		config := &noise.Config{
+			Host:            host,
+			Port:            utils.GetRandomUnusedPort(),
+			EnableSKademlia: false,
 		}
-
-		// setup the connection adapter
-		if _, err := base.NewConnectionAdapter(listener, dialTCP, node); err != nil {
-			log.Fatal().Msgf("%+v", err)
+		n, err := noise.NewNoise(config)
+		if err != nil {
+			panic(err)
 		}
 
 		// create service
 		service := &BasicService{
+			Noise:   n,
 			Mailbox: make(chan *messages.BasicMessage, 1),
 		}
-		node.AddService(service)
+		// register the callback
+		service.OnReceive(opCode, service.Receive)
 
-		// Start listening for connections
-		node.Start()
-
-		nodes = append(nodes, node)
 		services = append(services, service)
 	}
 
 	// Connect all the node routing tables
-	for i, srcNode := range nodes {
-		for j, otherNode := range nodes {
+	for i, svc := range services {
+		var peers []noise.PeerID
+		for j, other := range services {
 			if i == j {
 				continue
 			}
-			peerID := otherNode.GetIdentityAdapter().MyIdentity()
-			srcNode.GetConnectionAdapter().AddRemoteID(peerID, fmt.Sprintf("%s:%d", host, ports[j]))
+			peers = append(peers, other.Self())
 		}
+		svc.Bootstrap(peers...)
 	}
 
 	// Broadcast out a message from Node 0.
 	expected := "This is a broadcasted message from Node 0."
-	nodes[0].Broadcast(context.Background(), makeMessageBody(expected))
+	services[0].Messenger().Broadcast(context.Background(), makeMessageBody(expected))
 
 	fmt.Println("Node 0 sent out a message.")
 

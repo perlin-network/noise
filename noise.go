@@ -38,6 +38,10 @@ func dialTCP(addr string) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
+func CreatePeerID(publicKey []byte, addr string) PeerID {
+	return PeerID(peer.CreateID(addr, publicKey))
+}
+
 func NewNoise(config *Config) (*Noise, error) {
 
 	var idAdapter protocol.IdentityAdapter
@@ -136,10 +140,12 @@ func (n *Noise) Shutdown() {
 }
 
 func (n *Noise) Self() PeerID {
-	return PeerID(peer.CreateID(fmt.Sprintf("%s:%d", n.config.Host, n.config.Port), n.node.GetIdentityAdapter().MyIdentity()))
+	return CreatePeerID(
+		n.node.GetIdentityAdapter().MyIdentity(),
+		fmt.Sprintf("%s:%d", n.config.Host, n.config.Port))
 }
 
-func (n *Noise) Bootstrap(peers []PeerID) error {
+func (n *Noise) Bootstrap(peers ...PeerID) error {
 	if n.config.EnableSKademlia {
 		var skPeers []peer.ID
 		for _, p := range peers {
@@ -148,7 +154,7 @@ func (n *Noise) Bootstrap(peers []PeerID) error {
 		return n.node.GetConnectionAdapter().(*skademlia.ConnectionAdapter).Bootstrap(skPeers...)
 	} else {
 		for _, p := range peers {
-			if err := n.node.GetConnectionAdapter().AddRemoteID(p.Id, p.Address); err != nil {
+			if err := n.node.GetConnectionAdapter().AddRemoteID(p.PublicKey, p.Address); err != nil {
 				return err
 			}
 		}
