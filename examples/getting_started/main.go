@@ -9,17 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/perlin-network/noise/base"
+	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/protocol"
 )
 
-type StarterService struct {
-	protocol.Service
-}
-
-func (s *StarterService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
-	fmt.Printf("received payload from %s: %s\n", hex.EncodeToString(message.Sender), string(message.Body.Payload))
-	return nil, nil
+type starterService struct {
+	*noise.Noise
 }
 
 func dialTCP(addr string) (net.Conn, error) {
@@ -37,43 +32,40 @@ func main() {
 	host := *hostFlag
 	peers := strings.Split(*peersFlag, ",")
 
-	idAdapter := base.NewIdentityAdapter()
-	fmt.Printf("private_key: %s\n", idAdapter.GetKeyPair().PrivateKeyHex())
-	fmt.Printf("public_key: %s\n", idAdapter.GetKeyPair().PublicKeyHex())
-
-	localAddr := fmt.Sprintf("%s:%d", host, port)
-	listener, err := net.Listen("tcp", localAddr)
+	// setup the node
+	config := &noise.Config{
+		Host:            host,
+		Port:            port,
+		EnableSKademlia: false,
+	}
+	n, err := noise.NewNoise(config)
 	if err != nil {
 		panic(err)
 	}
-
-	node := protocol.NewNode(
-		protocol.NewController(),
-		idAdapter,
-	)
-
-	if _, err := base.NewConnectionAdapter(listener, dialTCP, node); err != nil {
-		panic(err)
+	service := &starterService{
+		Noise: n,
 	}
-
-	node.AddService(&StarterService{})
-
-	node.Start()
+	service.OnReceive(noise.OpCode(1234), func(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
+		fmt.Printf("received payload from %s: %s\n", hex.EncodeToString(message.Sender), string(message.Body.Payload))
+		return nil, nil
+	})
 
 	if len(peers) > 0 {
+		var peerIDs []noise.PeerID
 		for _, peerKV := range peers {
 			if len(peerKV) == 0 {
 				// this is a blank parameter
 				continue
 			}
 			p := strings.Split(peerKV, "=")
-			peerID, err := hex.DecodeString(p[0])
+			publicKey, err := hex.DecodeString(p[0])
 			if err != nil {
 				panic(err)
 			}
 			remoteAddr := p[1]
-			node.GetConnectionAdapter().AddRemoteID(peerID, remoteAddr)
+			peerIDs = append(peerIDs, noise.CreatePeerID(publicKey, remoteAddr))
 		}
+		service.Bootstrap(peerIDs...)
 	}
 
 	select {}
