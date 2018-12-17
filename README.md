@@ -76,55 +76,53 @@ go test -v -count=1 -race -short ./...
 
 Noise is designed to be modular and splits the networking, node identity, and message sending/receiving into separate interfaces.
 
-Noise provides an identity adapter which randomly generates cryptographic public/private keys using the Ed25519 signature scheme.
+Noise provides out-of-the-box node configuration. A new Noise configuration randomly generates public/private keys using the Ed25519 signature scheme.
 
 ```go
-// Create a new identity adapter and get the Ed25519 keypair.
-idAdapter := base.NewIdentityAdapter()
-keys := idAdapter.GetKeyPair()
+// Create a new Noise config which generate a new Ed25519 keypair.
+config := &noise.Config{
+    PrivateKeyHex: idAdapter.GetKeyPair().PrivateKeyHex(),
+}
+n, _ := noise.NewNoise(config)
 
-// Create an identity adapter from an existing hex-encoded private key.
-keys, _ := crypto.FromPrivateKey(ed25519.New(), "4d5333a68e3a96d0ad935cb6546b97bbb0c0771acf76c868a897f65dad0b7933e1442970cce57b7a35e1803e0e8acceb04dc6abf8a73df52e808ab5d966113ac")
-idAdapter = base.NewIdentityAdapterFromKeypair(keys)
+// Create a Noise config from an existing hex-encoded private key.
+config := &noise.Config{
+    PrivateKeyHex: "4d5333a68e3a96d0ad935cb6546b97bbb0c0771acf76c868a897f65dad0b7933e1442970cce57b7a35e1803e0e8acceb04dc6abf8a73df52e808ab5d966113ac",
+}
+n, _ := noise.NewNoise(config)
 
 // Print out loaded public/private keys.
 log.Info().
-    Str("private_key", idAdapter.GetKeyPair().PrivateKeyHex()).
+    Str("private_key", n.Config().PrivateKeyHex()).
     Msg("")
 log.Info().
-    Str("public_key", idAdapter.GetKeyPair().PublicKeyHex()).
+    Str("public_key", hex.EncodeToString(n.Self().PublicKey)).
     Msg("")
 log.Info().
-    Str("node_id", idAdapter.MyIdentity()).
+    Str("node_id", hex.EncodeToString(n.Self().Id)).
     Msg("")
 ```
 
-Now that you have your keys, we can start listening and handling messages from
-incoming peers.
+To change the host and port the node listens to, set the `Host` and `Port` settings in the Noise config.
 
 ```go
-// setup the node with a new identity adapter
-idAdapter := base.NewIdentityAdapter()
-node := protocol.NewNode(
-    protocol.NewController(),
-    idAdapter,
-)
+// setup the node with a different host and port
+config := &noise.Config{
+    Host: "localhost",
+    Port: 3000,
+}
+n, _ := noise.NewNoise(config)
 
-// Create the listener which peers will use to connect to
-// you. For example, set the host part to `localhost` if you are testing
-// locally, or your public IP address if you are connected to the internet
-// directly.
-listener, _ := net.Listen("tcp", "localhost:3000")
-
-// Create the dialer for the connection adapter
-func dialer(addr string) (net.Conn, error) {
-	return net.DialTimeout("tcp", addr, 10*time.Second)
+// add services for the node here.
+svc := &BasicService{
+    Noise, n,
 }
 
-// ... add services for the node here.
+// Register callbacks
+svc.OnReceive(svc.OpCode, svc.Receive)
 
-// Start the node.
-node.Start()
+// Connect or bootstrap to other nodes
+svc.Bootstrap(peers...)
 ```
 
 See `examples/getting_started` for a full working example to get started with.
@@ -136,111 +134,72 @@ Services are a way to interface with the lifecycle of your network.
 
 ```go
 type YourAwesomeService struct {
-	protocol.Service
+	*noise.Noise
 	Mailbox chan *messages.BasicMessage
 }
 
-func (state *YourAwesomeService) Startup(net *network.Network)              {}
-func (state *YourAwesomeService) Receive(ctx context.Context, request *Message) (*MessageBody, error)  { return nil }
-func (state *YourAwesomeService) Cleanup(node *Node)              {}
+func (state *YourAwesomeService) Startup(node *noise.Node)              {}
+func (state *YourAwesomeService) Receive(ctx context.Context, request *noise.Message) (*noise.MessageBody, error)  { return nil }
+func (state *YourAwesomeService) Cleanup(node *noise.Node)              {}
 func (state *YourAwesomeService) PeerConnect(id []byte)    {}
 func (state *YourAwesomeService) PeerDisconnect(id []byte) {}
 ```
 
-They are registered through `protocol.Node` through the following:
+Services reference a noise node as follows and register callbacks:
 
 ```go
-node := protocol.NewNode(
-    protocol.NewController(),
-    base.NewIdentityAdapter(),
-)
+n, err := noise.NewNoise(&noise.Config{})
 
-// Add service.
+// Create service from noise node.
 service := &BasicService{
+    Noise: n,
     Mailbox: make(chan *messages.BasicMessage, 1),
 }
-node.AddService(service)
+
+// register the service callback
+service.OnReceive(service.OpCode, func(ctx context.Context, message *noise.Message) (*noise.MessageBody, error) {
+	return nil, nil
+})
 ```
 
-**noise** comes with three plugins: `discovery.Plugin`, `backoff.Plugin` and
-`nat.Plugin`.
+## S/Kademlia
+
+Noise natively supports the [S/Kademlia]((https://ieeexplore.ieee.org/document/4447808)) protocol for peer identification and routing. Enable S/Kademlia in your application by setting the Noise config.
 
 ```go
-// Enables peer discovery through the network.
-// Check documentation for more info.
-builder.AddPlugin(new(discovery.Plugin))
-
-// Enables exponential backoff upon peer disconnection.
-// Check documentation for more info.
-builder.AddPlugin(new(backoff.Plugin))
-
-// Enables automated NAT traversal/port forwarding for your node.
-// Check documentation for more info.
-nat.RegisterPlugin(builder)
+n, err := noise.NewNoise(&noise.Config{
+    EnableSKademlia: true,
+})
 ```
-
-Make sure to register `discovery.Plugin` if you want to make use of automatic
-peer discovery within your application.
 
 ## Handling Messages
 
-All messages that pass through **noise** are serialized/deserialized as
-[protobufs](https://developers.google.com/protocol-buffers/). If you want to
-use a new message type for your application, you must first register your
-message type.
-
-```go
-opcode.RegisterMessageType(opcode.Opcode(1000), &MyNewProtobufMessage{})
-```
-
-On a spawned `us-east1-b` Google Cloud (GCP) cluster comprised of 8
-`n1-standard-1` (1 vCPU, 3.75GB memory) instances, **noise** is able to sign,
-send, receive, verify, and process a total of ~10,000 messages per second.
-
-Once you have modeled your messages as protobufs, you may process and receive
-them over the network by creating a plugin and overriding the
-`Receive(ctx *PluginContext)` method to process specific incoming message types.
+Messages in **noise** are passed as bytes. This means, you can serialize/deserialize your messages in whichever way you wish. In our examples, we use messages that are serialized/deserialized as
+[protobufs](https://developers.google.com/protocol-buffers/).
 
 Here's a simple example:
 
 ```go
-// An example chat plugin that will print out a formatted chat message.
-type ChatPlugin struct{ *network.Plugin }
-
-func (state *ChatPlugin) Receive(ctx *network.PluginContext) error {
-    switch msg := ctx.Message().(type) {
-        case *messages.ChatMessage:
-            log.Info().Msgf("<%s> %s", ctx.Client().ID.Address, msg.Message)
+// helper for converting strings to messages
+func makeMessageBody(value string) *noise.MessageBody {
+    msg := &messages.BasicMessage{
+        Message: value,
     }
-    return nil
+    payload, err := proto.Marshal(msg)
+    if err != nil {
+        return nil
+    }
+    body := &noise.MessageBody{
+        Service: opCode,
+        Payload: payload,
+    }
+    return body
 }
 
-// Register plugin to *network.Builder.
-builder.AddPlugin(new(ChatPlugin))
-```
+...
 
-Through a `ctx *network.PluginContext`, you can access flexible methods to
-customize how you handle/interact with your peer network. All messages are
-signed and verified with one's cryptographic keys.
-
-```go
-// Reply with a message should the incoming message be a request.
-err := ctx.Reply(message here)
-if err != nil {
-    return err
-}
-
-// Get an instance of your own nodes ID.
-self := ctx.Self()
-
-// Get an instance of the peers ID which sent the message.
-sender := ctx.Sender()
-
-// Get access to an instance of the peers client.
-client := ctx.Client()
-
-// Get access to your own nodes network instace.
-net := ctx.Network()
+// broadcast your message to all connected peers
+service.Broadcast(context.Background(), makeMessageBody("hello world"))
 ```
 
 Check out our documentation and look into the `examples/` directory to find out
@@ -259,11 +218,9 @@ the following guidelines:
 2. Commit messages are in the format `module_name: Change typed down as a sentence.`
    This allows our maintainers and everyone else to know what specific code
    changes you wish to address.
-    - `network: Added in message broadcasting methods.`
-    - `builders/network: Added in new option to address PoW in generating peer IDs.`
-3. Consider backwards compatibility. New methods are perfectly fine, though
-   changing the `network.Builder` pattern radically for example should only be
-   done should there be a good reason.
+    - `protocol: Made Noise interface simpler.`
+    - `examples/basic: Fixed test to conform to new code.`
+3. Consider backwards compatibility.
 
 If you...
 
