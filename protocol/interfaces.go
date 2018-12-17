@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"github.com/perlin-network/noise/crypto"
 )
 
 // ConnectionAdapter is an adapter that establishes real/virtual connections (message adapters), both passively and actively.
@@ -53,6 +54,9 @@ type IdentityAdapter interface {
 
 	// SignatureSize returns the number of bytes in the signature
 	SignatureSize() int
+
+	// GetKeyPair returns the key pair used to create the idenity
+	GetKeyPair() *crypto.KeyPair
 }
 
 // DoneAction are states that the handshake process goes through

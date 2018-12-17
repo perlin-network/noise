@@ -67,6 +67,7 @@ func NewNoise(config *Config) (*Noise, error) {
 			idAdapter = base.NewIdentityAdapterFromKeypair(kp)
 		}
 	}
+	config.PrivateKeyHex = idAdapter.GetKeyPair().PrivateKeyHex()
 
 	node := protocol.NewNode(
 		protocol.NewController(),
@@ -143,6 +144,10 @@ func (n *Noise) Self() PeerID {
 	return CreatePeerID(
 		n.node.GetIdentityAdapter().MyIdentity(),
 		fmt.Sprintf("%s:%d", n.config.Host, n.config.Port))
+}
+
+func (n *Noise) Config() *Config {
+	return n.config
 }
 
 func (n *Noise) Bootstrap(peers ...PeerID) error {

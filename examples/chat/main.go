@@ -5,15 +5,11 @@ import (
 	"context"
 	"encoding/hex"
 	"flag"
-	"fmt"
 	"github.com/gogo/protobuf/proto"
-	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/crypto/ed25519"
+	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/examples/chat/messages"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
-	"github.com/perlin-network/noise/skademlia"
-	"github.com/perlin-network/noise/skademlia/peer"
 	"github.com/pkg/errors"
 	"net"
 	"os"
@@ -23,7 +19,7 @@ import (
 )
 
 const (
-	chatServiceID = 44
+	chatOpCode = 44
 )
 
 var (
@@ -33,13 +29,11 @@ var (
 
 // ChatService implements the protocol service interface to listen to messages
 type ChatService struct {
-	protocol.Service
-	Address string
+	*noise.Noise
 }
 
-// Receive implements the service interface
-func (n *ChatService) Receive(ctx context.Context, request *protocol.Message) (*protocol.MessageBody, error) {
-	if request.Body.Service != chatServiceID {
+func receive(ctx context.Context, request *protocol.Message) (*protocol.MessageBody, error) {
+	if request.Body.Service != chatOpCode {
 		return nil, nil
 	}
 	if len(request.Body.Payload) == 0 {
@@ -83,53 +77,36 @@ func main() {
 	peers := strings.Split(*peersFlag, ",")
 	privateKeyHex := *privateKeyFlag
 
-	var idAdapter *skademlia.IdentityAdapter
-	if len(privateKeyHex) == 0 {
-		// generate a new identity
-		idAdapter = skademlia.NewIdentityAdapterDefault()
-	} else {
-		// if you're reusing a key, then get the keypair
-		kp, err := crypto.FromPrivateKey(ed25519.New(), privateKeyHex)
-		if err != nil {
-			panic(err)
-		}
-		idAdapter, err = skademlia.NewIdentityFromKeypair(kp, skademlia.DefaultC1, skademlia.DefaultC2)
-		if err != nil {
-			panic(err)
-		}
+	// setup the node
+	config := &noise.Config{
+		Host:            host,
+		Port:            port,
+		EnableSKademlia: true,
 	}
 
-	// print the identity so you can use the public key for the next node
-	log.Info().Msgf("PrivateKey: %s", idAdapter.GetKeyPair().PrivateKeyHex())
-	log.Info().Msgf("NodeID: %s", idAdapter.MyIdentityHex())
+	if len(privateKeyHex) > 0 {
+		config.PrivateKeyHex = privateKeyHex
+	}
 
 	// setup the node
-	addr := fmt.Sprintf("%s:%d", host, port)
-	listener, err := net.Listen("tcp", addr)
+	n, err := noise.NewNoise(config)
 	if err != nil {
 		panic(err)
 	}
-
-	node := protocol.NewNode(
-		protocol.NewController(),
-		idAdapter,
-	)
-
-	if _, err := skademlia.NewConnectionAdapter(listener, dialTCP, node, addr); err != nil {
-		panic(err)
+	svc := &ChatService{
+		Noise: n,
 	}
 
-	// add the service to the node
-	node.AddService(&ChatService{
-		Address: addr,
-	})
+	// print the identity so you can use the public key for the next node
+	log.Info().Msgf("PrivateKey: %s", svc.Config().PrivateKeyHex)
+	log.Info().Msgf("NodeID: %s", hex.EncodeToString(svc.Self().PublicKey))
 
-	// start listening for connections
-	node.Start()
+	// register the recieve callback
+	svc.OnReceive(noise.OpCode(chatOpCode), receive)
 
 	if len(peers) > 0 {
 		// bootstrap the node to an existing cluster
-		var peerIDs []peer.ID
+		var peerIDs []noise.PeerID
 		for _, peerKV := range peers {
 			if len(peerKV) == 0 {
 				// this is a blank parameter
@@ -141,10 +118,10 @@ func main() {
 				panic(err)
 			}
 			remoteAddr := p[1]
-			peerIDs = append(peerIDs, peer.CreateID(remoteAddr, peerPubKey))
+			peerIDs = append(peerIDs, noise.CreatePeerID(peerPubKey, remoteAddr))
 		}
 
-		node.GetConnectionAdapter().(*skademlia.ConnectionAdapter).Bootstrap(peerIDs...)
+		svc.Bootstrap(peerIDs...)
 	}
 
 	// broadcast any stdin inputs
@@ -157,11 +134,11 @@ func main() {
 			continue
 		}
 
-		log.Info().Msgf("<%s> %s", idAdapter.MyIdentityHex()[0:16], input)
+		log.Info().Msgf("<%s> %s", hex.EncodeToString(svc.Self().PublicKey)[0:16], input)
 
-		body := makeMessageBody(chatServiceID, &messages.ChatMessage{
+		body := makeMessageBody(chatOpCode, &messages.ChatMessage{
 			Message: input,
 		})
-		node.Broadcast(context.Background(), body)
+		svc.Messenger().Broadcast(context.Background(), body)
 	}
 }
