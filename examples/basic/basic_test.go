@@ -7,7 +7,6 @@ import (
 
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/examples/basic/messages"
-	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/utils"
 
 	"github.com/gogo/protobuf/proto"
@@ -26,7 +25,7 @@ type BasicService struct {
 	Mailbox chan *messages.BasicMessage
 }
 
-func (n *BasicService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
+func (n *BasicService) Receive(ctx context.Context, message *noise.Message) (*noise.MessageBody, error) {
 	if message.Body.Service != opCode {
 		// early exit if not the matching service
 		return nil, nil
@@ -42,7 +41,7 @@ func (n *BasicService) Receive(ctx context.Context, message *protocol.Message) (
 	return nil, nil
 }
 
-func makeMessageBody(value string) *protocol.MessageBody {
+func makeMessageBody(value string) *noise.MessageBody {
 	msg := &messages.BasicMessage{
 		Message: value,
 	}
@@ -50,7 +49,7 @@ func makeMessageBody(value string) *protocol.MessageBody {
 	if err != nil {
 		return nil
 	}
-	body := &protocol.MessageBody{
+	body := &noise.MessageBody{
 		Service: opCode,
 		Payload: payload,
 	}
@@ -100,7 +99,7 @@ func ExampleBasic() {
 
 	// Broadcast out a message from Node 0.
 	expected := "This is a broadcasted message from Node 0."
-	services[0].Messenger().Broadcast(context.Background(), makeMessageBody(expected))
+	services[0].Broadcast(context.Background(), makeMessageBody(expected))
 
 	fmt.Println("Node 0 sent out a message.")
 

@@ -3,12 +3,9 @@ package requestresponse
 import (
 	"context"
 	"fmt"
-	"net"
 	"testing"
-	"time"
 
 	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/utils"
 
 	"github.com/pkg/errors"
@@ -21,15 +18,11 @@ const (
 	host         = "localhost"
 )
 
-func dialTCP(addr string) (net.Conn, error) {
-	return net.DialTimeout("tcp", addr, 10*time.Second)
-}
-
 type SimpleService struct {
 	*noise.Noise
 }
 
-func (s *SimpleService) receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
+func (s *SimpleService) receive(ctx context.Context, message *noise.Message) (*noise.MessageBody, error) {
 	if message.Body.Service != simpleOpCode {
 		// not the matching service id
 		return nil, nil
@@ -39,7 +32,7 @@ func (s *SimpleService) receive(ctx context.Context, message *protocol.Message) 
 	}
 	reqMsg := string(message.Body.Payload)
 
-	return &protocol.MessageBody{
+	return &noise.MessageBody{
 		Service: simpleOpCode,
 		Payload: ([]byte)(fmt.Sprintf("%s reply", reqMsg)),
 	}, nil
@@ -79,9 +72,9 @@ func TestSimpleRequestResponse(t *testing.T) {
 	assert.Nil(t, err)
 
 	reqMsg0 := "Request response message from Node 0 to Node 1."
-	resp, err := services[0].Messenger().Request(context.Background(),
+	resp, err := services[0].Request(context.Background(),
 		services[1].Self().PublicKey,
-		&protocol.MessageBody{
+		&noise.MessageBody{
 			Service: simpleOpCode,
 			Payload: ([]byte)(reqMsg0),
 		},
@@ -90,9 +83,9 @@ func TestSimpleRequestResponse(t *testing.T) {
 	assert.Equal(t, fmt.Sprintf("%s reply", reqMsg0), string(resp.Payload))
 
 	reqMsg1 := "Request response message from Node 1 to Node 2."
-	resp, err = services[1].Messenger().Request(context.Background(),
+	resp, err = services[1].Request(context.Background(),
 		services[2].Self().PublicKey,
-		&protocol.MessageBody{
+		&noise.MessageBody{
 			Service: simpleOpCode,
 			Payload: ([]byte)(reqMsg1),
 		},

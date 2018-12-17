@@ -17,12 +17,12 @@ func (n *Noise) Receive(ctx context.Context, request *protocol.Message) (*protoc
 	opcode := OpCode(request.Body.Service)
 	if onReceive, ok := n.onReceive[opcode]; ok {
 		for _, cb := range onReceive {
-			reply, err := cb(ctx, request)
+			reply, err := cb(ctx, (*Message)(request))
 			if err != nil {
 				return nil, err
 			}
 			if reply != nil {
-				return reply, nil
+				return (*protocol.MessageBody)(reply), nil
 			}
 		}
 	}

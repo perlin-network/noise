@@ -3,13 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"net"
 	"sync/atomic"
 	"time"
 
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/utils"
 )
 
@@ -20,16 +18,12 @@ const (
 	sendingNodes = 1
 )
 
-func dialTCP(addr string) (net.Conn, error) {
-	return net.DialTimeout("tcp", addr, 10*time.Second)
-}
-
 type countService struct {
 	*noise.Noise
 	MsgCount uint64
 }
 
-func (s *countService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
+func (s *countService) Receive(ctx context.Context, message *noise.Message) (*noise.MessageBody, error) {
 	if message.Body.Service != opCode {
 		return nil, nil
 	}
@@ -78,12 +72,12 @@ func main() {
 	for i := 0; i < sendingNodes; i++ {
 		go func(senderIdx int) {
 			receiver := services[(senderIdx+1)%numNodes].Self().PublicKey
-			body := &protocol.MessageBody{
+			body := &noise.MessageBody{
 				Service: opCode,
 				Payload: []byte(fmt.Sprintf("From node %d to node %d", senderIdx, (senderIdx+1)%numNodes)),
 			}
 			for {
-				services[senderIdx].Messenger().Send(context.Background(), receiver, body)
+				services[senderIdx].Send(context.Background(), receiver, body)
 			}
 		}(i)
 	}

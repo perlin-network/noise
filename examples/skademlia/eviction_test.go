@@ -18,6 +18,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	evictOpcode = 43
+)
+
 func TestSKademliaEviction(t *testing.T) {
 	bucketSize := 4
 
@@ -62,7 +66,7 @@ func TestSKademliaEviction(t *testing.T) {
 	for i := 0; i < len(nodes); i++ {
 		expected := fmt.Sprintf("This is a broadcasted message from Node %d.", i)
 		assert.Nil(t, nodes[i].Broadcast(context.Background(), &protocol.MessageBody{
-			Service: serviceID,
+			Service: evictOpcode,
 			Payload: ([]byte)(expected),
 		}))
 
@@ -100,7 +104,7 @@ func TestSKademliaEviction(t *testing.T) {
 	for i := 0; i < len(nodes); i++ {
 		expected := fmt.Sprintf("This is a broadcasted message from Node %d.", i)
 		assert.Nil(t, nodes[i].Broadcast(context.Background(), &protocol.MessageBody{
-			Service: serviceID,
+			Service: evictOpcode,
 			Payload: ([]byte)(expected),
 		}))
 
@@ -152,7 +156,7 @@ type EvictService struct {
 }
 
 func (n *EvictService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
-	if message.Body.Service != serviceID {
+	if message.Body.Service != evictOpcode {
 		return nil, nil
 	}
 	if len(message.Body.Payload) == 0 {

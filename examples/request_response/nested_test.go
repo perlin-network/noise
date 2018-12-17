@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/utils"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -28,7 +27,7 @@ type NestedService struct {
 	responseCount int
 }
 
-func (n *NestedService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
+func (n *NestedService) Receive(ctx context.Context, message *noise.Message) (*noise.MessageBody, error) {
 	if message.Body.Service != nestedOpCode {
 		// not the matching service id
 		return nil, nil
@@ -47,9 +46,9 @@ func (n *NestedService) Receive(ctx context.Context, message *protocol.Message) 
 
 		// make another request/response
 		target := services[(n.id+1)%numNodes].Self().PublicKey
-		return n.Messenger().Request(ctx,
+		return n.Request(ctx,
 			target,
-			&protocol.MessageBody{
+			&noise.MessageBody{
 				Service: nestedOpCode,
 				Payload: ([]byte)(fmt.Sprintf("%s %d", reqMsg, n.id)),
 			},
@@ -58,7 +57,7 @@ func (n *NestedService) Receive(ctx context.Context, message *protocol.Message) 
 
 		// after a certain number of request/response, only send the responses
 		n.responseCount++
-		return &protocol.MessageBody{
+		return &noise.MessageBody{
 			Service: nestedOpCode,
 			Payload: ([]byte)(reqMsg),
 		}, nil
@@ -103,9 +102,9 @@ func TestNestedRequestResponse(t *testing.T) {
 	}
 
 	msg := "init"
-	resp, err := services[0].Messenger().Request(context.Background(),
+	resp, err := services[0].Request(context.Background(),
 		services[1].Self().PublicKey,
-		&protocol.MessageBody{
+		&noise.MessageBody{
 			Service: nestedOpCode,
 			Payload: ([]byte)(msg),
 		},

@@ -13,15 +13,17 @@ import (
 	"time"
 )
 
-type CallbackID int
+// Alias some of the internal types for external use
 type NodeID []byte
+type PeerID peer.ID
+type Message protocol.Message
+type MessageBody protocol.MessageBody
 type OpCode uint32
 type StartupCallback func(id NodeID)
-type ReceiveCallback func(ctx context.Context, request *protocol.Message) (*protocol.MessageBody, error)
+type ReceiveCallback func(ctx context.Context, request *Message) (*MessageBody, error)
 type CleanupCallback func(id NodeID)
 type PeerConnectCallback func(id NodeID)
 type PeerDisconnectCallback func(id NodeID)
-type PeerID peer.ID
 
 type Noise struct {
 	protocol.Service
@@ -107,12 +109,12 @@ func NewNoise(config *Config) (*Noise, error) {
 	return n, nil
 }
 
-// Callback for when the network starts listening for peers.
+// OnStartup set callback for when the network starts listening for peers.
 func (n *Noise) OnStartup(cb StartupCallback) {
 	n.onStartup = append(n.onStartup, cb)
 }
 
-// Callback for when an incoming message is received.
+// OnReceive set callback for when an incoming message is received.
 // Returns a message body to reply or whether there was an error.
 func (n *Noise) OnReceive(opCode OpCode, cb ReceiveCallback) {
 	if len(n.onReceive[opCode]) == 0 {
@@ -121,35 +123,39 @@ func (n *Noise) OnReceive(opCode OpCode, cb ReceiveCallback) {
 	n.onReceive[opCode] = append(n.onReceive[opCode], cb)
 }
 
-// Callback for when the network stops listening for peers.
+// OnCleanup set callback for when the network stops listening for peers.
 func (n *Noise) OnCleanup(cb CleanupCallback) {
 	n.onCleanup = append(n.onCleanup, cb)
 }
 
-// Callback for when a peer connects to the node
+// OnPeerConnect set callback for when a peer connects to the node
 func (n *Noise) OnPeerConnect(cb PeerConnectCallback) {
 	n.onPeerConnect = append(n.onPeerConnect, cb)
 }
 
-// Callback for when a peer disconnects from the node.
+// OnPeerDisconnect set callback for when a peer disconnects from the node.
 func (n *Noise) OnPeerDisconnect(cb PeerDisconnectCallback) {
 	n.onPeerDisconnect = append(n.onPeerDisconnect, cb)
 }
 
+// Shutdown closes all the open connections to this node
 func (n *Noise) Shutdown() {
 	n.node.Stop()
 }
 
+// Self returns this node's PeerID
 func (n *Noise) Self() PeerID {
 	return CreatePeerID(
 		n.node.GetIdentityAdapter().MyIdentity(),
 		fmt.Sprintf("%s:%d", n.config.Host, n.config.Port))
 }
 
+// Config returns the config of the current instance
 func (n *Noise) Config() *Config {
 	return n.config
 }
 
+// Bootstrap setups any connected node connection information
 func (n *Noise) Bootstrap(peers ...PeerID) error {
 	if n.config.EnableSKademlia {
 		var skPeers []peer.ID
@@ -171,6 +177,26 @@ func (n *Noise) Bootstrap(peers ...PeerID) error {
 	return nil
 }
 
-func (n *Noise) Messenger() protocol.SendAdapter {
-	return n.node
+// Send will deliver a one way message to the recipient node
+func (n *Noise) Send(ctx context.Context, recipient NodeID, body *MessageBody) error {
+	return n.node.Send(ctx, ([]byte)(recipient), (*protocol.MessageBody)(body))
+}
+
+// Request will send a message to the recipient and wait for a reply
+func (n *Noise) Request(ctx context.Context, recipient []byte, body *MessageBody) (*MessageBody, error) {
+	if reply, err := n.node.Request(ctx, ([]byte)(recipient), (*protocol.MessageBody)(body)); err != nil {
+		return nil, err
+	} else {
+		return (*MessageBody)(reply), nil
+	}
+}
+
+// Broadcast sends a message to all it's currently connected peers
+func (n *Noise) Broadcast(ctx context.Context, body *MessageBody) error {
+	return n.node.Broadcast(ctx, (*protocol.MessageBody)(body))
+}
+
+// BroadcastRandomly sends a message up to maxPeers number of random connected peers
+func (n *Noise) BroadcastRandomly(ctx context.Context, body *MessageBody, maxPeers int) error {
+	return n.node.BroadcastRandomly(ctx, (*protocol.MessageBody)(body), maxPeers)
 }

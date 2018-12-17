@@ -5,20 +5,13 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"net"
 	"strings"
-	"time"
 
 	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/protocol"
 )
 
 type starterService struct {
 	*noise.Noise
-}
-
-func dialTCP(addr string) (net.Conn, error) {
-	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
 func main() {
@@ -45,7 +38,7 @@ func main() {
 	service := &starterService{
 		Noise: n,
 	}
-	service.OnReceive(noise.OpCode(1234), func(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
+	service.OnReceive(noise.OpCode(1234), func(ctx context.Context, message *noise.Message) (*noise.MessageBody, error) {
 		fmt.Printf("received payload from %s: %s\n", hex.EncodeToString(message.Sender), string(message.Body.Payload))
 		return nil, nil
 	})

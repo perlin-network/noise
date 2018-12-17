@@ -8,15 +8,14 @@ import (
 
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/utils"
 
 	"github.com/stretchr/testify/assert"
 )
 
 const (
-	serviceID = 42
-	host      = "localhost"
+	bootstrapOpcode = 42
+	host            = "localhost"
 )
 
 func TestSKademliaBootstrap(t *testing.T) {
@@ -34,8 +33,8 @@ func TestSKademliaBootstrap(t *testing.T) {
 	// assert broadcasts goes to everyone
 	for i := 0; i < len(nodes); i++ {
 		expected := fmt.Sprintf("This is a broadcasted message from Node %d.", i)
-		assert.Nil(t, nodes[i].Messenger().Broadcast(context.Background(), &protocol.MessageBody{
-			Service: serviceID,
+		assert.Nil(t, nodes[i].Broadcast(context.Background(), &noise.MessageBody{
+			Service: bootstrapOpcode,
 			Payload: ([]byte)(expected),
 		}))
 
@@ -59,8 +58,8 @@ type MsgService struct {
 	Mailbox chan string
 }
 
-func (n *MsgService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
-	if message.Body.Service != serviceID {
+func (n *MsgService) Receive(ctx context.Context, message *noise.Message) (*noise.MessageBody, error) {
+	if message.Body.Service != bootstrapOpcode {
 		return nil, nil
 	}
 	if len(message.Body.Payload) == 0 {
@@ -94,7 +93,7 @@ func makeNodes(numNodes int) []*MsgService {
 			Mailbox: make(chan string, 1),
 		}
 		// register the callback
-		service.OnReceive(noise.OpCode(serviceID), service.Receive)
+		service.OnReceive(noise.OpCode(bootstrapOpcode), service.Receive)
 
 		services = append(services, service)
 	}

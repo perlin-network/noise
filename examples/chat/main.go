@@ -9,7 +9,6 @@ import (
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/examples/chat/messages"
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
 	"net"
 	"os"
@@ -27,12 +26,12 @@ var (
 	reqResponse sync.Map
 )
 
-// ChatService implements the protocol service interface to listen to messages
+// ChatService inherits the noise interface
 type ChatService struct {
 	*noise.Noise
 }
 
-func receive(ctx context.Context, request *protocol.Message) (*protocol.MessageBody, error) {
+func receive(ctx context.Context, request *noise.Message) (*noise.MessageBody, error) {
 	if request.Body.Service != chatOpCode {
 		return nil, nil
 	}
@@ -48,12 +47,12 @@ func receive(ctx context.Context, request *protocol.Message) (*protocol.MessageB
 }
 
 // makeMessageBody is a helper to serialize the message type
-func makeMessageBody(serviceID int, msg *messages.ChatMessage) *protocol.MessageBody {
+func makeMessageBody(serviceID int, msg *messages.ChatMessage) *noise.MessageBody {
 	payload, err := msg.Marshal()
 	if err != nil {
 		return nil
 	}
-	body := &protocol.MessageBody{
+	body := &noise.MessageBody{
 		Service: uint16(serviceID),
 		Payload: payload,
 	}
@@ -139,6 +138,6 @@ func main() {
 		body := makeMessageBody(chatOpCode, &messages.ChatMessage{
 			Message: input,
 		})
-		svc.Messenger().Broadcast(context.Background(), body)
+		svc.Broadcast(context.Background(), body)
 	}
 }
