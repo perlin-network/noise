@@ -3,7 +3,9 @@ package requestresponse
 import (
 	"context"
 	"fmt"
+	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/utils"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -11,24 +13,23 @@ import (
 )
 
 const (
-	nestedServiceID   = 51
+	nestedOpCode      = 51
 	maxNestedMessages = 5
 )
 
 var (
-	keys [][]byte
+	services []*NestedService
 )
 
 type NestedService struct {
-	protocol.Service
-	node          *protocol.Node
+	*noise.Noise
 	id            int
 	requestCount  int
 	responseCount int
 }
 
 func (n *NestedService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
-	if message.Body.Service != nestedServiceID {
+	if message.Body.Service != nestedOpCode {
 		// not the matching service id
 		return nil, nil
 	}
@@ -45,11 +46,11 @@ func (n *NestedService) Receive(ctx context.Context, message *protocol.Message) 
 		n.requestCount++
 
 		// make another request/response
-		target := keys[(n.id+1)%numNodes]
-		return n.node.Request(ctx,
+		target := services[(n.id+1)%numNodes].Self().PublicKey
+		return n.Messenger().Request(ctx,
 			target,
 			&protocol.MessageBody{
-				Service: nestedServiceID,
+				Service: nestedOpCode,
 				Payload: ([]byte)(fmt.Sprintf("%s %d", reqMsg, n.id)),
 			},
 		)
@@ -58,7 +59,7 @@ func (n *NestedService) Receive(ctx context.Context, message *protocol.Message) 
 		// after a certain number of request/response, only send the responses
 		n.responseCount++
 		return &protocol.MessageBody{
-			Service: nestedServiceID,
+			Service: nestedOpCode,
 			Payload: ([]byte)(reqMsg),
 		}, nil
 	}
@@ -68,31 +69,44 @@ func (n *NestedService) Receive(ctx context.Context, message *protocol.Message) 
 }
 
 func TestNestedRequestResponse(t *testing.T) {
-	nodes, ports := setupNodes()
+	// setup the services
+	for i := 0; i < numNodes; i++ {
+		// setup the node
+		config := &noise.Config{
+			Host:            host,
+			Port:            utils.GetRandomUnusedPort(),
+			EnableSKademlia: false,
+		}
+		n, err := noise.NewNoise(config)
+		if err != nil {
+			panic(err)
+		}
+		s := &NestedService{
+			Noise: n,
+			id:    i,
+		}
+		s.OnReceive(noise.OpCode(nestedOpCode), s.Receive)
 
-	for i, node := range nodes {
-		node.AddService(&NestedService{
-			id:   i,
-			node: node,
-		})
-		keys = append(keys, node.GetIdentityAdapter().MyIdentity())
+		services = append(services, s)
 	}
 
 	// Connect all node's routing table
-	for i, node := range nodes {
-		for j := range nodes {
+	for i, s := range services {
+		var peerIDs []noise.PeerID
+		for j := range services {
 			if i == j {
 				continue
 			}
-			node.GetConnectionAdapter().AddRemoteID(keys[j], fmt.Sprintf("%s:%d", host, ports[j]))
+			peerIDs = append(peerIDs, services[j].Self())
 		}
+		s.Bootstrap(peerIDs...)
 	}
 
 	msg := "init"
-	resp, err := nodes[0].Request(context.Background(),
-		keys[1],
+	resp, err := services[0].Messenger().Request(context.Background(),
+		services[1].Self().PublicKey,
 		&protocol.MessageBody{
-			Service: nestedServiceID,
+			Service: nestedOpCode,
 			Payload: ([]byte)(msg),
 		},
 	)

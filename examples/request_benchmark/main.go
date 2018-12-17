@@ -7,14 +7,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/perlin-network/noise/base"
+	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/utils"
 )
 
 const (
-	serviceID    = 42
+	opCode       = 42
 	host         = "localhost"
 	numNodes     = 2
 	sendingNodes = 1
@@ -25,12 +25,12 @@ func dialTCP(addr string) (net.Conn, error) {
 }
 
 type countService struct {
-	protocol.Service
+	*noise.Noise
 	MsgCount uint64
 }
 
 func (s *countService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
-	if message.Body.Service != serviceID {
+	if message.Body.Service != opCode {
 		return nil, nil
 	}
 	atomic.AddUint64(&s.MsgCount, 1)
@@ -39,62 +39,51 @@ func (s *countService) Receive(ctx context.Context, message *protocol.Message) (
 
 func main() {
 	var services []*countService
-	var nodes []*protocol.Node
-	var ports []int
 
 	// setup all the nodes
 	for i := 0; i < numNodes; i++ {
 		// setup the node
-		idAdapter := base.NewIdentityAdapter()
-		node := protocol.NewNode(
-			protocol.NewController(),
-			idAdapter,
-		)
-
-		port := utils.GetRandomUnusedPort()
-		ports = append(ports, port)
-		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
-		if err != nil {
-			log.Fatal().Msgf("%+v", err)
+		config := &noise.Config{
+			Host:            host,
+			Port:            utils.GetRandomUnusedPort(),
+			EnableSKademlia: false,
 		}
-
-		// setup the connection adapter
-		if _, err := base.NewConnectionAdapter(listener, dialTCP, node); err != nil {
-			log.Fatal().Msgf("%+v", err)
+		n, err := noise.NewNoise(config)
+		if err != nil {
+			panic(err)
 		}
 
 		// create service
-		service := &countService{}
-		node.AddService(service)
+		service := &countService{
+			Noise: n,
+		}
+		service.OnReceive(noise.OpCode(opCode), service.Receive)
 
-		// Start listening for connections
-		node.Start()
-
-		nodes = append(nodes, node)
 		services = append(services, service)
 	}
 
 	// Connect all the node routing tables
-	for i, srcNode := range nodes {
-		for j, otherNode := range nodes {
+	for i, svc := range services {
+		var peerIDs []noise.PeerID
+		for j, other := range services {
 			if i == j {
 				continue
 			}
-			peerID := otherNode.GetIdentityAdapter().MyIdentity()
-			srcNode.GetConnectionAdapter().AddRemoteID(peerID, fmt.Sprintf("%s:%d", host, ports[j]))
+			peerIDs = append(peerIDs, other.Self())
 		}
+		svc.Bootstrap(peerIDs...)
 	}
 
 	// have every node send to the next one as quickly as possible
 	for i := 0; i < sendingNodes; i++ {
 		go func(senderIdx int) {
-			receiver := nodes[(senderIdx+1)%numNodes].GetIdentityAdapter().MyIdentity()
+			receiver := services[(senderIdx+1)%numNodes].Self().PublicKey
 			body := &protocol.MessageBody{
-				Service: serviceID,
+				Service: opCode,
 				Payload: []byte(fmt.Sprintf("From node %d to node %d", senderIdx, (senderIdx+1)%numNodes)),
 			}
 			for {
-				nodes[senderIdx].Send(context.Background(), receiver, body)
+				services[senderIdx].Messenger().Send(context.Background(), receiver, body)
 			}
 		}(i)
 	}
