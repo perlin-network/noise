@@ -9,6 +9,7 @@ import (
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/skademlia"
 	"github.com/perlin-network/noise/skademlia/peer"
+	"github.com/pkg/errors"
 	"net"
 	"time"
 )
@@ -40,11 +41,19 @@ func dialTCP(addr string) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
+// CreatePeerID is a wrapper to create a PeerID instance
 func CreatePeerID(publicKey []byte, addr string) PeerID {
 	return PeerID(peer.CreateID(addr, publicKey))
 }
 
+// NewNoise creates a new Noise instance with the correct configuration
 func NewNoise(config *Config) (*Noise, error) {
+	if len(config.Host) == 0 {
+		return nil, errors.New("Host is missing")
+	}
+	if config.Port < 1024 || config.Port > 49152 {
+		return nil, errors.Errorf("Invalid config port: %d", config.Port)
+	}
 
 	var idAdapter protocol.IdentityAdapter
 	if len(config.PrivateKeyHex) == 0 {

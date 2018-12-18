@@ -81,12 +81,14 @@ Noise provides out-of-the-box node configuration. A new Noise configuration rand
 ```go
 // Create a new Noise config which generate a new Ed25519 keypair.
 config := &noise.Config{
-    PrivateKeyHex: idAdapter.GetKeyPair().PrivateKeyHex(),
+    Port: 3000,
+    // Leave PrivateKeyHex blank
 }
 n, _ := noise.NewNoise(config)
 
 // Create a Noise config from an existing hex-encoded private key.
 config := &noise.Config{
+    Port: 3000,
     PrivateKeyHex: "4d5333a68e3a96d0ad935cb6546b97bbb0c0771acf76c868a897f65dad0b7933e1442970cce57b7a35e1803e0e8acceb04dc6abf8a73df52e808ab5d966113ac",
 }
 n, _ := noise.NewNoise(config)
