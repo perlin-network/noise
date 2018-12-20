@@ -51,7 +51,7 @@ func NewNoise(config *Config) (*Noise, error) {
 	if len(config.Host) == 0 {
 		return nil, errors.New("Host is missing")
 	}
-	if config.Port < 1024 || config.Port > 49152 {
+	if config.Port < 0 || config.Port > 65535 {
 		return nil, errors.Errorf("Invalid config port: %d", config.Port)
 	}
 

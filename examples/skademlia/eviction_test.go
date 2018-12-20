@@ -191,7 +191,7 @@ func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int) []*Evict
 		svc.Metadata()["connection_adapter"].(*skademlia.ConnectionAdapter).Discovery.Routes = rt
 
 		// register the callback
-		svc.OnReceive(noise.OpCode(bootstrapOpcode), svc.Receive)
+		svc.OnReceive(noise.OpCode(evictOpcode), svc.Receive)
 
 		services = append(services, svc)
 	}
