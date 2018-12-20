@@ -28,13 +28,13 @@ type PeerDisconnectCallback func(id NodeID)
 
 type Noise struct {
 	protocol.Service
-	config           *Config
 	node             *protocol.Node
 	onStartup        []StartupCallback
 	onReceive        map[OpCode][]ReceiveCallback
 	onCleanup        []CleanupCallback
 	onPeerConnect    []PeerConnectCallback
 	onPeerDisconnect []PeerDisconnectCallback
+	metadata         map[string]interface{}
 }
 
 func dialTCP(addr string) (net.Conn, error) {
@@ -55,6 +55,8 @@ func NewNoise(config *Config) (*Noise, error) {
 		return nil, errors.Errorf("Invalid config port: %d", config.Port)
 	}
 
+	meta := map[string]interface{}{}
+
 	var idAdapter protocol.IdentityAdapter
 	if len(config.PrivateKeyHex) == 0 {
 		// generate a new identity
@@ -70,7 +72,15 @@ func NewNoise(config *Config) (*Noise, error) {
 			return nil, err
 		}
 		if config.EnableSKademlia {
-			idAdapter, err = skademlia.NewIdentityFromKeypair(kp, skademlia.DefaultC1, skademlia.DefaultC2)
+			c1 := skademlia.DefaultC1
+			c2 := skademlia.DefaultC2
+			if config.SKademliaC1 > 0 {
+				c1 = config.SKademliaC1
+			}
+			if config.SKademliaC2 > 0 {
+				c1 = config.SKademliaC2
+			}
+			idAdapter, err = skademlia.NewIdentityFromKeypair(kp, c1, c2)
 			if err != nil {
 				return nil, err
 			}
@@ -78,7 +88,11 @@ func NewNoise(config *Config) (*Noise, error) {
 			idAdapter = base.NewIdentityAdapterFromKeypair(kp)
 		}
 	}
-	config.PrivateKeyHex = idAdapter.GetKeyPair().PrivateKeyHex()
+	meta["keypair"] = idAdapter.GetKeyPair()
+	meta["self"] = CreatePeerID(idAdapter.MyIdentity(), fmt.Sprintf("%s:%d", config.Host, config.Port))
+	meta["host"] = config.Host
+	meta["port"] = config.Port
+	meta["enable_skademlia"] = config.EnableSKademlia
 
 	node := protocol.NewNode(
 		protocol.NewController(),
@@ -100,15 +114,16 @@ func NewNoise(config *Config) (*Noise, error) {
 			return nil, err
 		}
 	}
+	meta["connection_adapter"] = node.GetConnectionAdapter()
 
 	n := &Noise{
-		config:           config,
 		node:             node,
 		onStartup:        []StartupCallback{},
 		onReceive:        map[OpCode][]ReceiveCallback{},
 		onCleanup:        []CleanupCallback{},
 		onPeerConnect:    []PeerConnectCallback{},
 		onPeerDisconnect: []PeerDisconnectCallback{},
+		metadata:         meta,
 	}
 
 	node.AddService(n)
@@ -154,19 +169,17 @@ func (n *Noise) Shutdown() {
 
 // Self returns this node's PeerID
 func (n *Noise) Self() PeerID {
-	return CreatePeerID(
-		n.node.GetIdentityAdapter().MyIdentity(),
-		fmt.Sprintf("%s:%d", n.config.Host, n.config.Port))
+	return n.metadata["self"].(PeerID)
 }
 
-// Config returns the config of the current instance
-func (n *Noise) Config() *Config {
-	return n.config
+// Metadata returns internal data of the current instance
+func (n *Noise) Metadata() map[string]interface{} {
+	return n.metadata
 }
 
 // Bootstrap setups any connected node connection information
 func (n *Noise) Bootstrap(peers ...PeerID) error {
-	if n.config.EnableSKademlia {
+	if val, ok := n.metadata["enable_skademlia"]; ok && val.(bool) == true {
 		var skPeers []peer.ID
 		for _, p := range peers {
 			if !peer.ID(n.Self()).Equals(peer.ID(p)) {
