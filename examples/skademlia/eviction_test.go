@@ -7,11 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/skademlia"
 	"github.com/perlin-network/noise/skademlia/dht"
-	"github.com/perlin-network/noise/skademlia/discovery"
 	"github.com/perlin-network/noise/skademlia/peer"
 	"github.com/perlin-network/noise/utils"
 
@@ -20,63 +19,58 @@ import (
 
 const (
 	evictOpcode = 43
+	c1          = 8
+	c2          = 8
 )
 
 func TestSKademliaEviction(t *testing.T) {
 	bucketSize := 4
 
-	self := skademlia.NewIdentityAdapter(8, 8)
+	self := skademlia.NewIdentityAdapter(c1, c2)
 	ids := []*skademlia.IdentityAdapter{self}
 	// create 5 peers, last peer should not be in table
 	peers := generateBucketIDs(self, 5)
 	ids = append(ids, peers...)
-	nodes, msgServices, ports := makeNodesFromIDs(ids, bucketSize)
-
-	// being discovery process to connect nodes to each other
-	peer0 := peer.CreateID(fmt.Sprintf("%s:%d", host, ports[0]), nodes[0].GetIdentityAdapter().MyIdentity())
-
-	var discoveryServices []*discovery.Service
+	services := makeNodesFromIDs(ids, bucketSize)
 
 	// Connect other nodes to node 0
-	for _, node := range nodes {
-		ca, ok := node.GetConnectionAdapter().(*skademlia.ConnectionAdapter)
-		assert.True(t, ok)
-
-		// pull out the discovery services so you can test it
-		discoveryServices = append(discoveryServices, ca.Discovery)
+	for i, svc := range services {
+		if i == 0 {
+			continue
+		}
 
 		// bootstrap
-		assert.Nil(t, ca.Bootstrap(peer0))
+		assert.Nil(t, svc.Bootstrap(services[0].Self()))
 	}
 
 	// make sure nodes are connected
-	time.Sleep(100 * time.Duration(len(nodes)) * time.Millisecond)
+	time.Sleep(100 * time.Duration(len(services)) * time.Millisecond)
 
-	rt := discoveryServices[0].Routes
+	rt := services[0].Metadata()["connection_adapter"].(*skademlia.ConnectionAdapter).Discovery.Routes
 
 	skademliaID := peer.CreateID("", ids[1].MyIdentity())
 	expectedBucketID := rt.GetBucketID(skademliaID.Id)
-	for i := 2; i < len(nodes); i++ {
+	for i := 2; i < len(services); i++ {
 		skademliaID = peer.CreateID("", ids[i].MyIdentity())
 		bucketID := rt.GetBucketID(skademliaID.Id)
 		assert.Equalf(t, expectedBucketID, bucketID, "expected bucket ID to be %d, got %d", expectedBucketID, bucketID)
 	}
 
 	// assert broadcasts goes to everyone
-	for i := 0; i < len(nodes); i++ {
+	for i := 0; i < len(services); i++ {
 		expected := fmt.Sprintf("This is a broadcasted message from Node %d.", i)
-		assert.Nil(t, nodes[i].Broadcast(context.Background(), &protocol.MessageBody{
+		assert.Nil(t, services[i].Broadcast(context.Background(), &noise.MessageBody{
 			Service: evictOpcode,
 			Payload: ([]byte)(expected),
 		}))
 
 		// Check if message was received by other nodes.
-		for j := 0; j < len(msgServices); j++ {
+		for j := 0; j < len(services); j++ {
 			if i == j {
 				continue
 			}
 			select {
-			case received := <-msgServices[j].Mailbox:
+			case received := <-services[j].Mailbox:
 				assert.Equalf(t, expected, received, "Expected message '%s' to be received by node %d but got '%v'", expected, j, received)
 			case <-time.After(100 * time.Millisecond):
 				if i == 0 && j == 5 {
@@ -89,32 +83,30 @@ func TestSKademliaEviction(t *testing.T) {
 	}
 
 	expectedLen := 4
-	bucket := discoveryServices[0].Routes.Bucket(expectedBucketID)
+	bucket := rt.Bucket(expectedBucketID)
 	assert.Equalf(t, expectedLen, bucket.Len(), "expected bucket size to be %d, got %d", expectedLen, bucket.Len())
 
 	// stop node 1, bootstrap node 5 and broadcast again
-	nodes[1].Stop()
-	node5, ok := nodes[5].GetConnectionAdapter().(*skademlia.ConnectionAdapter)
-	assert.True(t, ok)
-	assert.Nil(t, node5.Bootstrap(peer0))
+	services[1].Shutdown()
+	assert.Nil(t, services[5].Bootstrap(services[0].Self()))
 	// make sure node 0 and node 5 are connected
 	time.Sleep(100 * time.Millisecond)
 
 	// assert broadcasts goes to everyone
-	for i := 0; i < len(nodes); i++ {
+	for i := 0; i < len(services); i++ {
 		expected := fmt.Sprintf("This is a broadcasted message from Node %d.", i)
-		assert.Nil(t, nodes[i].Broadcast(context.Background(), &protocol.MessageBody{
+		assert.Nil(t, services[i].Broadcast(context.Background(), &noise.MessageBody{
 			Service: evictOpcode,
 			Payload: ([]byte)(expected),
 		}))
 
 		// Check if message was received by other nodes.
-		for j := 0; j < len(msgServices); j++ {
+		for j := 0; j < len(services); j++ {
 			if i == j {
 				continue
 			}
 			select {
-			case received := <-msgServices[j].Mailbox:
+			case received := <-services[j].Mailbox:
 				assert.Equalf(t, expected, received, "Expected message '%s' to be received by node %d but got '%v'", expected, j, received)
 			case <-time.After(100 * time.Millisecond):
 				if i == 1 || j == 1 {
@@ -138,7 +130,7 @@ func generateBucketIDs(id *skademlia.IdentityAdapter, n int) []*skademlia.Identi
 	var ids []*skademlia.IdentityAdapter
 
 	for len(ids) < n {
-		id := skademlia.NewIdentityAdapter(8, 8)
+		id := skademlia.NewIdentityAdapter(c1, c2)
 		if rt.GetBucketID(peer.CreateID("", id.MyIdentity()).Id) == 4 {
 			ids = append(ids, id)
 		}
@@ -151,11 +143,11 @@ func dialTCP(addr string) (net.Conn, error) {
 }
 
 type EvictService struct {
-	protocol.Service
+	*noise.Noise
 	Mailbox chan string
 }
 
-func (n *EvictService) Receive(ctx context.Context, message *protocol.Message) (*protocol.MessageBody, error) {
+func (n *EvictService) Receive(ctx context.Context, message *noise.Message) (*noise.MessageBody, error) {
 	if message.Body.Service != evictOpcode {
 		return nil, nil
 	}
@@ -167,49 +159,42 @@ func (n *EvictService) Receive(ctx context.Context, message *protocol.Message) (
 	return nil, nil
 }
 
-func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int) ([]*protocol.Node, []*EvictService, []int) {
-	var nodes []*protocol.Node
+func makeNodesFromIDs(ids []*skademlia.IdentityAdapter, bucketSize int) []*EvictService {
 	var services []*EvictService
-	var ports []int
 
 	// setup all the nodes
 	for i := 0; i < len(ids); i++ {
-		idAdapter := ids[i]
 
-		port := utils.GetRandomUnusedPort()
-		ports = append(ports, port)
-		address := fmt.Sprintf("%s:%d", host, port)
-		listener, err := net.Listen("tcp", address)
+		// setup the node
+		config := &noise.Config{
+			Host:            host,
+			Port:            utils.GetRandomUnusedPort(),
+			PrivateKeyHex:   ids[i].GetKeyPair().PrivateKeyHex(),
+			EnableSKademlia: true,
+			SKademliaC1:     c1,
+			SKademliaC2:     c2,
+		}
+		n, err := noise.NewNoise(config)
 		if err != nil {
 			log.Fatal().Msgf("%+v", err)
 		}
 
-		node := protocol.NewNode(
-			protocol.NewController(),
-			idAdapter,
-		)
-
-		connAdapter, err := skademlia.NewConnectionAdapter(listener, dialTCP, node, address)
-		if err != nil {
-			log.Fatal().Msgf("%+v", err)
-		}
-
-		// override the routes with one with a different bucket size
-		peerID := peer.CreateID(address, idAdapter.MyIdentity())
-		rt := dht.NewRoutingTableWithOptions(peerID, dht.WithBucketSize(bucketSize))
-		connAdapter.Discovery.Routes = rt
-
+		// create service
 		svc := &EvictService{
+			Noise:   n,
 			Mailbox: make(chan string, 1),
 		}
 
-		node.AddService(svc)
+		// override the routes with one with a different bucket size
+		peerID := peer.ID(svc.Self())
+		rt := dht.NewRoutingTableWithOptions(peerID, dht.WithBucketSize(bucketSize))
+		svc.Metadata()["connection_adapter"].(*skademlia.ConnectionAdapter).Discovery.Routes = rt
 
-		node.Start()
+		// register the callback
+		svc.OnReceive(noise.OpCode(evictOpcode), svc.Receive)
 
-		nodes = append(nodes, node)
 		services = append(services, svc)
 	}
 
-	return nodes, services, ports
+	return services
 }

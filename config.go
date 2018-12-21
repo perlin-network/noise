@@ -5,4 +5,6 @@ type Config struct {
 	Port            int
 	PrivateKeyHex   string
 	EnableSKademlia bool
+	SKademliaC1     int
+	SKademliaC2     int
 }

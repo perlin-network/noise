@@ -7,6 +7,7 @@ import (
 	"flag"
 	"github.com/gogo/protobuf/proto"
 	"github.com/perlin-network/noise"
+	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/examples/chat/messages"
 	"github.com/perlin-network/noise/log"
 	"github.com/pkg/errors"
@@ -97,7 +98,7 @@ func main() {
 	}
 
 	// print the identity so you can use the public key for the next node
-	log.Info().Msgf("PrivateKey: %s", svc.Config().PrivateKeyHex)
+	log.Info().Msgf("PrivateKey: %s", svc.Metadata()["keypair"].(*crypto.KeyPair).PrivateKeyHex())
 	log.Info().Msgf("NodeID: %s", hex.EncodeToString(svc.Self().PublicKey))
 
 	// register the recieve callback
