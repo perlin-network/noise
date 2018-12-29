@@ -55,7 +55,7 @@ func (info *AddressInfo) String() string {
 	return address
 }
 
-// HostPort returns the address wihout protocol, in the format `host:port`.
+// HostPort returns the address without protocol, in the format `host:port`.
 func (info *AddressInfo) HostPort() string {
 	return net.JoinHostPort(info.Host, strconv.Itoa(int(info.Port)))
 }
