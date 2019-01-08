@@ -48,9 +48,6 @@ func CreatePeerID(publicKey []byte, addr string) PeerID {
 
 // NewNoise creates a new Noise instance with the correct configuration
 func NewNoise(config *Config) (*Noise, error) {
-	if len(config.Host) == 0 {
-		return nil, errors.New("Host is missing")
-	}
 	if config.Port < 1024 || config.Port > 65535 {
 		return nil, errors.Errorf("Invalid config port: %d", config.Port)
 	}
