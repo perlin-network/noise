@@ -98,7 +98,12 @@ func NewNoise(config *Config) (*Noise, error) {
 	)
 
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
+
+	// manage external address if specified in config
 	extAddr := fmt.Sprintf("%s:%d", config.ExternalAddress, config.Port)
+	if config.ExternalAddress == "" {
+		extAddr = addr
+	}
 
 	listener, err := net.Listen("tcp", addr)
 
