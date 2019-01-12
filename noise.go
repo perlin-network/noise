@@ -88,6 +88,7 @@ func NewNoise(config *Config) (*Noise, error) {
 	meta["keypair"] = idAdapter.GetKeyPair()
 	meta["self"] = CreatePeerID(idAdapter.MyIdentity(), fmt.Sprintf("%s:%d", config.Host, config.Port))
 	meta["host"] = config.Host
+	meta["extAddress"] = config.ExternalAddress
 	meta["port"] = config.Port
 	meta["enable_skademlia"] = config.EnableSKademlia
 
@@ -97,13 +98,16 @@ func NewNoise(config *Config) (*Noise, error) {
 	)
 
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	extAddr := fmt.Sprintf("%s:%d", config.ExternalAddress, config.Port)
+
 	listener, err := net.Listen("tcp", addr)
+
 	if err != nil {
 		return nil, err
 	}
 
 	if config.EnableSKademlia {
-		if _, err := skademlia.NewConnectionAdapter(listener, dialTCP, node, addr); err != nil {
+		if _, err := skademlia.NewConnectionAdapter(listener, dialTCP, node, extAddr); err != nil {
 			return nil, err
 		}
 	} else {

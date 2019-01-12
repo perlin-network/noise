@@ -2,6 +2,7 @@ package noise
 
 type Config struct {
 	Host            string
+	ExternalAddress	string
 	Port            int
 	PrivateKeyHex   string
 	EnableSKademlia bool
