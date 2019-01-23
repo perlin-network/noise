@@ -217,9 +217,9 @@ func (builder *Builder) Build() (*Network, error) {
 
 	net := &Network{
 		opts:    builder.opts,
-		ID:      id,
+		id:      id,
 		keys:    builder.keys,
-		Address: unifiedAddress,
+		address: unifiedAddress,
 
 		plugins:    builder.plugins,
 		transports: builder.transports,

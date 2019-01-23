@@ -45,8 +45,8 @@ func TestSetters(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if net.Address != fmt.Sprintf("tcp://127.0.0.1:%d", port) { // Unified address.
-		t.Fatalf("address is wrong: expected %s but got %s", fmt.Sprintf("tcp://127.0.0.1:%d", port), net.Address)
+	if net.Address() != fmt.Sprintf("tcp://127.0.0.1:%d", port) { // Unified address.
+		t.Fatalf("address is wrong: expected %s but got %s", fmt.Sprintf("tcp://127.0.0.1:%d", port), net.Address())
 	}
 
 	if !bytes.Equal(net.keys.PrivateKey, keys.PrivateKey) {

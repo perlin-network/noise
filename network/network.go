@@ -47,14 +47,14 @@ type Network struct {
 	keys *crypto.KeyPair
 
 	// Full address to listen on. `protocol://host:port`
-	Address string
+	address string
 
 	// Map of plugins registered to the network.
 	// map[string]Plugin
 	plugins *PluginList
 
 	// Node's cryptographic ID.
-	ID peer.ID
+	id peer.ID
 
 	// Map of connection addresses (string) <-> *network.PeerClient
 	// so that the Network doesn't dial multiple times to the same ip
@@ -212,7 +212,7 @@ func (n *Network) Listen() {
 		})
 	}()
 
-	addrInfo, err := ParseAddress(n.Address)
+	addrInfo, err := ParseAddress(n.Address())
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
@@ -232,7 +232,7 @@ func (n *Network) Listen() {
 	n.startListening()
 
 	log.Info().
-		Str("address", n.Address).
+		Str("address", n.Address()).
 		Msg("Listening for peers.")
 
 	// handle server shutdowns
@@ -252,7 +252,7 @@ func (n *Network) Listen() {
 			// if the Shutdown flag is set, no need to continue with the for loop
 			select {
 			case <-n.kill:
-				log.Info().Msgf("Shutting down server %s.", n.Address)
+				log.Info().Msgf("Shutting down server %s.", n.Address())
 				return
 			default:
 				log.Error().Msgf("%v", err)
@@ -268,7 +268,7 @@ func (n *Network) Client(address string) (*PeerClient, error) {
 		return nil, err
 	}
 
-	if address == n.Address {
+	if address == n.Address() {
 		return nil, errors.New("network: peer should not dial itself")
 	}
 
@@ -339,7 +339,7 @@ func (n *Network) BlockUntilListening() {
 func (n *Network) Bootstrap(addresses ...string) {
 	n.BlockUntilListening()
 
-	addresses = FilterPeers(n.Address, addresses)
+	addresses = FilterPeers(n.Address(), addresses)
 
 	for _, address := range addresses {
 		client, err := n.Client(address)
@@ -364,7 +364,7 @@ func (n *Network) Dial(address string) (net.Conn, error) {
 	}
 
 	if addrInfo.Host != "127.0.0.1" {
-		host, err := ParseAddress(n.Address)
+		host, err := ParseAddress(n.Address())
 		if err != nil {
 			return nil, err
 		}
@@ -490,7 +490,7 @@ func (n *Network) PrepareMessage(ctx context.Context, message proto.Message) (*p
 		return nil, err
 	}
 
-	id := protobuf.ID(n.ID)
+	id := protobuf.ID(n.ID())
 
 	msg := &protobuf.Message{
 		Message: raw,
@@ -614,4 +614,14 @@ func (n *Network) eachPeer(fn func(client *PeerClient) bool) {
 		client := value.(*PeerClient)
 		return fn(client)
 	})
+}
+
+// Address returns the full address to listen on. `protocol://host:port`
+func (n *Network) Address() string {
+	return n.address
+}
+
+// ID returns the node's cryptographic ID.
+func (n *Network) ID() peer.ID {
+	return n.id
 }

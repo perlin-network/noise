@@ -275,7 +275,7 @@ func (c *PeerClient) Write(data []byte) (int, error) {
 
 // LocalAddr implements net.Conn.
 func (c *PeerClient) LocalAddr() net.Addr {
-	addr, err := ParseAddress(c.Network.Address)
+	addr, err := ParseAddress(c.Network.Address())
 	if err != nil {
 		panic(err) // should never happen
 	}

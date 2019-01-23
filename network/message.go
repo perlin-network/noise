@@ -37,7 +37,7 @@ func (pctx *PluginContext) Network() *Network {
 
 // Self returns the node's ID.
 func (pctx *PluginContext) Self() peer.ID {
-	return pctx.Network().ID
+	return pctx.Network().ID()
 }
 
 // Sender returns the peer's ID.

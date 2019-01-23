@@ -66,4 +66,10 @@ type NetworkInterface interface {
 
 	// Close shuts down the entire network.
 	Close()
+
+	// Full address to listen on. `protocol://host:port`
+	Address() string
+
+	// Node's cryptographic ID.
+	ID() peer.ID
 }
