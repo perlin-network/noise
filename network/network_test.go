@@ -94,10 +94,10 @@ func testNodeBroadcastByIDs(t *testing.T, e env, numNodes, numPeers int) {
 	for _, node := range te.nodes {
 		numMsgs := len(te.getMailbox(node).RecvMailbox)
 
-		if isIn(node.Address, selectedPeers...) {
-			assert.Equalf(t, numMsgs, 1, "node [%v] got %d messages, expected 1", node.Address, numMsgs)
+		if isIn(node.Address(), selectedPeers...) {
+			assert.Equalf(t, numMsgs, 1, "node [%v] got %d messages, expected 1", node.Address(), numMsgs)
 		} else {
-			assert.Equalf(t, numMsgs, 0, "node [%v] got %d messages, expected 0", node.Address, numMsgs)
+			assert.Equalf(t, numMsgs, 0, "node [%v] got %d messages, expected 0", node.Address(), numMsgs)
 		}
 	}
 }
@@ -133,10 +133,10 @@ func testNodeBroadcastByAddresses(t *testing.T, e env, numNodes, numPeers int) {
 	for _, node := range te.nodes {
 		numMsgs := len(te.getMailbox(node).RecvMailbox)
 
-		if isInAddress(node.Address, addresses...) {
-			assert.Equalf(t, numMsgs, 1, "node [%v] got %d messages, expected 1", node.Address, numMsgs)
+		if isInAddress(node.Address(), addresses...) {
+			assert.Equalf(t, numMsgs, 1, "node [%v] got %d messages, expected 1", node.Address(), numMsgs)
 		} else {
-			assert.Equalf(t, numMsgs, 0, "node [%v] got %d messages, expected 0", node.Address, numMsgs)
+			assert.Equalf(t, numMsgs, 0, "node [%v] got %d messages, expected 0", node.Address(), numMsgs)
 		}
 	}
 }
@@ -159,7 +159,7 @@ func testClientRequest(t *testing.T, e env, numNodes int) {
 	defer te.tearDown()
 
 	msgStr := "test message"
-	address := te.nodes[0].Address
+	address := te.nodes[0].Address()
 	client, err := te.bootstrapNode.Client(address)
 	assert.Equal(t, nil, err, "expected client error to be nil")
 	msg := &protobuf.TestMessage{

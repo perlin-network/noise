@@ -104,7 +104,7 @@ func setupNetworks(host string, startPort int, numNodes int) []*network.Network 
 	// Bootstrap to Node 0.
 	for i, node := range nodes {
 		if i != 0 {
-			node.Bootstrap(nodes[0].Address)
+			node.Bootstrap(nodes[0].Address())
 		}
 	}
 
@@ -136,7 +136,7 @@ func sendMsg(net *network.Network, idx int) uint32 {
 		go func(address string) {
 			defer wg.Done()
 
-			expectedID := fmt.Sprintf("%s:%d->%s", net.Address, idx, address)
+			expectedID := fmt.Sprintf("%s:%d->%s", net.Address(), idx, address)
 
 			client, err := net.Client(address)
 			if err != nil {

@@ -31,10 +31,10 @@ var (
 
 func (p *plugin) Startup(n *network.Network) {
 	log.Info().
-		Str("address", n.Address).
+		Str("address", n.Address()).
 		Msg("setting up NAT traversal")
 
-	info, err := network.ParseAddress(n.Address)
+	info, err := network.ParseAddress(n.Address())
 	if err != nil {
 		return
 	}
@@ -94,10 +94,9 @@ func (p *plugin) Startup(n *network.Network) {
 	info.Port = uint16(p.externalPort)
 
 	// Set peer information based off of port mapping info.
-	n.Address = info.String()
-	n.ID = peer.CreateID(n.Address, n.GetKeys().PublicKey)
+	n.UpdateSelf(info.String(), peer.CreateID(n.Address(), n.GetKeys().PublicKey))
 
-	log.Info().Msgf("other peers may connect to you through the address %s.", n.Address)
+	log.Info().Msgf("other peers may connect to you through the address %s.", n.Address())
 }
 
 func (p *plugin) Cleanup(n *network.Network) {

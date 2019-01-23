@@ -85,7 +85,7 @@ func (te *testSuite) startBoostrap(numNodes int, plugins ...network.PluginInterf
 	}
 
 	for _, node := range te.nodes {
-		node.Bootstrap(te.bootstrapNode.Address)
+		node.Bootstrap(te.bootstrapNode.Address())
 	}
 
 	// wait for nodes to discover other peers

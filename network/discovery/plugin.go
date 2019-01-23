@@ -27,7 +27,7 @@ var (
 
 func (state *Plugin) Startup(net *network.Network) {
 	// Create routing table.
-	state.Routes = dht.CreateRoutingTable(net.ID)
+	state.Routes = dht.CreateRoutingTable(net.ID())
 }
 
 func (state *Plugin) Receive(ctx *network.PluginContext) error {
@@ -101,7 +101,7 @@ func (state *Plugin) PeerDisconnect(client *network.PeerClient) {
 			state.Routes.RemovePeer(*client.ID)
 
 			log.Debug().
-				Str("address", client.Network.ID.Address).
+				Str("address", client.Network.ID().Address).
 				Str("peer_address", client.ID.Address).
 				Msg("Peer has disconnected.")
 		}

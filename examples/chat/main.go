@@ -76,7 +76,7 @@ func main() {
 			continue
 		}
 
-		log.Info().Msgf("<%s> %s", net.Address, input)
+		log.Info().Msgf("<%s> %s", net.Address(), input)
 
 		ctx := network.WithSignMessage(context.Background(), true)
 		net.Broadcast(ctx, &messages.ChatMessage{Message: input})

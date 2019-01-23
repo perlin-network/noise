@@ -625,3 +625,9 @@ func (n *Network) Address() string {
 func (n *Network) ID() peer.ID {
 	return n.id
 }
+
+// UpdateSelf updates the address and id
+func (n *Network) UpdateSelf(address string, id peer.ID) {
+	n.address = address
+	n.id = id
+}

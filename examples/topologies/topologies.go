@@ -214,12 +214,12 @@ func setupNodes(ports []int) ([]*network.Network, []*MockPlugin, error) {
 // bootstrapNodes bootstraps assigned peers to specific nodes.
 func bootstrapNodes(nodes []*network.Network, peers map[string]map[string]struct{}) error {
 	for _, node := range nodes {
-		if len(peers[node.Address]) == 0 {
+		if len(peers[node.Address()]) == 0 {
 			continue
 		}
 
 		var peerList []string
-		for k := range peers[node.Address] {
+		for k := range peers[node.Address()] {
 			peerList = append(peerList, k)
 		}
 
@@ -244,7 +244,7 @@ func broadcastTest(t *testing.T, nodes []*network.Network, processors []*MockPlu
 
 	// check the messages
 	for i := 0; i < len(nodes); i++ {
-		if _, isPeer := peers[nodes[i].Address][nodes[sender].Address]; !isPeer || i == sender {
+		if _, isPeer := peers[nodes[i].Address()][nodes[sender].Address()]; !isPeer || i == sender {
 			// if not a peer or not the sender, should not receive anything
 			select {
 			case received := <-processors[sender].Mailbox:

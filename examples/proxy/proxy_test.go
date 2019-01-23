@@ -58,7 +58,7 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 	}
 
 	// Check if we are the target.
-	if node.ID.Equals(targetID) {
+	if node.ID().Equals(targetID) {
 		return nil
 	}
 
@@ -88,7 +88,7 @@ func (n *ProxyPlugin) ProxyBroadcast(node *network.Network, sender peer.ID, msg 
 
 	// Seems we have ran out of peers to attempt to propagate to.
 	if len(closestPeers) == 0 {
-		return errors.Errorf("could not found route from node %d to node %d", ids[node.Address], ids[targetID.Address])
+		return errors.Errorf("could not found route from node %d to node %d", ids[node.Address()], ids[targetID.Address])
 	}
 
 	// Propagate message to the closest peer.
@@ -143,10 +143,10 @@ func ExampleProxyPlugin() {
 	for i := 0; i < numNodes; i++ {
 		var peerList []string
 		if i > 0 {
-			peerList = append(peerList, nodes[i-1].Address)
+			peerList = append(peerList, nodes[i-1].Address())
 		}
 		if i < numNodes-1 {
-			peerList = append(peerList, nodes[i+1].Address)
+			peerList = append(peerList, nodes[i+1].Address())
 		}
 
 		// Bootstrap nodes to their assignd peers.
@@ -163,11 +163,11 @@ func ExampleProxyPlugin() {
 	expected := &messages.ProxyMessage{
 		Message: fmt.Sprintf("This is a proxy message from Node %d", sender),
 		Destination: &messages.ID{
-			Address: nodes[target].ID.Address,
-			Id:      nodes[target].ID.Id,
+			Address: nodes[target].ID().Address,
+			Id:      nodes[target].ID().Id,
 		},
 	}
-	plugins[sender].ProxyBroadcast(nodes[sender], nodes[sender].ID, expected)
+	plugins[sender].ProxyBroadcast(nodes[sender], nodes[sender].ID(), expected)
 
 	fmt.Printf("Node %d sent out a message targeting for node %d.\n", sender, target)
 

@@ -73,7 +73,7 @@ func ExampleBasicPlugin() {
 	// Bootstrap to Node 0.
 	for i, node := range nodes {
 		if i != 0 {
-			node.Bootstrap(nodes[0].Address)
+			node.Bootstrap(nodes[0].Address())
 		}
 	}
 

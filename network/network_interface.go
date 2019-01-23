@@ -67,9 +67,12 @@ type NetworkInterface interface {
 	// Close shuts down the entire network.
 	Close()
 
-	// Full address to listen on. `protocol://host:port`
+	// Address returns the full address to listen on. `protocol://host:port`
 	Address() string
 
-	// Node's cryptographic ID.
+	// ID returns the node's cryptographic ID.
 	ID() peer.ID
+
+	// UpdateSelf updates the address and id
+	UpdateSelf(address string, id peer.ID)
 }

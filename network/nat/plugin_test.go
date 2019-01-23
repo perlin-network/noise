@@ -29,7 +29,7 @@ func TestNatConnect(t *testing.T) {
 		n.BlockUntilListening()
 	}
 
-	nodes[1].Bootstrap(nodes[0].Address)
+	nodes[1].Bootstrap(nodes[0].Address())
 	pluginInt, ok := nodes[1].Plugin(discovery.PluginID)
 	assert.Equal(t, true, ok)
 	plugin := pluginInt.(*discovery.Plugin)
