@@ -1,0 +1,9 @@
+.idea/
+.vscode/
+
+vendor/
+coverage.txt
+
+*.exe
+
+*.iml
