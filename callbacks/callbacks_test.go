@@ -1,9 +1,9 @@
-package callbacks_test
+package callbacks
 
 import (
-	"github.com/perlin-network/noise/callbacks"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"math/rand"
 	"sync"
 	"testing"
 )
@@ -13,7 +13,7 @@ const (
 )
 
 func TestReduceCallbacks(t *testing.T) {
-	manager := callbacks.NewReduceCallbackManager()
+	manager := NewReduceCallbackManager()
 
 	initial := 3
 	expected := initial
@@ -35,7 +35,7 @@ func TestReduceCallbacks(t *testing.T) {
 }
 
 func TestReduceCallbacksDeregisterMidway(t *testing.T) {
-	manager := callbacks.NewReduceCallbackManager()
+	manager := NewReduceCallbackManager()
 
 	initial := 3
 	expected := initial
@@ -45,7 +45,7 @@ func TestReduceCallbacksDeregisterMidway(t *testing.T) {
 
 		manager.RegisterCallback(func(in interface{}, params ...interface{}) (interface{}, error) {
 			if i == numCB/2 {
-				return in.(int) + i, callbacks.DeregisterCallback
+				return in.(int) + i, DeregisterCallback
 			}
 
 			return in.(int) + i, nil
@@ -68,7 +68,7 @@ func TestReduceCallbacksDeregisterMidway(t *testing.T) {
 }
 
 func TestReduceCallbacksConcurrent(t *testing.T) {
-	manager := callbacks.NewReduceCallbackManager()
+	manager := NewReduceCallbackManager()
 
 	initial := 3
 	expected := initial
@@ -85,7 +85,7 @@ func TestReduceCallbacksConcurrent(t *testing.T) {
 
 			manager.RegisterCallback(func(in interface{}, params ...interface{}) (interface{}, error) {
 				if i == numCB/2 {
-					return in.(int) + i, callbacks.DeregisterCallback
+					return in.(int) + i, DeregisterCallback
 				}
 
 				return in.(int) + i, nil
@@ -111,7 +111,7 @@ func TestReduceCallbacksConcurrent(t *testing.T) {
 }
 
 func TestReduceCallbacksDeregistered(t *testing.T) {
-	manager := callbacks.NewReduceCallbackManager()
+	manager := NewReduceCallbackManager()
 
 	var actual []int
 	var expected []int
@@ -121,7 +121,7 @@ func TestReduceCallbacksDeregistered(t *testing.T) {
 
 		manager.RegisterCallback(func(in interface{}, params ...interface{}) (interface{}, error) {
 			actual = append(actual, i)
-			return nil, callbacks.DeregisterCallback
+			return nil, DeregisterCallback
 		})
 
 		expected = append(expected, i)
@@ -131,17 +131,17 @@ func TestReduceCallbacksDeregistered(t *testing.T) {
 
 	assert.EqualValues(t, expected, actual, "reduce callbacks failed to execute properly")
 	assert.Equal(t, nil, ret, "reduce callbacks for some reason didn't return expected val")
-	assert.Empty(t, errs, "reduce callbacks still exist in spite of errors being callbacks.DeregisterCallback")
+	assert.Empty(t, errs, "reduce callbacks still exist in spite of errors being DeregisterCallback")
 
 	ret, errs = manager.RunCallbacks(nil)
 
 	assert.EqualValues(t, expected, actual, "reduce callbacks failed to be de-registered")
 	assert.Equal(t, nil, ret, "reduce callbacks for some reason didn't return expected val")
-	assert.Empty(t, errs, "reduce callbacks still exist in spite of errors being callbacks.DeregisterCallback")
+	assert.Empty(t, errs, "reduce callbacks still exist in spite of errors being DeregisterCallback")
 }
 
 func TestReduceCallbacksOnError(t *testing.T) {
-	manager := callbacks.NewReduceCallbackManager()
+	manager := NewReduceCallbackManager()
 
 	var expected []error
 
@@ -167,7 +167,7 @@ func TestReduceCallbacksOnError(t *testing.T) {
 }
 
 func TestSequentialCallbacks(t *testing.T) {
-	manager := callbacks.NewSequentialCallbackManager()
+	manager := NewSequentialCallbackManager()
 
 	initial := uint32(3)
 	actual, expected := initial, initial
@@ -190,7 +190,7 @@ func TestSequentialCallbacks(t *testing.T) {
 }
 
 func TestSequentialCallbacksConcurrent(t *testing.T) {
-	manager := callbacks.NewSequentialCallbackManager()
+	manager := NewSequentialCallbackManager()
 
 	initial := uint32(3)
 	actual, expected := initial, initial
@@ -209,7 +209,7 @@ func TestSequentialCallbacksConcurrent(t *testing.T) {
 				actual += i
 
 				if i == numCB/2 {
-					return callbacks.DeregisterCallback
+					return DeregisterCallback
 				}
 
 				return nil
@@ -235,7 +235,7 @@ func TestSequentialCallbacksConcurrent(t *testing.T) {
 }
 
 func TestSequentialCallbackDeregistered(t *testing.T) {
-	manager := callbacks.NewSequentialCallbackManager()
+	manager := NewSequentialCallbackManager()
 
 	var actual []int
 	var expected []int
@@ -245,7 +245,7 @@ func TestSequentialCallbackDeregistered(t *testing.T) {
 
 		manager.RegisterCallback(func(params ...interface{}) error {
 			actual = append(actual, i)
-			return callbacks.DeregisterCallback
+			return DeregisterCallback
 		})
 
 		expected = append(expected, i)
@@ -254,16 +254,16 @@ func TestSequentialCallbackDeregistered(t *testing.T) {
 	errs := manager.RunCallbacks()
 
 	assert.EqualValues(t, expected, actual, "sequential callbacks failed to execute properly")
-	assert.Empty(t, errs, "sequential callbacks still exist in spite of errors being callbacks.DeregisterCallback")
+	assert.Empty(t, errs, "sequential callbacks still exist in spite of errors being DeregisterCallback")
 
 	errs = manager.RunCallbacks()
 
 	assert.EqualValues(t, expected, actual, "sequential callbacks failed to be de-registered")
-	assert.Empty(t, errs, "sequential callbacks still exist in spite of errors being callbacks.DeregisterCallback")
+	assert.Empty(t, errs, "sequential callbacks still exist in spite of errors being DeregisterCallback")
 }
 
 func TestSequentialCallbacksOnError(t *testing.T) {
-	manager := callbacks.NewSequentialCallbackManager()
+	manager := NewSequentialCallbackManager()
 
 	var expected []error
 
@@ -286,12 +286,67 @@ func TestSequentialCallbacksOnError(t *testing.T) {
 	assert.Empty(t, actual, "sequential callbacks still exist after errors were returned")
 }
 
+func TestSequentialCallbackIntegration(t *testing.T) {
+	var funcs []callback
+
+	removed := make(map[int]struct{})
+	var indices []int
+
+	// Create callbacks, and randomly choose ones to deregister.
+	for i := 0; i < numCB; i++ {
+		i := i
+
+		remove := false
+
+		// 1/3rd chance to remove callback.
+		if rand.Intn(3) == 1 {
+			remove = true
+			removed[i] = struct{}{}
+		}
+
+		funcs = append(funcs, func(params ...interface{}) error {
+			if remove {
+				return DeregisterCallback
+			}
+
+			return nil
+		})
+
+		indices = append(indices, i)
+	}
+
+	manager := NewSequentialCallbackManager()
+	for i := 0; i < numCB; i++ {
+		manager.RegisterCallback(funcs[i])
+	}
+
+	var expected []*callback
+
+	for i := 0; i < numCB; i++ {
+		if _, deregistered := removed[i]; !deregistered {
+			expected = append(expected, manager.callbacks[i])
+		}
+	}
+
+	// Run once and check everything's de-registered properly.
+	errs := manager.RunCallbacks()
+	assert.Empty(t, errs, "callbacks unexpectedly returned errs")
+
+	assert.EqualValues(t, expected, manager.callbacks, "callback sequence is unexpected after deregistering")
+
+	// Run twice and check nothing changes.
+	errs = manager.RunCallbacks()
+	assert.Empty(t, errs, "callbacks unexpectedly returned errs")
+
+	assert.EqualValues(t, expected, manager.callbacks, "callback sequence is unexpected after running after deregistering")
+}
+
 // TODO(kenta): finish tests for opcode callbacks
 func TestOpcodeCallback(t *testing.T) {
 	{
 		// test random order
 		var results []int
-		ocm := callbacks.NewOpcodeCallbackManager()
+		ocm := NewOpcodeCallbackManager()
 		wg := &sync.WaitGroup{}
 		for i := 0; i < numCB; i++ {
 			wg.Add(1)
@@ -319,7 +374,7 @@ func TestOpcodeCallback(t *testing.T) {
 	{
 		// test in order
 		var results []int
-		ocm := callbacks.NewOpcodeCallbackManager()
+		ocm := NewOpcodeCallbackManager()
 		for i := 0; i < numCB; i++ {
 			j := i
 			ocm.RegisterCallback(byte(i), func(params ...interface{}) error {
@@ -345,13 +400,13 @@ func TestOpcodeCallback(t *testing.T) {
 	{
 		// test errors
 		var results []int
-		ocm := callbacks.NewOpcodeCallbackManager()
+		ocm := NewOpcodeCallbackManager()
 		for i := 0; i < numCB; i++ {
 			j := i
 			ocm.RegisterCallback(byte(i), func(params ...interface{}) error {
 				results = append(results, j)
 				//return errors.Errorf("Error-%d", j)
-				return callbacks.DeregisterCallback
+				return DeregisterCallback
 			})
 		}
 
