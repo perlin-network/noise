@@ -3,7 +3,6 @@ package callbacks
 import (
 	"github.com/pkg/errors"
 	"math"
-	"sort"
 	"sync"
 )
 
@@ -50,7 +49,7 @@ func (m *ReduceCallbackManager) RunCallbacks(in interface{}, params ...interface
 
 	m.Unlock()
 
-	var removed []*reduceCallback
+	var remaining []*reduceCallback
 	var err error
 
 	for _, c := range callbacksCopy {
@@ -58,27 +57,14 @@ func (m *ReduceCallbackManager) RunCallbacks(in interface{}, params ...interface
 			if errors.Cause(err) != DeregisterCallback {
 				errs = append(errs, err)
 			}
-
-			removed = append(removed, c)
+		} else {
+			remaining = append(remaining, c)
 		}
 	}
 
 	m.Lock()
 
-	slice := m.callbacks[:0]
-
-	for _, x := range m.callbacks {
-		index := sort.Search(len(removed), func(i int) bool {
-			return x == removed[i]
-		})
-
-		// If x is to be removed,
-		if index == len(removed) {
-			slice = append(slice, x)
-		}
-	}
-
-	m.callbacks = slice
+	m.callbacks = remaining
 
 	m.Unlock()
 
@@ -130,34 +116,21 @@ func (m *SequentialCallbackManager) RunCallbacks(params ...interface{}) (errs []
 
 	m.Unlock()
 
-	var removed []*callback
+	var remaining []*callback
 
 	for _, c := range callbacksCopy {
 		if err := (*c)(params...); err != nil {
 			if errors.Cause(err) != DeregisterCallback {
 				errs = append(errs, err)
 			}
-
-			removed = append(removed, c)
+		} else {
+			remaining = append(remaining, c)
 		}
 	}
 
 	m.Lock()
 
-	slice := m.callbacks[:0]
-
-	for _, x := range m.callbacks {
-		index := sort.Search(len(removed), func(i int) bool {
-			return x == removed[i]
-		})
-
-		// If x is to be removed,
-		if index == len(removed) {
-			slice = append(slice, x)
-		}
-	}
-
-	m.callbacks = slice
+	m.callbacks = remaining
 
 	m.Unlock()
 

@@ -1,6 +1,7 @@
 package noise
 
 import (
+	"fmt"
 	"github.com/perlin-network/noise/callbacks"
 	"github.com/perlin-network/noise/identity"
 	"github.com/perlin-network/noise/nat"
@@ -112,6 +113,8 @@ func (n *Node) Dial(address string) (*Peer, error) {
 	if n.ExternalAddress() == address {
 		return nil, errors.New("noise: node attempted to dial itself")
 	}
+
+	fmt.Println("Dialing", address)
 
 	conn, err := n.transport.Dial(address)
 

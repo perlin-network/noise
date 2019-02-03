@@ -43,7 +43,7 @@ func (p identityPolicy) EnforceIdentityPolicy(node *noise.Node) {
 	protocol.SetNodeID(node, id)
 	node.Set(KeyKademliaTable, newTable(id))
 
-	protocol.OnEachPeerAuthenticated(node, func(node *noise.Node, peer *noise.Peer, id protocol.ID) error {
+	activityLogger := func(node *noise.Node, peer *noise.Peer, id protocol.ID) error {
 		logPeerActivity(node, peer, id)
 
 		peer.BeforeMessageReceived(func(node *noise.Node, peer *noise.Peer, msg []byte) (i []byte, e error) {
@@ -51,7 +51,9 @@ func (p identityPolicy) EnforceIdentityPolicy(node *noise.Node) {
 		})
 
 		return nil
-	})
+	}
+
+	protocol.OnEachPeerAuthenticated(node, activityLogger)
 }
 
 func (p identityPolicy) OnSessionEstablished(node *noise.Node, peer *noise.Peer) error {

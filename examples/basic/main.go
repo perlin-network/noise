@@ -64,7 +64,7 @@ func registerLogCallbacks(node *noise.Node) {
 func registerMessageCallbacks(node *noise.Node) {
 	opcodeChat = noise.RegisterMessage(noise.NextAvailableOpcode(), (*chatMessage)(nil))
 
-	protocol.OnEachSessionEstablished(node, func(node *noise.Node, peer *noise.Peer) error {
+	node.OnMessageReceived(opcodeChat, func(node *noise.Node, opcode noise.Opcode, peer *noise.Peer, message noise.Message) error {
 		peer.OnMessageReceived(opcodeChat, func(node *noise.Node, opcode noise.Opcode, peer *noise.Peer, message noise.Message) error {
 			log.Info().Msgf("[%s]: %s", protocol.PeerID(peer).String(), message.(chatMessage).text)
 
@@ -104,8 +104,6 @@ func main() {
 	log.Info().Msgf("Listening for peers on port %d.", node.Port())
 
 	go node.Listen()
-
-	noise.DebugOpcodes()
 
 	if len(flag.Args()) > 0 {
 		for _, address := range flag.Args() {

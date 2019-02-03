@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"io"
 	"net"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -380,10 +381,10 @@ func (p *Peer) OnMessageReceived(o Opcode, c onMessageReceivedCallback) {
 }
 
 func (p *Peer) Disconnect() {
-	//_, file, no, ok := runtime.Caller(1)
-	//if ok {
-	//	log.Debug().Msf("Disconnect() called from %s#%d.", file, no)
-	//}
+	_, file, no, ok := runtime.Caller(1)
+	if ok {
+		log.Debug().Msgf("Disconnect() called from %s#%d.", file, no)
+	}
 
 	p.killOnce.Do(func() {
 		workersRunning := atomic.LoadUint32(&p.workersRunning)

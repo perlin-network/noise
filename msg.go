@@ -59,7 +59,7 @@ func OpcodeFromMessage(msg Message) (Opcode, error) {
 
 	opcode, exists := messages[typ]
 	if !exists {
-		return OpcodeNil, errors.Errorf("there is no opcode registered for messages type %v")
+		return OpcodeNil, errors.Errorf("there is no opcode registered for message type %v", typ)
 	}
 
 	return opcode, nil

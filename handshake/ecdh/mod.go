@@ -113,6 +113,11 @@ func (p policy) DoHandshake(peer *noise.Peer, opcode noise.Opcode, message noise
 }
 
 func (p policy) onPeerInit(node *noise.Node, peer *noise.Peer) (err error) {
+	if peer.Has(keyEphemeralPrivateKey) {
+		peer.Disconnect()
+		return errors.New("peer attempted to have us instantiate a 2nd handshake")
+	}
+
 	// Generate an ephemeral keypair to perform ECDH with our peer.
 	ephemeralPrivateKey := p.suite.Scalar().Pick(p.suite.RandomStream())
 	ephemeralPublicKey := p.suite.Point().Mul(ephemeralPrivateKey, p.suite.Point().Base())
@@ -146,7 +151,6 @@ func (p policy) onPeerInit(node *noise.Node, peer *noise.Peer) (err error) {
 }
 
 func (policy) onPeerDisconnected(node *noise.Node, peer *noise.Peer) error {
-	peer.Delete(keyTimeoutDispatcher)
 	peer.Delete(keyEphemeralPrivateKey)
 	protocol.DeleteSharedKey(peer)
 
