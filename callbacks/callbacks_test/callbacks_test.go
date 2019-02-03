@@ -166,85 +166,127 @@ func TestReduceCallbacksOnError(t *testing.T) {
 	assert.Empty(t, actual, "reduce callbacks still exist after errors were returned")
 }
 
-// TODO(kenta): need to fix/re-debug sequential callback manager
-func TestSequentialCallback(t *testing.T) {
-	{
-		// test random order
-		var results []int
-		scm := callbacks.NewSequentialCallbackManager()
-		wg := &sync.WaitGroup{}
-		for i := 0; i < numCB; i++ {
-			wg.Add(1)
-			go func(i int) {
-				defer wg.Done()
-				scm.RegisterCallback(func(params ...interface{}) error {
-					results = append(results, i)
-					return nil
-				})
-			}(i)
-		}
-		wg.Wait()
+func TestSequentialCallbacks(t *testing.T) {
+	manager := callbacks.NewSequentialCallbackManager()
 
-		// call the callbacks 3 times
-		for i := 0; i < 3; i++ {
-			results = nil
-			errs := scm.RunCallbacks([]byte{}, nil, []byte{})
-			assert.Equal(t, 0, len(errs))
-			assert.Equal(t, numCB, len(results))
-			//t.Logf("res=%+v errs=%+v", results, errs)
-		}
-	}
-	{
-		// test in order
-		var results []int
-		scm := callbacks.NewSequentialCallbackManager()
-		for i := 0; i < numCB; i++ {
-			j := i
-			scm.RegisterCallback(func(params ...interface{}) error {
-				results = append(results, j)
-				return nil
-			})
-		}
+	initial := uint32(3)
+	actual, expected := initial, initial
 
-		// call the callbacks 3 times
-		for j := 0; j < 3; j++ {
-			results = nil
-			errs := scm.RunCallbacks([]byte{})
-			assert.Equal(t, 0, len(errs))
-			assert.Equal(t, numCB, len(results))
-			for i := 0; i < numCB; i++ {
-				assert.Equal(t, i, results[i])
-			}
-			//t.Logf("res=%+v errs=%+v", results, errs)
-		}
-	}
-	{
-		// test errors
-		var results []int
-		scm := callbacks.NewSequentialCallbackManager()
-		for i := 0; i < numCB; i++ {
-			j := i
-			scm.RegisterCallback(func(params ...interface{}) error {
-				results = append(results, j)
-				//return errors.Errorf("Error-%d", j)
-				return callbacks.DeregisterCallback
-			})
-		}
+	for i := 0; i < numCB; i++ {
+		i := uint32(i)
 
-		// call the callbacks 3 times
-		for j := 0; j < 3; j++ {
-			results = nil
-			errs := scm.RunCallbacks([]byte{})
-			assert.Equal(t, numCB, len(errs))
-			assert.Equal(t, numCB, len(results))
-			for i := 0; i < numCB; i++ {
-				assert.Equal(t, i, results[i])
-			}
-			t.Logf("res=%+v errs=%+v", results, errs)
-		}
+		manager.RegisterCallback(func(params ...interface{}) error {
+			actual += i
+			return nil
+		})
+
+		expected += i
 	}
+
+	errs := manager.RunCallbacks(initial)
+
+	assert.Equal(t, expected, actual, "got invalid result from sequential callbacks")
+	assert.Empty(t, errs, "expected no errors from sequential callbacks")
 }
 
+func TestSequentialCallbacksConcurrent(t *testing.T) {
+	manager := callbacks.NewSequentialCallbackManager()
+
+	initial := uint32(3)
+	actual, expected := initial, initial
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < numCB; i++ {
+		wg.Add(1)
+
+		i := uint32(i)
+
+		go func() {
+			defer wg.Done()
+
+			manager.RegisterCallback(func(params ...interface{}) error {
+				actual += i
+
+				if i == numCB/2 {
+					return callbacks.DeregisterCallback
+				}
+
+				return nil
+			})
+		}()
+
+		expected += i
+	}
+
+	wg.Wait()
+
+	errs := manager.RunCallbacks()
+
+	assert.Equal(t, expected, actual, "got invalid result from sequential callbacks")
+	assert.Empty(t, errs, "expected no errors from sequential callbacks")
+
+	errs = manager.RunCallbacks()
+
+	removedMidwayVal := uint32(numCB / 2)
+
+	assert.Equal(t, expected*2-removedMidwayVal-initial, actual, "got invalid result from sequential callbacks after deregistering callback")
+	assert.Empty(t, errs, "expected no errors from sequential callbacks")
+}
+
+func TestSequentialCallbackDeregistered(t *testing.T) {
+	manager := callbacks.NewSequentialCallbackManager()
+
+	var actual []int
+	var expected []int
+
+	for i := 0; i < numCB; i++ {
+		i := i
+
+		manager.RegisterCallback(func(params ...interface{}) error {
+			actual = append(actual, i)
+			return callbacks.DeregisterCallback
+		})
+
+		expected = append(expected, i)
+	}
+
+	errs := manager.RunCallbacks()
+
+	assert.EqualValues(t, expected, actual, "sequential callbacks failed to execute properly")
+	assert.Empty(t, errs, "sequential callbacks still exist in spite of errors being callbacks.DeregisterCallback")
+
+	errs = manager.RunCallbacks()
+
+	assert.EqualValues(t, expected, actual, "sequential callbacks failed to be de-registered")
+	assert.Empty(t, errs, "sequential callbacks still exist in spite of errors being callbacks.DeregisterCallback")
+}
+
+func TestSequentialCallbacksOnError(t *testing.T) {
+	manager := callbacks.NewSequentialCallbackManager()
+
+	var expected []error
+
+	for i := 0; i < numCB; i++ {
+		err := errors.Errorf("%d", i)
+
+		manager.RegisterCallback(func(params ...interface{}) error {
+			return err
+		})
+
+		expected = append(expected, err)
+	}
+
+	actual := manager.RunCallbacks()
+
+	assert.EqualValues(t, expected, actual, "sequential callbacks failed to return errors properly")
+
+	actual = manager.RunCallbacks()
+
+	assert.Empty(t, actual, "sequential callbacks still exist after errors were returned")
+}
+
+// TODO(kenta): finish tests for opcode callbacks
 func TestOpcodeCallback(t *testing.T) {
 	{
 		// test random order
