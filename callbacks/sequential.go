@@ -35,7 +35,9 @@ func (m *SequentialCallbackManager) RegisterCallback(c callback) {
 func (m *SequentialCallbackManager) RunCallbacks(params ...interface{}) (errs []error) {
 	m.Lock()
 
-	copy := m.callbacks[:]
+	cpy := make([]*callback, len(m.callbacks))
+	copy(cpy, m.callbacks)
+
 	m.callbacks = make([]*callback, 0)
 
 	m.Unlock()
@@ -43,7 +45,7 @@ func (m *SequentialCallbackManager) RunCallbacks(params ...interface{}) (errs []
 	var remaining []*callback
 	var err error
 
-	for _, c := range copy {
+	for _, c := range cpy {
 		if err = (*c)(params...); err != nil {
 			if err != DeregisterCallback {
 				errs = append(errs, err)

@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"github.com/perlin-network/noise/callbacks"
 	"github.com/perlin-network/noise/identity"
+	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/nat"
 	"github.com/perlin-network/noise/transport"
 	"github.com/pkg/errors"
 	"net"
+	"runtime"
 	"strconv"
 	"sync"
 )
@@ -185,6 +187,11 @@ func (n *Node) OnPeerDialed(c onPeerInitCallback) {
 }
 
 func (n *Node) OnPeerInit(c onPeerInitCallback) {
+	_, file, no, ok := runtime.Caller(1)
+	if ok {
+		log.Debug().Msgf("OnPeerInit() called from %s#%d.", file, no)
+	}
+
 	n.onPeerInitCallbacks.RegisterCallback(func(params ...interface{}) error {
 		if len(params) != 1 {
 			panic(errors.Errorf("noise: OnPeerInit received unexpected args %v", params))

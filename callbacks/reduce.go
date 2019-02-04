@@ -35,7 +35,9 @@ func (m *ReduceCallbackManager) RegisterCallback(c reduceCallback) {
 func (m *ReduceCallbackManager) RunCallbacks(in interface{}, params ...interface{}) (res interface{}, errs []error) {
 	m.Lock()
 
-	copy := m.callbacks[:]
+	cpy := make([]*reduceCallback, len(m.callbacks))
+	copy(cpy, m.callbacks)
+
 	m.callbacks = make([]*reduceCallback, 0)
 
 	m.Unlock()
@@ -43,7 +45,7 @@ func (m *ReduceCallbackManager) RunCallbacks(in interface{}, params ...interface
 	var remaining []*reduceCallback
 	var err error
 
-	for _, c := range copy {
+	for _, c := range cpy {
 		if in, err = (*c)(in, params...); err != nil {
 			if err != DeregisterCallback {
 				errs = append(errs, err)
