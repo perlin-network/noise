@@ -105,8 +105,13 @@ func (n *Node) Listen() {
 		peer := newPeer(n, conn)
 		peer.init()
 
-		n.onPeerConnectedCallbacks.RunCallbacks(peer)
-		n.onPeerInitCallbacks.RunCallbacks(peer)
+		if errs := n.onPeerConnectedCallbacks.RunCallbacks(peer); len(errs) > 0 {
+			log.Error().Errs("errors", errs).Msg("Got errors running OnPeerConnected callbacks.")
+		}
+		if errs := n.onPeerInitCallbacks.RunCallbacks(peer); len(errs) > 0 {
+			log.Error().Errs("errors", errs).Msg("Got errors running OnPeerInit callbacks.")
+		}
+
 	}
 }
 
@@ -127,8 +132,12 @@ func (n *Node) Dial(address string) (*Peer, error) {
 	peer := newPeer(n, conn)
 	peer.init()
 
-	n.onPeerDialedCallbacks.RunCallbacks(peer)
-	n.onPeerInitCallbacks.RunCallbacks(peer)
+	if errs := n.onPeerDialedCallbacks.RunCallbacks(peer); len(errs) > 0 {
+		log.Error().Errs("errors", errs).Msg("Got errors running OnPeerConnected callbacks.")
+	}
+	if errs := n.onPeerInitCallbacks.RunCallbacks(peer); len(errs) > 0 {
+		log.Error().Errs("errors", errs).Msg("Got errors running OnPeerInit callbacks.")
+	}
 
 	return peer, nil
 }

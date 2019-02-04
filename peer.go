@@ -135,12 +135,14 @@ func (p *Peer) spawnReceiveWorker() {
 			continue
 		}
 
-		errs := p.onMessageReceivedCallbacks.RunCallbacks(byte(opcode), p.node, msg)
-
-		if len(errs) > 0 {
+		if errs := p.onMessageReceivedCallbacks.RunCallbacks(byte(opcode), p.node, msg); len(errs) > 0 {
 			log.Error().Errs("errors", errs).Msg("Got errors running OnMessageReceived callbacks.")
 		}
-		p.afterMessageReceivedCallbacks.RunCallbacks(p.node)
+
+		if errs := p.afterMessageReceivedCallbacks.RunCallbacks(p.node); len(errs) > 0 {
+			log.Error().Errs("errors", errs).Msg("Got errors running AfterMessageReceived callbacks.")
+		}
+
 	}
 }
 
@@ -170,7 +172,9 @@ func (p *Peer) SendMessage(opcode Opcode, message Message) error {
 		return errors.Wrap(err, "failed to send message to peer")
 	}
 
-	p.afterMessageSentCallbacks.RunCallbacks(p.node)
+	if errs := p.afterMessageSentCallbacks.RunCallbacks(p.node); len(errs) > 0 {
+		log.Error().Errs("errors", errs).Msg("Got errors running AfterMessageSent callbacks.")
+	}
 
 	return nil
 }

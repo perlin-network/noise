@@ -3,6 +3,7 @@ package protocol
 import (
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/callbacks"
+	"github.com/perlin-network/noise/log"
 	"github.com/pkg/errors"
 	"sync"
 )
@@ -81,7 +82,9 @@ func EstablishSession(peer *noise.Peer) {
 
 	once.Do(func() {
 		manager := peer.Get(KeyEstablishSessionCallbacks)
-		manager.(*callbacks.SequentialCallbackManager).RunCallbacks(peer.Node())
+		if errs := manager.(*callbacks.SequentialCallbackManager).RunCallbacks(peer.Node()); len(errs) > 0 {
+			log.Error().Errs("errors", errs).Msg("Got errors running SequentialCallback callbacks.")
+		}
 
 		close(peer.Get(KeyEstablishSessionSignal).(chan struct{}))
 	})

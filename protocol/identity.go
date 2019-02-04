@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/callbacks"
+	"github.com/perlin-network/noise/log"
 	"github.com/pkg/errors"
 	"sync"
 )
@@ -186,8 +187,9 @@ func AuthenticatePeer(peer *noise.Peer, id ID) {
 		SetPeerID(peer, id)
 
 		manager := peer.Get(KeyAuthCallbacks)
-		manager.(*callbacks.SequentialCallbackManager).RunCallbacks(peer.Node(), peer, id)
-
+		if errs := manager.(*callbacks.SequentialCallbackManager).RunCallbacks(peer.Node(), peer, id); len(errs) > 0 {
+			log.Error().Errs("errors", errs).Msg("Got errors running SequentialCallback callbacks.")
+		}
 		close(peer.Get(KeyAuthSignal).(chan struct{}))
 	})
 }
