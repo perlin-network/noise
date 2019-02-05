@@ -162,7 +162,7 @@ func TestSequentialCallbackIntegration(t *testing.T) {
 		manager.RegisterCallback(funcs[i])
 	}
 
-	var expected []*callback
+	var expected []*wrappedCallback
 
 	for i := 0; i < numCB; i++ {
 		if _, deregistered := removed[i]; !deregistered {

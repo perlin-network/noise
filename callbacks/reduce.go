@@ -1,11 +1,26 @@
 package callbacks
 
-import "sync"
+import (
+	"fmt"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
+)
+
+type wrappedReduceCallback struct {
+	file       string
+	line       int
+	createdAt  time.Time
+	label      string
+	createdIdx int
+	cb         *reduceCallback
+}
 
 type ReduceCallbackManager struct {
 	sync.Mutex
 
-	callbacks []*reduceCallback
+	callbacks []*wrappedReduceCallback
 	reverse   bool
 }
 
@@ -21,10 +36,18 @@ func (m *ReduceCallbackManager) Reverse() *ReduceCallbackManager {
 func (m *ReduceCallbackManager) RegisterCallback(c reduceCallback) {
 	m.Lock()
 
+	_, file, no, _ := runtime.Caller(1)
+	wc := &wrappedReduceCallback{
+		file:       file,
+		line:       no,
+		createdAt:  time.Now(),
+		createdIdx: len(m.callbacks),
+		cb:         &c,
+	}
 	if m.reverse {
-		m.callbacks = append([]*reduceCallback{&c}, m.callbacks...)
+		m.callbacks = append([]*wrappedReduceCallback{wc}, m.callbacks...)
 	} else {
-		m.callbacks = append(m.callbacks, &c)
+		m.callbacks = append(m.callbacks, wc)
 	}
 
 	m.Unlock()
@@ -35,18 +58,18 @@ func (m *ReduceCallbackManager) RegisterCallback(c reduceCallback) {
 func (m *ReduceCallbackManager) RunCallbacks(in interface{}, params ...interface{}) (res interface{}, errs []error) {
 	m.Lock()
 
-	cpy := make([]*reduceCallback, len(m.callbacks))
+	cpy := make([]*wrappedReduceCallback, len(m.callbacks))
 	copy(cpy, m.callbacks)
 
-	m.callbacks = make([]*reduceCallback, 0)
+	m.callbacks = make([]*wrappedReduceCallback, 0)
 
 	m.Unlock()
 
-	var remaining []*reduceCallback
+	var remaining []*wrappedReduceCallback
 	var err error
 
 	for _, c := range cpy {
-		if in, err = (*c)(in, params...); err != nil {
+		if in, err = (*c.cb)(in, params...); err != nil {
 			if err != DeregisterCallback {
 				errs = append(errs, err)
 			}
@@ -69,4 +92,18 @@ func (m *ReduceCallbackManager) RunCallbacks(in interface{}, params ...interface
 func (m *ReduceCallbackManager) MustRunCallbacks(in interface{}, params ...interface{}) interface{} {
 	out, _ := m.RunCallbacks(in, params...)
 	return out
+}
+
+func (m *ReduceCallbackManager) ListCallbacks() []string {
+	m.Lock()
+
+	var results []string
+	for i, cb := range m.callbacks {
+		path := strings.Split(cb.file, "/")
+		results = append(results, fmt.Sprintf("%d| %s:%d", i, strings.Join(path[len(path)-3:], "/"), cb.line))
+	}
+
+	m.Unlock()
+
+	return results
 }

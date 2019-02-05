@@ -1,6 +1,7 @@
 package callbacks
 
 import (
+	"fmt"
 	"math"
 	"sync"
 )
@@ -45,4 +46,20 @@ func (m *OpcodeCallbackManager) RunCallbacks(opcode byte, params ...interface{})
 	errs = manager.RunCallbacks(params...)
 
 	return errs
+}
+
+func (m *OpcodeCallbackManager) ListCallbacks() []string {
+	m.Lock()
+
+	var results []string
+	for opcode, mgr := range m.callbacks {
+		callbacks := mgr.ListCallbacks()
+		for _, cb := range callbacks {
+			results = append(results, fmt.Sprintf("%d/%s", opcode, cb))
+		}
+	}
+
+	m.Unlock()
+
+	return results
 }
