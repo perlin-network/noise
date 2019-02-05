@@ -81,7 +81,7 @@ func makeNode(port int) (*noise.Node, error) {
 	params := noise.DefaultParams()
 	params.ID = ed25519.Random()
 	params.Port = uint16(port)
-	params.Transport = tcpLayer
+	//params.Transport = tcpLayer
 
 	node, err := noise.NewNode(params)
 	if err != nil {
