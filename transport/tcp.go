@@ -7,18 +7,15 @@ import (
 
 var _ Layer = (*tcp)(nil)
 
-type tcp struct {
-	listener net.Listener
-}
+type tcp struct{}
 
 func (t tcp) Listen(port uint16) (net.Listener, error) {
 	listener, err := net.Listen("tcp", ":"+strconv.Itoa(int(port)))
 	if err != nil {
 		return nil, err
 	}
-	t.listener = listener
 
-	return t.listener, nil
+	return listener, nil
 }
 
 func (t tcp) Dial(address string) (net.Conn, error) {
