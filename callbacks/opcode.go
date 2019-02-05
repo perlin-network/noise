@@ -53,9 +53,11 @@ func (m *OpcodeCallbackManager) ListCallbacks() []string {
 
 	var results []string
 	for opcode, mgr := range m.callbacks {
-		callbacks := mgr.ListCallbacks()
-		for _, cb := range callbacks {
-			results = append(results, fmt.Sprintf("%d/%s", opcode, cb))
+		if mgr != nil {
+			callbacks := mgr.ListCallbacks()
+			for _, cb := range callbacks {
+				results = append(results, fmt.Sprintf("%d/%s", opcode, cb))
+			}
 		}
 	}
 
