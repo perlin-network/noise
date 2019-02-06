@@ -15,12 +15,13 @@ const (
 	OpcodeNil Opcode = 0
 )
 
-var opcodes = map[Opcode]Message{
-	OpcodeNil: reflect.New(reflect.TypeOf((*EmptyMessage)(nil)).Elem()).Elem().Interface().(Message),
-}
+var (
+	opcodes  map[Opcode]Message
+	messages map[reflect.Type]Opcode
+)
 
-var messages = map[reflect.Type]Opcode{
-	reflect.TypeOf((*EmptyMessage)(nil)).Elem(): OpcodeNil,
+func init() {
+	resetCodes()
 }
 
 func (o Opcode) Bytes() (buf [1]byte) {
@@ -184,4 +185,14 @@ func RegisterMessage(o Opcode, m interface{}) Opcode {
 	messages[typ] = o
 
 	return o
+}
+
+func resetCodes() {
+	opcodes = map[Opcode]Message{
+		OpcodeNil: reflect.New(reflect.TypeOf((*EmptyMessage)(nil)).Elem()).Elem().Interface().(Message),
+	}
+
+	messages = map[reflect.Type]Opcode{
+		reflect.TypeOf((*EmptyMessage)(nil)).Elem(): OpcodeNil,
+	}
 }
