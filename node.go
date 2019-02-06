@@ -106,10 +106,10 @@ func (n *Node) Listen() {
 		peer.init()
 
 		if errs := n.onPeerConnectedCallbacks.RunCallbacks(peer); len(errs) > 0 {
-			log.Error().Errs("errors", errs).Msg("Got errors running OnPeerConnected callbacks.")
+			log.Warn().Errs("errors", errs).Msg("Got errors running OnPeerConnected callbacks.")
 		}
 		if errs := n.onPeerInitCallbacks.RunCallbacks(peer); len(errs) > 0 {
-			log.Error().Errs("errors", errs).Msg("Got errors running OnPeerInit callbacks.")
+			log.Warn().Errs("errors", errs).Msg("Got errors running OnPeerInit callbacks.")
 		}
 
 	}
