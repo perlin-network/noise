@@ -22,6 +22,8 @@ type ReduceCallbackManager struct {
 
 	callbacks []*wrappedReduceCallback
 	reverse   bool
+
+	logMetadata *LogMetadata
 }
 
 func NewReduceCallbackManager() *ReduceCallbackManager {
@@ -36,7 +38,11 @@ func (m *ReduceCallbackManager) Reverse() *ReduceCallbackManager {
 func (m *ReduceCallbackManager) RegisterCallback(c reduceCallback) {
 	m.Lock()
 
-	_, file, no, _ := runtime.Caller(1)
+	offset := 1
+	if m.logMetadata != nil {
+		offset = m.logMetadata.RuntimeCallerOffset
+	}
+	_, file, no, _ := runtime.Caller(offset)
 	wc := &wrappedReduceCallback{
 		file:       file,
 		line:       no,
@@ -94,13 +100,26 @@ func (m *ReduceCallbackManager) MustRunCallbacks(in interface{}, params ...inter
 	return out
 }
 
+func (m *ReduceCallbackManager) SetLogMetadata(l *LogMetadata) {
+	m.logMetadata = l
+}
+
 func (m *ReduceCallbackManager) ListCallbacks() []string {
 	m.Lock()
+
+	nodeID := "unset"
+	peerID := "unset"
+	if m.logMetadata != nil {
+		nodeID = m.logMetadata.NodeID
+		peerID = m.logMetadata.PeerID
+	}
 
 	var results []string
 	for i, cb := range m.callbacks {
 		path := strings.Split(cb.file, "/")
-		results = append(results, fmt.Sprintf("%d| %s:%d", i, strings.Join(path[len(path)-3:], "/"), cb.line))
+		results = append(results, fmt.Sprintf("%d node=%s,peer=%s,%d|r %s:%d %s %d %d",
+			time.Now().UnixNano(), nodeID, peerID,
+			i, strings.Join(path[len(path)-3:], "/"), cb.line, cb.label, cb.createdIdx, cb.createdAt.UnixNano()))
 	}
 
 	m.Unlock()

@@ -22,6 +22,8 @@ type SequentialCallbackManager struct {
 
 	callbacks []*wrappedCallback
 	reverse   bool
+
+	logMetadata *LogMetadata
 }
 
 func NewSequentialCallbackManager() *SequentialCallbackManager {
@@ -36,7 +38,11 @@ func (m *SequentialCallbackManager) Reverse() *SequentialCallbackManager {
 func (m *SequentialCallbackManager) RegisterCallback(c callback) {
 	m.Lock()
 
-	_, file, no, _ := runtime.Caller(1)
+	offset := 1
+	if m.logMetadata != nil {
+		offset = m.logMetadata.RuntimeCallerOffset
+	}
+	_, file, no, _ := runtime.Caller(offset)
 	wc := &wrappedCallback{
 		file:       file,
 		line:       no,
@@ -88,13 +94,26 @@ func (m *SequentialCallbackManager) RunCallbacks(params ...interface{}) (errs []
 	return
 }
 
+func (m *SequentialCallbackManager) SetLogMetadata(l *LogMetadata) {
+	m.logMetadata = l
+}
+
 func (m *SequentialCallbackManager) ListCallbacks() []string {
 	m.Lock()
+
+	nodeID := "unset"
+	peerID := "unset"
+	if m.logMetadata != nil {
+		nodeID = m.logMetadata.NodeID
+		peerID = m.logMetadata.PeerID
+	}
 
 	var results []string
 	for i, cb := range m.callbacks {
 		path := strings.Split(cb.file, "/")
-		results = append(results, fmt.Sprintf("%d| %s:%d", i, strings.Join(path[len(path)-3:], "/"), cb.line))
+		results = append(results, fmt.Sprintf("%d node=%s,peer=%s,%d|r %s:%d %s %d %d",
+			time.Now().UnixNano(), nodeID, peerID,
+			i, strings.Join(path[len(path)-3:], "/"), cb.line, cb.label, cb.createdIdx, cb.createdAt.UnixNano()))
 	}
 
 	m.Unlock()
