@@ -28,6 +28,10 @@ import (
 	"time"
 )
 
+const (
+	bufferSize = 16 // bytes
+)
+
 // Listener implements a net.Listener that creates local, buffered net.Conns
 // via its Accept and Dial method.
 type Listener struct {
@@ -42,9 +46,9 @@ var errClosed = fmt.Errorf("Closed")
 
 // Listen returns a Listener that can only be contacted by its own Dialers and
 // creates buffered connections between the two.
-func Listen(sz int, port uint16) *Listener {
+func Listen(port uint16) *Listener {
 	return &Listener{
-		sz:   sz,
+		sz:   bufferSize,
 		ch:   make(chan net.Conn),
 		done: make(chan struct{}),
 		a: &addr{

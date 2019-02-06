@@ -9,22 +9,22 @@ import (
 	"strings"
 )
 
-var _ Layer = (*virtualTCP)(nil)
+var _ Layer = (*Buffered)(nil)
 
-type virtualTCP struct {
+type Buffered struct {
 	listeners map[string]*bufconn.Listener
 }
 
-func (t virtualTCP) Listen(port uint16) (net.Listener, error) {
+func (t *Buffered) Listen(port uint16) (net.Listener, error) {
 	addr := fmt.Sprintf("%d", port)
 	if l, ok := t.listeners[addr]; ok {
 		return l, nil
 	}
-	t.listeners[addr] = bufconn.Listen(7, port)
+	t.listeners[addr] = bufconn.Listen(port)
 	return t.listeners[addr], nil
 }
 
-func (t virtualTCP) Dial(address string) (net.Conn, error) {
+func (t *Buffered) Dial(address string) (net.Conn, error) {
 	split := strings.Split(address, ":")
 	addr := split[len(split)-1]
 	if l, ok := t.listeners[addr]; ok {
@@ -33,13 +33,13 @@ func (t virtualTCP) Dial(address string) (net.Conn, error) {
 	return nil, errors.Errorf("no listener setup for address %s, port %s", address, addr)
 }
 
-func (t virtualTCP) IP(address net.Addr) net.IP {
+func (t *Buffered) IP(address net.Addr) net.IP {
 	split := strings.Split(address.String(), ":")
 	addr := split[0]
 	return net.IP(addr)
 }
 
-func (t virtualTCP) Port(address net.Addr) uint16 {
+func (t *Buffered) Port(address net.Addr) uint16 {
 	split := strings.Split(address.String(), ":")
 	addr := split[len(split)-1]
 	port, err := strconv.Atoi(addr)
@@ -50,8 +50,8 @@ func (t virtualTCP) Port(address net.Addr) uint16 {
 }
 
 // NewVirtualTCP returns a new virtualTCP instance
-func NewVirtualTCP() virtualTCP {
-	return virtualTCP{
+func NewBuffered() *Buffered {
+	return &Buffered{
 		listeners: map[string]*bufconn.Listener{},
 	}
 }
