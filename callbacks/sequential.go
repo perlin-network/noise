@@ -23,7 +23,7 @@ type SequentialCallbackManager struct {
 	callbacks []*wrappedCallback
 	reverse   bool
 
-	logMetadata LogMetadata
+	logMetadata *LogMetadata
 }
 
 func NewSequentialCallbackManager() *SequentialCallbackManager {
@@ -95,7 +95,7 @@ func (m *SequentialCallbackManager) RunCallbacks(params ...interface{}) (errs []
 }
 
 func (m *SequentialCallbackManager) SetLogMetadata(l LogMetadata) {
-	m.logMetadata = l
+	m.logMetadata = &l
 }
 
 func (m *SequentialCallbackManager) ListCallbacks() []string {
@@ -111,7 +111,7 @@ func (m *SequentialCallbackManager) ListCallbacks() []string {
 	var results []string
 	for i, cb := range m.callbacks {
 		path := strings.Split(cb.file, "/")
-		results = append(results, fmt.Sprintf("%d node=%s,peer=%s,%d|r %s:%d %s %d %d",
+		results = append(results, fmt.Sprintf("%d node=%s,peer=%s,%d,s %s:%d %s %d %d",
 			time.Now().UnixNano(), nodeID, peerID,
 			i, strings.Join(path[len(path)-3:], "/"), cb.line, cb.label, cb.createdIdx, cb.createdAt.UnixNano()))
 	}

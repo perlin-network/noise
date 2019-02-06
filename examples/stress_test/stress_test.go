@@ -24,7 +24,7 @@ import (
 var (
 	opcodeChat noise.Opcode
 	_          noise.Message = (*chatMessage)(nil)
-	tcpLayer                 = transport.NewVirtualTCP()
+	tcpLayer                 = transport.NewBuffered()
 )
 
 type chatMessage struct {
