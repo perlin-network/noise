@@ -13,7 +13,7 @@ type OpcodeCallbackManager struct {
 
 	callbacks [math.MaxUint8 + 1]*SequentialCallbackManager
 
-	logMetadata *LogMetadata
+	logMetadata LogMetadata
 }
 
 func NewOpcodeCallbackManager() *OpcodeCallbackManager {
@@ -50,7 +50,7 @@ func (m *OpcodeCallbackManager) RunCallbacks(opcode byte, params ...interface{})
 	return errs
 }
 
-func (m *OpcodeCallbackManager) SetLogMetadata(l *LogMetadata) {
+func (m *OpcodeCallbackManager) SetLogMetadata(l LogMetadata) {
 	m.logMetadata = l
 }
 

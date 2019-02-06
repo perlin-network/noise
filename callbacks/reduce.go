@@ -23,7 +23,7 @@ type ReduceCallbackManager struct {
 	callbacks []*wrappedReduceCallback
 	reverse   bool
 
-	logMetadata *LogMetadata
+	logMetadata LogMetadata
 }
 
 func NewReduceCallbackManager() *ReduceCallbackManager {
@@ -100,7 +100,7 @@ func (m *ReduceCallbackManager) MustRunCallbacks(in interface{}, params ...inter
 	return out
 }
 
-func (m *ReduceCallbackManager) SetLogMetadata(l *LogMetadata) {
+func (m *ReduceCallbackManager) SetLogMetadata(l LogMetadata) {
 	m.logMetadata = l
 }
 

@@ -23,7 +23,7 @@ type SequentialCallbackManager struct {
 	callbacks []*wrappedCallback
 	reverse   bool
 
-	logMetadata *LogMetadata
+	logMetadata LogMetadata
 }
 
 func NewSequentialCallbackManager() *SequentialCallbackManager {
@@ -94,7 +94,7 @@ func (m *SequentialCallbackManager) RunCallbacks(params ...interface{}) (errs []
 	return
 }
 
-func (m *SequentialCallbackManager) SetLogMetadata(l *LogMetadata) {
+func (m *SequentialCallbackManager) SetLogMetadata(l LogMetadata) {
 	m.logMetadata = l
 }
 
