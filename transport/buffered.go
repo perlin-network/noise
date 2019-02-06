@@ -7,15 +7,20 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 var _ Layer = (*Buffered)(nil)
 
 type Buffered struct {
+	sync.Mutex
 	listeners map[string]*bufconn.Listener
 }
 
 func (t *Buffered) Listen(port uint16) (net.Listener, error) {
+	t.Lock()
+	defer t.Unlock()
+
 	addr := fmt.Sprintf("%d", port)
 	if l, ok := t.listeners[addr]; ok {
 		return l, nil
@@ -25,6 +30,9 @@ func (t *Buffered) Listen(port uint16) (net.Listener, error) {
 }
 
 func (t *Buffered) Dial(address string) (net.Conn, error) {
+	t.Lock()
+	defer t.Unlock()
+
 	split := strings.Split(address, ":")
 	addr := split[len(split)-1]
 	if l, ok := t.listeners[addr]; ok {
