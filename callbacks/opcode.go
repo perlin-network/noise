@@ -1,7 +1,6 @@
 package callbacks
 
 import (
-	"fmt"
 	"math"
 	"sync"
 )
@@ -12,8 +11,6 @@ type OpcodeCallbackManager struct {
 	sync.Mutex
 
 	callbacks [math.MaxUint8 + 1]*SequentialCallbackManager
-
-	logMetadata LogMetadata
 }
 
 func NewOpcodeCallbackManager() *OpcodeCallbackManager {
@@ -48,27 +45,4 @@ func (m *OpcodeCallbackManager) RunCallbacks(opcode byte, params ...interface{})
 	errs = manager.RunCallbacks(params...)
 
 	return errs
-}
-
-func (m *OpcodeCallbackManager) SetLogMetadata(l LogMetadata) {
-	m.logMetadata = l
-}
-
-func (m *OpcodeCallbackManager) ListCallbacks() []string {
-	m.Lock()
-
-	var results []string
-	for opcode, mgr := range m.callbacks {
-		if mgr != nil {
-			mgr.SetLogMetadata(m.logMetadata)
-			callbacks := mgr.ListCallbacks()
-			for _, cb := range callbacks {
-				results = append(results, fmt.Sprintf("%d/%s", opcode, cb))
-			}
-		}
-	}
-
-	m.Unlock()
-
-	return results
 }
