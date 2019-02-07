@@ -6,11 +6,15 @@ import (
 	"unsafe"
 )
 
-type SequentialCallbackManager struct {
-	sync.Mutex
+const autoTrimThreshold = 10
 
-	callbacks *[]callbackState
-	reverse   bool
+type SequentialCallbackManager struct {
+	callbacksMutex sync.Mutex // this mutex only protects the `callbacks` pointer itself.
+
+	callbacks           *[]callbackState
+	pendingRemovalCount uint64
+
+	reverse bool
 }
 
 type callbackState struct {
@@ -41,7 +45,9 @@ func (m *SequentialCallbackManager) storeCallbacks(callbacks []callbackState) {
 }
 
 func (m *SequentialCallbackManager) Trim() {
-	m.Lock()
+	atomic.StoreUint64(&m.pendingRemovalCount, 0)
+
+	m.callbacksMutex.Lock()
 	newCallbacks := make([]callbackState, 0)
 	for _, cb := range m.loadCallbacks() {
 		if cb.pendingRemoval == 0 {
@@ -49,15 +55,15 @@ func (m *SequentialCallbackManager) Trim() {
 		}
 	}
 	m.storeCallbacks(newCallbacks)
-	m.Unlock()
+	m.callbacksMutex.Unlock()
 }
 
 func (m *SequentialCallbackManager) RegisterCallback(c callback) {
-	m.Lock()
+	m.callbacksMutex.Lock()
 	m.storeCallbacks(append(m.loadCallbacks(), callbackState{
 		cb: c,
 	}))
-	m.Unlock()
+	m.callbacksMutex.Unlock()
 }
 
 // RunCallbacks runs all callbacks on a variadic parameter list, and de-registers callbacks
@@ -67,26 +73,32 @@ func (m *SequentialCallbackManager) RunCallbacks(params ...interface{}) (errs []
 	if m.reverse {
 		for i := len(callbacks) - 1; i >= 0; i-- {
 			c := &callbacks[i]
-			if err := c.run(params...); err != nil {
+			if err := m.doRunCallback(c, params...); err != nil {
 				errs = append(errs, err)
 			}
 		}
 	} else {
 		for i := 0; i < len(callbacks); i++ {
 			c := &callbacks[i]
-			if err := c.run(params...); err != nil {
+			if err := m.doRunCallback(c, params...); err != nil {
 				errs = append(errs, err)
 			}
 		}
 	}
+
+	if atomic.LoadUint64(&m.pendingRemovalCount) >= autoTrimThreshold {
+		m.Trim()
+	}
+
 	return
 }
 
-func (c *callbackState) run(params ...interface{}) error {
+func (m *SequentialCallbackManager) doRunCallback(c *callbackState, params ...interface{}) error {
 	if atomic.LoadUint32(&c.pendingRemoval) == 0 {
 		err := c.cb(params...)
 		if err != nil {
 			atomic.StoreUint32(&c.pendingRemoval, 1)
+			atomic.AddUint64(&m.pendingRemovalCount, 1)
 			if err != DeregisterCallback {
 				return err
 			}
