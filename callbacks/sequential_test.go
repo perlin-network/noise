@@ -31,7 +31,7 @@ func TestSequentialCallbacks(t *testing.T) {
 	assert.Empty(t, errs, "expected no errors from sequential callbacks")
 }
 
-func TestSequentialCallbacksConcurrent(t *testing.T) {
+func TestSequentialCallbacksRegisterConcurrent(t *testing.T) {
 	manager := NewSequentialCallbackManager()
 
 	initial := uint32(3)
@@ -74,6 +74,53 @@ func TestSequentialCallbacksConcurrent(t *testing.T) {
 
 	assert.Equal(t, expected*2-removedMidwayVal-initial, actual, "got invalid result from sequential callbacks after deregistering callback")
 	assert.Empty(t, errs, "expected no errors from sequential callbacks")
+}
+
+// Execute the RunCallbacks concurrently.
+func TestSequentialCallbacksRunConcurrent(t *testing.T) {
+	manager := NewSequentialCallbackManager()
+
+	initial := uint32(3)
+	actual, expected := initial, initial
+
+	for i := 0; i < numCB; i++ {
+		i := uint32(i)
+		manager.RegisterCallback(func(params ...interface{}) error {
+			actual += i
+
+			if i == numCB/2 {
+				return DeregisterCallback
+			}
+
+			return nil
+		})
+
+		expected += i
+	}
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		errs := manager.RunCallbacks()
+
+		assert.Equal(t, expected, actual, "got invalid result from sequential callbacks")
+		assert.Empty(t, errs, "expected no errors from sequential callbacks")
+		wg.Done()
+	}()
+
+	wg.Add(1)
+	go func() {
+		errs := manager.RunCallbacks()
+
+		removedMidwayVal := uint32(numCB / 2)
+
+		assert.Equal(t, expected*2-removedMidwayVal-initial, actual, "got invalid result from sequential callbacks after deregistering callback")
+		assert.Empty(t, errs, "expected no errors from sequential callbacks")
+		wg.Done()
+	}()
+
+	wg.Wait()
 }
 
 func TestSequentialCallbackDeregistered(t *testing.T) {
