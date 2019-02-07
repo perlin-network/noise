@@ -25,9 +25,7 @@ var (
 	_ protocol.HandshakePolicy = (*policy)(nil)
 )
 
-type policy struct {
-	timeoutDuration time.Duration
-}
+type policy struct{}
 
 func New() *policy {
 	return &policy{}
@@ -86,7 +84,7 @@ func (p *policy) onPeerInit(node *noise.Node, peer *noise.Peer) (err error) {
 		return errors.Wrap(err, "failed to send our ephemeral public key to our peer")
 	}
 
-	timeout.Enforce(peer, keyTimeoutDispatcher, p.timeoutDuration, func() {
+	timeout.Enforce(peer, keyTimeoutDispatcher, 5*time.Second, func() {
 		log.Warn().Msg("PeerInit timed out")
 		peer.Disconnect()
 	})
