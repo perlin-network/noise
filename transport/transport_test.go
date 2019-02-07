@@ -3,15 +3,12 @@ package transport
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"io"
 	"net"
 	"testing"
 	"time"
 )
 
-func TestBuffered(t *testing.T) {
-	port := uint16(3000)
-	layer := NewBuffered()
+func testTransport(t *testing.T, layer Layer, port uint16, host string) {
 	errChan := make(chan error)
 	var lisConn net.Conn
 	go func() {
@@ -22,8 +19,8 @@ func TestBuffered(t *testing.T) {
 		}
 		close(errChan)
 	}()
-	// seems Accept isn't instant, need a bit of setup
-	time.Sleep(1 * time.Millisecond)
+	// Accept isn't instant, need a bit of setup time
+	time.Sleep(10 * time.Millisecond)
 
 	// dial
 	dialConn, err := layer.Dial(fmt.Sprintf(":%d", port))
@@ -32,7 +29,7 @@ func TestBuffered(t *testing.T) {
 	assert.Nilf(t, err, "Listen error: %v", err)
 
 	// check the IP and port
-	assert.Equal(t, "bufconn", string(layer.IP(dialConn.RemoteAddr())))
+	assert.Equal(t, host, string(layer.IP(dialConn.RemoteAddr())))
 	assert.Equal(t, port, layer.Port(dialConn.RemoteAddr()))
 
 	// Write some data on both sides of the connection.
@@ -45,15 +42,23 @@ func TestBuffered(t *testing.T) {
 	// Close dial-side; writes from either side should fail.
 	dialConn.Close()
 	_, err = lisConn.Write([]byte("hello"))
-	assert.Equalf(t, err, io.ErrClosedPipe, "lisConn.Write() = _, <nil>; want _, <non-nil>")
+	assert.Truef(t, err != nil, "lisConn.Write() = _, <nil>; want _, <non-nil>")
 	_, err = dialConn.Write([]byte("hello"))
-	assert.Equalf(t, err, io.ErrClosedPipe, "dialConn.Write() = _, <nil>; want _, <non-nil>")
+	assert.Truef(t, err != nil, "dialConn.Write() = _, <nil>; want _, <non-nil>")
 
 	// Read from both sides; reads on lisConn should work, but dialConn should fail.
 	buf := make([]byte, 6)
 	_, err = dialConn.Read(buf)
-	assert.Equalf(t, err, io.ErrClosedPipe, "dialConn.Read(buf) = %v, %v; want _, io.ErrClosedPipe", n, err)
+	assert.Truef(t, err != nil, "dialConn.Read(buf) = %v, %v; want _, io.ErrClosedPipe", n, err)
 	n, err = lisConn.Read(buf)
 	assert.Truef(t, n == 5 && err == nil, "lisConn.Read(buf) = %v, %v; want 5, <nil>", n, err)
 
+}
+
+func TestBuffered(t *testing.T) {
+	testTransport(t, NewBuffered(), uint16(8900), "bufconn")
+}
+
+func TestTCP(t *testing.T) {
+	testTransport(t, NewTCP(), uint16(8900), "\u007f\x00\x00\x01")
 }
