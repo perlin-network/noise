@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	keyTimeoutDispatcher = "basic.timeout"
+	keyTimeoutDispatcher = "basic.handshake.timeout"
 
 	keyEphemeralPrivateKey = "basic.ephemeralPrivateKey"
 	msgEphemeralHandshake  = ".noise_handshake"

@@ -20,7 +20,7 @@ var (
 )
 
 const (
-	keyPingTimeoutDispatcher = "kademlia.timeout.ping"
+	keyPingTimeoutDispatcher = "basic.network.timeout.ping"
 )
 
 type networkPolicy struct{}

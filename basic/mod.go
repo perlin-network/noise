@@ -1,23 +1,24 @@
 package basic
 
 import (
+	"encoding/hex"
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/protocol"
 	"sync"
 )
 
 var (
-	// protocol.ID -> struct{}
+	// string --> protocol.ID
 	peers sync.Map
 )
 
 // GetPeers returns a list of K peers with in order of ascending XOR distance.
 func GetPeers(K int) (results []protocol.ID) {
-	peers.Range(func(k, _ interface{}) bool {
+	peers.Range(func(_, v interface{}) bool {
 		if len(results) >= K {
 			return false
 		}
-		results = append(results, k.(protocol.ID))
+		results = append(results, v.(protocol.ID))
 		return true
 	})
 
@@ -25,11 +26,11 @@ func GetPeers(K int) (results []protocol.ID) {
 }
 
 func AddPeer(node *noise.Node, target protocol.ID) (err error) {
-	peers.Store(target, struct{}{})
+	peers.Store(hex.EncodeToString(target.Hash()), target)
 	return nil
 }
 
 func DeletePeer(node *noise.Node, target protocol.ID) (err error) {
-	peers.Delete(target)
+	peers.Delete(hex.EncodeToString(target.Hash()))
 	return nil
 }
