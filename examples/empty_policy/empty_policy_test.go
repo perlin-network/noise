@@ -144,6 +144,6 @@ func Run(numNodes int, numMessages int) error {
 }
 
 func TestMultiple(t *testing.T) {
-	assert.Nil(t, Run(3, 10))
+	assert.Nil(t, Run(4, 10))
 	t.Log("done")
 }
