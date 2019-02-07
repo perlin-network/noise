@@ -16,7 +16,6 @@ func New() *policy {
 }
 
 func (p *policy) EnforceCipherPolicy(node *noise.Node) {
-
 }
 
 func (p *policy) Encrypt(peer *noise.Peer, buf []byte) ([]byte, error) {

@@ -104,7 +104,7 @@ func makeNode(port int) (*noise.Node, error) {
 }
 
 func Run(numNodes int, numMessages int) error {
-	startPort := 3000
+	startPort := 6000
 	var nodes []*noise.Node
 	for i := 0; i < numNodes; i++ {
 		n, err := makeNode(startPort + i)

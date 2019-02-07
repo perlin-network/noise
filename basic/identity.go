@@ -31,6 +31,15 @@ func (p *identityPolicy) EnforceIdentityPolicy(node *noise.Node) {
 
 	protocol.SetNodeID(node, id)
 
+	simpleActivity := func(node *noise.Node, peer *noise.Peer, id protocol.ID) error {
+		AddPeer(node, id)
+		peer.BeforeMessageReceived(func(node *noise.Node, peer *noise.Peer, msg []byte) (i []byte, e error) {
+			return msg, nil
+		})
+		return nil
+	}
+
+	protocol.OnEachPeerAuthenticated(node, simpleActivity)
 }
 
 func (p *identityPolicy) OnSessionEstablished(node *noise.Node, peer *noise.Peer) error {
