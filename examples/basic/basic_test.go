@@ -1,4 +1,4 @@
-package empty_policy_test
+package basic_test
 
 import (
 	"fmt"
