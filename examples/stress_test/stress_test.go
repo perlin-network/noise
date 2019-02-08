@@ -105,7 +105,7 @@ func makeNode(port int, opcodeChat noise.Opcode) (*noise.Node, error) {
 }
 
 func Run(numNodes int, numMessages int) error {
-	startPort := 3000
+	startPort := 6100
 	opcodeChat = noise.RegisterMessage(noise.NextAvailableOpcode(), (*chatMessage)(nil))
 
 	var nodes []*noise.Node
