@@ -1,65 +1,109 @@
 package callbacks
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+	"unsafe"
+)
+
+const autoTrimThreshold = 10
 
 type SequentialCallbackManager struct {
-	sync.Mutex
+	callbacksMutex sync.Mutex // this mutex only protects the `callbacks` pointer itself.
 
-	callbacks []*callback
-	reverse   bool
+	callbacks           *[]callbackState
+	pendingRemovalCount uint64
+
+	reverse bool
+}
+
+type callbackState struct {
+	cb             callback
+	pendingRemoval uint32
 }
 
 func NewSequentialCallbackManager() *SequentialCallbackManager {
-	return &SequentialCallbackManager{reverse: false}
+	callbacks := make([]callbackState, 0)
+
+	return &SequentialCallbackManager{
+		reverse:   false,
+		callbacks: &callbacks,
+	}
 }
 
-func (m *SequentialCallbackManager) Reverse() *SequentialCallbackManager {
+func (m *SequentialCallbackManager) UnsafelySetReverse() *SequentialCallbackManager {
 	m.reverse = true
 	return m
 }
 
-func (m *SequentialCallbackManager) RegisterCallback(c callback) {
-	m.Lock()
+func (m *SequentialCallbackManager) loadCallbacks() []callbackState {
+	return *(*[]callbackState)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&m.callbacks))))
+}
 
-	if m.reverse {
-		m.callbacks = append([]*callback{&c}, m.callbacks...)
-	} else {
-		m.callbacks = append(m.callbacks, &c)
+func (m *SequentialCallbackManager) storeCallbacks(callbacks []callbackState) {
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&m.callbacks)), unsafe.Pointer(&callbacks))
+}
+
+func (m *SequentialCallbackManager) Trim() {
+	atomic.StoreUint64(&m.pendingRemovalCount, 0)
+
+	m.callbacksMutex.Lock()
+	newCallbacks := make([]callbackState, 0)
+	for _, cb := range m.loadCallbacks() {
+		if cb.pendingRemoval == 0 {
+			newCallbacks = append(newCallbacks, cb)
+		}
 	}
+	m.storeCallbacks(newCallbacks)
+	m.callbacksMutex.Unlock()
+}
 
-	m.Unlock()
+func (m *SequentialCallbackManager) RegisterCallback(c callback) {
+	m.callbacksMutex.Lock()
+	m.storeCallbacks(append(m.loadCallbacks(), callbackState{
+		cb: c,
+	}))
+	m.callbacksMutex.Unlock()
 }
 
 // RunCallbacks runs all callbacks on a variadic parameter list, and de-registers callbacks
 // that throw an error.
 func (m *SequentialCallbackManager) RunCallbacks(params ...interface{}) (errs []error) {
-	m.Lock()
-
-	cpy := make([]*callback, len(m.callbacks))
-	copy(cpy, m.callbacks)
-
-	m.callbacks = make([]*callback, 0)
-
-	m.Unlock()
-
-	var remaining []*callback
-	var err error
-
-	for _, c := range cpy {
-		if err = (*c)(params...); err != nil {
-			if err != DeregisterCallback {
+	callbacks := m.loadCallbacks()
+	if m.reverse {
+		for i := len(callbacks) - 1; i >= 0; i-- {
+			c := &callbacks[i]
+			if err := m.doRunCallback(c, params...); err != nil {
 				errs = append(errs, err)
 			}
-		} else {
-			remaining = append(remaining, c)
+		}
+	} else {
+		for i := 0; i < len(callbacks); i++ {
+			c := &callbacks[i]
+			if err := m.doRunCallback(c, params...); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
 
-	m.Lock()
-
-	m.callbacks = append(m.callbacks, remaining...)
-
-	m.Unlock()
+	if atomic.LoadUint64(&m.pendingRemovalCount) >= autoTrimThreshold {
+		m.Trim()
+	}
 
 	return
+}
+
+func (m *SequentialCallbackManager) doRunCallback(c *callbackState, params ...interface{}) error {
+	if atomic.LoadUint32(&c.pendingRemoval) == 0 {
+		err := c.cb(params...)
+		if err != nil {
+			atomic.StoreUint32(&c.pendingRemoval, 1)
+			atomic.AddUint64(&m.pendingRemovalCount, 1)
+			if err != DeregisterCallback {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
