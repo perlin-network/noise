@@ -18,7 +18,7 @@ type SequentialCallbackManager struct {
 }
 
 type callbackState struct {
-	cb             callback
+	cb             Callback
 	pendingRemoval uint32
 }
 
@@ -31,7 +31,7 @@ func NewSequentialCallbackManager() *SequentialCallbackManager {
 	}
 }
 
-func (m *SequentialCallbackManager) pushCallback(cb callback) {
+func (m *SequentialCallbackManager) pushCallback(cb Callback) {
 	callbacks := m.loadCallbacks()
 	if len(callbacks) == cap(callbacks) {
 		newCallbacks := make([]callbackState, len(callbacks), len(callbacks)*2+1)
@@ -75,28 +75,31 @@ func (m *SequentialCallbackManager) Trim() {
 	m.callbacksMutex.Unlock()
 }
 
-func (m *SequentialCallbackManager) RegisterCallback(c callback) {
+// RegisterCallback atomically registers all callbacks passed in.
+func (m *SequentialCallbackManager) RegisterCallback(callbacks ...Callback) {
 	m.callbacksMutex.Lock()
-	m.pushCallback(c)
+	for _, c := range callbacks {
+		m.pushCallback(c)
+	}
 	m.callbacksMutex.Unlock()
 }
 
 // RunCallbacks runs all callbacks on a variadic parameter list, and de-registers callbacks
 // that throw an error.
-func (m *SequentialCallbackManager) RunCallbacks(params ...interface{}) (errs []error) {
+func (m *SequentialCallbackManager) RunCallbacks(params ...interface{}) []error {
 	callbacks := m.loadCallbacks()
 	if m.reverse {
 		for i := len(callbacks) - 1; i >= 0; i-- {
 			c := &callbacks[i]
 			if err := m.doRunCallback(c, params...); err != nil {
-				errs = append(errs, err)
+				return []error{err}
 			}
 		}
 	} else {
 		for i := 0; i < len(callbacks); i++ {
 			c := &callbacks[i]
 			if err := m.doRunCallback(c, params...); err != nil {
-				errs = append(errs, err)
+				return []error{err}
 			}
 		}
 	}
@@ -105,7 +108,7 @@ func (m *SequentialCallbackManager) RunCallbacks(params ...interface{}) (errs []
 		m.Trim()
 	}
 
-	return
+	return nil
 }
 
 func (m *SequentialCallbackManager) doRunCallback(c *callbackState, params ...interface{}) error {

@@ -17,7 +17,7 @@ func NewOpcodeCallbackManager() *OpcodeCallbackManager {
 	return &OpcodeCallbackManager{}
 }
 
-func (m *OpcodeCallbackManager) RegisterCallback(opcode byte, c callback) {
+func (m *OpcodeCallbackManager) RegisterCallback(opcode byte, c Callback) {
 	m.Lock()
 
 	if m.callbacks[opcode] == nil {

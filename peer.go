@@ -179,7 +179,7 @@ func (p *Peer) SendMessage(opcode Opcode, message Message) error {
 	return nil
 }
 
-func (p *Peer) BeforeMessageSent(c beforeMessageSentCallback) {
+func (p *Peer) BeforeMessageSent(c BeforeMessageSentCallback) {
 	p.beforeMessageSentCallbacks.RegisterCallback(func(in interface{}, params ...interface{}) (i interface{}, e error) {
 		if len(params) != 1 {
 			panic(errors.Errorf("noise: BeforeMessageSent received unexpected args %v", params))
@@ -194,7 +194,7 @@ func (p *Peer) BeforeMessageSent(c beforeMessageSentCallback) {
 	})
 }
 
-func (p *Peer) BeforeMessageReceived(c beforeMessageReceivedCallback) {
+func (p *Peer) BeforeMessageReceived(c BeforeMessageReceivedCallback) {
 	p.beforeMessageReceivedCallbacks.RegisterCallback(func(in interface{}, params ...interface{}) (i interface{}, e error) {
 		if len(params) != 1 {
 			panic(errors.Errorf("noise: BeforeMessageReceived received unexpected args %v", params))
@@ -209,7 +209,7 @@ func (p *Peer) BeforeMessageReceived(c beforeMessageReceivedCallback) {
 	})
 }
 
-func (p *Peer) AfterMessageSent(c afterMessageSentCallback) {
+func (p *Peer) AfterMessageSent(c AfterMessageSentCallback) {
 	p.afterMessageSentCallbacks.RegisterCallback(func(params ...interface{}) error {
 		if len(params) != 1 {
 			panic(errors.Errorf("noise: AfterMessageSent received unexpected args %v", params))
@@ -224,7 +224,7 @@ func (p *Peer) AfterMessageSent(c afterMessageSentCallback) {
 	})
 }
 
-func (p *Peer) AfterMessageReceived(c afterMessageReceivedCallback) {
+func (p *Peer) AfterMessageReceived(c AfterMessageReceivedCallback) {
 	p.afterMessageReceivedCallbacks.RegisterCallback(func(params ...interface{}) error {
 		if len(params) != 1 {
 			panic(errors.Errorf("noise: AfterMessageReceived received unexpected args %v", params))
@@ -239,7 +239,7 @@ func (p *Peer) AfterMessageReceived(c afterMessageReceivedCallback) {
 	})
 }
 
-func (p *Peer) OnDecodeHeader(c onPeerDecodeHeaderCallback) {
+func (p *Peer) OnDecodeHeader(c OnPeerDecodeHeaderCallback) {
 	p.onDecodeHeaderCallbacks.RegisterCallback(func(params ...interface{}) error {
 		if len(params) != 2 {
 			panic(errors.Errorf("noise: OnDecodeHeader received unexpected args %v", params))
@@ -260,7 +260,7 @@ func (p *Peer) OnDecodeHeader(c onPeerDecodeHeaderCallback) {
 	})
 }
 
-func (p *Peer) OnDecodeFooter(c onPeerDecodeFooterCallback) {
+func (p *Peer) OnDecodeFooter(c OnPeerDecodeFooterCallback) {
 	p.onDecodeFooterCallbacks.RegisterCallback(func(params ...interface{}) error {
 		if len(params) != 3 {
 			panic(errors.Errorf("noise: OnDecodeFooter received unexpected args %v", params))
@@ -287,7 +287,7 @@ func (p *Peer) OnDecodeFooter(c onPeerDecodeFooterCallback) {
 	})
 }
 
-func (p *Peer) OnEncodeHeader(c afterMessageEncodedCallback) {
+func (p *Peer) OnEncodeHeader(c AfterMessageEncodedCallback) {
 	p.onEncodeHeaderCallbacks.RegisterCallback(func(header interface{}, params ...interface{}) (i interface{}, e error) {
 		if len(params) != 2 {
 			panic(errors.Errorf("noise: OnEncodeHeader received unexpected args %v", params))
@@ -308,7 +308,7 @@ func (p *Peer) OnEncodeHeader(c afterMessageEncodedCallback) {
 	})
 }
 
-func (p *Peer) OnEncodeFooter(c afterMessageEncodedCallback) {
+func (p *Peer) OnEncodeFooter(c AfterMessageEncodedCallback) {
 	p.onEncodeFooterCallbacks.RegisterCallback(func(footer interface{}, params ...interface{}) (i interface{}, e error) {
 		if len(params) != 2 {
 			panic(errors.Errorf("noise: OnEncodeFooter received unexpected args %v", params))
@@ -330,7 +330,7 @@ func (p *Peer) OnEncodeFooter(c afterMessageEncodedCallback) {
 }
 
 // OnConnError registers a callback for whenever somethings wrong with our peers connection
-func (p *Peer) OnConnError(c onPeerErrorCallback) {
+func (p *Peer) OnConnError(c OnPeerErrorCallback) {
 	p.onConnErrorCallbacks.RegisterCallback(func(params ...interface{}) error {
 		if len(params) != 2 {
 			panic(errors.Errorf("noise: OnConnError received unexpected args %v", params))
@@ -352,19 +352,26 @@ func (p *Peer) OnConnError(c onPeerErrorCallback) {
 }
 
 // OnDisconnect registers a callback for whenever the peer disconnects.
-func (p *Peer) OnDisconnect(c onPeerDisconnectCallback) {
-	p.onDisconnectCallbacks.RegisterCallback(func(params ...interface{}) error {
-		node, ok := params[0].(*Node)
-		if !ok {
-			return nil
-		}
+func (p *Peer) OnDisconnect(srcCallbacks ...OnPeerDisconnectCallback) {
+	targetCallbacks := make([]callbacks.Callback, 0, len(srcCallbacks))
 
-		return c(node, p)
-	})
+	for _, c := range srcCallbacks {
+		c := c
+		targetCallbacks = append(targetCallbacks, func(params ...interface{}) error {
+			node, ok := params[0].(*Node)
+			if !ok {
+				panic("params[0] is not a Node")
+			}
+
+			return c(node, p)
+		})
+	}
+
+	p.onDisconnectCallbacks.RegisterCallback(targetCallbacks...)
 }
 
 // OnMessageReceived registers a callback for whenever a peer sends a message to our node.
-func (p *Peer) OnMessageReceived(o Opcode, c onMessageReceivedCallback) {
+func (p *Peer) OnMessageReceived(o Opcode, c OnMessageReceivedCallback) {
 	p.onMessageReceivedCallbacks.RegisterCallback(byte(o), func(params ...interface{}) error {
 		if len(params) != 2 {
 			panic(errors.Errorf("noise: OnMessageReceived received unexpected args %+v", params))
@@ -372,12 +379,12 @@ func (p *Peer) OnMessageReceived(o Opcode, c onMessageReceivedCallback) {
 
 		node, ok := params[0].(*Node)
 		if !ok {
-			return nil
+			panic("params[0] is not a Node")
 		}
 
 		message, ok := params[1].(Message)
 		if !ok {
-			return nil
+			panic("params[1] is not a Message")
 		}
 
 		return c(node, o, p, message)

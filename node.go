@@ -143,7 +143,7 @@ func (n *Node) Dial(address string) (*Peer, error) {
 }
 
 // OnListenerError registers a callback for whenever our nodes listener fails to accept an incoming peer.
-func (n *Node) OnListenerError(c onErrorCallback) {
+func (n *Node) OnListenerError(c OnErrorCallback) {
 	n.onListenerErrorCallbacks.RegisterCallback(func(params ...interface{}) error {
 		if len(params) != 1 {
 			panic(errors.Errorf("noise: OnListenerError received unexpected args %v", params))
@@ -160,7 +160,7 @@ func (n *Node) OnListenerError(c onErrorCallback) {
 }
 
 // OnPeerConnected registers a callback for whenever a peer has successfully been accepted by our node.
-func (n *Node) OnPeerConnected(c onPeerInitCallback) {
+func (n *Node) OnPeerConnected(c OnPeerInitCallback) {
 	n.onPeerConnectedCallbacks.RegisterCallback(func(params ...interface{}) error {
 		if len(params) != 1 {
 			panic(errors.Errorf("noise: OnPeerConnected received unexpected args %v", params))
@@ -171,21 +171,20 @@ func (n *Node) OnPeerConnected(c onPeerInitCallback) {
 }
 
 // OnPeerDisconnected registers a callback whenever a peer has been disconnected.
-func (n *Node) OnPeerDisconnected(c onPeerDisconnectCallback) {
+func (n *Node) OnPeerDisconnected(srcCallbacks ...OnPeerDisconnectCallback) {
 	n.onPeerInitCallbacks.RegisterCallback(func(params ...interface{}) error {
 		if len(params) != 1 {
 			panic(errors.Errorf("noise: OnPeerDisconnected received unexpected args %v", params))
 		}
 
 		peer := params[0].(*Peer)
-		peer.OnDisconnect(c)
-
+		peer.OnDisconnect(srcCallbacks...)
 		return nil
 	})
 }
 
 // OnPeerDialed registers a callback for whenever a peer has been successfully dialed.
-func (n *Node) OnPeerDialed(c onPeerInitCallback) {
+func (n *Node) OnPeerDialed(c OnPeerInitCallback) {
 	n.onPeerDialedCallbacks.RegisterCallback(func(params ...interface{}) error {
 		if len(params) != 1 {
 			panic(errors.Errorf("noise: OnPeerDialed received unexpected args %v", params))
@@ -195,24 +194,31 @@ func (n *Node) OnPeerDialed(c onPeerInitCallback) {
 	})
 }
 
-func (n *Node) OnPeerInit(c onPeerInitCallback) {
+func (n *Node) OnPeerInit(srcCallbacks ...OnPeerInitCallback) {
 	_, file, no, ok := runtime.Caller(1)
 	if ok {
 		log.Debug().Msgf("OnPeerInit() called from %s#%d.", file, no)
 	}
 
-	n.onPeerInitCallbacks.RegisterCallback(func(params ...interface{}) error {
-		if len(params) != 1 {
-			panic(errors.Errorf("noise: OnPeerInit received unexpected args %v", params))
-		}
+	targetCallbacks := make([]callbacks.Callback, 0, len(srcCallbacks))
 
-		return c(n, params[0].(*Peer))
-	})
+	for _, c := range srcCallbacks {
+		c := c
+		targetCallbacks = append(targetCallbacks, func(params ...interface{}) error {
+			if len(params) != 1 {
+				panic(errors.Errorf("noise: OnPeerInit received unexpected args %v", params))
+			}
+
+			return c(n, params[0].(*Peer))
+		})
+	}
+
+	n.onPeerInitCallbacks.RegisterCallback(targetCallbacks...)
 }
 
 // OnMessageReceived registers a callback for whenever any peer sends a message to our node.
 // Returning noise.DeRegisterCallback will deregister the callback only from a single peer.
-func (n *Node) OnMessageReceived(o Opcode, c onMessageReceivedCallback) {
+func (n *Node) OnMessageReceived(o Opcode, c OnMessageReceivedCallback) {
 	n.OnPeerInit(func(node *Node, peer *Peer) error {
 		peer.OnMessageReceived(o, c)
 		return nil

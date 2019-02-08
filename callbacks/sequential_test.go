@@ -1,7 +1,6 @@
 package callbacks
 
 import (
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"sync"
@@ -148,6 +147,7 @@ func TestSequentialCallbackDeregistered(t *testing.T) {
 	assert.Empty(t, errs, "sequential callbacks still exist in spite of errors being DeregisterCallback")
 }
 
+/*
 func TestSequentialCallbacksOnError(t *testing.T) {
 	manager := NewSequentialCallbackManager()
 
@@ -171,9 +171,10 @@ func TestSequentialCallbacksOnError(t *testing.T) {
 
 	assert.Empty(t, actual, "sequential callbacks still exist after errors were returned")
 }
+*/
 
 func TestSequentialCallbackIntegration(t *testing.T) {
-	var funcs []callback
+	var funcs []Callback
 
 	removed := make(map[int]struct{})
 	var indices []int
@@ -206,7 +207,7 @@ func TestSequentialCallbackIntegration(t *testing.T) {
 		manager.RegisterCallback(funcs[i])
 	}
 
-	var expected []callback
+	var expected []Callback
 
 	for i := 0; i < numCB; i++ {
 		if _, deregistered := removed[i]; !deregistered {
