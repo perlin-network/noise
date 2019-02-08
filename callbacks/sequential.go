@@ -31,6 +31,23 @@ func NewSequentialCallbackManager() *SequentialCallbackManager {
 	}
 }
 
+func (m *SequentialCallbackManager) pushCallback(cb callback) {
+	callbacks := m.loadCallbacks()
+	if len(callbacks) == cap(callbacks) {
+		newCallbacks := make([]callbackState, len(callbacks), len(callbacks)*2+1)
+		for i := 0; i < len(callbacks); i++ {
+			oldCb := &callbacks[i]
+			newCallbacks[i].cb = oldCb.cb
+			newCallbacks[i].pendingRemoval = atomic.LoadUint32(&oldCb.pendingRemoval)
+		}
+		callbacks = newCallbacks
+	}
+	callbacks = append(callbacks, callbackState{
+		cb: cb,
+	})
+	m.storeCallbacks(callbacks)
+}
+
 func (m *SequentialCallbackManager) UnsafelySetReverse() *SequentialCallbackManager {
 	m.reverse = true
 	return m
@@ -60,9 +77,7 @@ func (m *SequentialCallbackManager) Trim() {
 
 func (m *SequentialCallbackManager) RegisterCallback(c callback) {
 	m.callbacksMutex.Lock()
-	m.storeCallbacks(append(m.loadCallbacks(), callbackState{
-		cb: c,
-	}))
+	m.pushCallback(c)
 	m.callbacksMutex.Unlock()
 }
 
