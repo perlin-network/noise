@@ -83,13 +83,25 @@ func TestSequentialCallbacksRunConcurrent(t *testing.T) {
 	manager := NewSequentialCallbackManager()
 
 	expectedCount := numCB
+	deregisterCount := numCB / 2
+
 	for i := 0; i < expectedCount; i++ {
+		index := i + 1
+
 		manager.RegisterCallback(func(params ...interface{}) error {
 			// pretend we're doing something here
 			time.Sleep(100 * time.Millisecond)
 
-			count := params[0].(*int)
+			id := params[0].(int)
+			count := params[1].(*int)
 			*count++
+
+			if id == 1 {
+				if index % 2 == 0 {
+					return DeregisterCallback
+				}
+			}
+
 			return nil
 		})
 	}
@@ -97,9 +109,10 @@ func TestSequentialCallbacksRunConcurrent(t *testing.T) {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
+	// This goroutine will remove half of the callbacks
 	go func() {
 		var count = new(int)
-		errs := manager.RunCallbacks(count)
+		errs := manager.RunCallbacks(1, count)
 
 		assert.Equal(t, expectedCount, *count, "got invalid callbacks count")
 		assert.Empty(t, errs, "expected no errors from sequential callbacks")
@@ -109,7 +122,7 @@ func TestSequentialCallbacksRunConcurrent(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		var count = new(int)
-		errs := manager.RunCallbacks(count)
+		errs := manager.RunCallbacks(2, count)
 
 		assert.Equal(t, expectedCount, *count, "got invalid callbacks count")
 		assert.Empty(t, errs, "expected no errors from sequential callbacks")
@@ -117,6 +130,9 @@ func TestSequentialCallbacksRunConcurrent(t *testing.T) {
 	}()
 
 	wg.Wait()
+
+	manager.Trim()
+	assert.Equal(t, len(manager.loadCallbacks()), expectedCount - deregisterCount, "got invalid callbacks count after trim")
 }
 
 func TestSequentialCallbackDeregistered(t *testing.T) {
@@ -230,4 +246,8 @@ func TestSequentialCallbackIntegration(t *testing.T) {
 
 	manager.Trim()
 	assert.Equal(t, len(expected), len(*manager.callbacks), "callback sequence is unexpected after running after deregistering")
+}
+
+func createIntPointer(x int) *int {
+	return &x
 }
