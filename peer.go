@@ -59,7 +59,7 @@ func newPeer(node *Node, conn net.Conn) *Peer {
 		onDecodeHeaderCallbacks: callbacks.NewSequentialCallbackManager(),
 		onDecodeFooterCallbacks: callbacks.NewSequentialCallbackManager(),
 
-		beforeMessageReceivedCallbacks: callbacks.NewReduceCallbackManager().Reverse(),
+		beforeMessageReceivedCallbacks: callbacks.NewReduceCallbackManager().UnsafelySetReverse(),
 		beforeMessageSentCallbacks:     callbacks.NewReduceCallbackManager(),
 
 		afterMessageReceivedCallbacks: callbacks.NewSequentialCallbackManager(),
