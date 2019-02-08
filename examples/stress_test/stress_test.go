@@ -106,13 +106,13 @@ func makeNode(port int) (*noise.Node, error) {
 	return node, nil
 }
 
-func Run(numNodes int, numMessages int) bool {
+func Run(numNodes int, numMessages int) error {
 	startPort := 3000
 	var nodes []*noise.Node
 	for i := 0; i < numNodes; i++ {
 		n, err := makeNode(startPort + i)
 		if err != nil {
-			panic(fmt.Sprintf("Unable to make node %d", i))
+			return err
 		}
 		nodes = append(nodes, n)
 	}
@@ -126,7 +126,7 @@ func Run(numNodes int, numMessages int) bool {
 	for i := 1; i < numNodes; i++ {
 		peer, err := nodes[i].Dial(address)
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		protocol.BlockUntilAuthenticated(peer)
@@ -143,14 +143,15 @@ func Run(numNodes int, numMessages int) bool {
 		text := fmt.Sprintf("%d", i)
 
 		if err := skademlia.Broadcast(nodes[i%numNodes], opcodeChat, chatMessage{text: strings.TrimSpace(text)}); err != nil {
-			panic(err)
+			return err
 		}
 		time.Sleep(time.Duration(numNodes*25) * time.Millisecond)
 	}
-	return true
+
+	return nil
 }
 
 func TestMultiple(t *testing.T) {
-	assert.True(t, Run(3, 10))
+	assert.Nil(t, Run(3, 10))
 	t.Log("done")
 }
