@@ -22,9 +22,9 @@ import (
 
 /** DEFINE MESSAGES **/
 var (
-	opcodeChat noise.Opcode
-	_          noise.Message = (*chatMessage)(nil)
-	tcpLayer                 = transport.NewBuffered()
+	opcodeChat     noise.Opcode
+	_              noise.Message = (*chatMessage)(nil)
+	transportLayer               = transport.NewBuffered()
 )
 
 type chatMessage struct {
@@ -63,9 +63,7 @@ func registerLogCallbacks(node *noise.Node) {
 	})
 }
 
-func registerMessageCallbacks(node *noise.Node) {
-	opcodeChat = noise.RegisterMessage(noise.NextAvailableOpcode(), (*chatMessage)(nil))
-
+func registerMessageCallbacks(node *noise.Node, opcodeChat noise.Opcode) {
 	protocol.OnEachSessionEstablished(node, func(node *noise.Node, peer *noise.Peer) error {
 		peer.OnMessageReceived(opcodeChat, func(node *noise.Node, opcode noise.Opcode, peer *noise.Peer, message noise.Message) error {
 			log.Info().Msgf("[%s]: %s", protocol.PeerID(peer).String(), message.(chatMessage).text)
@@ -77,11 +75,11 @@ func registerMessageCallbacks(node *noise.Node) {
 	})
 }
 
-func makeNode(port int) (*noise.Node, error) {
+func makeNode(port int, opcodeChat noise.Opcode) (*noise.Node, error) {
 	params := noise.DefaultParams()
 	params.ID = ed25519.Random()
 	params.Port = uint16(port)
-	//params.Transport = tcpLayer
+	//params.Transport = transportLayer
 
 	node, err := noise.NewNode(params)
 	if err != nil {
@@ -97,7 +95,7 @@ func makeNode(port int) (*noise.Node, error) {
 	protocol.EnforceNetworkPolicy(node, skademlia.NewNetworkPolicy())
 
 	registerLogCallbacks(node)
-	registerMessageCallbacks(node)
+	registerMessageCallbacks(node, opcodeChat)
 
 	log.Info().Msgf("Listening for peers on port %d.", node.Port())
 
@@ -108,9 +106,11 @@ func makeNode(port int) (*noise.Node, error) {
 
 func Run(numNodes int, numMessages int) error {
 	startPort := 3000
+	opcodeChat = noise.RegisterMessage(noise.NextAvailableOpcode(), (*chatMessage)(nil))
+
 	var nodes []*noise.Node
 	for i := 0; i < numNodes; i++ {
-		n, err := makeNode(startPort + i)
+		n, err := makeNode(startPort+i, opcodeChat)
 		if err != nil {
 			return err
 		}
@@ -152,6 +152,6 @@ func Run(numNodes int, numMessages int) error {
 }
 
 func TestMultiple(t *testing.T) {
-	assert.Nil(t, Run(3, 10))
+	assert.Nil(t, Run(4, 10))
 	t.Log("done")
 }
