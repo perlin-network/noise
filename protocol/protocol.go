@@ -1,8 +1,18 @@
 package protocol
 
-import "github.com/perlin-network/noise"
+import (
+	"github.com/perlin-network/noise"
+	"github.com/pkg/errors"
+)
 
-const KeyProtocolCurrentBlockIndex = "protocol.current_block"
+const (
+	KeyProtocolBlocks            = "protocol.blocks"
+	KeyProtocolCurrentBlockIndex = "protocol.current_block"
+)
+
+var (
+	CompletedAllBlocks = errors.New("completed all blocks")
+)
 
 type Protocol struct {
 	blocks []Block
@@ -17,20 +27,47 @@ func NewProtocol() *Protocol {
 	return &Protocol{}
 }
 
+// Register registers a block to this protocol sequentially.
 func (p *Protocol) Register(blk Block) {
 	p.blocks = append(p.blocks, blk)
 }
 
+// Enforce enforces that all peers of a node follow the given protocol.
 func (p *Protocol) Enforce(node *noise.Node) {
-	initCallbacks := make([]noise.OnPeerInitCallback, len(p.blocks))
-	disconnectCallbacks := make([]noise.OnPeerDisconnectCallback, len(p.blocks))
+	node.OnPeerInit(func(node *noise.Node, peer *noise.Peer) error {
+		peer.Set(KeyProtocolCurrentBlockIndex, 0)
+		return p.blocks[0].OnBegin(node, peer)
+	})
+}
 
-	for i, blk := range p.blocks {
-		blk := blk
-		initCallbacks[i] = blk.OnBegin
-		disconnectCallbacks[i] = blk.OnEnd
+// Next forces a peer to be in the next 'protocol block'.
+// To be called inside a 'Block' implementation to signal that the peer is done following the current block
+func (p *Protocol) Next(node *noise.Node, peer *noise.Peer) error {
+	numBlocks := len(p.blocks)
+
+	currBlock := 0
+	if val, ok := peer.Get(KeyProtocolCurrentBlockIndex).(int); ok {
+		currBlock = val
 	}
 
-	node.OnPeerInit(initCallbacks...)
-	node.OnPeerDisconnected(disconnectCallbacks...)
+	if currBlock >= numBlocks {
+		return CompletedAllBlocks
+	}
+
+	if err := p.blocks[currBlock].OnEnd(node, peer); err != nil {
+		return err
+	}
+
+	nextBlock := (currBlock + 1) % numBlocks
+	peer.Set(KeyProtocolCurrentBlockIndex, nextBlock)
+
+	if nextBlock == 0 {
+		return CompletedAllBlocks
+	}
+
+	if err := p.blocks[nextBlock].OnBegin(node, peer); err != nil {
+		return err
+	}
+
+	return nil
 }
