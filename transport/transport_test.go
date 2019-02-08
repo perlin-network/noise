@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"net"
+	"sync"
 	"testing"
 	"time"
 )
@@ -56,9 +57,31 @@ func testTransport(t *testing.T, layer Layer, port uint16, host string) {
 }
 
 func TestBuffered(t *testing.T) {
-	testTransport(t, NewBuffered(), uint16(8900), "bufconn")
+	layer := NewBuffered()
+	var wg sync.WaitGroup
+
+	// run the test over several ports
+	for i := 8900; i < 8910; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			testTransport(t, layer, uint16(i), "bufconn")
+		}(i)
+	}
+	wg.Wait()
 }
 
 func TestTCP(t *testing.T) {
-	testTransport(t, NewTCP(), uint16(8900), "\u007f\x00\x00\x01")
+	layer := NewTCP()
+	var wg sync.WaitGroup
+
+	// run the test over several ports
+	for i := 8900; i < 8910; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			testTransport(t, layer, uint16(i), "\u007f\x00\x00\x01")
+		}(i)
+	}
+	wg.Wait()
 }
