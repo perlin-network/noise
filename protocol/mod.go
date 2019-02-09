@@ -6,7 +6,6 @@ import (
 )
 
 const (
-	KeyProtocolBlocks            = "protocol.blocks"
 	KeyProtocolCurrentBlockIndex = "protocol.current_block"
 )
 
@@ -19,8 +18,8 @@ type Protocol struct {
 }
 
 type Block interface {
-	OnBegin(node *noise.Node, peer *noise.Peer) error
-	OnEnd(node *noise.Node, peer *noise.Peer) error
+	OnBegin(protocol *Protocol, peer *noise.Peer) error
+	OnEnd(protocol *Protocol, peer *noise.Peer) error
 }
 
 func NewProtocol() *Protocol {
@@ -36,7 +35,11 @@ func (p *Protocol) Register(blk Block) {
 func (p *Protocol) Enforce(node *noise.Node) {
 	node.OnPeerInit(func(node *noise.Node, peer *noise.Peer) error {
 		peer.Set(KeyProtocolCurrentBlockIndex, 0)
-		return p.blocks[0].OnBegin(node, peer)
+		return p.blocks[0].OnBegin(p, peer)
+	})
+
+	node.OnPeerDisconnected(func(node *noise.Node, peer *noise.Peer) error {
+		return p.blocks[peer.LoadOrStore(KeyProtocolCurrentBlockIndex, 0).(int)].OnEnd(p, peer)
 	})
 }
 
@@ -45,17 +48,14 @@ func (p *Protocol) Enforce(node *noise.Node) {
 func (p *Protocol) Next(node *noise.Node, peer *noise.Peer) error {
 	numBlocks := len(p.blocks)
 
-	currBlock := 0
-	if val, ok := peer.Get(KeyProtocolCurrentBlockIndex).(int); ok {
-		currBlock = val
+	currBlock := peer.LoadOrStore(KeyProtocolCurrentBlockIndex, 0).(int)
+
+	if err := p.blocks[currBlock].OnEnd(p, peer); err != nil {
+		return err
 	}
 
 	if currBlock >= numBlocks {
 		return CompletedAllBlocks
-	}
-
-	if err := p.blocks[currBlock].OnEnd(node, peer); err != nil {
-		return err
 	}
 
 	nextBlock := (currBlock + 1) % numBlocks
@@ -65,7 +65,7 @@ func (p *Protocol) Next(node *noise.Node, peer *noise.Peer) error {
 		return CompletedAllBlocks
 	}
 
-	if err := p.blocks[nextBlock].OnBegin(node, peer); err != nil {
+	if err := p.blocks[nextBlock].OnBegin(p, peer); err != nil {
 		return err
 	}
 

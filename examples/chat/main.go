@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"flag"
 	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/cipher/aead"
 	"github.com/perlin-network/noise/handshake/ecdh"
 	"github.com/perlin-network/noise/identity/ed25519"
 	"github.com/perlin-network/noise/log"
@@ -92,11 +91,10 @@ func main() {
 
 	rpc.Register(node)
 
-	protocol.EnforceHandshakePolicy(node, ecdh.New())
-	protocol.EnforceCipherPolicy(node, aead.New())
+	p := protocol.NewProtocol()
+	p.Register(ecdh.New())
 
-	protocol.EnforceIdentityPolicy(node, skademlia.NewIdentityPolicy())
-	protocol.EnforceNetworkPolicy(node, skademlia.NewNetworkPolicy())
+	p.Enforce(node)
 
 	registerLogCallbacks(node)
 	registerMessageCallbacks(node)
@@ -107,16 +105,16 @@ func main() {
 
 	if len(flag.Args()) > 0 {
 		for _, address := range flag.Args() {
-			peer, err := node.Dial(address)
+			_, err := node.Dial(address)
 			if err != nil {
 				panic(err)
 			}
 
-			protocol.BlockUntilAuthenticated(peer)
+			//protocol.BlockUntilAuthenticated(peer)
 		}
 
-		peers := skademlia.FindNode(node, protocol.NodeID(node).(skademlia.ID), skademlia.DefaultBucketSize, 8)
-		log.Info().Msgf("Bootstrapped with peers: %+v", peers)
+		//peers := skademlia.FindNode(node, protocol.NodeID(node).(skademlia.ID), skademlia.DefaultBucketSize, 8)
+		//log.Info().Msgf("Bootstrapped with peers: %+v", peers)
 	}
 
 	reader := bufio.NewReader(os.Stdin)
