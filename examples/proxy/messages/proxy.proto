@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package messages;
+
+import "gogo/protobuf/gogoproto/gogo.proto";
+
+option (gogoproto.equal_all) = true;
+option (gogoproto.goproto_stringer_all) = false;
+option (gogoproto.gostring_all) = true;
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.stringer_all) =  true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.verbose_equal_all) = true;
+
+// Test options
+option (gogoproto.populate_all) = true;
+option (gogoproto.testgen_all) = true;
+
+message ID {
+    bytes public_key = 1;
+    string address = 2;
+    bytes id = 3;
+}
+
+message ProxyMessage {
+    string message = 1;
+    ID destination = 2;
+}

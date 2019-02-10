@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package protobuf;
+
+option java_multiple_files = true;
+option java_package = "org.perlin.noise.proto";
+option java_outer_classname = "NoiseProto";
+
+import "gogo/protobuf/gogoproto/gogo.proto";
+
+option (gogoproto.equal_all) = true;
+option (gogoproto.goproto_stringer_all) = false;
+option (gogoproto.gostring_all) = true;
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.stringer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.verbose_equal_all) = true;
+
+// Test options
+// FIXME: uncomment when fixed https://github.com/gogo/protobuf/issues/407
+// option (gogoproto.populate_all) = true;
+// option (gogoproto.testgen_all) = true;
+
+message ID {
+    // public_key of the peer (we no longer use the public key as the peer ID, but use it to verify messages)
+    bytes public_key = 1;
+    // address is the network address of the peer
+    string address = 2;
+    // id is the computed hash of the public key
+    bytes id = 3;
+}
+
+message Message {
+    bytes message = 1;
+
+    // Sender's address and public key.
+    ID sender = 2;
+
+    // Sender's signature of message.
+    bytes signature = 3;
+
+    // request_nonce is the request/response ID. Null if ID associated to a message is not a request/response.
+    uint64 request_nonce = 4;
+
+    // message_nonce is the sequence ID.
+    uint64 message_nonce = 5;
+
+    // reply_flag indicates this is a reply to a request
+    bool reply_flag = 6;
+
+    // opcode specifies the message type
+    uint32 opcode = 7;
+}
+
+message Ping {
+}
+
+message Pong {
+}
+
+message LookupNodeRequest {
+    ID target = 1;
+}
+
+message LookupNodeResponse {
+    repeated ID peers = 1;
+}
+
+message Bytes {
+    bytes data = 1;
+}
