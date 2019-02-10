@@ -4,15 +4,14 @@ import (
 	"bufio"
 	"flag"
 	"github.com/perlin-network/noise"
+	"github.com/perlin-network/noise/cipher/aead"
 	"github.com/perlin-network/noise/handshake/ecdh"
 	"github.com/perlin-network/noise/identity/ed25519"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/payload"
 	"github.com/perlin-network/noise/protocol"
-	"github.com/perlin-network/noise/rpc"
 	"github.com/perlin-network/noise/skademlia"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
 	"os"
 	"strconv"
 	"strings"
@@ -42,7 +41,9 @@ func (m chatMessage) Write() []byte {
 }
 
 /** ENTRY POINT **/
-func registerLogCallbacks(node *noise.Node) {
+func setup(node *noise.Node) {
+	opcodeChat = noise.RegisterMessage(noise.NextAvailableOpcode(), (*chatMessage)(nil))
+
 	node.OnPeerInit(func(node *noise.Node, peer *noise.Peer) error {
 		peer.OnConnError(func(node *noise.Node, peer *noise.Peer, err error) error {
 			log.Info().Msgf("Got an error: %v", err)
@@ -56,19 +57,11 @@ func registerLogCallbacks(node *noise.Node) {
 			return nil
 		})
 
-		return nil
-	})
-}
-
-func registerMessageCallbacks(node *noise.Node) {
-	opcodeChat = noise.RegisterMessage(noise.NextAvailableOpcode(), (*chatMessage)(nil))
-
-	node.OnMessageReceived(opcodeChat, func(node *noise.Node, opcode noise.Opcode, peer *noise.Peer, message noise.Message) error {
-		peer.OnMessageReceived(opcodeChat, func(node *noise.Node, opcode noise.Opcode, peer *noise.Peer, message noise.Message) error {
-			log.Info().Msgf("[%s]: %s", protocol.PeerID(peer).String(), message.(chatMessage).text)
-
-			return nil
-		})
+		go func() {
+			for {
+				log.Info().Msgf("[%s]: %s", peer.RemoteIP(), (<-peer.Receive(opcodeChat)).(chatMessage).text)
+			}
+		}()
 
 		return nil
 	})
@@ -77,8 +70,6 @@ func registerMessageCallbacks(node *noise.Node) {
 func main() {
 	portFlag := flag.Uint("p", 3000, "port to listen for peers on")
 	flag.Parse()
-
-	log.Level(zerolog.InfoLevel)
 
 	params := noise.DefaultParams()
 	params.ID = ed25519.Random()
@@ -89,45 +80,41 @@ func main() {
 		panic(err)
 	}
 
-	rpc.Register(node)
-
-	p := protocol.NewProtocol()
+	p := protocol.New()
 	p.Register(ecdh.New())
-
+	p.Register(aead.New())
+	p.Register(skademlia.New())
 	p.Enforce(node)
 
-	registerLogCallbacks(node)
-	registerMessageCallbacks(node)
+	setup(node)
+	go node.Listen()
 
 	log.Info().Msgf("Listening for peers on port %d.", node.Port())
 
-	go node.Listen()
-
 	if len(flag.Args()) > 0 {
 		for _, address := range flag.Args() {
-			_, err := node.Dial(address)
+			peer, err := node.Dial(address)
 			if err != nil {
 				panic(err)
 			}
 
-			//protocol.BlockUntilAuthenticated(peer)
+			skademlia.BlockUntilAuthenticated(peer)
 		}
 
-		//peers := skademlia.FindNode(node, protocol.NodeID(node).(skademlia.ID), skademlia.DefaultBucketSize, 8)
-		//log.Info().Msgf("Bootstrapped with peers: %+v", peers)
+		peers := skademlia.FindNode(node, protocol.NodeID(node).(skademlia.ID), skademlia.DefaultBucketSize, 8)
+		log.Info().Msgf("Bootstrapped with peers: %+v", peers)
 	}
 
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
-		text, err := reader.ReadString('\n')
+		txt, err := reader.ReadString('\n')
 
 		if err != nil {
 			panic(err)
 		}
 
-		err = skademlia.Broadcast(node, opcodeChat, chatMessage{text: strings.TrimSpace(text)})
-
+		err = skademlia.Broadcast(node, opcodeChat, chatMessage{text: strings.TrimSpace(txt)})
 		if err != nil {
 			panic(err)
 		}

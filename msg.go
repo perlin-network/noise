@@ -33,14 +33,6 @@ func NextAvailableOpcode() Opcode {
 	return Opcode(len(opcodes))
 }
 
-func GetOpcodes() (ret []Opcode) {
-	for k, _ := range opcodes {
-		ret = append(ret, k)
-	}
-
-	return
-}
-
 func DebugOpcodes() {
 	log.Debug().Msg("Here are all opcodes registered so far.")
 

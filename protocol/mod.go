@@ -4,11 +4,11 @@ import (
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/log"
 	"github.com/pkg/errors"
+	"sync"
 )
 
 const (
-	KeyProtocolCurrentBlockIndex = "protocol.current_block"
-	KeyProtocolInstanceIndex     = "protocol.instance"
+	KeyProtocolCurrentBlockIndex = "protocol.current_block_index"
 )
 
 var (
@@ -16,19 +16,18 @@ var (
 	DisconnectPeer     = errors.New("peer disconnect requested")
 )
 
-type Block func(protocol *ProtocolInstance, peer *noise.Peer) (Block, error)
+type Block interface {
+	OnRegister(p *Protocol, node *noise.Node)
+	OnBegin(p *Protocol, peer *noise.Peer) error
+	OnEnd(p *Protocol, peer *noise.Peer) error
+}
 
 type Protocol struct {
-	blocks []Block
+	enforceOnce sync.Once
+	blocks      []Block
 }
 
-type ProtocolInstance struct {
-	protocol *Protocol
-
-	incoming map[noise.Opcode]chan noise.Message
-}
-
-func NewProtocol() *Protocol {
+func New() *Protocol {
 	return &Protocol{}
 }
 
@@ -39,63 +38,51 @@ func (p *Protocol) Register(blk Block) {
 
 // Enforce enforces that all peers of a node follow the given protocol.
 func (p *Protocol) Enforce(node *noise.Node) {
-	node.OnPeerInit(func(node *noise.Node, peer *noise.Peer) error {
-		inst := &ProtocolInstance{
-			protocol: p,
-			incoming: make(map[noise.Opcode]chan noise.Message),
-		}
-		for _, op := range noise.GetOpcodes() {
-			ch := make(chan noise.Message)
-			inst.incoming[op] = ch
-			peer.OnMessageReceived(op, func(node *noise.Node, opcode noise.Opcode, peer *noise.Peer, message noise.Message) error {
-				ch <- message
-				return nil
-			})
-		}
-		peer.Set(KeyProtocolInstanceIndex, inst)
-		go inst.runWorker(peer)
-		return nil
-	})
-
-	node.OnPeerDisconnected(func(node *noise.Node, peer *noise.Peer) error {
-		inst := peer.Get(KeyProtocolInstanceIndex).(*ProtocolInstance)
-
-		for _, ch := range inst.incoming {
-			close(ch)
+	p.enforceOnce.Do(func() {
+		for _, block := range p.blocks {
+			block.OnRegister(p, node)
 		}
 
-		return nil
-	})
-}
+		node.OnPeerInit(func(node *noise.Node, peer *noise.Peer) error {
+			peer.Set(KeyProtocolCurrentBlockIndex, 0)
 
-func (p *ProtocolInstance) Recv(op noise.Opcode) (noise.Message, error) {
-	ch := p.incoming[op]
-	if ch == nil {
-		return nil, errors.New("invalid opcode")
-	}
+			go func() {
+				peer.OnDisconnect(func(node *noise.Node, peer *noise.Peer) error {
+					blockIndex := peer.Get(KeyProtocolCurrentBlockIndex).(int)
 
-	msg, ok := <-ch
-	if !ok {
-		return nil, errors.New("peer disconnected")
-	}
+					if blockIndex >= len(p.blocks) {
+						return nil
+					}
 
-	return msg, nil
-}
+					return p.blocks[blockIndex].OnEnd(p, peer)
+				})
 
-func (p *ProtocolInstance) runWorker(peer *noise.Peer) {
-	defer peer.Disconnect()
+				for {
+					blockIndex := peer.Get(KeyProtocolCurrentBlockIndex).(int)
 
-	for _, blk := range p.protocol.blocks {
-		maybeNext := blk
-		var err error
-		for maybeNext != nil {
-			maybeNext, err = maybeNext(p, peer)
-			if err != nil {
-				if err != DisconnectPeer {
-					log.Error().Err(err).Msg("got an error while handling protocol session")
+					if blockIndex >= len(p.blocks) {
+						return
+					}
+
+					err := p.blocks[blockIndex].OnBegin(p, peer)
+
+					if err != nil {
+						switch errors.Cause(err) {
+						case DisconnectPeer:
+							peer.Disconnect()
+							return
+						case CompletedAllBlocks:
+							return
+						}
+
+						log.Warn().Err(err).Msg("Received an error following protocol.")
+					} else {
+						peer.Set(KeyProtocolCurrentBlockIndex, blockIndex+1)
+					}
 				}
-				return
-			}
-		}
-	}
+			}()
+
+			return nil
+		})
+	})
 }

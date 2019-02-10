@@ -3,21 +3,12 @@ package protocol
 import (
 	"fmt"
 	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/callbacks"
-	"github.com/perlin-network/noise/log"
-	"github.com/pkg/errors"
-	"sync"
 )
 
 const (
-	KeyAuthCallbacks = "auth.callbacks"
-	KeyAuthSignal    = "auth.signal"
-	KeyAuthOnce      = "auth.once"
-
-	KeyIdentityPolicy = "identityPolicy"
-	KeySharedKey      = "sharedKey"
-	KeyPeerID         = "peer."
-	KeyID             = "id"
+	KeySharedKey = "identity.shared_key"
+	KeyID        = "node.id"
+	KeyPeerID    = "peer.id"
 )
 
 type ID interface {
@@ -28,62 +19,6 @@ type ID interface {
 
 	PublicID() []byte
 	Hash() []byte
-}
-
-type IdentityPolicy interface {
-	EnforceIdentityPolicy(node *noise.Node)
-
-	OnSessionEstablished(node *noise.Node, peer *noise.Peer) error
-}
-
-func EnforceIdentityPolicy(node *noise.Node, policy IdentityPolicy) IdentityPolicy {
-	node.Set(KeyIdentityPolicy, policy)
-
-	node.OnPeerInit(func(node *noise.Node, peer *noise.Peer) error {
-		peer.Set(KeyAuthCallbacks, defaultAuthCallbackManager())
-		peer.Set(KeyAuthSignal, make(chan struct{}))
-		peer.Set(KeyAuthOnce, new(sync.Once))
-
-		return nil
-	})
-
-	policy.EnforceIdentityPolicy(node)
-
-	// If a handshake policy exists, we register our peer to the overlay network
-	// when an authenticated session has been established.
-	if HasHandshakePolicy(node) {
-		OnEachSessionEstablished(node, policy.OnSessionEstablished)
-	} else {
-		node.OnPeerInit(policy.OnSessionEstablished)
-	}
-
-	return policy
-}
-
-func HasIdentityPolicy(node *noise.Node) bool {
-	return node.Has(KeyIdentityPolicy)
-}
-
-func LoadIdentityPolicy(node *noise.Node) IdentityPolicy {
-	manager := node.Get(KeyIdentityPolicy)
-
-	if manager == nil {
-		return nil
-	}
-
-	if manager, ok := manager.(IdentityPolicy); ok {
-		return manager
-	}
-
-	return nil
-}
-
-func MustIdentityPolicy(node *noise.Node) IdentityPolicy {
-	if !HasIdentityPolicy(node) {
-		panic("noise: node must have an identity policy enforced")
-	}
-
-	return LoadIdentityPolicy(node)
 }
 
 func HasSharedKey(peer *noise.Peer) bool {
@@ -126,6 +61,10 @@ func SetNodeID(node *noise.Node, id ID) {
 
 func DeleteNodeID(node *noise.Node) {
 	node.Delete(KeyID)
+}
+
+func HasPeerID(peer *noise.Peer) bool {
+	return peer.Has(KeyID)
 }
 
 func SetPeerID(peer *noise.Peer, id ID) {
@@ -178,81 +117,4 @@ func Peer(node *noise.Node, id ID) *noise.Peer {
 	}
 
 	return nil
-}
-
-func AuthenticatePeer(peer *noise.Peer, id ID) {
-	once := peer.Get(KeyAuthOnce).(*sync.Once)
-
-	once.Do(func() {
-		SetPeerID(peer, id)
-
-		manager := peer.Get(KeyAuthCallbacks)
-		if errs := manager.(*callbacks.SequentialCallbackManager).RunCallbacks(peer.Node(), peer, id); len(errs) > 0 {
-			log.Error().Errs("errors", errs).Msg("Got errors running SequentialCallback callbacks.")
-		}
-		close(peer.Get(KeyAuthSignal).(chan struct{}))
-	})
-}
-
-func OnPeerAuthenticated(peer *noise.Peer, c func(node *noise.Node, peer *noise.Peer, id ID) error) {
-	manager := peer.Get(KeyAuthCallbacks)
-
-	manager.(*callbacks.SequentialCallbackManager).RegisterCallback(func(params ...interface{}) error {
-		if len(params) != 3 {
-			panic(errors.Errorf("protocol: OnPeerAuthenticated received unexpected args %v", params))
-		}
-
-		node, ok := params[0].(*noise.Node)
-		if !ok {
-			return nil
-		}
-
-		peer, ok := params[1].(*noise.Peer)
-		if !ok {
-			return nil
-		}
-
-		id, ok := params[2].(ID)
-		if !ok {
-			return nil
-		}
-
-		return c(node, peer, id)
-	})
-}
-
-func OnEachPeerAuthenticated(n *noise.Node, c func(node *noise.Node, peer *noise.Peer, id ID) error) {
-	n.OnPeerInit(func(node *noise.Node, peer *noise.Peer) error {
-		OnPeerAuthenticated(peer, c)
-		return nil
-	})
-}
-
-func defaultAuthCallbackManager() *callbacks.SequentialCallbackManager {
-	manager := callbacks.NewSequentialCallbackManager()
-
-	// Deregister peer ID when a peer disconnects.
-	manager.RegisterCallback(func(params ...interface{}) error {
-		if len(params) != 3 {
-			panic(errors.Errorf("protocol: OnPeerAuthenticated received unexpected args %v", params))
-		}
-
-		peer, ok := params[1].(*noise.Peer)
-		if !ok {
-			return nil
-		}
-
-		peer.OnDisconnect(func(node *noise.Node, peer *noise.Peer) error {
-			DeletePeerID(peer)
-			return callbacks.DeregisterCallback
-		})
-
-		return nil
-	})
-
-	return manager
-}
-
-func BlockUntilAuthenticated(peer *noise.Peer) {
-	<-peer.Get(KeyAuthSignal).(chan struct{})
 }

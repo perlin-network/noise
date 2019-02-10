@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type Peer struct {
@@ -35,7 +36,8 @@ type Peer struct {
 	afterMessageSentCallbacks     *callbacks.SequentialCallbackManager
 	afterMessageReceivedCallbacks *callbacks.SequentialCallbackManager
 
-	onMessageReceivedCallbacks *callbacks.OpcodeCallbackManager
+	// map[Opcode]chan Message
+	messageHub sync.Map
 
 	kill     chan struct{}
 	killOnce sync.Once
@@ -64,8 +66,6 @@ func newPeer(node *Node, conn net.Conn) *Peer {
 
 		afterMessageReceivedCallbacks: callbacks.NewSequentialCallbackManager(),
 		afterMessageSentCallbacks:     callbacks.NewSequentialCallbackManager(),
-
-		onMessageReceivedCallbacks: callbacks.NewOpcodeCallbackManager(),
 
 		kill: make(chan struct{}, 1),
 	}
@@ -135,8 +135,14 @@ func (p *Peer) spawnReceiveWorker() {
 			continue
 		}
 
-		if errs := p.onMessageReceivedCallbacks.RunCallbacks(byte(opcode), p.node, msg); len(errs) > 0 {
-			log.Warn().Errs("errors", errs).Msg("Got errors running OnMessageReceived callbacks.")
+		c, _ := p.messageHub.LoadOrStore(opcode, make(chan Message, 1))
+
+		select {
+		case c.(chan Message) <- msg:
+		case <-time.After(3 * time.Second):
+			// TODO(kenta): message was unhandled for 3 seconds; disconnect peer.
+			p.Disconnect()
+			continue
 		}
 
 		if errs := p.afterMessageReceivedCallbacks.RunCallbacks(p.node); len(errs) > 0 {
@@ -370,25 +376,9 @@ func (p *Peer) OnDisconnect(srcCallbacks ...OnPeerDisconnectCallback) {
 	p.onDisconnectCallbacks.RegisterCallback(targetCallbacks...)
 }
 
-// OnMessageReceived registers a callback for whenever a peer sends a message to our node.
-func (p *Peer) OnMessageReceived(o Opcode, c OnMessageReceivedCallback) {
-	p.onMessageReceivedCallbacks.RegisterCallback(byte(o), func(params ...interface{}) error {
-		if len(params) != 2 {
-			panic(errors.Errorf("noise: OnMessageReceived received unexpected args %+v", params))
-		}
-
-		node, ok := params[0].(*Node)
-		if !ok {
-			panic("params[0] is not a Node")
-		}
-
-		message, ok := params[1].(Message)
-		if !ok {
-			panic("params[1] is not a Message")
-		}
-
-		return c(node, o, p, message)
-	})
+func (p *Peer) Receive(o Opcode) <-chan Message {
+	c, _ := p.messageHub.LoadOrStore(o, make(chan Message, 1))
+	return c.(chan Message)
 }
 
 func (p *Peer) Disconnect() {
