@@ -3,99 +3,26 @@ package skademlia
 import (
 	"bytes"
 	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/callbacks"
-	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
-	"github.com/perlin-network/noise/rpc"
-	"github.com/perlin-network/noise/timeout"
-	"github.com/pkg/errors"
 	"sort"
 	"sync"
 	"time"
 )
 
-var (
-	OpcodePing           noise.Opcode
-	OpcodePong           noise.Opcode
-	OpcodeLookupRequest  noise.Opcode
-	OpcodeLookupResponse noise.Opcode
+func Broadcast(node *noise.Node, opcode noise.Opcode, message noise.Message) error {
+	for _, peerID := range FindClosestPeers(Table(node), protocol.NodeID(node).Hash(), DefaultBucketSize) {
+		peer := protocol.Peer(node, peerID)
 
-	registerOpcodesOnce sync.Once
-
-	_ protocol.NetworkPolicy = (*networkPolicy)(nil)
-)
-
-const (
-	keyPingTimeoutDispatcher = "kademlia.timeout.ping"
-)
-
-type networkPolicy struct{}
-
-func NewNetworkPolicy() *networkPolicy {
-	return new(networkPolicy)
-}
-
-func (p networkPolicy) EnforceNetworkPolicy(node *noise.Node) {
-	protocol.MustIdentityPolicy(node)
-
-	registerOpcodesOnce.Do(func() {
-		OpcodePing = noise.RegisterMessage(noise.NextAvailableOpcode(), (*Ping)(nil))
-		OpcodePong = noise.RegisterMessage(noise.NextAvailableOpcode(), (*Pong)(nil))
-		OpcodeLookupRequest = noise.RegisterMessage(noise.NextAvailableOpcode(), (*LookupRequest)(nil))
-		OpcodeLookupResponse = noise.RegisterMessage(noise.NextAvailableOpcode(), (*LookupResponse)(nil))
-	})
-}
-
-func (p networkPolicy) OnSessionEstablished(node *noise.Node, peer *noise.Peer) error {
-	peer.OnMessageReceived(OpcodePing, onReceivePing)
-
-	peer.OnMessageReceived(OpcodePong, func(node *noise.Node, opcode noise.Opcode, peer *noise.Peer, message noise.Message) error {
-		if err := timeout.Clear(peer, keyPingTimeoutDispatcher); err != nil {
-			peer.Disconnect()
-			return errors.Wrap(err, "error enforcing ping timeout policy")
+		if peer == nil {
+			continue
 		}
 
-		return callbacks.DeregisterCallback
-	})
-
-	rpc.OnRequestReceived(peer, OpcodeLookupRequest, onLookupRequest)
-
-	// Send a ping.
-	err := peer.SendMessage(OpcodePing, Ping{})
-
-	if err != nil {
-		peer.Disconnect()
-		return errors.Wrap(err, "failed to ping peer")
+		if err := peer.SendMessage(opcode, message); err != nil {
+			return err
+		}
 	}
 
-	timeout.Enforce(peer, keyPingTimeoutDispatcher, 3*time.Second, peer.Disconnect)
-
-	return callbacks.DeregisterCallback
-}
-
-// Send a pong.
-func onReceivePing(node *noise.Node, opcode noise.Opcode, peer *noise.Peer, message noise.Message) error {
-	err := peer.SendMessage(OpcodePong, Pong{})
-
-	if err != nil {
-		peer.Disconnect()
-		return errors.Wrap(err, "failed to pong peer")
-	}
-
-	// Never de-register accepting pings.
 	return nil
-}
-
-func onLookupRequest(peer *noise.Peer, message noise.Message) (noise.Message, error) {
-	targetID, res := message.(LookupRequest), LookupResponse{}
-
-	for _, peerID := range FindClosestPeers(Table(peer.Node()), targetID.Hash(), DefaultBucketSize) {
-		res.peers = append(res.peers, peerID.(ID))
-	}
-
-	log.Info().Strs("addrs", Table(peer.Node()).GetPeers()).Msg("Connected to peer(s).")
-
-	return res, nil
 }
 
 func queryPeerByID(node *noise.Node, peerID, targetID ID, responses chan []ID) {
@@ -115,18 +42,25 @@ func queryPeerByID(node *noise.Node, peerID, targetID ID, responses chan []ID) {
 			responses <- []ID{}
 			return
 		}
-
-		protocol.BlockUntilAuthenticated(peer)
 	}
 
-	res, err := rpc.Request(peer, 3*time.Second, OpcodeLookupRequest, LookupRequest{targetID})
-
+	// Send lookup request.
+	err = peer.SendMessage(OpcodeLookupRequest, LookupRequest(targetID))
 	if err != nil {
 		responses <- []ID{}
 		return
 	}
 
-	responses <- res.(LookupResponse).peers
+	// Handle lookup response.
+	for {
+		select {
+		case msg := <-peer.Receive(OpcodeLookupResponse):
+			responses <- msg.(LookupResponse).peers
+		case <-time.After(3 * time.Second):
+			responses <- []ID{}
+			return
+		}
+	}
 }
 
 type lookupBucket struct {

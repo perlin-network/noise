@@ -18,7 +18,7 @@ type SequentialCallbackManager struct {
 }
 
 type callbackState struct {
-	cb             callback
+	cb             Callback
 	pendingRemoval uint32
 }
 
@@ -29,6 +29,23 @@ func NewSequentialCallbackManager() *SequentialCallbackManager {
 		reverse:   false,
 		callbacks: &callbacks,
 	}
+}
+
+func (m *SequentialCallbackManager) pushCallback(cb Callback) {
+	callbacks := m.loadCallbacks()
+	if len(callbacks) == cap(callbacks) {
+		newCallbacks := make([]callbackState, len(callbacks), len(callbacks)*2+1)
+		for i := 0; i < len(callbacks); i++ {
+			oldCb := &callbacks[i]
+			newCallbacks[i].cb = oldCb.cb
+			newCallbacks[i].pendingRemoval = atomic.LoadUint32(&oldCb.pendingRemoval)
+		}
+		callbacks = newCallbacks
+	}
+	callbacks = append(callbacks, callbackState{
+		cb: cb,
+	})
+	m.storeCallbacks(callbacks)
 }
 
 func (m *SequentialCallbackManager) UnsafelySetReverse() *SequentialCallbackManager {
@@ -49,39 +66,48 @@ func (m *SequentialCallbackManager) Trim() {
 
 	m.callbacksMutex.Lock()
 	newCallbacks := make([]callbackState, 0)
-	for _, cb := range m.loadCallbacks() {
-		if cb.pendingRemoval == 0 {
-			newCallbacks = append(newCallbacks, cb)
+	oldCallbacks := m.loadCallbacks()
+	for i := 0; i < len(oldCallbacks); i++ {
+		cb := &oldCallbacks[i]
+		if atomic.LoadUint32(&cb.pendingRemoval) == 0 {
+			newCallbacks = append(newCallbacks, callbackState{
+				cb:             cb.cb,
+				pendingRemoval: 0,
+			})
 		}
 	}
 	m.storeCallbacks(newCallbacks)
 	m.callbacksMutex.Unlock()
 }
 
-func (m *SequentialCallbackManager) RegisterCallback(c callback) {
+// RegisterCallback atomically registers all callbacks passed in.
+func (m *SequentialCallbackManager) RegisterCallback(callbacks ...Callback) {
+	//log.Debug().Str("callbacks", fmt.Sprintf("%+v", callbacks)).Msg("Registering callbacks")
 	m.callbacksMutex.Lock()
-	m.storeCallbacks(append(m.loadCallbacks(), callbackState{
-		cb: c,
-	}))
+	for _, c := range callbacks {
+		m.pushCallback(c)
+	}
 	m.callbacksMutex.Unlock()
 }
 
 // RunCallbacks runs all callbacks on a variadic parameter list, and de-registers callbacks
 // that throw an error.
-func (m *SequentialCallbackManager) RunCallbacks(params ...interface{}) (errs []error) {
+func (m *SequentialCallbackManager) RunCallbacks(params ...interface{}) []error {
 	callbacks := m.loadCallbacks()
+	//log.Debug().Str("callbacks", fmt.Sprintf("%+v", callbacks)).Msg("Running callbacks")
+
 	if m.reverse {
 		for i := len(callbacks) - 1; i >= 0; i-- {
 			c := &callbacks[i]
 			if err := m.doRunCallback(c, params...); err != nil {
-				errs = append(errs, err)
+				return []error{err}
 			}
 		}
 	} else {
 		for i := 0; i < len(callbacks); i++ {
 			c := &callbacks[i]
 			if err := m.doRunCallback(c, params...); err != nil {
-				errs = append(errs, err)
+				return []error{err}
 			}
 		}
 	}
@@ -90,7 +116,7 @@ func (m *SequentialCallbackManager) RunCallbacks(params ...interface{}) (errs []
 		m.Trim()
 	}
 
-	return
+	return nil
 }
 
 func (m *SequentialCallbackManager) doRunCallback(c *callbackState, params ...interface{}) error {

@@ -40,6 +40,7 @@ func (t tcp) Port(address net.Addr) uint16 {
 	return uint16(address.(*net.TCPAddr).Port)
 }
 
+// NewTCP returns a new tcp instance
 func NewTCP() tcp {
 	return tcp{}
 }

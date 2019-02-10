@@ -15,7 +15,7 @@ func (m *ReduceCallbackManager) UnsafelySetReverse() *ReduceCallbackManager {
 	return m
 }
 
-func (m *ReduceCallbackManager) RegisterCallback(c reduceCallback) {
+func (m *ReduceCallbackManager) RegisterCallback(c ReduceCallback) {
 	m.seqMgr.RegisterCallback(func(params ...interface{}) error {
 		valueOut := params[0].(*interface{})
 		var err error

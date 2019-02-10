@@ -9,26 +9,17 @@ import (
 const maxNumPeersToLookup = 64
 
 var (
+	_ noise.Message = (*Ping)(nil)
+	_ noise.Message = (*Evict)(nil)
 	_ noise.Message = (*LookupRequest)(nil)
 	_ noise.Message = (*LookupResponse)(nil)
 )
 
-type Ping struct{ noise.EmptyMessage }
-type Pong struct{ noise.EmptyMessage }
+type Ping = ID
 
-type LookupRequest struct{ ID }
+type Evict = noise.EmptyMessage
 
-func (m LookupRequest) Read(reader payload.Reader) (noise.Message, error) {
-	id, err := ID{}.Read(reader)
-	if err != nil {
-		return nil, errors.Wrap(err, "skademlia: failed to read id for LookupRequest")
-	}
-
-	m.ID = id.(ID)
-
-	return m, nil
-}
-
+type LookupRequest = ID
 type LookupResponse struct {
 	peers []ID
 }

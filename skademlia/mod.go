@@ -1,131 +1,159 @@
 package skademlia
 
 import (
-	"bytes"
 	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/callbacks"
+	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/payload"
 	"github.com/perlin-network/noise/protocol"
-	"github.com/perlin-network/noise/timeout"
 	"github.com/pkg/errors"
-	"sort"
 	"time"
 )
 
-func Table(node *noise.Node) *table {
-	t := node.Get(KeyKademliaTable)
+const (
+	keyKademliaTable = "kademlia.table"
+	keyAuthChannel   = "kademlia.auth.ch"
+)
 
-	if t == nil {
-		panic("kademlia: node has not enforced identity policy, and thus has no table associated to it")
-	}
+var (
+	OpcodePing           noise.Opcode
+	OpcodeEvict          noise.Opcode
+	OpcodeLookupRequest  noise.Opcode
+	OpcodeLookupResponse noise.Opcode
 
-	if t, ok := t.(*table); ok {
-		return t
-	}
+	_ protocol.Block = (*block)(nil)
+)
 
-	panic("kademlia: table associated to node is not an instance of a kademlia table")
+type block struct{}
+
+func New() block {
+	return block{}
 }
 
-// FindClosestPeers returns a list of K peers with in order of ascending XOR distance.
-func FindClosestPeers(t *table, target []byte, K int) (peers []protocol.ID) {
-	bucketID := t.bucketID(xor(target, t.self.Hash()))
-	bucket := t.bucket(bucketID)
+func (b block) OnRegister(p *protocol.Protocol, node *noise.Node) {
+	OpcodePing = noise.RegisterMessage(noise.NextAvailableOpcode(), (*Ping)(nil))
+	OpcodeEvict = noise.RegisterMessage(noise.NextAvailableOpcode(), (*Evict)(nil))
+	OpcodeLookupRequest = noise.RegisterMessage(noise.NextAvailableOpcode(), (*LookupRequest)(nil))
+	OpcodeLookupResponse = noise.RegisterMessage(noise.NextAvailableOpcode(), (*LookupResponse)(nil))
 
-	bucket.RLock()
+	var nodeID = NewID(node.ExternalAddress(), node.ID.PublicID())
 
-	for e := bucket.Front(); e != nil; e = e.Next() {
-		if !e.Value.(protocol.ID).Equals(t.self) {
-			peers = append(peers, e.Value.(protocol.ID))
-		}
+	protocol.SetNodeID(node, nodeID)
+	node.Set(keyKademliaTable, newTable(nodeID))
+}
+
+func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
+	// Send a ping.
+	err := peer.SendMessage(OpcodePing, Ping(protocol.NodeID(peer.Node()).(ID)))
+	if err != nil {
+		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to send ping")
 	}
 
-	bucket.RUnlock()
+	// Receive a ping and set the peers ID.
+	var peerID Ping
 
-	for i := 1; len(peers) < K && (bucketID-i >= 0 || bucketID+i < len(t.self.Hash())*8); i++ {
-		if bucketID-i >= 0 {
-			other := t.bucket(bucketID - i)
-			other.RLock()
-			for e := other.Front(); e != nil; e = e.Next() {
-				if !e.Value.(protocol.ID).Equals(t.self) {
-					peers = append(peers, e.Value.(protocol.ID))
-				}
-			}
-			other.RUnlock()
-		}
-
-		if bucketID+i < len(t.self.Hash())*8 {
-			other := t.bucket(bucketID + i)
-			other.RLock()
-			for e := other.Front(); e != nil; e = e.Next() {
-				if !e.Value.(protocol.ID).Equals(t.self) {
-					peers = append(peers, e.Value.(protocol.ID))
-				}
-			}
-			other.RUnlock()
-		}
+	select {
+	case msg := <-peer.Receive(OpcodePing):
+		peerID = msg.(Ping)
+	case <-time.After(3 * time.Second):
+		return errors.Wrap(protocol.DisconnectPeer, "timed out waiting for pong")
 	}
 
-	// Sort peers by XOR distance.
-	sort.Slice(peers, func(i, j int) bool {
-		return bytes.Compare(xor(peers[i].Hash(), target), xor(peers[j].Hash(), target)) == -1
+	// Register peer.
+	protocol.SetPeerID(peer, peerID)
+	enforceSignatures(peer, true)
+
+	// Log peer into S/Kademlia table, and have all messages update the S/Kademlia table.
+	logPeerActivity(peer)
+
+	peer.BeforeMessageReceived(func(node *noise.Node, peer *noise.Peer, msg []byte) (i []byte, e error) {
+		return msg, logPeerActivity(peer)
 	})
 
-	if len(peers) > K {
-		peers = peers[:K]
-	}
+	go handleLookups(peer)
 
-	return peers
+	peer.LoadOrStore(keyAuthChannel, make(chan struct{}, 1)).(chan struct{}) <- struct{}{}
+
+	return nil
 }
 
-func UpdateTable(node *noise.Node, target protocol.ID) (err error) {
-	table := Table(node)
-
-	if err = table.Update(target); err != nil {
-		switch err {
-		case ErrBucketFull:
-			bucket := table.bucket(table.bucketID(target.Hash()))
-
-			last := bucket.Back()
-			lastPeer := protocol.Peer(node, last.Value.(protocol.ID))
-
-			if lastPeer == nil {
-				return errors.New("kademlia: last peer in bucket was not actually connected to our node")
-			}
-
-			// If the candidate peer to-be-evicted responds with a pong, move him to the front of the bucket
-			// and do not push the target ID into the bucket.
-			//
-			// Else, evict the candidate peer and push the target ID to the front of the bucket.
-			lastPeer.OnMessageReceived(OpcodePong, func(node *noise.Node, opcode noise.Opcode, peer *noise.Peer, message noise.Message) error {
-				bucket.MoveToFront(last)
-
-				if err = timeout.Clear(lastPeer, keyPingTimeoutDispatcher); err != nil {
-					lastPeer.Disconnect()
-					return errors.Wrap(err, "error enforcing ping timeout policy")
-				}
-
-				return callbacks.DeregisterCallback
-			})
-
-			// Send a ping to the candidate peer to-be-evicted.
-			err := lastPeer.SendMessage(OpcodePing, Ping{})
-
-			evictLastPeer := func() {
-				lastPeer.Disconnect()
-
-				bucket.Remove(last)
-				bucket.PushFront(target)
-			}
-
-			if err != nil {
-				evictLastPeer()
-				return nil
-			}
-
-			timeout.Enforce(lastPeer, keyPingTimeoutDispatcher, 3*time.Second, evictLastPeer)
-		default:
-			return err
-		}
+func (b block) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
+	if protocol.HasPeerID(peer) {
+		protocol.DeletePeerID(peer)
 	}
 
 	return nil
+}
+
+func logPeerActivity(peer *noise.Peer) error {
+	err := UpdateTable(peer.Node(), protocol.PeerID(peer))
+
+	if err != nil {
+		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()),
+			"kademlia: failed to update table with peer ID")
+	}
+
+	return nil
+}
+
+func enforceSignatures(peer *noise.Peer, enforce bool) {
+	if enforce {
+		// Place signature at the footer of every single message.
+		peer.OnEncodeFooter(func(node *noise.Node, peer *noise.Peer, header, msg []byte) (i []byte, e error) {
+			signature, err := node.ID.Sign(msg)
+
+			if err != nil {
+				panic(errors.Wrap(err, "signature: failed to sign message"))
+			}
+
+			return payload.NewWriter(header).WriteBytes(signature).Bytes(), nil
+		})
+
+		// Validate signature situated inside every single messages header.
+		peer.OnDecodeFooter(func(node *noise.Node, peer *noise.Peer, msg []byte, reader payload.Reader) error {
+			signature, err := reader.ReadBytes()
+			if err != nil {
+				peer.Disconnect()
+				return errors.Wrap(err, "signature: failed to read message signature")
+			}
+
+			if err = node.ID.Verify(protocol.PeerID(peer).PublicID(), msg, signature); err != nil {
+				peer.Disconnect()
+				return errors.Wrap(err, "signature: peer sent an invalid signature")
+			}
+
+			return nil
+		})
+	}
+}
+
+func handleLookups(peer *noise.Peer) {
+	for {
+		select {
+		case msg := <-peer.Receive(OpcodeLookupRequest):
+			id := msg.(LookupRequest)
+
+			var res LookupResponse
+
+			for _, peerID := range FindClosestPeers(Table(peer.Node()), id.Hash(), DefaultBucketSize) {
+				res.peers = append(res.peers, peerID.(ID))
+			}
+
+			log.Info().
+				Strs("addrs", Table(peer.Node()).GetPeers()).
+				Msg("Connected to peer(s).")
+
+			// Send lookup response back.
+
+			if err := peer.SendMessage(OpcodeLookupResponse, res); err != nil {
+				log.Warn().
+					AnErr("err", err).
+					Interface("peer", protocol.PeerID(peer)).
+					Msg("Failed to send lookup response to peer.")
+			}
+		}
+	}
+}
+
+func BlockUntilAuthenticated(peer *noise.Peer) {
+	<-peer.LoadOrStore(keyAuthChannel, make(chan struct{}, 1)).(chan struct{})
 }
