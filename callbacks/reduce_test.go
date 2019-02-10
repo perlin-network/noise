@@ -39,7 +39,7 @@ func TestReduceCallbacksDeregisterMidway(t *testing.T) {
 
 		manager.RegisterCallback(func(in interface{}, params ...interface{}) (interface{}, error) {
 			if i == numCB/2 {
-				return in.(int) + i, DeregisterCallback
+				return in.(int) + i, Deregister
 			}
 
 			return in.(int) + i, nil
@@ -79,7 +79,7 @@ func TestReduceCallbacksConcurrent(t *testing.T) {
 
 			manager.RegisterCallback(func(in interface{}, params ...interface{}) (interface{}, error) {
 				if i == numCB/2 {
-					return in.(int) + i, DeregisterCallback
+					return in.(int) + i, Deregister
 				}
 
 				return in.(int) + i, nil
@@ -115,7 +115,7 @@ func TestReduceCallbacksDeregistered(t *testing.T) {
 
 		manager.RegisterCallback(func(in interface{}, params ...interface{}) (interface{}, error) {
 			actual = append(actual, i)
-			return nil, DeregisterCallback
+			return nil, Deregister
 		})
 
 		expected = append(expected, i)
@@ -125,13 +125,13 @@ func TestReduceCallbacksDeregistered(t *testing.T) {
 
 	assert.EqualValues(t, expected, actual, "reduce callbacks failed to execute properly")
 	assert.Equal(t, nil, ret, "reduce callbacks for some reason didn't return expected val")
-	assert.Empty(t, errs, "reduce callbacks still exist in spite of errors being DeregisterCallback")
+	assert.Empty(t, errs, "reduce callbacks still exist in spite of errors being Deregister")
 
 	ret, errs = manager.RunCallbacks(nil)
 
 	assert.EqualValues(t, expected, actual, "reduce callbacks failed to be de-registered")
 	assert.Equal(t, nil, ret, "reduce callbacks for some reason didn't return expected val")
-	assert.Empty(t, errs, "reduce callbacks still exist in spite of errors being DeregisterCallback")
+	assert.Empty(t, errs, "reduce callbacks still exist in spite of errors being Deregister")
 }
 
 /*

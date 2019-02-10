@@ -51,7 +51,7 @@ func TestSequentialCallbacksConcurrent(t *testing.T) {
 				actual += i
 
 				if i == numCB/2 {
-					return DeregisterCallback
+					return Deregister
 				}
 
 				return nil
@@ -98,7 +98,7 @@ func TestSequentialCallbacksRunConcurrent(t *testing.T) {
 
 			if id == 1 {
 				if index%2 == 0 {
-					return DeregisterCallback
+					return Deregister
 				}
 			}
 
@@ -146,7 +146,7 @@ func TestSequentialCallbackDeregistered(t *testing.T) {
 
 		manager.RegisterCallback(func(params ...interface{}) error {
 			actual = append(actual, i)
-			return DeregisterCallback
+			return Deregister
 		})
 
 		expected = append(expected, i)
@@ -155,12 +155,12 @@ func TestSequentialCallbackDeregistered(t *testing.T) {
 	errs := manager.RunCallbacks()
 
 	assert.EqualValues(t, expected, actual, "sequential callbacks failed to execute properly")
-	assert.Empty(t, errs, "sequential callbacks still exist in spite of errors being DeregisterCallback")
+	assert.Empty(t, errs, "sequential callbacks still exist in spite of errors being Deregister")
 
 	errs = manager.RunCallbacks()
 
 	assert.EqualValues(t, expected, actual, "sequential callbacks failed to be de-registered")
-	assert.Empty(t, errs, "sequential callbacks still exist in spite of errors being DeregisterCallback")
+	assert.Empty(t, errs, "sequential callbacks still exist in spite of errors being Deregister")
 }
 
 /*
@@ -209,7 +209,7 @@ func TestSequentialCallbackIntegration(t *testing.T) {
 
 		funcs = append(funcs, func(params ...interface{}) error {
 			if remove {
-				return DeregisterCallback
+				return Deregister
 			}
 
 			return nil

@@ -67,6 +67,8 @@ func (p *Protocol) Enforce(node *noise.Node) {
 					err := p.blocks[blockIndex].OnBegin(p, peer)
 
 					if err != nil {
+						log.Warn().Err(err).Msg("Received an error following protocol.")
+
 						switch errors.Cause(err) {
 						case DisconnectPeer:
 							peer.Disconnect()
@@ -74,8 +76,6 @@ func (p *Protocol) Enforce(node *noise.Node) {
 						case CompletedAllBlocks:
 							return
 						}
-
-						log.Warn().Err(err).Msg("Received an error following protocol.")
 					} else {
 						peer.Set(KeyProtocolCurrentBlockIndex, blockIndex+1)
 					}

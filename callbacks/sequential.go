@@ -125,7 +125,7 @@ func (m *SequentialCallbackManager) doRunCallback(c *callbackState, params ...in
 		if err != nil {
 			atomic.StoreUint32(&c.pendingRemoval, 1)
 			atomic.AddUint64(&m.pendingRemovalCount, 1)
-			if err != DeregisterCallback {
+			if err != Deregister {
 				return err
 			}
 		}

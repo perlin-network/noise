@@ -55,12 +55,12 @@ func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	case msg := <-peer.Receive(OpcodePing):
 		peerID = msg.(Ping)
 	case <-time.After(3 * time.Second):
-		return errors.Wrap(protocol.DisconnectPeer, "timed out waiting for pong")
+		return errors.Wrap(protocol.DisconnectPeer, "skademlia: timed out waiting for pong")
 	}
 
 	// Register peer.
 	protocol.SetPeerID(peer, peerID)
-	enforceSignatures(peer, true)
+	enforceSignatures(peer, false)
 
 	// Log peer into S/Kademlia table, and have all messages update the S/Kademlia table.
 	logPeerActivity(peer)
@@ -71,7 +71,7 @@ func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 
 	go handleLookups(peer)
 
-	peer.LoadOrStore(keyAuthChannel, make(chan struct{}, 1)).(chan struct{}) <- struct{}{}
+	close(peer.LoadOrStore(keyAuthChannel, make(chan struct{})).(chan struct{}))
 
 	return nil
 }
@@ -154,6 +154,6 @@ func handleLookups(peer *noise.Peer) {
 	}
 }
 
-func BlockUntilAuthenticated(peer *noise.Peer) {
+func WaitUntilAuthenticated(peer *noise.Peer) {
 	<-peer.LoadOrStore(keyAuthChannel, make(chan struct{}, 1)).(chan struct{})
 }

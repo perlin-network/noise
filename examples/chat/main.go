@@ -59,7 +59,8 @@ func setup(node *noise.Node) {
 
 		go func() {
 			for {
-				log.Info().Msgf("[%s]: %s", peer.RemoteIP(), (<-peer.Receive(opcodeChat)).(chatMessage).text)
+				msg := <-peer.Receive(opcodeChat)
+				log.Info().Msgf("[%s]: %s", protocol.PeerID(peer), msg.(chatMessage).text)
 			}
 		}()
 
@@ -98,7 +99,7 @@ func main() {
 				panic(err)
 			}
 
-			skademlia.BlockUntilAuthenticated(peer)
+			skademlia.WaitUntilAuthenticated(peer)
 		}
 
 		peers := skademlia.FindNode(node, protocol.NodeID(node).(skademlia.ID), skademlia.DefaultBucketSize, 8)

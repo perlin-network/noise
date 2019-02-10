@@ -4,8 +4,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/callbacks"
-	"github.com/perlin-network/noise/cipher/aead"
 	"github.com/perlin-network/noise/handshake/ecdh"
 	"github.com/perlin-network/noise/identity/ed25519"
 	"github.com/perlin-network/noise/log"
@@ -19,7 +17,7 @@ import (
 )
 
 var (
-	opcodeBenchmark noise.Opcode  = noise.RegisterMessage(noise.NextAvailableOpcode(), (*benchmarkMessage)(nil))
+	opcodeBenchmark               = noise.RegisterMessage(noise.NextAvailableOpcode(), (*benchmarkMessage)(nil))
 	_               noise.Message = (*benchmarkMessage)(nil)
 
 	messagesSentPerSecond     uint64
@@ -43,56 +41,31 @@ func (m benchmarkMessage) Write() []byte {
 	return payload.NewWriter(nil).WriteString(m.text).Bytes()
 }
 
-func spawnNode(port uint16, server bool) *noise.Node {
+func spawnNode(port uint16) *noise.Node {
 	params := noise.DefaultParams()
 	params.ID = ed25519.Random()
+	params.Port = port
 
 	node, err := noise.NewNode(params)
 	if err != nil {
 		panic(err)
 	}
 
-	protocol.EnforceHandshakePolicy(node, ecdh.New())
-	protocol.EnforceCipherPolicy(node, aead.New())
-
-	protocol.EnforceIdentityPolicy(node, skademlia.NewIdentityPolicy())
-	protocol.EnforceNetworkPolicy(node, skademlia.NewNetworkPolicy())
-
-	if server {
-		protocol.OnEachSessionEstablished(node, func(node *noise.Node, peer *noise.Peer) error {
-			peer.OnMessageReceived(opcodeBenchmark, func(node *noise.Node, opcode noise.Opcode, peer *noise.Peer, message noise.Message) error {
-				atomic.AddUint64(&messagesReceivedPerSecond, 1)
-				return nil
-			})
-
-			return nil
-		})
-	} else {
-		protocol.OnEachSessionEstablished(node, func(node *noise.Node, peer *noise.Peer) error {
-			peer.BeforeMessageSent(func(node *noise.Node, peer *noise.Peer, msg []byte) (bytes []byte, e error) {
-				atomic.AddUint64(&messagesSentPerSecond, 1)
-				return msg, nil
-			})
-
-			return nil
-		})
-	}
+	p := protocol.New()
+	p.Register(ecdh.New())
+	//p.Register(aead.New())
+	p.Register(skademlia.New())
+	p.Enforce(node)
 
 	go node.Listen()
 
 	log.Info().Msgf("Listening for peers on port %d.", node.Port())
 
 	return node
-
 }
 
 func main() {
-	server, client := spawnNode(0, true), spawnNode(0, false)
-
-	_, err := client.Dial("127.0.0.1:" + strconv.Itoa(int(server.Port())))
-	if err != nil {
-		panic(err)
-	}
+	server, client := spawnNode(0), spawnNode(0)
 
 	go func() {
 		for range time.Tick(3 * time.Second) {
@@ -102,18 +75,35 @@ func main() {
 		}
 	}()
 
-	protocol.OnEachSessionEstablished(server, func(node *noise.Node, peer *noise.Peer) error {
+	server.OnPeerConnected(func(node *noise.Node, peer *noise.Peer) error {
 		go func() {
 			for {
 				payload := make([]byte, 600)
 				rand.Read(payload)
 
+				atomic.AddUint64(&messagesSentPerSecond, 1)
 				peer.SendMessage(opcodeBenchmark, benchmarkMessage{string(payload)})
 			}
 		}()
 
-		return callbacks.DeregisterCallback
+		return nil
 	})
+
+	client.OnPeerDialed(func(node *noise.Node, peer *noise.Peer) error {
+		go func() {
+			for {
+				<-peer.Receive(opcodeBenchmark)
+				atomic.AddUint64(&messagesReceivedPerSecond, 1)
+			}
+		}()
+
+		return nil
+	})
+
+	_, err := client.Dial("127.0.0.1:" + strconv.Itoa(int(server.Port())))
+	if err != nil {
+		panic(err)
+	}
 
 	select {}
 }
