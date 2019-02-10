@@ -26,7 +26,7 @@ func (m testMsg) Write() []byte {
 }
 
 func TestNextAvailableOpcode(t *testing.T) {
-	resetCodes()
+	resetOpcodes()
 
 	// opcode 0 should be an empty message
 	msg, err := MessageFromOpcode(Opcode(0))
@@ -66,7 +66,7 @@ func TestEncodeMessage(t *testing.T) {
 }
 
 func TestDecodeMessage(t *testing.T) {
-	resetCodes()
+	resetOpcodes()
 	o := Opcode(45)
 	msg := testMsg{
 		text: "world",
