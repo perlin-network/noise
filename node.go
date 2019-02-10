@@ -9,7 +9,6 @@ import (
 	"github.com/perlin-network/noise/transport"
 	"github.com/pkg/errors"
 	"net"
-	"runtime"
 	"strconv"
 	"sync"
 )
@@ -197,11 +196,6 @@ func (n *Node) OnPeerDialed(c OnPeerInitCallback) {
 }
 
 func (n *Node) OnPeerInit(srcCallbacks ...OnPeerInitCallback) {
-	_, file, no, ok := runtime.Caller(1)
-	if ok {
-		log.Debug().Msgf("OnPeerInit() called from %s#%d.", file, no)
-	}
-
 	targetCallbacks := make([]callbacks.Callback, 0, len(srcCallbacks))
 
 	for _, c := range srcCallbacks {
