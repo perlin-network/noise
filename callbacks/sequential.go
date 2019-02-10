@@ -66,9 +66,14 @@ func (m *SequentialCallbackManager) Trim() {
 
 	m.callbacksMutex.Lock()
 	newCallbacks := make([]callbackState, 0)
-	for _, cb := range m.loadCallbacks() {
-		if cb.pendingRemoval == 0 {
-			newCallbacks = append(newCallbacks, cb)
+	oldCallbacks := m.loadCallbacks()
+	for i := 0; i < len(oldCallbacks); i++ {
+		cb := &oldCallbacks[i]
+		if atomic.LoadUint32(&cb.pendingRemoval) == 0 {
+			newCallbacks = append(newCallbacks, callbackState{
+				cb:             cb.cb,
+				pendingRemoval: 0,
+			})
 		}
 	}
 	m.storeCallbacks(newCallbacks)
@@ -77,6 +82,7 @@ func (m *SequentialCallbackManager) Trim() {
 
 // RegisterCallback atomically registers all callbacks passed in.
 func (m *SequentialCallbackManager) RegisterCallback(callbacks ...Callback) {
+	//log.Debug().Str("callbacks", fmt.Sprintf("%+v", callbacks)).Msg("Registering callbacks")
 	m.callbacksMutex.Lock()
 	for _, c := range callbacks {
 		m.pushCallback(c)
@@ -88,6 +94,8 @@ func (m *SequentialCallbackManager) RegisterCallback(callbacks ...Callback) {
 // that throw an error.
 func (m *SequentialCallbackManager) RunCallbacks(params ...interface{}) []error {
 	callbacks := m.loadCallbacks()
+	//log.Debug().Str("callbacks", fmt.Sprintf("%+v", callbacks)).Msg("Running callbacks")
+
 	if m.reverse {
 		for i := len(callbacks) - 1; i >= 0; i-- {
 			c := &callbacks[i]

@@ -97,7 +97,7 @@ func TestSequentialCallbacksRunConcurrent(t *testing.T) {
 			*count++
 
 			if id == 1 {
-				if index % 2 == 0 {
+				if index%2 == 0 {
 					return DeregisterCallback
 				}
 			}
@@ -132,7 +132,7 @@ func TestSequentialCallbacksRunConcurrent(t *testing.T) {
 	wg.Wait()
 
 	manager.Trim()
-	assert.Equal(t, len(manager.loadCallbacks()), expectedCount - deregisterCount, "got invalid callbacks count after trim")
+	assert.Equal(t, len(manager.loadCallbacks()), expectedCount-deregisterCount, "got invalid callbacks count after trim")
 }
 
 func TestSequentialCallbackDeregistered(t *testing.T) {

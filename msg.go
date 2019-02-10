@@ -21,7 +21,7 @@ var (
 )
 
 func init() {
-	resetCodes()
+	resetOpcodes()
 }
 
 func (o Opcode) Bytes() (buf [1]byte) {
@@ -187,7 +187,7 @@ func RegisterMessage(o Opcode, m interface{}) Opcode {
 	return o
 }
 
-func resetCodes() {
+func resetOpcodes() {
 	opcodes = map[Opcode]Message{
 		OpcodeNil: reflect.New(reflect.TypeOf((*EmptyMessage)(nil)).Elem()).Elem().Interface().(Message),
 	}

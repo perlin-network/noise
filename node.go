@@ -135,6 +135,7 @@ func (n *Node) Dial(address string) (*Peer, error) {
 	if errs := n.onPeerDialedCallbacks.RunCallbacks(peer); len(errs) > 0 {
 		log.Error().Errs("errors", errs).Msg("Got errors running OnPeerConnected callbacks.")
 	}
+
 	if errs := n.onPeerInitCallbacks.RunCallbacks(peer); len(errs) > 0 {
 		log.Error().Errs("errors", errs).Msg("Got errors running OnPeerInit callbacks.")
 	}
@@ -214,15 +215,6 @@ func (n *Node) OnPeerInit(srcCallbacks ...OnPeerInitCallback) {
 	}
 
 	n.onPeerInitCallbacks.RegisterCallback(targetCallbacks...)
-}
-
-// OnMessageReceived registers a callback for whenever any peer sends a message to our node.
-// Returning noise.DeRegisterCallback will deregister the callback only from a single peer.
-func (n *Node) OnMessageReceived(o Opcode, c OnMessageReceivedCallback) {
-	n.OnPeerInit(func(node *Node, peer *Peer) error {
-		peer.OnMessageReceived(o, c)
-		return nil
-	})
 }
 
 // Set sets a metadata entry given a key-value pair on our node.
