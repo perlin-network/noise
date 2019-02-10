@@ -1,114 +1,82 @@
 package aead
 
 import (
-	"crypto/cipher"
 	"crypto/sha256"
 	"encoding/binary"
 	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/callbacks"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
 	"go.dedis.ch/kyber/v3/group/edwards25519"
 	"hash"
-)
-
-const (
-	keyCipherSuite = "aead.suite"
-	keyOurNonce    = "aead.localNonce"
-	keyTheirNonce  = "aead.remoteNonce"
+	"sync/atomic"
 )
 
 var (
 	curve crypto.EllipticSuite = edwards25519.NewBlakeSHA256Ed25519()
 
-	_ protocol.CipherPolicy = (*policy)(nil)
+	_ protocol.Block = (*block)(nil)
 )
 
-type policy struct{ hash func() hash.Hash }
+type block struct{ hash func() hash.Hash }
 
-func New() policy {
-	return policy{hash: sha256.New}
+func New() block {
+	return block{hash: sha256.New}
 }
 
-func (policy) WithHash(hash func() hash.Hash) policy {
-	return policy{hash: hash}
+func (block) WithHash(hash func() hash.Hash) block {
+	return block{hash: hash}
 }
 
-func (p policy) WithSuite(suite crypto.EllipticSuite) policy {
+func (b block) WithSuite(suite crypto.EllipticSuite) block {
 	curve = suite
-	return p
+	return b
 }
 
-func (p policy) EnforceCipherPolicy(node *noise.Node) {
-	// AEAD requires a handshake policy to yield an ephemeral shared key.
-	protocol.MustHandshakePolicy(node)
+func (b block) OnRegister(p *protocol.Protocol, node *noise.Node) {}
 
-	protocol.OnEachSessionEstablished(node, p.onSessionEstablished)
-}
-
-func (policy) Encrypt(peer *noise.Peer, buf []byte) ([]byte, error) {
-	if !peer.Has(keyCipherSuite) {
-		panic("noise: attempted to seal message via AEAD but no cipher suite registered")
-	}
-
-	ourNonce, ourNonceBuf := peer.Get(keyOurNonce).(uint64), make([]byte, 12)
-	binary.LittleEndian.PutUint64(ourNonceBuf, ourNonce)
-
-	// Increment our nonce by 1.
-	peer.Set(keyOurNonce, ourNonce+1)
-
-	suite := peer.Get(keyCipherSuite).(cipher.AEAD)
-
-	return suite.Seal(buf[:0], ourNonceBuf, buf, nil), nil
-}
-
-func (policy) Decrypt(peer *noise.Peer, buf []byte) ([]byte, error) {
-	if !peer.Has(keyCipherSuite) {
-		panic("noise: attempted to seal message via AEAD but no cipher suite registered")
-	}
-
-	theirNonce, theirNonceBuf := peer.Get(keyTheirNonce).(uint64), make([]byte, 12)
-	binary.LittleEndian.PutUint64(theirNonceBuf, theirNonce)
-
-	// Increment their nonce by 1.
-	peer.Set(keyTheirNonce, theirNonce+1)
-
-	suite := peer.Get(keyCipherSuite).(cipher.AEAD)
-
-	return suite.Open(buf[:0], theirNonceBuf, buf, nil)
-}
-
-func (p policy) onSessionEstablished(node *noise.Node, peer *noise.Peer) error {
+func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	ephemeralSharedKeyBuf := protocol.LoadSharedKey(peer)
 
 	if ephemeralSharedKeyBuf == nil {
-		peer.Disconnect()
-		return errors.New("session was established, but no ephemeral shared key found")
+		return errors.Wrap(protocol.DisconnectPeer, "session was established, but no ephemeral shared key found")
 	}
 
 	ephemeralSharedKey := curve.Point()
 
 	err := ephemeralSharedKey.UnmarshalBinary(ephemeralSharedKeyBuf)
 	if err != nil {
-		peer.Disconnect()
-		return errors.Wrap(err, "failed to unmarshal ephemeral shared key buf")
+		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to unmarshal ephemeral shared key buf")
 	}
 
-	suite, sharedKey, err := deriveCipherSuite(p.hash, ephemeralSharedKey, nil)
+	suite, sharedKey, err := deriveCipherSuite(b.hash, ephemeralSharedKey, nil)
 	if err != nil {
-		peer.Disconnect()
-		return errors.Wrap(err, "failed to derive AEAD cipher suite given ephemeral shared key")
+		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to derive AEAD cipher suite given ephemeral shared key")
 	}
 
-	peer.Set(keyOurNonce, uint64(0))
-	peer.Set(keyTheirNonce, uint64(0))
-	peer.Set(keyCipherSuite, suite)
+	var ourNonce uint64
+	var theirNonce uint64
 
-	protocol.SetSharedKey(peer, sharedKey)
+	ourNonceBuf, theirNonceBuf := make([]byte, suite.NonceSize()), make([]byte, suite.NonceSize())
+
+	// TODO(kenta): these callbacks cause a 'race condition' with any future messages sent. Using the `chat` example, try uncomment "aead.New()".
+	peer.BeforeMessageSent(func(node *noise.Node, peer *noise.Peer, msg []byte) (bytes []byte, e error) {
+		binary.LittleEndian.PutUint64(ourNonceBuf, atomic.AddUint64(&ourNonce, 1))
+		return suite.Seal(msg[:0], ourNonceBuf, msg, nil), nil
+	})
+
+	peer.BeforeMessageReceived(func(node *noise.Node, peer *noise.Peer, msg []byte) (bytes []byte, e error) {
+		binary.LittleEndian.PutUint64(theirNonceBuf, atomic.AddUint64(&theirNonce, 1))
+		return suite.Open(msg[:0], theirNonceBuf, msg, nil)
+	})
 
 	log.Debug().Hex("derived_shared_key", sharedKey).Msg("Derived HMAC, and successfully initialized session w/ AEAD cipher suite.")
 
-	return callbacks.DeregisterCallback
+	return nil
+}
+
+func (b block) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
+
+	return nil
 }

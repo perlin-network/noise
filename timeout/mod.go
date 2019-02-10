@@ -30,6 +30,7 @@ func Enforce(peer *noise.Peer, key string, timeoutDuration time.Duration, fn fun
 func Clear(peer *noise.Peer, key string) error {
 	if dispatcher := peer.Get(key); dispatcher != nil {
 		dispatcher.(chan struct{}) <- struct{}{}
+		peer.Delete(key)
 	} else {
 		return errors.New("no timeout dispatcher was registered to the peer")
 	}
