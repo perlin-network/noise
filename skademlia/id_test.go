@@ -59,8 +59,8 @@ func noTestXor(t *testing.T) {
 		{
 			name: "id1 xor id2",
 			args: args{
-				a: publicKey1,
-				b: publicKey2,
+				a: id1.PublicID(),
+				b: id2.PublicID(),
 			},
 			want: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
 		},
@@ -115,6 +115,12 @@ func TestReadWrite(t *testing.T) {
 			assert.Nil(t, err)
 			assert.Truef(t, id.Equals(msg.(ID)), "Expected equal %v vs %v", id, msg)
 		})
+	}
+
+	// bad
+	{
+		_, err := id1.Read(payload.NewReader([]byte("bad")))
+		assert.NotNil(t, err)
 	}
 }
 
