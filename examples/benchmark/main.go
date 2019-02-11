@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"github.com/perlin-network/noise"
+	"github.com/perlin-network/noise/cipher/aead"
 	"github.com/perlin-network/noise/handshake/ecdh"
 	"github.com/perlin-network/noise/identity/ed25519"
 	"github.com/perlin-network/noise/log"
@@ -53,7 +54,7 @@ func spawnNode(port uint16) *noise.Node {
 
 	p := protocol.New()
 	p.Register(ecdh.New())
-	//p.Register(aead.New())
+	p.Register(aead.New())
 	p.Register(skademlia.New())
 	p.Enforce(node)
 
@@ -77,6 +78,8 @@ func main() {
 
 	server.OnPeerConnected(func(node *noise.Node, peer *noise.Peer) error {
 		go func() {
+			skademlia.WaitUntilAuthenticated(peer)
+
 			for {
 				payload := make([]byte, 600)
 				rand.Read(payload)

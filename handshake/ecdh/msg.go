@@ -6,14 +6,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-var _ noise.Message = (*messageHandshake)(nil)
+var _ noise.Message = (*Handshake)(nil)
 
-type messageHandshake struct {
+type Handshake struct {
 	publicKey []byte
 	signature []byte
 }
 
-func (messageHandshake) Read(reader payload.Reader) (noise.Message, error) {
+func (Handshake) Read(reader payload.Reader) (noise.Message, error) {
 	publicKey, err := reader.ReadBytes()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read public key")
@@ -24,9 +24,9 @@ func (messageHandshake) Read(reader payload.Reader) (noise.Message, error) {
 		return nil, errors.Wrap(err, "failed to read signature")
 	}
 
-	return messageHandshake{publicKey: publicKey, signature: signature}, nil
+	return Handshake{publicKey: publicKey, signature: signature}, nil
 }
 
-func (m messageHandshake) Write() []byte {
+func (m Handshake) Write() []byte {
 	return payload.NewWriter(nil).WriteBytes(m.publicKey).WriteBytes(m.signature).Bytes()
 }
