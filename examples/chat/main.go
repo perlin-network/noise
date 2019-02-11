@@ -115,9 +115,6 @@ func main() {
 			panic(err)
 		}
 
-		err = skademlia.Broadcast(node, opcodeChat, chatMessage{text: strings.TrimSpace(txt)})
-		if err != nil {
-			panic(err)
-		}
+		_ = skademlia.Broadcast(node, opcodeChat, chatMessage{text: strings.TrimSpace(txt)})
 	}
 }

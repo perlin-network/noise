@@ -8,9 +8,9 @@ import (
 )
 
 var (
-	testBytes = []byte{'a', 'b'}
-	testByte byte = 'c'
-	testString = "str"
+	testBytes         = []byte{'a', 'b'}
+	testByte   byte   = 'c'
+	testString        = "str"
 	testUint16 uint16 = 10
 	testUint32 uint32 = 11
 	testUint64 uint64 = 12

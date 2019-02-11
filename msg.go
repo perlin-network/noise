@@ -24,15 +24,19 @@ func init() {
 	resetOpcodes()
 }
 
+// Bytes returns this opcodes' byte representation.
 func (o Opcode) Bytes() (buf [1]byte) {
 	buf[0] = byte(o)
 	return
 }
 
+// NextAvailableOpcode returns the next available unregistered message opcode
+// registered to Noise.
 func NextAvailableOpcode() Opcode {
 	return Opcode(len(opcodes))
 }
 
+// DebugOpcodes prints out all opcodes registered to Noise thus far.
 func DebugOpcodes() {
 	log.Debug().Msg("Here are all opcodes registered so far.")
 
@@ -41,6 +45,10 @@ func DebugOpcodes() {
 	}
 }
 
+// MessageFromOpcode returns an empty message representation associated to a registered
+// message opcode.
+//
+// It errors if the specified message opcode is not registered to Noise.
 func MessageFromOpcode(opcode Opcode) (Message, error) {
 	typ, exists := opcodes[Opcode(opcode)]
 	if !exists {
@@ -55,6 +63,10 @@ func MessageFromOpcode(opcode Opcode) (Message, error) {
 	return message, nil
 }
 
+// OpcodeFromMessage uses reflection to extract and return the opcode associated to a message
+// value type.
+//
+// It errors if the specified message value type is not registered to Noise.
 func OpcodeFromMessage(msg Message) (Opcode, error) {
 	typ := reflect.TypeOf(msg)
 
@@ -66,11 +78,52 @@ func OpcodeFromMessage(msg Message) (Opcode, error) {
 	return opcode, nil
 }
 
+func RegisterMessage(o Opcode, m interface{}) Opcode {
+	if t, registered := opcodes[o]; registered {
+		panic(errors.Errorf("noise: opcode %v was already registered with type %T; tried registering it with type %T", o, m, t))
+	}
+
+	typ := reflect.TypeOf(m).Elem()
+
+	opcodes[o] = reflect.New(typ).Elem().Interface().(Message)
+	messages[typ] = o
+
+	return o
+}
+
+func resetOpcodes() {
+	opcodes = map[Opcode]Message{
+		OpcodeNil: reflect.New(reflect.TypeOf((*EmptyMessage)(nil)).Elem()).Elem().Interface().(Message),
+	}
+
+	messages = map[reflect.Type]Opcode{
+		reflect.TypeOf((*EmptyMessage)(nil)).Elem(): OpcodeNil,
+	}
+}
+
+// To have Noise send/receive messages of a given type, said type must implement the
+// following Message interface.
+//
+// Noise by default encodes messages as bytes in little-endian order, and provides
+// utility classes to assist with serializing/deserializing arbitrary Go types into
+// bytes efficiently.
+//
+// By exposing raw network packets as bytes to users, any additional form of serialization
+// or message packing or compression scheme or cipher scheme may be bootstrapped on top of
+// any particular message type registered to Noise.
 type Message interface {
 	Read(reader payload.Reader) (Message, error)
 	Write() []byte
 }
 
+// EncodeMessage serializes a message body into its byte representation, and prefixes
+// said byte representation with the messages opcode for the purpose of sending said
+// bytes over the wire.
+//
+// Additional header/footer bytes is prepended/appended accordingly.
+//
+// Refer to the functions `OnEncodeHeader` and `OnEncodeFooter` available in `noise.Peer`
+// to prepend/append additional information on every single message sent over the wire.
 func (p *Peer) EncodeMessage(opcode Opcode, message Message) ([]byte, error) {
 	var buf bytes.Buffer
 
@@ -172,27 +225,4 @@ func (EmptyMessage) Read(reader payload.Reader) (Message, error) {
 
 func (EmptyMessage) Write() []byte {
 	return nil
-}
-
-func RegisterMessage(o Opcode, m interface{}) Opcode {
-	if t, registered := opcodes[o]; registered {
-		panic(errors.Errorf("noise: opcode %v was already registered with type %T; tried registering it with type %T", o, m, t))
-	}
-
-	typ := reflect.TypeOf(m).Elem()
-
-	opcodes[o] = reflect.New(typ).Elem().Interface().(Message)
-	messages[typ] = o
-
-	return o
-}
-
-func resetOpcodes() {
-	opcodes = map[Opcode]Message{
-		OpcodeNil: reflect.New(reflect.TypeOf((*EmptyMessage)(nil)).Elem()).Elem().Interface().(Message),
-	}
-
-	messages = map[reflect.Type]Opcode{
-		reflect.TypeOf((*EmptyMessage)(nil)).Elem(): OpcodeNil,
-	}
 }
