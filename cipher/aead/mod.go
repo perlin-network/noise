@@ -65,6 +65,7 @@ func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	}
 
 	peer.PauseReads()
+	defer peer.ResumeReads()
 
 	select {
 	case <-time.After(3 * time.Second):
@@ -86,8 +87,6 @@ func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		binary.LittleEndian.PutUint64(theirNonceBuf, atomic.AddUint64(&theirNonce, 1))
 		return suite.Open(msg[:0], theirNonceBuf, msg, nil)
 	})
-
-	peer.ResumeReads()
 
 	log.Debug().Hex("derived_shared_key", sharedKey).Msg("Derived HMAC, and successfully initialized session w/ AEAD cipher suite.")
 	return nil
