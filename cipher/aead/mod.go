@@ -64,8 +64,8 @@ func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to send AEAD ACK")
 	}
 
-	peer.PauseReads()
-	defer peer.ResumeReads()
+	peer.EnterCriticalReadMode()
+	defer peer.LeaveCriticalReadMode()
 
 	select {
 	case <-time.After(3 * time.Second):

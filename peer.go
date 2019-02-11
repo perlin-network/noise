@@ -46,7 +46,7 @@ type Peer struct {
 
 	metadata sync.Map
 
-	readLock *sync.WaitGroup
+	criticalReadLock *sync.WaitGroup
 }
 
 func newPeer(node *Node, conn net.Conn) *Peer {
@@ -71,7 +71,7 @@ func newPeer(node *Node, conn net.Conn) *Peer {
 
 		kill: make(chan struct{}, 1),
 
-		readLock: new(sync.WaitGroup),
+		criticalReadLock: new(sync.WaitGroup),
 	}
 }
 
@@ -143,7 +143,7 @@ func (p *Peer) spawnReceiveWorker() {
 
 		select {
 		case c.(chan Message) <- msg:
-			p.readLock.Wait()
+			p.criticalReadLock.Wait()
 		case <-time.After(3 * time.Second):
 			// TODO(kenta): message was unhandled for 3 seconds; disconnect peer.
 			p.Disconnect()
@@ -451,10 +451,10 @@ func (p *Peer) Node() *Node {
 	return p.node
 }
 
-func (p *Peer) PauseReads() {
-	p.readLock.Add(1)
+func (p *Peer) EnterCriticalReadMode() {
+	p.criticalReadLock.Add(1)
 }
 
-func (p *Peer) ResumeReads() {
-	p.readLock.Done()
+func (p *Peer) LeaveCriticalReadMode() {
+	p.criticalReadLock.Done()
 }
