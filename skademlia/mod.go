@@ -134,7 +134,7 @@ func handleLookups(peer *noise.Peer) {
 
 			var res LookupResponse
 
-			for _, peerID := range FindClosestPeers(Table(peer.Node()), id.Hash(), DefaultBucketSize) {
+			for _, peerID := range FindClosestPeers(Table(peer.Node()), id.Hash(), BucketSize()) {
 				res.peers = append(res.peers, peerID.(ID))
 			}
 

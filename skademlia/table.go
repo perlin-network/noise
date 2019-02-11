@@ -11,9 +11,8 @@ import (
 	"time"
 )
 
-const DefaultBucketSize = 16
-
 var (
+	bucketSize    = 16
 	ErrBucketFull = errors.New("kademlia: cannot add ID, bucket is full")
 )
 
@@ -51,6 +50,10 @@ func newTable(self protocol.ID) *table {
 	return &table
 }
 
+func BucketSize() int {
+	return bucketSize
+}
+
 func (t *table) Update(target protocol.ID) error {
 	if len(t.self.Hash()) != len(target.Hash()) {
 		return errors.New("kademlia: got invalid hash size for target ID on update")
@@ -75,7 +78,7 @@ func (t *table) Update(target protocol.ID) error {
 
 	if element == nil {
 		// Populate bucket if its not full.
-		if bucket.Len() < DefaultBucketSize {
+		if bucket.Len() < BucketSize() {
 			bucket.PushFront(target)
 		} else {
 			return ErrBucketFull
