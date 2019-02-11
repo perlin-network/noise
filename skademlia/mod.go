@@ -49,17 +49,17 @@ func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	}
 
 	// Receive a ping and set the peers ID.
-	var peerID Ping
+	var ping Ping
 
 	select {
 	case msg := <-peer.Receive(OpcodePing):
-		peerID = msg.(Ping)
+		ping = msg.(Ping)
 	case <-time.After(3 * time.Second):
 		return errors.Wrap(protocol.DisconnectPeer, "skademlia: timed out waiting for pong")
 	}
 
 	// Register peer.
-	protocol.SetPeerID(peer, peerID)
+	protocol.SetPeerID(peer, ping.ID)
 	enforceSignatures(peer, false)
 
 	// Log peer into S/Kademlia table, and have all messages update the S/Kademlia table.
