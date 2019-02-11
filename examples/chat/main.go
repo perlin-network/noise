@@ -104,7 +104,7 @@ func main() {
 			skademlia.WaitUntilAuthenticated(peer)
 		}
 
-		peers := skademlia.FindNode(node, protocol.NodeID(node).(skademlia.ID), skademlia.DefaultBucketSize, 8)
+		peers := skademlia.FindNode(node, protocol.NodeID(node).(skademlia.ID), skademlia.BucketSize(), 8)
 		log.Info().Msgf("Bootstrapped with peers: %+v", peers)
 	}
 
