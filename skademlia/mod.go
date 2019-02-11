@@ -6,7 +6,6 @@ import (
 	"github.com/perlin-network/noise/payload"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
-	"time"
 )
 
 const (
@@ -51,12 +50,11 @@ func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	// Receive a ping and set the peers ID.
 	var ping Ping
 
-	select {
-	case msg := <-peer.Receive(OpcodePing):
-		ping = msg.(Ping)
-	case <-time.After(3 * time.Second):
-		return errors.Wrap(protocol.DisconnectPeer, "skademlia: timed out waiting for pong")
+	msg := peer.Receive(OpcodePing, nil)
+	if msg == nil {
+		return errors.New("receive() failed")
 	}
+	ping = msg.(Ping)
 
 	// Register peer.
 	protocol.SetPeerID(peer, ping.ID)
@@ -128,28 +126,30 @@ func enforceSignatures(peer *noise.Peer, enforce bool) {
 
 func handleLookups(peer *noise.Peer) {
 	for {
-		select {
-		case msg := <-peer.Receive(OpcodeLookupRequest):
-			id := msg.(LookupRequest)
+		msg := peer.Receive(OpcodeLookupRequest, nil)
+		if msg == nil {
+			break
+		}
 
-			var res LookupResponse
+		id := msg.(LookupRequest)
 
-			for _, peerID := range FindClosestPeers(Table(peer.Node()), id.Hash(), DefaultBucketSize) {
-				res.peers = append(res.peers, peerID.(ID))
-			}
+		var res LookupResponse
 
-			log.Info().
-				Strs("addrs", Table(peer.Node()).GetPeers()).
-				Msg("Connected to peer(s).")
+		for _, peerID := range FindClosestPeers(Table(peer.Node()), id.Hash(), DefaultBucketSize) {
+			res.peers = append(res.peers, peerID.(ID))
+		}
 
-			// Send lookup response back.
+		log.Info().
+			Strs("addrs", Table(peer.Node()).GetPeers()).
+			Msg("Connected to peer(s).")
 
-			if err := peer.SendMessage(OpcodeLookupResponse, res); err != nil {
-				log.Warn().
-					AnErr("err", err).
-					Interface("peer", protocol.PeerID(peer)).
-					Msg("Failed to send lookup response to peer.")
-			}
+		// Send lookup response back.
+
+		if err := peer.SendMessage(OpcodeLookupResponse, res); err != nil {
+			log.Warn().
+				AnErr("err", err).
+				Interface("peer", protocol.PeerID(peer)).
+				Msg("Failed to send lookup response to peer.")
 		}
 	}
 }

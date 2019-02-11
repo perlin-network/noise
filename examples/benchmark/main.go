@@ -92,7 +92,7 @@ func main() {
 	client.OnPeerDialed(func(node *noise.Node, peer *noise.Peer) error {
 		go func() {
 			for {
-				<-peer.Receive(opcodeBenchmark)
+				peer.Receive(opcodeBenchmark, nil)
 				atomic.AddUint64(&messagesReceivedPerSecond, 1)
 			}
 		}()

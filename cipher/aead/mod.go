@@ -6,11 +6,11 @@ import (
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/payload"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
 	"go.dedis.ch/kyber/v3/group/edwards25519"
 	"hash"
-	"sync/atomic"
 )
 
 var (
@@ -20,6 +20,18 @@ var (
 )
 
 type block struct{ hash func() hash.Hash }
+
+var OpcodeAeadFence noise.Opcode
+
+type messageAeadFence struct{}
+
+func (messageAeadFence) Read(reader payload.Reader) (noise.Message, error) {
+	return &messageAeadFence{}, nil
+}
+
+func (messageAeadFence) Write() []byte {
+	return nil
+}
 
 func New() block {
 	return block{hash: sha256.New}
@@ -34,7 +46,9 @@ func (b block) WithSuite(suite crypto.EllipticSuite) block {
 	return b
 }
 
-func (b block) OnRegister(p *protocol.Protocol, node *noise.Node) {}
+func (b block) OnRegister(p *protocol.Protocol, node *noise.Node) {
+	OpcodeAeadFence = noise.RegisterMessage(noise.NextAvailableOpcode(), (*messageAeadFence)(nil))
+}
 
 func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	ephemeralSharedKeyBuf := protocol.LoadSharedKey(peer)
@@ -60,15 +74,19 @@ func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 
 	ourNonceBuf, theirNonceBuf := make([]byte, suite.NonceSize()), make([]byte, suite.NonceSize())
 
-	// TODO(kenta): these callbacks cause a 'race condition' with any future messages sent. Using the `chat` example, try uncomment "aead.New()".
-	peer.BeforeMessageSent(func(node *noise.Node, peer *noise.Peer, msg []byte) (bytes []byte, e error) {
-		binary.LittleEndian.PutUint64(ourNonceBuf, atomic.AddUint64(&ourNonce, 1))
-		return suite.Seal(msg[:0], ourNonceBuf, msg, nil), nil
-	})
+	peer.SendMessage(OpcodeAeadFence, &messageAeadFence{})
+	peer.Receive(OpcodeAeadFence, func() {
+		peer.BeforeMessageSent(func(node *noise.Node, peer *noise.Peer, msg []byte) (bytes []byte, e error) {
+			ourNonce++
+			binary.LittleEndian.PutUint64(ourNonceBuf, ourNonce)
+			return suite.Seal(msg[:0], ourNonceBuf, msg, nil), nil
+		})
 
-	peer.BeforeMessageReceived(func(node *noise.Node, peer *noise.Peer, msg []byte) (bytes []byte, e error) {
-		binary.LittleEndian.PutUint64(theirNonceBuf, atomic.AddUint64(&theirNonce, 1))
-		return suite.Open(msg[:0], theirNonceBuf, msg, nil)
+		peer.BeforeMessageReceived(func(node *noise.Node, peer *noise.Peer, msg []byte) (bytes []byte, e error) {
+			theirNonce++
+			binary.LittleEndian.PutUint64(theirNonceBuf, theirNonce)
+			return suite.Open(msg[:0], theirNonceBuf, msg, nil)
+		})
 	})
 
 	log.Debug().Hex("derived_shared_key", sharedKey).Msg("Derived HMAC, and successfully initialized session w/ AEAD cipher suite.")

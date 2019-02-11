@@ -59,7 +59,7 @@ func setup(node *noise.Node) {
 
 		go func() {
 			for {
-				msg := <-peer.Receive(opcodeChat)
+				msg := peer.Receive(opcodeChat, nil)
 				log.Info().Msgf("[%s]: %s", protocol.PeerID(peer), msg.(chatMessage).text)
 			}
 		}()

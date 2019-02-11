@@ -8,7 +8,6 @@ import (
 	"github.com/pkg/errors"
 	"sort"
 	"sync"
-	"time"
 )
 
 const DefaultBucketSize = 16
@@ -254,11 +253,11 @@ func UpdateTable(node *noise.Node, target protocol.ID) (err error) {
 				return nil
 			}
 
-			select {
-			case <-lastPeer.Receive(OpcodeEvict):
-				bucket.MoveToFront(last)
-			case <-time.After(3 * time.Second):
+			msg := lastPeer.Receive(OpcodeEvict, nil)
+			if msg == nil {
 				evictLastPeer()
+			} else {
+				bucket.MoveToFront(last)
 			}
 		default:
 			return err

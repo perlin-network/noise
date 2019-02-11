@@ -78,14 +78,13 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	var res messageHandshake
 	var ok bool
 
-	select {
-	case <-time.After(b.timeoutDuration):
-		return errors.Wrap(protocol.DisconnectPeer, "timed out receiving handshake request")
-	case msg := <-peer.Receive(OpcodeHandshake):
-		res, ok = msg.(messageHandshake)
-		if !ok {
-			return errors.Wrap(protocol.DisconnectPeer, "did not get a handshake response back")
-		}
+	msg := peer.Receive(OpcodeHandshake, nil)
+	if msg == nil {
+		return errors.New("receive() failed")
+	}
+	res, ok = msg.(messageHandshake)
+	if !ok {
+		return errors.Wrap(protocol.DisconnectPeer, "did not get a handshake response back")
 	}
 
 	peersPublicKey := b.suite.Point()

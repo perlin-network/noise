@@ -6,7 +6,6 @@ import (
 	"github.com/perlin-network/noise/protocol"
 	"sort"
 	"sync"
-	"time"
 )
 
 func Broadcast(node *noise.Node, opcode noise.Opcode, message noise.Message) error {
@@ -53,13 +52,11 @@ func queryPeerByID(node *noise.Node, peerID, targetID ID, responses chan []ID) {
 
 	// Handle lookup response.
 	for {
-		select {
-		case msg := <-peer.Receive(OpcodeLookupResponse):
-			responses <- msg.(LookupResponse).peers
-		case <-time.After(3 * time.Second):
-			responses <- []ID{}
+		msg := peer.Receive(OpcodeLookupResponse, nil)
+		if msg == nil {
 			return
 		}
+		responses <- msg.(LookupResponse).peers
 	}
 }
 

@@ -17,6 +17,11 @@ import (
 	"time"
 )
 
+type MessageReceiver struct {
+	Channel chan Message
+	Lock    chan struct{}
+}
+
 type Peer struct {
 	node *Node
 	conn net.Conn
@@ -36,7 +41,7 @@ type Peer struct {
 	afterMessageSentCallbacks     *callbacks.SequentialCallbackManager
 	afterMessageReceivedCallbacks *callbacks.SequentialCallbackManager
 
-	// map[Opcode]chan Message
+	// map[Opcode]*MessageReceiver
 	messageHub sync.Map
 
 	kill     chan struct{}
@@ -135,10 +140,16 @@ func (p *Peer) spawnReceiveWorker() {
 			continue
 		}
 
-		c, _ := p.messageHub.LoadOrStore(opcode, make(chan Message, 1))
+		_c, _ := p.messageHub.LoadOrStore(opcode, &MessageReceiver{
+			Channel: make(chan Message), // this channel cannot be buffered (otherwise there's a data race on c.Lock)
+		})
+		c := _c.(*MessageReceiver)
 
 		select {
-		case c.(chan Message) <- msg:
+		case c.Channel <- msg:
+			if c.Lock != nil {
+				<-c.Lock
+			}
 		case <-time.After(3 * time.Second):
 			// TODO(kenta): message was unhandled for 3 seconds; disconnect peer.
 			p.Disconnect()
@@ -376,9 +387,24 @@ func (p *Peer) OnDisconnect(srcCallbacks ...OnPeerDisconnectCallback) {
 	p.onDisconnectCallbacks.RegisterCallback(targetCallbacks...)
 }
 
-func (p *Peer) Receive(o Opcode) <-chan Message {
-	c, _ := p.messageHub.LoadOrStore(o, make(chan Message, 1))
-	return c.(chan Message)
+func (p *Peer) Receive(o Opcode, lockCallback func()) Message {
+	_receiver, _ := p.messageHub.LoadOrStore(o, &MessageReceiver{
+		Channel: make(chan Message), // this channel cannot be buffered (otherwise there's a data race on c.Lock)
+	})
+	receiver := _receiver.(*MessageReceiver)
+
+	if lockCallback != nil {
+		receiver.Lock = make(chan struct{})
+	} else {
+		receiver.Lock = nil
+	}
+
+	msg := <-receiver.Channel
+	if lockCallback != nil {
+		lockCallback()
+		close(receiver.Lock)
+	}
+	return msg
 }
 
 func (p *Peer) Disconnect() {
