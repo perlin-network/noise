@@ -11,22 +11,22 @@ import (
 )
 
 var (
-	publicKey1 = []byte("12345678901234567890123456789012")
-	publicKey2 = []byte("12345678901234567890123456789011")
-	publicKey3 = []byte("12345678901234567890123456789013")
-	address    = "localhost:12345"
+	itpublicKey1 = []byte("12345678901234567890123456789012")
+	itpublicKey2 = []byte("12345678901234567890123456789011")
+	itpublicKey3 = []byte("12345678901234567890123456789013")
+	itaddress    = "localhost:12345"
 
-	id1 = NewID(address, publicKey1)
-	id2 = NewID(address, publicKey2)
-	id3 = NewID(address, publicKey3)
+	itid1 = NewID(itaddress, itpublicKey1)
+	itid2 = NewID(itaddress, itpublicKey2)
+	itid3 = NewID(itaddress, itpublicKey3)
 )
 
 func TestNewID(t *testing.T) {
 	t.Parallel()
 
-	hash := blake2b.Sum256(publicKey1)
-	assert.EqualValues(t, hash[:], id1.Hash())
-	assert.Equal(t, address, id1.address)
+	hash := blake2b.Sum256(itpublicKey1)
+	assert.EqualValues(t, hash[:], itid1.Hash())
+	assert.Equal(t, itaddress, itid1.address)
 }
 
 func TestString(t *testing.T) {
@@ -34,19 +34,19 @@ func TestString(t *testing.T) {
 
 	want := "localhost:12345(3132333435363738)(492c7f5c8f125366)"
 
-	assert.Equal(t, want, id1.String())
+	assert.Equal(t, want, itid1.String())
 }
 
 func TestEquals(t *testing.T) {
 	t.Parallel()
 
-	assert.NotEqual(t, id1, id2)
-	assert.False(t, id1.Equals(id2))
-	assert.True(t, id1.Equals(id1))
-	assert.False(t, id1.Equals(nil))
+	assert.NotEqual(t, itid1, itid2)
+	assert.False(t, itid1.Equals(itid2))
+	assert.True(t, itid1.Equals(itid1))
+	assert.False(t, itid1.Equals(nil))
 }
 
-func noTestXor(t *testing.T) {
+func TestXor(t *testing.T) {
 	type args struct {
 		a []byte
 		b []byte
@@ -59,34 +59,18 @@ func noTestXor(t *testing.T) {
 		{
 			name: "id1 xor id2",
 			args: args{
-				a: id1.PublicID(),
-				b: id2.PublicID(),
+				a: itid1.PublicID(),
+				b: itid2.PublicID(),
 			},
-			want: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+			want: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3},
 		},
 		{
 			name: "id1 xor id3",
 			args: args{
-				a: id1.Hash(),
-				b: id3.Hash(),
+				a: itid1.PublicID(),
+				b: itid3.PublicID(),
 			},
 			want: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-		},
-		{
-			name: "calculated hash",
-			args: args{
-				a: publicKey1,
-				b: publicKey3,
-			},
-			want: func() []byte {
-				publicKey1Hash := blake2b.Sum256(publicKey1)
-				publicKey3Hash := blake2b.Sum256(publicKey3)
-				result := make([]byte, len(publicKey3Hash))
-				for i, b := range publicKey1Hash {
-					result[i] = b ^ publicKey3Hash[i]
-				}
-				return result
-			}(),
 		},
 	}
 	for _, tt := range tests {
@@ -101,9 +85,9 @@ func TestReadWrite(t *testing.T) {
 	t.Parallel()
 
 	testCases := []ID{
-		id1,
-		id2,
-		id3,
+		itid1,
+		itid2,
+		itid3,
 	}
 	for i, id := range testCases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
@@ -119,7 +103,7 @@ func TestReadWrite(t *testing.T) {
 
 	// bad
 	{
-		_, err := id1.Read(payload.NewReader([]byte("bad")))
+		_, err := itid1.Read(payload.NewReader([]byte("bad")))
 		assert.NotNil(t, err)
 	}
 }

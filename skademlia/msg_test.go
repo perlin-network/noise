@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	publicKey = []byte("12345678901234567890123456789012")
-	id        = NewID(address, publicKey)
+	mtpublicKey = []byte("12345678901234567890123456789012")
+	mtid        = NewID("address", mtpublicKey)
 )
 
 func TestPing(t *testing.T) {
@@ -19,11 +19,11 @@ func TestPing(t *testing.T) {
 
 	// good
 	{
-		msg, err := p.Read(payload.NewReader(id.Write()))
+		msg, err := p.Read(payload.NewReader(mtid.Write()))
 		assert.Nil(t, err)
 		_, castOK := msg.(Ping)
 		assert.True(t, castOK)
-		assert.Truef(t, id.Equals(msg.(Ping).ID), "Expected equal %v vs %v", id, msg)
+		assert.Truef(t, mtid.Equals(msg.(Ping).ID), "Expected equal %v vs %v", mtid, msg)
 	}
 
 	// bad
@@ -51,11 +51,11 @@ func TestLookupRequest(t *testing.T) {
 
 	// good
 	{
-		msg, err := lr.Read(payload.NewReader(id.Write()))
+		msg, err := lr.Read(payload.NewReader(mtid.Write()))
 		assert.Nil(t, err)
 		_, castOK := msg.(LookupRequest)
 		assert.True(t, castOK)
-		assert.Truef(t, id.Equals(msg.(LookupRequest).ID), "Expected equal %v vs %v", id, msg)
+		assert.Truef(t, mtid.Equals(msg.(LookupRequest).ID), "Expected equal %v vs %v", mtid, msg)
 	}
 
 	// bad
@@ -83,11 +83,11 @@ func TestLookupResponse(t *testing.T) {
 		},
 		LookupResponse{
 			// 1 entry
-			peers: []ID{id},
+			peers: []ID{mtid},
 		},
 		LookupResponse{
 			// 2 entries
-			peers: []ID{id, id},
+			peers: []ID{mtid, mtid},
 		},
 	}
 	for i, lr := range testCases {
