@@ -37,7 +37,11 @@ func (a ID) PublicID() []byte {
 
 func NewID(address string, publicKey []byte) ID {
 	hash := blake2b.Sum256(publicKey)
-	return ID{address: address, publicKey: publicKey, hash: hash[:]}
+	return ID{
+		address:   address,
+		publicKey: publicKey,
+		hash:      hash[:],
+	}
 }
 
 func (a ID) String() string {
