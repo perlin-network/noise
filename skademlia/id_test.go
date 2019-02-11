@@ -3,6 +3,7 @@ package skademlia
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/perlin-network/noise/payload"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -92,6 +93,27 @@ func noTestXor(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := xor(tt.args.a, tt.args.b)
 			assert.Equalf(t, got, tt.want, "xor() = %v, want %v", got, tt.want)
+		})
+	}
+}
+
+func TestReadWrite(t *testing.T) {
+	t.Parallel()
+
+	testCases := []ID{
+		id1,
+		id2,
+		id3,
+	}
+	for i, id := range testCases {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			wrote := id.Write()
+			assert.True(t, len(wrote) > len(id.address), "bytes should not be empty")
+			placeholder := ID{}
+			assert.Falsef(t, id.Equals(placeholder), "Expected not equal %v vs %v", id, placeholder)
+			msg, err := placeholder.Read(payload.NewReader(payload.NewWriter(wrote).Bytes()))
+			assert.Nil(t, err)
+			assert.Truef(t, id.Equals(msg.(ID)), "Expected equal %v vs %v", id, msg)
 		})
 	}
 }

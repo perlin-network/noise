@@ -66,7 +66,9 @@ func (a ID) Read(reader payload.Reader) (msg noise.Message, err error) {
 }
 
 func (a ID) Write() []byte {
-	return payload.NewWriter(nil).WriteString(a.address).WriteBytes(a.publicKey).Bytes()
+	return payload.NewWriter(nil).
+		WriteString(a.address).
+		WriteBytes(a.publicKey).Bytes()
 }
 
 func (a ID) Hash() []byte {
