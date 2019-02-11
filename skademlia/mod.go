@@ -43,7 +43,7 @@ func (b block) OnRegister(p *protocol.Protocol, node *noise.Node) {
 
 func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	// Send a ping.
-	err := peer.SendMessage(OpcodePing, Ping(protocol.NodeID(peer.Node()).(ID)))
+	err := peer.SendMessage(OpcodePing, Ping{protocol.NodeID(peer.Node()).(ID)})
 	if err != nil {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to send ping")
 	}

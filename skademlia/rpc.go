@@ -45,7 +45,7 @@ func queryPeerByID(node *noise.Node, peerID, targetID ID, responses chan []ID) {
 	}
 
 	// Send lookup request.
-	err = peer.SendMessage(OpcodeLookupRequest, LookupRequest(targetID))
+	err = peer.SendMessage(OpcodeLookupRequest, LookupRequest{targetID})
 	if err != nil {
 		responses <- []ID{}
 		return

@@ -15,11 +15,34 @@ var (
 	_ noise.Message = (*LookupResponse)(nil)
 )
 
-type Ping = ID
+type Ping struct{ ID }
 
-type Evict = noise.EmptyMessage
+func (m Ping) Read(reader payload.Reader) (noise.Message, error) {
+	id, err := ID{}.Read(reader)
+	if err != nil {
+		return nil, errors.Wrap(err, "skademlia: failed to read id")
+	}
 
-type LookupRequest = ID
+	m.ID = id.(ID)
+
+	return m, nil
+}
+
+type Evict struct{ noise.EmptyMessage }
+
+type LookupRequest struct{ ID }
+
+func (m LookupRequest) Read(reader payload.Reader) (noise.Message, error) {
+	id, err := ID{}.Read(reader)
+	if err != nil {
+		return nil, errors.Wrap(err, "skademlia: failed to read id")
+	}
+
+	m.ID = id.(ID)
+
+	return m, nil
+}
+
 type LookupResponse struct {
 	peers []ID
 }

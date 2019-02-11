@@ -87,6 +87,8 @@ func main() {
 	p.Register(skademlia.New())
 	p.Enforce(node)
 
+	noise.DebugOpcodes()
+
 	setup(node)
 	go node.Listen()
 
