@@ -48,7 +48,7 @@ func (b *block) TimeoutAfter(timeoutDuration time.Duration) *block {
 }
 
 func (b *block) OnRegister(p *protocol.Protocol, node *noise.Node) {
-	OpcodeHandshake = noise.RegisterMessage(noise.NextAvailableOpcode(), (*messageHandshake)(nil))
+	OpcodeHandshake = noise.RegisterMessage(noise.NextAvailableOpcode(), (*Handshake)(nil))
 }
 
 func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
@@ -57,7 +57,7 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	ephemeralPublicKey := b.suite.Point().Mul(ephemeralPrivateKey, b.suite.Point().Base())
 
 	var err error
-	var req messageHandshake
+	var req Handshake
 
 	req.publicKey, err = ephemeralPublicKey.MarshalBinary()
 	if err != nil {
@@ -75,14 +75,14 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	}
 
 	// Wait for handshake response.
-	var res messageHandshake
+	var res Handshake
 	var ok bool
 
 	select {
 	case <-time.After(b.timeoutDuration):
 		return errors.Wrap(protocol.DisconnectPeer, "timed out receiving handshake request")
 	case msg := <-peer.Receive(OpcodeHandshake):
-		res, ok = msg.(messageHandshake)
+		res, ok = msg.(Handshake)
 		if !ok {
 			return errors.Wrap(protocol.DisconnectPeer, "did not get a handshake response back")
 		}
