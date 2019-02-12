@@ -23,10 +23,17 @@ var (
 	_ protocol.Block = (*block)(nil)
 )
 
-type block struct{}
+type block struct {
+	enforceSignatures bool
+}
 
 func New() block {
-	return block{}
+	return block{enforceSignatures: false}
+}
+
+func (b block) EnforceSignatures() block {
+	b.enforceSignatures = true
+	return b
 }
 
 func (b block) OnRegister(p *protocol.Protocol, node *noise.Node) {
@@ -60,7 +67,7 @@ func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 
 	// Register peer.
 	protocol.SetPeerID(peer, ping.ID)
-	enforceSignatures(peer, false)
+	enforceSignatures(peer, b.enforceSignatures)
 
 	// Log peer into S/Kademlia table, and have all messages update the S/Kademlia table.
 	logPeerActivity(peer)

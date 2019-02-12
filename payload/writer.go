@@ -33,7 +33,7 @@ func (b Writer) Write(buf []byte) (n int, err error) {
 
 func (b Writer) WriteBytes(buf []byte) Writer {
 	b.WriteUint32(uint32(len(buf)))
-	b.Write(buf)
+	_, _ = b.Write(buf)
 
 	return b
 }
@@ -53,7 +53,7 @@ func (b Writer) WriteByte(x byte) Writer {
 func (b Writer) WriteUint16(x uint16) Writer {
 	var buf [2]byte
 	binary.LittleEndian.PutUint16(buf[:], x)
-	b.Write(buf[:])
+	_, _ = b.Write(buf[:])
 
 	return b
 }
@@ -61,7 +61,7 @@ func (b Writer) WriteUint16(x uint16) Writer {
 func (b Writer) WriteUint32(x uint32) Writer {
 	var buf [4]byte
 	binary.LittleEndian.PutUint32(buf[:], x)
-	b.Write(buf[:])
+	_, _ = b.Write(buf[:])
 
 	return b
 }
@@ -69,7 +69,7 @@ func (b Writer) WriteUint32(x uint32) Writer {
 func (b Writer) WriteUint64(x uint64) Writer {
 	var buf [8]byte
 	binary.LittleEndian.PutUint64(buf[:], x)
-	b.Write(buf[:])
+	_, _ = b.Write(buf[:])
 
 	return b
 }

@@ -11,10 +11,12 @@ import (
 	"go.dedis.ch/kyber/v3/group/edwards25519"
 	"hash"
 	"sync/atomic"
+	"time"
 )
 
 var (
-	curve crypto.EllipticSuite = edwards25519.NewBlakeSHA256Ed25519()
+	OpcodeACK noise.Opcode
+	curve     crypto.EllipticSuite = edwards25519.NewBlakeSHA256Ed25519()
 
 	_ protocol.Block = (*block)(nil)
 )
@@ -34,7 +36,9 @@ func (b block) WithSuite(suite crypto.EllipticSuite) block {
 	return b
 }
 
-func (b block) OnRegister(p *protocol.Protocol, node *noise.Node) {}
+func (b block) OnRegister(p *protocol.Protocol, node *noise.Node) {
+	OpcodeACK = noise.RegisterMessage(noise.NextAvailableOpcode(), (*ACK)(nil))
+}
 
 func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	ephemeralSharedKeyBuf := protocol.LoadSharedKey(peer)
@@ -55,24 +59,36 @@ func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to derive AEAD cipher suite given ephemeral shared key")
 	}
 
+	err = peer.SendMessage(OpcodeACK, ACK{})
+	if err != nil {
+		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to send AEAD ACK")
+	}
+
+	peer.EnterCriticalReadMode()
+	defer peer.LeaveCriticalReadMode()
+
+	select {
+	case <-time.After(3 * time.Second):
+		return errors.Wrap(protocol.DisconnectPeer, "timed out waiting for AEAD ACK")
+	case <-peer.Receive(OpcodeACK):
+	}
+
 	var ourNonce uint64
 	var theirNonce uint64
 
-	ourNonceBuf, theirNonceBuf := make([]byte, suite.NonceSize()), make([]byte, suite.NonceSize())
-
-	// TODO(kenta): these callbacks cause a 'race condition' with any future messages sent. Using the `chat` example, try uncomment "aead.New()".
 	peer.BeforeMessageSent(func(node *noise.Node, peer *noise.Peer, msg []byte) (bytes []byte, e error) {
+		ourNonceBuf := make([]byte, suite.NonceSize())
 		binary.LittleEndian.PutUint64(ourNonceBuf, atomic.AddUint64(&ourNonce, 1))
 		return suite.Seal(msg[:0], ourNonceBuf, msg, nil), nil
 	})
 
 	peer.BeforeMessageReceived(func(node *noise.Node, peer *noise.Peer, msg []byte) (bytes []byte, e error) {
+		theirNonceBuf := make([]byte, suite.NonceSize())
 		binary.LittleEndian.PutUint64(theirNonceBuf, atomic.AddUint64(&theirNonce, 1))
 		return suite.Open(msg[:0], theirNonceBuf, msg, nil)
 	})
 
 	log.Debug().Hex("derived_shared_key", sharedKey).Msg("Derived HMAC, and successfully initialized session w/ AEAD cipher suite.")
-
 	return nil
 }
 

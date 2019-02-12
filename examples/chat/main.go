@@ -87,8 +87,6 @@ func main() {
 	p.Register(skademlia.New())
 	p.Enforce(node)
 
-	noise.DebugOpcodes()
-
 	setup(node)
 	go node.Listen()
 
@@ -117,9 +115,6 @@ func main() {
 			panic(err)
 		}
 
-		err = skademlia.Broadcast(node, opcodeChat, chatMessage{text: strings.TrimSpace(txt)})
-		if err != nil {
-			panic(err)
-		}
+		_ = skademlia.Broadcast(node, opcodeChat, chatMessage{text: strings.TrimSpace(txt)})
 	}
 }
