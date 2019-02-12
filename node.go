@@ -30,7 +30,8 @@ type Node struct {
 
 	metadata sync.Map
 
-	kill     chan struct{}
+	// the waitgroup will be nil if the sender does not want to wait.
+	kill     chan *sync.WaitGroup
 	killOnce sync.Once
 }
 
@@ -66,7 +67,7 @@ func NewNode(params parameters) (*Node, error) {
 		onPeerDialedCallbacks:    callbacks.NewSequentialCallbackManager(),
 		onPeerInitCallbacks:      callbacks.NewSequentialCallbackManager(),
 
-		kill: make(chan struct{}, 1),
+		kill: make(chan *sync.WaitGroup, 1),
 	}
 
 	for key, val := range params.Metadata {
@@ -83,21 +84,25 @@ func (n *Node) Port() uint16 {
 // Listen makes our node start listening for peers.
 func (n *Node) Listen() {
 	for {
-		select {
-		case <-n.kill:
-			if err := n.listener.Close(); err != nil {
-				n.onListenerErrorCallbacks.RunCallbacks(err)
-			}
-
-			n.listener = nil
-			return
-		default:
-		}
-
 		conn, err := n.listener.Accept()
 
 		if err != nil {
 			n.onListenerErrorCallbacks.RunCallbacks(err)
+
+			// check the kill signal
+			select {
+			case wg := <-n.kill:
+				n.listener = nil
+
+				// If waitgroup is not nil then it means the sender want to wait until the loop is terminated
+				if wg != nil {
+					wg.Done()
+				}
+				return
+			default:
+			}
+
+			continue
 		}
 
 		peer := newPeer(n, conn)
@@ -235,14 +240,28 @@ func (n *Node) Delete(key string) {
 	n.metadata.Delete(key)
 }
 
-// Fence blocks the current goroutine until the node stops listening for peers.
-func (n *Node) Fence() {
-	<-n.kill
-}
-
-func (n *Node) Kill() {
+// Pass block=true if you want to block until the node stops listening.
+func (n *Node) Kill(block bool) {
 	n.killOnce.Do(func() {
-		n.kill <- struct{}{}
+		var wg *sync.WaitGroup
+
+		if block {
+			wg = new(sync.WaitGroup)
+			wg.Add(1)
+		}
+
+		n.kill <- wg
+
+		err := n.listener.Close()
+		if err != nil {
+			log.Warn().Err(err).Msg("error closing listener")
+		}
+
+		if block {
+			wg.Wait()
+		}
+
+		close(n.kill)
 	})
 }
 
