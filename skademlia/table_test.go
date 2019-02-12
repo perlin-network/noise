@@ -3,7 +3,10 @@ package skademlia
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
+	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/identity/ed25519"
+	"github.com/perlin-network/noise/protocol"
 	"github.com/stretchr/testify/assert"
 	"sort"
 	"sync"
@@ -201,9 +204,13 @@ func TestFindClosestPeers(t *testing.T) {
 		assert.EqualValues(t, _answer, testee[i])
 	}
 
+	// make sure the bucket size is right too
+	assert.Nil(t, routingTable.bucket(len(ttid1.Hash())*8+1))
+	assert.NotNil(t, routingTable.bucket(len(ttid1.Hash())*8-1))
+
 }
 
-func TestTable(t *testing.T) {
+func TestFindClosestConcurrent(t *testing.T) {
 	t.Parallel()
 
 	const IDPoolSize = 16
@@ -267,4 +274,23 @@ func TestTable(t *testing.T) {
 
 func TestUpdateTable(t *testing.T) {
 	// TODO:
+}
+
+func TestTable(t *testing.T) {
+	params := noise.DefaultParams()
+	params.ID = ed25519.Random()
+	params.Port = uint16(3000)
+
+	node, err := noise.NewNode(params)
+	assert.Nil(t, err)
+
+	p := protocol.New()
+	p.Register(New())
+	p.Enforce(node)
+
+	table := Table(node)
+	assert.NotNil(t, table)
+
+	id := NewID(fmt.Sprintf("127.0.0.1:%d", params.Port), params.ID.PublicID())
+	assert.EqualValues(t, id, table.self)
 }
