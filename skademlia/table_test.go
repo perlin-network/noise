@@ -180,12 +180,10 @@ func TestFindClosestPeers(t *testing.T) {
 	for _, peer := range FindClosestPeers(routingTable, nodes[5].Hash(), 3) {
 		testee = append(testee, peer.(ID))
 	}
-	if len(testee) != 3 {
-		t.Fatalf("findclosestpeers() error, size of return should be 3, but found %d", len(testee))
-	}
+	assert.Equalf(t, 3, len(testee), "expected 3 peers got %+v", testee)
 	answerKeys := []int{5, 2, 3}
-	for i := 0; i <= 2; i++ {
-		_answer := nodes[answerKeys[i]]
+	for i, key := range answerKeys {
+		_answer := nodes[key]
 		assert.EqualValues(t, _answer, testee[i])
 	}
 
@@ -193,14 +191,10 @@ func TestFindClosestPeers(t *testing.T) {
 	for _, peer := range FindClosestPeers(routingTable, nodes[4].Hash(), 2) {
 		testee = append(testee, peer.(ID))
 	}
-	if len(testee) != 2 {
-		t.Fatalf("findclosestpeers() error, size of return should be 2, but found %d", len(testee))
-	}
+	assert.Equalf(t, 2, len(testee), "expected 2 peers got %v", testee)
 	answerKeys = []int{4, 5}
-	// TODO: should be {4, 2} not {4, 5}
-	//answerKeys = []int{4, 2}
-	for i := 0; i <= 1; i++ {
-		_answer := nodes[answerKeys[i]]
+	for i, key := range answerKeys {
+		_answer := nodes[key]
 		assert.EqualValues(t, _answer, testee[i])
 	}
 

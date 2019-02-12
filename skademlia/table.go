@@ -19,7 +19,8 @@ var (
 type table struct {
 	self protocol.ID
 
-	buckets []*bucket
+	numBuckets int
+	buckets    []*bucket
 }
 
 type bucket struct {
@@ -36,12 +37,14 @@ func newTable(self protocol.ID) *table {
 		panic("kademlia: self ID must not be nil")
 	}
 
+	numBuckets := len(self.Hash()) * 8
 	table := table{
-		self:    self,
-		buckets: make([]*bucket, len(self.Hash())*8),
+		self:       self,
+		numBuckets: numBuckets,
+		buckets:    make([]*bucket, numBuckets),
 	}
 
-	for i := 0; i < len(self.Hash())*8; i++ {
+	for i := 0; i < numBuckets; i++ {
 		table.buckets[i] = newBucket()
 	}
 
@@ -188,7 +191,7 @@ func FindClosestPeers(t *table, target []byte, K int) (peers []protocol.ID) {
 
 	bucket.RUnlock()
 
-	for i := 1; len(peers) < K && (bucketID-i >= 0 || bucketID+i < len(t.self.Hash())*8); i++ {
+	for i := 1; len(peers) < K && (bucketID-i >= 0 || bucketID+i < t.numBuckets); i++ {
 		if bucketID-i >= 0 {
 			other := t.bucket(bucketID - i)
 			other.RLock()
@@ -200,7 +203,7 @@ func FindClosestPeers(t *table, target []byte, K int) (peers []protocol.ID) {
 			other.RUnlock()
 		}
 
-		if bucketID+i < len(t.self.Hash())*8 {
+		if bucketID+i < t.numBuckets {
 			other := t.bucket(bucketID + i)
 			other.RLock()
 			for e := other.Front(); e != nil; e = e.Next() {
