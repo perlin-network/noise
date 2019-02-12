@@ -9,6 +9,7 @@ import (
 	"github.com/perlin-network/noise/protocol"
 	"github.com/stretchr/testify/assert"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -273,24 +274,46 @@ func TestFindClosestConcurrent(t *testing.T) {
 }
 
 func TestUpdateTable(t *testing.T) {
-	// TODO:
-}
+	// modify the bucket size for this test
+	defaultBucketSize := BucketSize()
+	defer func() {
+		bucketSize = defaultBucketSize
+	}()
 
-func TestTable(t *testing.T) {
+	// key generates bucket id 8
+	idKey2 := []byte{210, 127, 212, 137, 47, 66, 40, 189, 231, 239, 210, 168, 52, 15, 223, 66, 199, 199, 156, 61, 132, 56, 102, 223, 32, 175, 169, 241, 156, 46, 83, 98}
+	id2 := NewID("0002", idKey2)
+
+	// key generates bucket id 8
+	idKey3 := []byte{228, 61, 230, 169, 243, 78, 244, 44, 82, 76, 54, 56, 98, 135, 227, 158, 114, 251, 56, 160, 208, 60, 121, 41, 197, 63, 235, 41, 236, 66, 222, 219}
+	id3 := NewID("0003", idKey3)
+
+	// make the node and table
 	params := noise.DefaultParams()
-	params.ID = ed25519.Random()
+	params.ID = ed25519.New([]byte{124, 224, 147, 208, 211, 103, 166, 113, 153, 104, 83, 62, 61, 145, 8, 211, 144, 164, 224, 191, 177, 205, 198, 94, 92, 35, 76, 83, 229, 46, 219, 110})
 	params.Port = uint16(3000)
+	id := NewID(fmt.Sprintf("127.0.0.1:%d", params.Port), params.ID.PublicID())
 
 	node, err := noise.NewNode(params)
 	assert.Nil(t, err)
 
+	bucketSize = 2
 	p := protocol.New()
 	p.Register(New())
 	p.Enforce(node)
 
+	// test the table
 	table := Table(node)
 	assert.NotNil(t, table)
-
-	id := NewID(fmt.Sprintf("127.0.0.1:%d", params.Port), params.ID.PublicID())
 	assert.EqualValues(t, id, table.self)
+
+	// fill up the buckets
+	assert.Nil(t, UpdateTable(node, id2))
+	assert.Nil(t, UpdateTable(node, id3))
+
+	// cause error on the last peer
+	err = UpdateTable(node, ttid1)
+	assert.NotNil(t, err)
+	fmt.Printf("%s %+v\n", err, err)
+	assert.True(t, strings.Contains(err.Error(), "last peer"))
 }
