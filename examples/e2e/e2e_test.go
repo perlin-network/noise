@@ -22,8 +22,8 @@ import (
 var (
 	_               noise.Message = (*testMessage)(nil)
 	startPort                     = 4000
-	numNodes                      = 16
-	numMessagesEach               = 1000
+	numNodes                      = 10
+	numMessagesEach               = 100
 )
 
 type testMessage struct {
@@ -145,5 +145,6 @@ func Run(startPort int, numNodes int, numTxEach int) error {
 func TestRun(t *testing.T) {
 	assert.Nil(t, Run(startPort, numNodes, numMessagesEach))
 
+	noise.DebugOpcodes()
 	t.Log("Done")
 }
