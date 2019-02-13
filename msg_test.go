@@ -4,7 +4,6 @@ import (
 	"github.com/perlin-network/noise/payload"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	"math"
 	"testing"
 )
 
@@ -45,27 +44,7 @@ func TestNextAvailableOpcode(t *testing.T) {
 	_, err = MessageFromOpcode(Opcode(1))
 	assert.NotNil(t, err)
 
-	type badType struct {
-		EmptyMessage
-	}
-
-	_, err = OpcodeFromMessage(badType{})
-	assert.NotNil(t, err)
-
-	// try adding all the possible values for opcode
-	for i := 1; i <= math.MaxUint8; i++ {
-		o := NextAvailableOpcode()
-		assert.Equal(t, Opcode(i), o)
-		assert.Equal(t, o, RegisterMessage(o, (*testMsg)(nil)))
-
-		msg, err = MessageFromOpcode(Opcode(i))
-		assert.Nil(t, err)
-		assert.Equal(t, testMsg{}, msg)
-
-		actual, err := OpcodeFromMessage(testMsg{})
-		assert.Nil(t, err)
-		assert.Equal(t, o, actual)
-	}
+	RegisterMessage(Opcode(1), (*testMsg)(nil))
 
 	// an opcode should still exist after the loop
 	msg, err = MessageFromOpcode(Opcode(1))
@@ -76,26 +55,32 @@ func TestNextAvailableOpcode(t *testing.T) {
 }
 
 func TestEncodeMessage(t *testing.T) {
-	o := Opcode(123)
+	resetOpcodes()
+	o := RegisterMessage(Opcode(123), (*testMsg)(nil))
+
 	msg := testMsg{
 		text: "hello",
 	}
+
 	p := newPeer(nil, nil)
-	bytes, err := p.EncodeMessage(o, msg)
+
+	bytes, err := p.EncodeMessage(msg)
 	assert.Nil(t, err)
-	assert.Equal(t, append([]byte{123}, msg.Write()...), bytes)
+	assert.Equal(t, append([]byte{byte(o)}, msg.Write()...), bytes)
 }
 
 func TestDecodeMessage(t *testing.T) {
 	resetOpcodes()
-	o := Opcode(45)
+	o := RegisterMessage(Opcode(45), (*testMsg)(nil))
+
 	msg := testMsg{
 		text: "world",
 	}
 	assert.Equal(t, o, RegisterMessage(o, (*testMsg)(nil)))
 
 	p := newPeer(nil, nil)
-	resultO, resultM, err := p.DecodeMessage(append([]byte{45}, msg.Write()...))
+
+	resultO, resultM, err := p.DecodeMessage(append([]byte{byte(o)}, msg.Write()...))
 	assert.Nil(t, err)
 	assert.Equal(t, o, resultO)
 	assert.Equal(t, msg, resultM)

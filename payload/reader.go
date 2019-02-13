@@ -41,8 +41,9 @@ func (r Reader) ReadBytes() ([]byte, error) {
 	}
 
 	buf := make([]byte, size)
+
 	_, err = r.Read(buf)
-	if err != nil {
+	if err != nil && errors.Cause(err) != io.EOF {
 		return nil, err
 	}
 

@@ -63,7 +63,7 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to derive AEAD cipher suite given ephemeral shared key")
 	}
 
-	err = peer.SendMessage(b.opcodeACK, ACK{})
+	err = peer.SendMessage(ACK{})
 	if err != nil {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to send AEAD ACK")
 	}

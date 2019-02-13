@@ -157,8 +157,8 @@ func (p *Peer) spawnReceiveWorker() {
 	}
 }
 
-func (p *Peer) SendMessage(opcode Opcode, message Message) error {
-	payload, err := p.EncodeMessage(opcode, message)
+func (p *Peer) SendMessage(message Message) error {
+	payload, err := p.EncodeMessage(message)
 	if err != nil {
 		return errors.Wrap(err, "failed to serialize message contents to be sent to a peer")
 	}
