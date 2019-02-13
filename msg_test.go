@@ -56,14 +56,18 @@ func TestNextAvailableOpcode(t *testing.T) {
 
 func TestEncodeMessage(t *testing.T) {
 	resetOpcodes()
-	o := RegisterMessage(Opcode(123), (*testMsg)(nil))
 
+	p := newPeer(nil, nil)
 	msg := testMsg{
 		text: "hello",
 	}
 
-	p := newPeer(nil, nil)
+	// test an unregister messsage for an error
+	_, err := p.EncodeMessage(msg)
+	assert.NotNil(t, err)
 
+	// register and encode again
+	o := RegisterMessage(Opcode(123), (*testMsg)(nil))
 	bytes, err := p.EncodeMessage(msg)
 	assert.Nil(t, err)
 	assert.Equal(t, append([]byte{byte(o)}, msg.Write()...), bytes)
@@ -71,14 +75,20 @@ func TestEncodeMessage(t *testing.T) {
 
 func TestDecodeMessage(t *testing.T) {
 	resetOpcodes()
-	o := RegisterMessage(Opcode(45), (*testMsg)(nil))
 
+	p := newPeer(nil, nil)
 	msg := testMsg{
 		text: "world",
 	}
-	assert.Equal(t, o, RegisterMessage(o, (*testMsg)(nil)))
+	o := Opcode(45)
 
-	p := newPeer(nil, nil)
+	// decode an unregistered msg
+	_, _, err := p.DecodeMessage(append([]byte{byte(o)}, msg.Write()...))
+	assert.NotNil(t, err)
+
+	// decode a registered one
+	o = RegisterMessage(o, (*testMsg)(nil))
+	assert.Equal(t, o, RegisterMessage(o, (*testMsg)(nil)))
 
 	resultO, resultM, err := p.DecodeMessage(append([]byte{byte(o)}, msg.Write()...))
 	assert.Nil(t, err)
