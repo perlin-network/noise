@@ -25,6 +25,14 @@ func (m testMsg) Write() []byte {
 	return payload.NewWriter(nil).WriteString(m.text).Bytes()
 }
 
+func TestBytes(t *testing.T) {
+	t.Parallel()
+	for i := 0; i < 1000; i++ {
+		o := Opcode(i)
+		assert.Equal(t, [1]byte{byte(i)}, o.Bytes())
+	}
+}
+
 func TestNextAvailableOpcode(t *testing.T) {
 	resetOpcodes()
 
@@ -37,21 +45,34 @@ func TestNextAvailableOpcode(t *testing.T) {
 	_, err = MessageFromOpcode(Opcode(1))
 	assert.NotNil(t, err)
 
+	type badType struct {
+		EmptyMessage
+	}
+
+	_, err = OpcodeFromMessage(badType{})
+	assert.NotNil(t, err)
+
 	// try adding all the possible values for opcode
 	for i := 1; i <= math.MaxUint8; i++ {
 		o := NextAvailableOpcode()
 		assert.Equal(t, Opcode(i), o)
 		assert.Equal(t, o, RegisterMessage(o, (*testMsg)(nil)))
 
-		msg, err = MessageFromOpcode(Opcode(1))
+		msg, err = MessageFromOpcode(Opcode(i))
 		assert.Nil(t, err)
 		assert.Equal(t, testMsg{}, msg)
+
+		actual, err := OpcodeFromMessage(testMsg{})
+		assert.Nil(t, err)
+		assert.Equal(t, o, actual)
 	}
 
 	// an opcode should still exist after the loop
 	msg, err = MessageFromOpcode(Opcode(1))
 	assert.Nil(t, err)
 	assert.Equal(t, testMsg{}, msg)
+
+	DebugOpcodes()
 }
 
 func TestEncodeMessage(t *testing.T) {
@@ -78,4 +99,16 @@ func TestDecodeMessage(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, o, resultO)
 	assert.Equal(t, msg, resultM)
+}
+
+func TestEmptyMessage(t *testing.T) {
+	t.Parallel()
+
+	em := EmptyMessage{}
+
+	m, err := em.Read(payload.NewReader(nil))
+	assert.Nil(t, err)
+	assert.Equal(t, em, m)
+
+	assert.Nil(t, em.Write())
 }

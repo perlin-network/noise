@@ -95,6 +95,8 @@ func Run(startPort int, numNodes int, numTxEach int) error {
 		log.Info().Msgf("Listening for peers on port %d.", node.Port())
 	}
 
+	noise.DebugOpcodes()
+
 	time.Sleep(100 * time.Millisecond)
 
 	for i := 1; i < numNodes; i++ {
