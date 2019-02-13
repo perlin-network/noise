@@ -264,5 +264,5 @@ func (n *Node) ExternalAddress() string {
 		return externalIP.String() + ":" + strconv.Itoa(int(n.port))
 	}
 
-	return "0.0.0.0" + ":" + strconv.Itoa(int(n.port))
+	return "127.0.0.1" + ":" + strconv.Itoa(int(n.port))
 }
