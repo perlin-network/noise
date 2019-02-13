@@ -15,7 +15,7 @@ import (
 // It returns a list of errors which have occurred in sending any messages to peers
 // closest to a given node instance.
 func Broadcast(node *noise.Node, opcode noise.Opcode, message noise.Message) (errs []error) {
-	for _, peerID := range FindClosestPeers(Table(node), protocol.NodeID(node).Hash(), DefaultBucketSize) {
+	for _, peerID := range FindClosestPeers(Table(node), protocol.NodeID(node).Hash(), BucketSize()) {
 		peer := protocol.Peer(node, peerID)
 
 		if peer == nil {
@@ -174,8 +174,8 @@ func FindNode(node *noise.Node, targetID ID, alpha int, numDisjointPaths int) (r
 
 	// Cut off list of results to only have the routing table focus on the
 	// BUCKET_SIZE closest peers to the current node.
-	if len(results) > DefaultBucketSize {
-		results = results[:DefaultBucketSize]
+	if len(results) > BucketSize() {
+		results = results[:BucketSize()]
 	}
 
 	return

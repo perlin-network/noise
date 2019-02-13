@@ -1,6 +1,7 @@
 package ed25519
 
 import (
+	"encoding/hex"
 	"fmt"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/identity"
@@ -11,18 +12,18 @@ import (
 )
 
 var (
-	_     identity.Manager     = (*manager)(nil)
+	_     identity.Manager     = (*Manager)(nil)
 	suite crypto.EllipticSuite = edwards25519.NewBlakeSHA256Ed25519()
 )
 
-type manager struct {
+type Manager struct {
 	privateKey kyber.Scalar
 	publicKey  kyber.Point
 
 	publicKeyBuf []byte
 }
 
-func New(privateKeyBuf []byte) *manager {
+func New(privateKeyBuf []byte) *Manager {
 	privateKey := suite.Scalar().SetBytes(privateKeyBuf)
 	publicKey := suite.Point().Mul(privateKey, suite.Point().Base())
 
@@ -32,31 +33,33 @@ func New(privateKeyBuf []byte) *manager {
 		panic(errors.Wrap(err, "failed to marshal public key"))
 	}
 
-	return &manager{privateKey: privateKey, publicKey: publicKey, publicKeyBuf: publicKeyBuf}
+	return &Manager{
+		privateKey:   privateKey,
+		publicKey:    publicKey,
+		publicKeyBuf: publicKeyBuf,
+	}
 }
 
-func Random() *manager {
+func Random() *Manager {
 	privateKey := suite.Scalar().Pick(suite.RandomStream())
-	publicKey := suite.Point().Mul(privateKey, suite.Point().Base())
 
-	publicKeyBuf, err := publicKey.MarshalBinary()
-
+	privateKeyBytes, err := hex.DecodeString(privateKey.String())
 	if err != nil {
-		panic(errors.Wrap(err, "failed to marshal public key"))
+		panic(errors.Wrap(err, "failed to marshal private key"))
 	}
 
-	return &manager{privateKey: privateKey, publicKey: publicKey, publicKeyBuf: publicKeyBuf}
+	return New(privateKeyBytes)
 }
 
-func (p *manager) PublicID() []byte {
+func (p *Manager) PublicID() []byte {
 	return p.publicKeyBuf
 }
 
-func (p *manager) Sign(buf []byte) ([]byte, error) {
+func (p *Manager) Sign(buf []byte) ([]byte, error) {
 	return schnorr.Sign(suite, p.privateKey, buf)
 }
 
-func (p *manager) Verify(publicKeyBuf []byte, buf []byte, signature []byte) error {
+func (p *Manager) Verify(publicKeyBuf []byte, buf []byte, signature []byte) error {
 	point := suite.Point()
 
 	if err := point.UnmarshalBinary(publicKeyBuf); err != nil {
@@ -66,6 +69,10 @@ func (p *manager) Verify(publicKeyBuf []byte, buf []byte, signature []byte) erro
 	return schnorr.Verify(suite, point, buf, signature)
 }
 
-func (p *manager) String() string {
+func (p *Manager) String() string {
 	return fmt.Sprintf("ed25519-manager{publicKey: %s, privateKey: %s}", p.publicKey.String(), p.privateKey.String())
+}
+
+func (p *Manager) PrivateKey() string {
+	return p.privateKey.String()
 }

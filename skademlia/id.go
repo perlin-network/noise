@@ -37,7 +37,11 @@ func (a ID) PublicID() []byte {
 
 func NewID(address string, publicKey []byte) ID {
 	hash := blake2b.Sum256(publicKey)
-	return ID{address: address, publicKey: publicKey, hash: hash[:]}
+	return ID{
+		address:   address,
+		publicKey: publicKey,
+		hash:      hash[:],
+	}
 }
 
 func (a ID) String() string {
@@ -62,7 +66,9 @@ func (a ID) Read(reader payload.Reader) (msg noise.Message, err error) {
 }
 
 func (a ID) Write() []byte {
-	return payload.NewWriter(nil).WriteString(a.address).WriteBytes(a.publicKey).Bytes()
+	return payload.NewWriter(nil).
+		WriteString(a.address).
+		WriteBytes(a.publicKey).Bytes()
 }
 
 func (a ID) Hash() []byte {
