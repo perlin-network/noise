@@ -18,8 +18,7 @@ import (
 )
 
 var (
-	opcodeBenchmark               = noise.RegisterMessage(noise.NextAvailableOpcode(), (*benchmarkMessage)(nil))
-	_               noise.Message = (*benchmarkMessage)(nil)
+	_ noise.Message = (*benchmarkMessage)(nil)
 
 	messagesSentPerSecond     uint64
 	messagesReceivedPerSecond uint64
@@ -66,6 +65,8 @@ func spawnNode(port uint16) *noise.Node {
 }
 
 func main() {
+	opcodeBenchmark := noise.RegisterMessage(noise.NextAvailableOpcode(), (*benchmarkMessage)(nil))
+
 	server, client := spawnNode(0), spawnNode(0)
 
 	go func() {
@@ -85,7 +86,7 @@ func main() {
 				rand.Read(payload)
 
 				atomic.AddUint64(&messagesSentPerSecond, 1)
-				peer.SendMessage(opcodeBenchmark, benchmarkMessage{string(payload)})
+				peer.SendMessage(benchmarkMessage{string(payload)})
 			}
 		}()
 

@@ -67,7 +67,7 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to sign handshake message using Schnorr signature scheme")
 	}
 
-	err = peer.SendMessage(b.opcodeHandshake, req)
+	err = peer.SendMessage(req)
 	if err != nil {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to send our ephemeral public key to our peer")
 	}

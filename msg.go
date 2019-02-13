@@ -84,6 +84,9 @@ func OpcodeFromMessage(msg Message) (Opcode, error) {
 	defer opcodesMutex.Unlock()
 
 	typ := reflect.TypeOf(msg)
+	if typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+	}
 
 	opcode, exists := messages[typ]
 	if !exists {
@@ -145,10 +148,15 @@ type Message interface {
 //
 // Refer to the functions `OnEncodeHeader` and `OnEncodeFooter` available in `noise.Peer`
 // to prepend/append additional information on every single message sent over the wire.
-func (p *Peer) EncodeMessage(opcode Opcode, message Message) ([]byte, error) {
+func (p *Peer) EncodeMessage(message Message) ([]byte, error) {
+	opcode, err := OpcodeFromMessage(message)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not find opcode registered for message")
+	}
+
 	var buf bytes.Buffer
 
-	_, err := buf.Write(payload.NewWriter(nil).WriteByte(byte(opcode)).Bytes())
+	_, err = buf.Write(payload.NewWriter(nil).WriteByte(byte(opcode)).Bytes())
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to serialize message opcode")
 	}

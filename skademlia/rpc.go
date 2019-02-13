@@ -14,7 +14,7 @@ import (
 //
 // It returns a list of errors which have occurred in sending any messages to peers
 // closest to a given node instance.
-func Broadcast(node *noise.Node, opcode noise.Opcode, message noise.Message) (errs []error) {
+func Broadcast(node *noise.Node, message noise.Message) (errs []error) {
 	for _, peerID := range FindClosestPeers(Table(node), protocol.NodeID(node).Hash(), BucketSize()) {
 		peer := protocol.Peer(node, peerID)
 
@@ -22,7 +22,7 @@ func Broadcast(node *noise.Node, opcode noise.Opcode, message noise.Message) (er
 			continue
 		}
 
-		if err := peer.SendMessage(opcode, message); err != nil {
+		if err := peer.SendMessage(message); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -49,8 +49,13 @@ func queryPeerByID(node *noise.Node, peerID, targetID ID, responses chan []ID) {
 		}
 	}
 
+	opcodeLookupResponse, err := noise.OpcodeFromMessage((*LookupResponse)(nil))
+	if err != nil {
+		panic("skademlia: response opcode not registered")
+	}
+
 	// Send lookup request.
-	err = peer.SendMessage(OpcodeLookupRequest, LookupRequest{targetID})
+	err = peer.SendMessage(LookupRequest{targetID})
 	if err != nil {
 		responses <- []ID{}
 		return
@@ -59,7 +64,7 @@ func queryPeerByID(node *noise.Node, peerID, targetID ID, responses chan []ID) {
 	// Handle lookup response.
 	for {
 		select {
-		case msg := <-peer.Receive(OpcodeLookupResponse):
+		case msg := <-peer.Receive(opcodeLookupResponse):
 			responses <- msg.(LookupResponse).peers
 		case <-time.After(3 * time.Second):
 			responses <- []ID{}

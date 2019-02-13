@@ -15,15 +15,15 @@ const (
 )
 
 var (
-	OpcodePing           noise.Opcode
-	OpcodeEvict          noise.Opcode
-	OpcodeLookupRequest  noise.Opcode
-	OpcodeLookupResponse noise.Opcode
-
 	_ protocol.Block = (*block)(nil)
 )
 
 type block struct {
+	opcodePing           noise.Opcode
+	opcodeEvict          noise.Opcode
+	opcodeLookupRequest  noise.Opcode
+	opcodeLookupResponse noise.Opcode
+
 	enforceSignatures bool
 }
 
@@ -37,10 +37,10 @@ func (b *block) EnforceSignatures() *block {
 }
 
 func (b *block) OnRegister(p *protocol.Protocol, node *noise.Node) {
-	OpcodePing = noise.RegisterMessage(noise.NextAvailableOpcode(), (*Ping)(nil))
-	OpcodeEvict = noise.RegisterMessage(noise.NextAvailableOpcode(), (*Evict)(nil))
-	OpcodeLookupRequest = noise.RegisterMessage(noise.NextAvailableOpcode(), (*LookupRequest)(nil))
-	OpcodeLookupResponse = noise.RegisterMessage(noise.NextAvailableOpcode(), (*LookupResponse)(nil))
+	b.opcodePing = noise.RegisterMessage(noise.NextAvailableOpcode(), (*Ping)(nil))
+	b.opcodeEvict = noise.RegisterMessage(noise.NextAvailableOpcode(), (*Evict)(nil))
+	b.opcodeLookupRequest = noise.RegisterMessage(noise.NextAvailableOpcode(), (*LookupRequest)(nil))
+	b.opcodeLookupResponse = noise.RegisterMessage(noise.NextAvailableOpcode(), (*LookupResponse)(nil))
 
 	var nodeID = NewID(node.ExternalAddress(), node.ID.PublicID())
 
@@ -50,7 +50,7 @@ func (b *block) OnRegister(p *protocol.Protocol, node *noise.Node) {
 
 func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	// Send a ping.
-	err := peer.SendMessage(OpcodePing, Ping{protocol.NodeID(peer.Node()).(ID)})
+	err := peer.SendMessage(Ping{protocol.NodeID(peer.Node()).(ID)})
 	if err != nil {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to send ping")
 	}
@@ -59,7 +59,7 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	var ping Ping
 
 	select {
-	case msg := <-peer.Receive(OpcodePing):
+	case msg := <-peer.Receive(b.opcodePing):
 		ping = msg.(Ping)
 	case <-time.After(3 * time.Second):
 		return errors.Wrap(protocol.DisconnectPeer, "skademlia: timed out waiting for pong")
@@ -76,7 +76,7 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		return msg, logPeerActivity(peer)
 	})
 
-	go handleLookups(peer)
+	go b.handleLookups(peer)
 
 	close(peer.LoadOrStore(keyAuthChannel, make(chan struct{})).(chan struct{}))
 
@@ -133,10 +133,10 @@ func enforceSignatures(peer *noise.Peer, enforce bool) {
 	}
 }
 
-func handleLookups(peer *noise.Peer) {
+func (b *block) handleLookups(peer *noise.Peer) {
 	for {
 		select {
-		case msg := <-peer.Receive(OpcodeLookupRequest):
+		case msg := <-peer.Receive(b.opcodeLookupRequest):
 			id := msg.(LookupRequest)
 
 			var res LookupResponse
@@ -151,7 +151,7 @@ func handleLookups(peer *noise.Peer) {
 
 			// Send lookup response back.
 
-			if err := peer.SendMessage(OpcodeLookupResponse, res); err != nil {
+			if err := peer.SendMessage(res); err != nil {
 				log.Warn().
 					AnErr("err", err).
 					Interface("peer", protocol.PeerID(peer)).

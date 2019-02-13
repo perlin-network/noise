@@ -228,6 +228,11 @@ func FindClosestPeers(t *table, target []byte, K int) (peers []protocol.ID) {
 }
 
 func UpdateTable(node *noise.Node, target protocol.ID) (err error) {
+	opcodeEvict, err := noise.OpcodeFromMessage((*Evict)(nil))
+	if err != nil {
+		panic("skademlia: Evict{} message not registered")
+	}
+
 	table := Table(node)
 
 	if err = table.Update(target); err != nil {
@@ -253,7 +258,7 @@ func UpdateTable(node *noise.Node, target protocol.ID) (err error) {
 			}
 
 			// Send an 'evict' message to the candidate peer to-be-evicted.
-			err := lastPeer.SendMessage(OpcodeEvict, Evict{})
+			err := lastPeer.SendMessage(Evict{})
 
 			if err != nil {
 				evictLastPeer()
@@ -261,7 +266,7 @@ func UpdateTable(node *noise.Node, target protocol.ID) (err error) {
 			}
 
 			select {
-			case <-lastPeer.Receive(OpcodeEvict):
+			case <-lastPeer.Receive(opcodeEvict):
 				bucket.MoveToFront(last)
 			case <-time.After(3 * time.Second):
 				evictLastPeer()

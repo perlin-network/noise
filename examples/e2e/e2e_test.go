@@ -125,7 +125,7 @@ func Run(startPort int, numNodes int, numTxEach int) error {
 			for j := 0; j < numTxEach; j++ {
 				txt := fmt.Sprintf("Sending from %d tx %d", i, j)
 
-				errs := skademlia.Broadcast(nodes[i], opcodeTest, testMessage{text: strings.TrimSpace(txt)})
+				errs := skademlia.Broadcast(nodes[i], testMessage{text: strings.TrimSpace(txt)})
 				if len(errs) > 0 {
 					log.Error().Msgf("got errors %+v", errs)
 					allErrs = append(allErrs, errs...)
