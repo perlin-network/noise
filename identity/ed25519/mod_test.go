@@ -2,7 +2,6 @@ package ed25519_test
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"github.com/perlin-network/noise/identity/ed25519"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -55,7 +54,7 @@ func TestEd25519(t *testing.T) {
 	p := ed25519.Random()
 
 	publicKey := p.PublicID()
-	privateKeyHex := (*ed25519.Manager)(p).PrivateKey()
+	privateKey := p.PrivateKey()
 	assert.True(t, len(p.PublicID()) > 0)
 	assert.True(t, len(p.String()) > 0)
 
@@ -79,9 +78,6 @@ func TestEd25519(t *testing.T) {
 	wrongMessage := []byte("wrong message")
 	err = p.Verify(publicKey, wrongMessage, sig)
 	assert.NotNil(t, err)
-
-	privateKey, err := hex.DecodeString(privateKeyHex)
-	assert.Nil(t, err)
 
 	// try reloading the private key, should make the same object
 	mgr := ed25519.New(privateKey)

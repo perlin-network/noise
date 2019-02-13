@@ -73,6 +73,11 @@ func (p *Manager) String() string {
 	return fmt.Sprintf("ed25519-manager{publicKey: %s, privateKey: %s}", p.publicKey.String(), p.privateKey.String())
 }
 
-func (p *Manager) PrivateKey() string {
-	return p.privateKey.String()
+func (p *Manager) PrivateKey() []byte {
+	privateKeyBytes, err := hex.DecodeString(p.privateKey.String())
+	if err != nil {
+		panic(errors.Wrap(err, "failed to marshal private key"))
+	}
+
+	return privateKeyBytes
 }
