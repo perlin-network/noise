@@ -15,32 +15,36 @@ import (
 )
 
 var (
-	OpcodeACK noise.Opcode
-	curve     crypto.EllipticSuite = edwards25519.NewBlakeSHA256Ed25519()
+	curve crypto.EllipticSuite = edwards25519.NewBlakeSHA256Ed25519()
 
 	_ protocol.Block = (*block)(nil)
 )
 
-type block struct{ hash func() hash.Hash }
+type block struct {
+	opcodeACK noise.Opcode
 
-func New() block {
-	return block{hash: sha256.New}
+	hash func() hash.Hash
 }
 
-func (block) WithHash(hash func() hash.Hash) block {
-	return block{hash: hash}
+func New() *block {
+	return &block{hash: sha256.New}
 }
 
-func (b block) WithSuite(suite crypto.EllipticSuite) block {
+func (b *block) WithHash(hash func() hash.Hash) *block {
+	b.hash = hash
+	return b
+}
+
+func (b *block) WithSuite(suite crypto.EllipticSuite) *block {
 	curve = suite
 	return b
 }
 
-func (b block) OnRegister(p *protocol.Protocol, node *noise.Node) {
-	OpcodeACK = noise.RegisterMessage(noise.NextAvailableOpcode(), (*ACK)(nil))
+func (b *block) OnRegister(p *protocol.Protocol, node *noise.Node) {
+	b.opcodeACK = noise.RegisterMessage(noise.NextAvailableOpcode(), (*ACK)(nil))
 }
 
-func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
+func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	ephemeralSharedKeyBuf := protocol.LoadSharedKey(peer)
 
 	if ephemeralSharedKeyBuf == nil {
@@ -59,7 +63,7 @@ func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to derive AEAD cipher suite given ephemeral shared key")
 	}
 
-	err = peer.SendMessage(OpcodeACK, ACK{})
+	err = peer.SendMessage(b.opcodeACK, ACK{})
 	if err != nil {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to send AEAD ACK")
 	}
@@ -70,7 +74,7 @@ func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	select {
 	case <-time.After(3 * time.Second):
 		return errors.Wrap(protocol.DisconnectPeer, "timed out waiting for AEAD ACK")
-	case <-peer.Receive(OpcodeACK):
+	case <-peer.Receive(b.opcodeACK):
 	}
 
 	var ourNonce uint64
@@ -92,7 +96,7 @@ func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	return nil
 }
 
-func (b block) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
+func (b *block) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
 
 	return nil
 }

@@ -24,7 +24,9 @@ type Block interface {
 
 type Protocol struct {
 	enforceOnce sync.Once
+
 	blocks      []Block
+	blocksMutex sync.Mutex
 }
 
 func New() *Protocol {
@@ -33,15 +35,20 @@ func New() *Protocol {
 
 // Register registers a block to this protocol sequentially.
 func (p *Protocol) Register(blk Block) {
+	p.blocksMutex.Lock()
+	defer p.blocksMutex.Unlock()
+
 	p.blocks = append(p.blocks, blk)
 }
 
 // Enforce enforces that all peers of a node follow the given protocol.
 func (p *Protocol) Enforce(node *noise.Node) {
 	p.enforceOnce.Do(func() {
+		p.blocksMutex.Lock()
 		for _, block := range p.blocks {
 			block.OnRegister(p, node)
 		}
+		p.blocksMutex.Unlock()
 
 		node.OnPeerInit(func(node *noise.Node, peer *noise.Peer) error {
 			peer.Set(KeyProtocolCurrentBlockIndex, 0)
@@ -49,6 +56,9 @@ func (p *Protocol) Enforce(node *noise.Node) {
 			go func() {
 				peer.OnDisconnect(func(node *noise.Node, peer *noise.Peer) error {
 					blockIndex := peer.Get(KeyProtocolCurrentBlockIndex).(int)
+
+					p.blocksMutex.Lock()
+					defer p.blocksMutex.Unlock()
 
 					if blockIndex >= len(p.blocks) {
 						return nil
@@ -64,7 +74,9 @@ func (p *Protocol) Enforce(node *noise.Node) {
 						return
 					}
 
+					p.blocksMutex.Lock()
 					err := p.blocks[blockIndex].OnBegin(p, peer)
+					p.blocksMutex.Unlock()
 
 					if err != nil {
 						log.Warn().Err(err).Msg("Received an error following protocol.")

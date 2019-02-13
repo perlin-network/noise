@@ -11,10 +11,6 @@ import (
 	"time"
 )
 
-var (
-	OpcodeHandshake noise.Opcode
-)
-
 const msgEphemeralHandshake = ".noise_handshake"
 
 var (
@@ -22,6 +18,8 @@ var (
 )
 
 type block struct {
+	opcodeHandshake noise.Opcode
+
 	suite           crypto.EllipticSuite
 	timeoutDuration time.Duration
 }
@@ -48,7 +46,7 @@ func (b *block) TimeoutAfter(timeoutDuration time.Duration) *block {
 }
 
 func (b *block) OnRegister(p *protocol.Protocol, node *noise.Node) {
-	OpcodeHandshake = noise.RegisterMessage(noise.NextAvailableOpcode(), (*Handshake)(nil))
+	b.opcodeHandshake = noise.RegisterMessage(noise.NextAvailableOpcode(), (*Handshake)(nil))
 }
 
 func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
@@ -69,7 +67,7 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to sign handshake message using Schnorr signature scheme")
 	}
 
-	err = peer.SendMessage(OpcodeHandshake, req)
+	err = peer.SendMessage(b.opcodeHandshake, req)
 	if err != nil {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to send our ephemeral public key to our peer")
 	}
@@ -81,7 +79,7 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	select {
 	case <-time.After(b.timeoutDuration):
 		return errors.Wrap(protocol.DisconnectPeer, "timed out receiving handshake request")
-	case msg := <-peer.Receive(OpcodeHandshake):
+	case msg := <-peer.Receive(b.opcodeHandshake):
 		res, ok = msg.(Handshake)
 		if !ok {
 			return errors.Wrap(protocol.DisconnectPeer, "did not get a handshake response back")

@@ -7,6 +7,7 @@ import (
 	"github.com/perlin-network/noise/payload"
 	"github.com/pkg/errors"
 	"reflect"
+	"sync"
 )
 
 type Opcode byte
@@ -18,6 +19,8 @@ const (
 var (
 	opcodes  map[Opcode]Message
 	messages map[reflect.Type]Opcode
+
+	opcodesMutex sync.Mutex
 )
 
 func init() {
@@ -33,11 +36,17 @@ func (o Opcode) Bytes() (buf [1]byte) {
 // NextAvailableOpcode returns the next available unregistered message opcode
 // registered to Noise.
 func NextAvailableOpcode() Opcode {
+	opcodesMutex.Lock()
+	defer opcodesMutex.Unlock()
+
 	return Opcode(len(opcodes))
 }
 
 // DebugOpcodes prints out all opcodes registered to Noise thus far.
 func DebugOpcodes() {
+	opcodesMutex.Lock()
+	defer opcodesMutex.Unlock()
+
 	log.Debug().Msg("Here are all opcodes registered so far.")
 
 	for i := 0; i < len(opcodes); i++ {
@@ -50,6 +59,9 @@ func DebugOpcodes() {
 //
 // It errors if the specified message opcode is not registered to Noise.
 func MessageFromOpcode(opcode Opcode) (Message, error) {
+	opcodesMutex.Lock()
+	defer opcodesMutex.Unlock()
+
 	typ, exists := opcodes[Opcode(opcode)]
 	if !exists {
 		return nil, errors.Errorf("there is no message type registered to opcode %d", opcode)
@@ -68,6 +80,9 @@ func MessageFromOpcode(opcode Opcode) (Message, error) {
 //
 // It errors if the specified message value type is not registered to Noise.
 func OpcodeFromMessage(msg Message) (Opcode, error) {
+	opcodesMutex.Lock()
+	defer opcodesMutex.Unlock()
+
 	typ := reflect.TypeOf(msg)
 
 	opcode, exists := messages[typ]
@@ -79,11 +94,14 @@ func OpcodeFromMessage(msg Message) (Opcode, error) {
 }
 
 func RegisterMessage(o Opcode, m interface{}) Opcode {
-	if t, registered := opcodes[o]; registered {
-		panic(errors.Errorf("noise: opcode %v was already registered with type %T; tried registering it with type %T", o, m, t))
-	}
-
 	typ := reflect.TypeOf(m).Elem()
+
+	opcodesMutex.Lock()
+	defer opcodesMutex.Unlock()
+
+	if opcode, registered := messages[typ]; registered {
+		return opcode
+	}
 
 	opcodes[o] = reflect.New(typ).Elem().Interface().(Message)
 	messages[typ] = o
@@ -92,6 +110,9 @@ func RegisterMessage(o Opcode, m interface{}) Opcode {
 }
 
 func resetOpcodes() {
+	opcodesMutex.Lock()
+	defer opcodesMutex.Unlock()
+
 	opcodes = map[Opcode]Message{
 		OpcodeNil: reflect.New(reflect.TypeOf((*EmptyMessage)(nil)).Elem()).Elem().Interface().(Message),
 	}

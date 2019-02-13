@@ -27,16 +27,16 @@ type block struct {
 	enforceSignatures bool
 }
 
-func New() block {
-	return block{enforceSignatures: false}
+func New() *block {
+	return &block{enforceSignatures: false}
 }
 
-func (b block) EnforceSignatures() block {
+func (b *block) EnforceSignatures() *block {
 	b.enforceSignatures = true
 	return b
 }
 
-func (b block) OnRegister(p *protocol.Protocol, node *noise.Node) {
+func (b *block) OnRegister(p *protocol.Protocol, node *noise.Node) {
 	OpcodePing = noise.RegisterMessage(noise.NextAvailableOpcode(), (*Ping)(nil))
 	OpcodeEvict = noise.RegisterMessage(noise.NextAvailableOpcode(), (*Evict)(nil))
 	OpcodeLookupRequest = noise.RegisterMessage(noise.NextAvailableOpcode(), (*LookupRequest)(nil))
@@ -48,7 +48,7 @@ func (b block) OnRegister(p *protocol.Protocol, node *noise.Node) {
 	node.Set(keyKademliaTable, newTable(nodeID))
 }
 
-func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
+func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	// Send a ping.
 	err := peer.SendMessage(OpcodePing, Ping{protocol.NodeID(peer.Node()).(ID)})
 	if err != nil {
@@ -83,7 +83,7 @@ func (b block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	return nil
 }
 
-func (b block) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
+func (b *block) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
 	if protocol.HasPeerID(peer) {
 		protocol.DeletePeerID(peer)
 	}
