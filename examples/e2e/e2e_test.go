@@ -1,4 +1,4 @@
-package end_to_end
+package e2e
 
 import (
 	"fmt"
@@ -70,7 +70,6 @@ func setup(node *noise.Node, opcodeTest noise.Opcode) {
 func Run(startPort int, numNodes int, numTxEach int) error {
 	opcodeTest := noise.RegisterMessage(noise.NextAvailableOpcode(), (*testMessage)(nil))
 	var nodes []*noise.Node
-	var wg sync.WaitGroup
 	var allErrs []error
 
 	for i := 0; i < numNodes; i++ {
@@ -96,28 +95,27 @@ func Run(startPort int, numNodes int, numTxEach int) error {
 		log.Info().Msgf("Listening for peers on port %d.", node.Port())
 	}
 
+	time.Sleep(100 * time.Millisecond)
+
 	for i := 1; i < numNodes; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
+		peer, err := nodes[i].Dial(fmt.Sprintf("127.0.0.1:%d", startPort))
+		if err != nil {
+			log.Error().Msgf("got error %+v", err)
+			allErrs = append(allErrs, err)
+		}
 
-			peer, err := nodes[i].Dial(fmt.Sprintf("127.0.0.1:%d", startPort))
-			if err != nil {
-				log.Error().Msgf("got error %+v", err)
-				allErrs = append(allErrs, err)
-			}
+		skademlia.WaitUntilAuthenticated(peer)
 
-			skademlia.WaitUntilAuthenticated(peer)
+		peers := skademlia.FindNode(nodes[i], protocol.NodeID(nodes[i]).(skademlia.ID), skademlia.BucketSize(), 8)
+		log.Info().Msgf("Bootstrapped with peers: %+v", peers)
 
-			peers := skademlia.FindNode(nodes[i], protocol.NodeID(nodes[i]).(skademlia.ID), skademlia.BucketSize(), 8)
-			log.Info().Msgf("Bootstrapped with peers: %+v", peers)
-		}(i)
 	}
-	wg.Wait()
 
 	if len(allErrs) > 0 {
 		return allErrs[0]
 	}
+
+	var wg sync.WaitGroup
 
 	for i := 0; i < numNodes; i++ {
 		wg.Add(1)
@@ -126,13 +124,12 @@ func Run(startPort int, numNodes int, numTxEach int) error {
 
 			for j := 0; j < numTxEach; j++ {
 				txt := fmt.Sprintf("Sending from %d tx %d", i, j)
+
 				errs := skademlia.Broadcast(nodes[i], opcodeTest, testMessage{text: strings.TrimSpace(txt)})
 				if len(errs) > 0 {
 					log.Error().Msgf("got errors %+v", errs)
 					allErrs = append(allErrs, errs...)
 				}
-
-				time.Sleep(5 * time.Millisecond)
 			}
 		}(i)
 	}
@@ -147,5 +144,6 @@ func Run(startPort int, numNodes int, numTxEach int) error {
 
 func TestRun(t *testing.T) {
 	assert.Nil(t, Run(startPort, numNodes, numTxEach))
+
 	t.Log("Done")
 }

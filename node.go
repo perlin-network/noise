@@ -85,10 +85,6 @@ func (n *Node) Listen() {
 	for {
 		select {
 		case <-n.kill:
-			if err := n.listener.Close(); err != nil {
-				n.onListenerErrorCallbacks.RunCallbacks(err)
-			}
-
 			n.listener = nil
 			return
 		default:
@@ -243,6 +239,10 @@ func (n *Node) Fence() {
 func (n *Node) Kill() {
 	n.killOnce.Do(func() {
 		n.kill <- struct{}{}
+
+		if err := n.listener.Close(); err != nil {
+			n.onListenerErrorCallbacks.RunCallbacks(err)
+		}
 	})
 }
 
