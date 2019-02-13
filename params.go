@@ -20,7 +20,6 @@ type parameters struct {
 
 func DefaultParams() parameters {
 	return parameters{
-		NAT:       nat.NewSTUNProvider(),
 		Transport: transport.NewTCP(),
 
 		Metadata: map[string]interface{}{},

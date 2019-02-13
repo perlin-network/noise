@@ -1,8 +1,7 @@
 module github.com/perlin-network/noise
 
 require (
-	github.com/golang/mock v1.2.0 // indirect
-	github.com/gortc/stun v1.18.2
+	github.com/jackpal/go-nat-pmp v1.0.1
 	github.com/pkg/errors v0.8.1
 	github.com/rs/zerolog v1.11.0
 	github.com/stretchr/testify v1.3.0

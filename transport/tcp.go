@@ -9,6 +9,10 @@ var _ Layer = (*tcp)(nil)
 
 type tcp struct{}
 
+func (t tcp) String() string {
+	return "tcp"
+}
+
 func (t tcp) Listen(port uint16) (net.Listener, error) {
 	listener, err := net.Listen("tcp", ":"+strconv.Itoa(int(port)))
 	if err != nil {
