@@ -11,6 +11,15 @@ import (
 	"go.dedis.ch/kyber/v3/sign/schnorr"
 )
 
+const (
+	// PublicKeySize is the size, in bytes, of public keys as used in this package.
+	PublicKeySize = 32
+	// PrivateKeySize is the size, in bytes, of private keys as used in this package.
+	PrivateKeySize = 64
+	// SignatureSize is the size, in bytes, of signatures generated and verified by this package.
+	SignatureSize = 64
+)
+
 var (
 	_     identity.Manager     = (*Manager)(nil)
 	suite crypto.EllipticSuite = edwards25519.NewBlakeSHA256Ed25519()
