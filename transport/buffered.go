@@ -17,6 +17,10 @@ type Buffered struct {
 	listeners map[string]*bufconn.Listener
 }
 
+func (t *Buffered) String() string {
+	return "buffered"
+}
+
 func (t *Buffered) Listen(port uint16) (net.Listener, error) {
 	t.Lock()
 	defer t.Unlock()

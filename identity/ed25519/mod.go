@@ -79,7 +79,7 @@ func (p *Manager) Verify(publicKeyBuf []byte, buf []byte, signature []byte) erro
 }
 
 func (p *Manager) String() string {
-	return fmt.Sprintf("ed25519-manager{publicKey: %s, privateKey: %s}", p.publicKey.String(), p.privateKey.String())
+	return fmt.Sprintf("Ed25519(public: %s, private: %s)", p.publicKey.String(), p.privateKey.String())
 }
 
 func (p *Manager) PrivateKey() []byte {

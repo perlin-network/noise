@@ -5,10 +5,12 @@ codecov:
 
 ignore:
   - "./examples"
-  - "**/mocks"
-  - "**/*.pb.go"
-  - "scripts.go"
-  - "./crypto/ed25519/internal/edwards25519"
+  - "./crypto/suite.go"
+  - "./params.go"
+  - "./init.go"
+  - "./empty.go"
+  - "./callbacks.go"
+  - "./identity/manager.go"
 
 comment: false
 
@@ -18,8 +20,8 @@ coverage:
   status:
     project:
       default:
-       threshold: 20%
-       if_not_found: success
+        threshold: 20%
+        if_not_found: success
     patch:
       default:
         enabled: no

@@ -10,6 +10,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"time"
 )
 
 type Node struct {
@@ -71,6 +72,13 @@ func NewNode(params parameters) (*Node, error) {
 
 	for key, val := range params.Metadata {
 		node.Set(key, val)
+	}
+
+	if node.nat != nil {
+		err = node.nat.AddMapping(node.transport.String(), node.port, node.port, 1*time.Hour)
+		if err != nil {
+			panic(errors.Wrap(err, "nat: failed to port-forward"))
+		}
 	}
 
 	return &node, nil
@@ -247,6 +255,14 @@ func (n *Node) Kill() {
 }
 
 func (n *Node) ExternalAddress() string {
-	//return n.nat.ExternalIP().String() + ":" + strconv.Itoa(int(n.port))
+	if n.nat != nil {
+		externalIP, err := n.nat.ExternalIP()
+		if err != nil {
+			panic(err)
+		}
+
+		return externalIP.String() + ":" + strconv.Itoa(int(n.port))
+	}
+
 	return "127.0.0.1" + ":" + strconv.Itoa(int(n.port))
 }

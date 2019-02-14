@@ -20,10 +20,10 @@ import (
 )
 
 var (
-	_         noise.Message = (*testMessage)(nil)
-	startPort               = 4000
-	numNodes                = 10
-	numTxEach               = 100
+	_               noise.Message = (*testMessage)(nil)
+	startPort                     = 4000
+	numNodes                      = 10
+	numMessagesEach               = 100
 )
 
 type testMessage struct {
@@ -33,7 +33,7 @@ type testMessage struct {
 func (testMessage) Read(reader payload.Reader) (noise.Message, error) {
 	text, err := reader.ReadString()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to read test msg")
+		return nil, errors.Wrap(err, "failed to read test message")
 	}
 
 	return testMessage{text: text}, nil
@@ -95,8 +95,6 @@ func Run(startPort int, numNodes int, numTxEach int) error {
 		log.Info().Msgf("Listening for peers on port %d.", node.Port())
 	}
 
-	noise.DebugOpcodes()
-
 	time.Sleep(100 * time.Millisecond)
 
 	for i := 1; i < numNodes; i++ {
@@ -145,7 +143,8 @@ func Run(startPort int, numNodes int, numTxEach int) error {
 }
 
 func TestRun(t *testing.T) {
-	assert.Nil(t, Run(startPort, numNodes, numTxEach))
+	assert.Nil(t, Run(startPort, numNodes, numMessagesEach))
 
+	noise.DebugOpcodes()
 	t.Log("Done")
 }

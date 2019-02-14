@@ -73,6 +73,7 @@ func main() {
 	flag.Parse()
 
 	params := noise.DefaultParams()
+	//params.NAT = nat.NewPMP()
 	params.ID = ed25519.Random()
 	params.Port = uint16(*portFlag)
 

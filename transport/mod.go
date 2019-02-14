@@ -1,10 +1,13 @@
 package transport
 
 import (
+	"fmt"
 	"net"
 )
 
 type Layer interface {
+	fmt.Stringer
+
 	Listen(port uint16) (net.Listener, error)
 	Dial(address string) (net.Conn, error)
 
