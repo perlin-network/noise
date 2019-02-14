@@ -109,7 +109,8 @@ func NewUPnP() Provider {
 			return c
 		}
 	}
-	return nil
+
+	panic("upnp: unable to find gateway that supports UPnP")
 }
 
 func discover(out chan<- *upnp, target string, matcher func(*goupnp.RootDevice, goupnp.ServiceClient) *upnp) {
