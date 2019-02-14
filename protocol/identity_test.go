@@ -7,29 +7,29 @@ import (
 	"testing"
 )
 
-type DummyID struct{}
+type dummyID struct{}
 
-func (DummyID) String() string {
-	panic("")
+func (dummyID) String() string {
+	panic("unreachable")
 }
 
-func (DummyID) Equals(other ID) bool {
-	panic("")
+func (dummyID) Equals(other ID) bool {
+	panic("unreachable")
 }
 
-func (DummyID) PublicID() []byte {
-	panic("")
+func (dummyID) PublicID() []byte {
+	panic("unreachable")
 }
 
-func (DummyID) Hash() []byte {
+func (dummyID) Hash() []byte {
 	return []byte{0}
 }
 
-func (DummyID) Read(reader payload.Reader) (msg noise.Message, err error) {
-	return DummyID{}, nil
+func (dummyID) Read(reader payload.Reader) (msg noise.Message, err error) {
+	return dummyID{}, nil
 }
 
-func (DummyID) Write() []byte {
+func (dummyID) Write() []byte {
 	return nil
 }
 
@@ -52,7 +52,7 @@ func TestNodeID(t *testing.T) {
 	node := &noise.Node{}
 	assert.Nil(t, node.Get(KeyID))
 
-	SetNodeID(node, DummyID{})
+	SetNodeID(node, dummyID{})
 	assert.NotNil(t, NodeID(node))
 
 	DeleteNodeID(node)
@@ -67,14 +67,14 @@ func TestPeerID(t *testing.T) {
 	assert.False(t, HasPeerID(peer))
 	assert.Nil(t, PeerID(peer))
 
-	SetPeerID(peer, DummyID{})
+	SetPeerID(peer, dummyID{})
 
 	assert.True(t, HasPeerID(peer))
 	assert.NotNil(t, PeerID(peer))
-	assert.Equal(t, peer, Peer(node, DummyID{}))
+	assert.Equal(t, peer, Peer(node, dummyID{}))
 
 	DeletePeerID(peer)
 	assert.False(t, HasPeerID(peer))
 	assert.Nil(t, PeerID(peer))
-	assert.Nil(t, Peer(node, DummyID{}))
+	assert.Nil(t, Peer(node, dummyID{}))
 }

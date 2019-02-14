@@ -40,6 +40,8 @@ func (p *Protocol) Register(blk Block) {
 
 // Enforce enforces that all peers of a node follow the given protocol.
 func (p *Protocol) Enforce(node *noise.Node) {
+	// TODO(kenta): attempt to remove mutices
+
 	p.blocksMutex.Lock()
 	for _, block := range p.blocks {
 		block.OnRegister(p, node)

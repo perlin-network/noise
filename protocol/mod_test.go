@@ -10,16 +10,16 @@ import (
 	"time"
 )
 
-type DummyBlock struct {
+type dummyBlock struct {
 	earlyStop  bool
 	blockCount *uint32
 }
 
-func (b *DummyBlock) OnRegister(p *Protocol, node *noise.Node) {
-}
+func (b *dummyBlock) OnRegister(p *Protocol, node *noise.Node) {}
 
-func (b *DummyBlock) OnBegin(p *Protocol, peer *noise.Peer) error {
+func (b *dummyBlock) OnBegin(p *Protocol, peer *noise.Peer) error {
 	atomic.AddUint32(b.blockCount, 1)
+
 	if b.earlyStop {
 		return CompletedAllBlocks
 	} else {
@@ -27,7 +27,7 @@ func (b *DummyBlock) OnBegin(p *Protocol, peer *noise.Peer) error {
 	}
 }
 
-func (b *DummyBlock) OnEnd(p *Protocol, peer *noise.Peer) error {
+func (b *dummyBlock) OnEnd(p *Protocol, peer *noise.Peer) error {
 	return nil
 }
 
@@ -40,7 +40,7 @@ func TestProtocol(t *testing.T) {
 		count := new(uint32)
 
 		for i := 0; i < totalBlocks; i++ {
-			blk := &DummyBlock{
+			blk := &dummyBlock{
 				blockCount: count,
 			}
 			if i == earlyStopIdx {

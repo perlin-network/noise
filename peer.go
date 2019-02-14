@@ -390,9 +390,9 @@ func (p *Peer) Disconnect() {
 			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrapf(err, "got errors closing peer connection"))
 		}
 
-		p.kill <- struct{}{}
-
 		p.onDisconnectCallbacks.RunCallbacks(p.node)
+
+		p.kill <- struct{}{}
 	})
 }
 
