@@ -1,6 +1,7 @@
 package noise
 
 import (
+	"fmt"
 	"github.com/perlin-network/noise/callbacks"
 	"github.com/perlin-network/noise/identity"
 	"github.com/perlin-network/noise/log"
@@ -8,7 +9,6 @@ import (
 	"github.com/perlin-network/noise/transport"
 	"github.com/pkg/errors"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -20,6 +20,7 @@ type Node struct {
 	transport transport.Layer
 
 	listener net.Listener
+	host     string
 	port     uint16
 
 	maxMessageSize uint64
@@ -36,7 +37,7 @@ type Node struct {
 }
 
 func NewNode(params parameters) (*Node, error) {
-	if params.Port != 0 && (params.Port < 1024 || params.Port > 65535) {
+	if params.Port != 0 && params.Port < 1024 {
 		return nil, errors.Errorf("port must be either 0 or between [1024, 65535]; port specified was %d", params.Port)
 	}
 
@@ -44,7 +45,7 @@ func NewNode(params parameters) (*Node, error) {
 		return nil, errors.New("no transport layer was registered; try set params.Transport to transport.NewTCP()")
 	}
 
-	listener, err := params.Transport.Listen(params.Port)
+	listener, err := params.Transport.Listen(params.Host, params.Port)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to start listening for peers on port %d", params.Port)
 	}
@@ -58,6 +59,7 @@ func NewNode(params parameters) (*Node, error) {
 		transport: params.Transport,
 
 		listener: listener,
+		host:     params.Host,
 		port:     params.Port,
 
 		maxMessageSize: params.MaxMessageSize,
@@ -77,7 +79,7 @@ func NewNode(params parameters) (*Node, error) {
 	if node.nat != nil {
 		err = node.nat.AddMapping(node.transport.String(), node.port, node.port, 1*time.Hour)
 		if err != nil {
-			panic(errors.Wrap(err, "nat: failed to port-forward"))
+			return nil, errors.Wrap(err, "nat: failed to port-forward")
 		}
 	}
 
@@ -261,8 +263,8 @@ func (n *Node) ExternalAddress() string {
 			panic(err)
 		}
 
-		return externalIP.String() + ":" + strconv.Itoa(int(n.port))
+		return fmt.Sprintf("%s:%d", externalIP.String(), n.port)
 	}
 
-	return "127.0.0.1" + ":" + strconv.Itoa(int(n.port))
+	return fmt.Sprintf("%s:%d", n.host, n.Port())
 }
