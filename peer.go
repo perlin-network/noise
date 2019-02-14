@@ -87,7 +87,6 @@ func (p *Peer) spawnReceiveWorker() {
 
 		size, err := binary.ReadUvarint(reader)
 		if err != nil {
-			// TODO(kenta): Hacky fix, but any errors w/ Error() = use of closed network connection is not considered a conn error.
 			if errors.Cause(err) != io.EOF && !strings.Contains(errors.Cause(err).Error(), "use of closed network connection") && !strings.Contains(errors.Cause(err).Error(), "read: connection reset by peer") {
 				p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrap(err, "failed to read message size"))
 			}
@@ -138,7 +137,6 @@ func (p *Peer) spawnReceiveWorker() {
 			p.criticalReadLock <- struct{}{}
 			<-p.criticalReadLock
 		case <-time.After(3 * time.Second):
-			// TODO(kenta): message was unhandled for 3 seconds; disconnect peer.
 			p.Disconnect()
 			continue
 		}
