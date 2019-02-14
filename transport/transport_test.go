@@ -9,6 +9,12 @@ import (
 	"time"
 )
 
+func testBadHost(t *testing.T, layer Layer) {
+	// test a bad host
+	_, err := layer.Listen("badhost", 10000)
+	assert.NotNil(t, err)
+}
+
 func testTransport(t *testing.T, layer Layer, host string, port uint16) {
 	errChan := make(chan error)
 	var lisConn net.Conn
@@ -71,6 +77,8 @@ func TestBuffered(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+
+	testBadHost(t, layer)
 }
 
 func TestTCP(t *testing.T) {
@@ -88,4 +96,6 @@ func TestTCP(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+
+	testBadHost(t, layer)
 }

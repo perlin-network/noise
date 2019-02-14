@@ -25,7 +25,11 @@ func (t *Buffered) Listen(host string, port uint16) (net.Listener, error) {
 	t.Lock()
 	defer t.Unlock()
 
-	addr := fmt.Sprintf("%d", port)
+	if net.ParseIP(host) == nil {
+		return nil, errors.Errorf("unable to parse host as IP: %s", host)
+	}
+
+	addr := fmt.Sprintf("%s:%d", host, port)
 	if l, ok := t.listeners[addr]; ok {
 		return l, nil
 	}
@@ -37,12 +41,10 @@ func (t *Buffered) Dial(address string) (net.Conn, error) {
 	t.Lock()
 	defer t.Unlock()
 
-	split := strings.Split(address, ":")
-	addr := split[len(split)-1]
-	if l, ok := t.listeners[addr]; ok {
+	if l, ok := t.listeners[address]; ok {
 		return l.Dial()
 	}
-	return nil, errors.Errorf("no listener setup for address %s, port %s", address, addr)
+	return nil, errors.Errorf("no listener setup for address %s", address)
 }
 
 func (t *Buffered) IP(address net.Addr) net.IP {
