@@ -178,7 +178,9 @@ func TestCallbacks(t *testing.T) {
 
 func TestNodeKill(t *testing.T) {
 	t.Parallel()
+
 	numNodes := 2
+
 	var nodes []*noise.Node
 	layer := transport.NewBuffered()
 

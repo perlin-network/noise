@@ -38,6 +38,7 @@ func (t *Buffered) Listen(host string, port uint16) (net.Listener, error) {
 	if l, ok := t.listeners[addr]; ok {
 		return l, nil
 	}
+
 	t.listeners[addr] = bufconn.Listen(host, port)
 	return t.listeners[addr], nil
 }
@@ -49,6 +50,7 @@ func (t *Buffered) Dial(address string) (net.Conn, error) {
 	if l, ok := t.listeners[address]; ok {
 		return l.Dial()
 	}
+
 	return nil, errors.Errorf("no listener setup for address %s", address)
 }
 

@@ -69,7 +69,7 @@ func NewNode(params parameters) (*Node, error) {
 		onPeerDialedCallbacks:    callbacks.NewSequentialCallbackManager(),
 		onPeerInitCallbacks:      callbacks.NewSequentialCallbackManager(),
 
-		kill: make(chan struct{}, 1),
+		kill: make(chan struct{}),
 	}
 
 	for key, val := range params.Metadata {
@@ -95,7 +95,6 @@ func (n *Node) Listen() {
 	for {
 		select {
 		case <-n.kill:
-			n.listener = nil
 			return
 		default:
 		}
@@ -104,6 +103,7 @@ func (n *Node) Listen() {
 
 		if err != nil {
 			n.onListenerErrorCallbacks.RunCallbacks(err)
+			continue
 		}
 
 		peer := newPeer(n, conn)
@@ -248,11 +248,11 @@ func (n *Node) Fence() {
 
 func (n *Node) Kill() {
 	n.killOnce.Do(func() {
-		n.kill <- struct{}{}
-
 		if err := n.listener.Close(); err != nil {
 			n.onListenerErrorCallbacks.RunCallbacks(err)
 		}
+
+		n.kill <- struct{}{}
 	})
 }
 
