@@ -37,7 +37,7 @@ type Node struct {
 }
 
 func NewNode(params parameters) (*Node, error) {
-	if params.Port != 0 && params.Port < 1024 {
+	if params.Port != 0 && (params.Port < 1024 || params.Port > 65535) {
 		return nil, errors.Errorf("port must be either 0 or between [1024, 65535]; port specified was %d", params.Port)
 	}
 
@@ -96,12 +96,9 @@ func (n *Node) Listen() {
 		select {
 		case <-n.kill:
 			n.listener = nil
-			log.Debug().Msg("Node is killed")
 			return
 		default:
 		}
-
-		log.Debug().Msgf("Node is listening on address %s", n.ExternalAddress())
 
 		conn, err := n.listener.Accept()
 
