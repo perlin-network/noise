@@ -22,12 +22,12 @@ func init() {
 
 // Disable disables the noise logger
 func Disable() {
-	logger = zerolog.New(nil).Level(zerolog.Disabled)
+	zerolog.SetGlobalLevel(zerolog.Disabled)
 }
 
 // Enable enables the noise logger
 func Enable() {
-	logger = zerolog.New(nil).With().Timestamp().Caller().Logger()
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 }
 
 // Output duplicates the global logger and sets w as its output.

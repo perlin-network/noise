@@ -10,29 +10,30 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"go.dedis.ch/kyber/v3/group/edwards25519"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
 
-func setup(node *noise.Node) (*protocol.Protocol, *block) {
-	block := New()
-	block.WithHash(sha512.New)
-	block.WithCurve(edwards25519.NewBlakeSHA256Ed25519())
-	block.WithACKTimeout(1 * time.Millisecond)
-
-	p := protocol.New()
-	p.Register(block)
-	p.Enforce(node)
-
-	go node.Listen()
-
-	return p, block
-}
-
-func TestBlock_OnBegin(t *testing.T) {
+func TestBlock_OnBeginEdgeCases(t *testing.T) {
 	log.Disable()
 	defer log.Enable()
+
+	setup := func(node *noise.Node) (*protocol.Protocol, *block) {
+		block := New()
+		block.WithHash(sha512.New)
+		block.WithCurve(edwards25519.NewBlakeSHA256Ed25519())
+		block.WithACKTimeout(1 * time.Millisecond)
+
+		p := protocol.New()
+		p.Register(block)
+		p.Enforce(node)
+
+		go node.Listen()
+
+		return p, block
+	}
 
 	params := noise.DefaultParams()
 	params.Port = 3000
@@ -42,8 +43,7 @@ func TestBlock_OnBegin(t *testing.T) {
 	assert.NoError(t, err)
 	aliceProtocol, aliceBlock := setup(alice)
 
-	params.Port = 3001
-
+	params.Port++
 	bob, err := noise.NewNode(params)
 	assert.NoError(t, err)
 	_, bobBlock := setup(bob)
@@ -70,5 +70,78 @@ func TestBlock_OnBegin(t *testing.T) {
 	assert.NoError(t, err)
 
 	protocol.SetSharedKey(peerBob, ephemeralSharedKey)
-	assert.True(t, strings.Contains(aliceBlock.OnBegin(aliceProtocol, peerBob).Error(), "failed to send AEAD ACK"))
+	assert.True(t, errors.Cause(aliceBlock.OnBegin(aliceProtocol, peerBob)) == protocol.DisconnectPeer)
+}
+
+type msg struct{ noise.EmptyMessage }
+
+var _ protocol.Block = (*receiverBlock)(nil)
+
+type receiverBlock struct {
+	opcodeMsg noise.Opcode
+	receiver  chan interface{}
+}
+
+func (b *receiverBlock) OnRegister(p *protocol.Protocol, node *noise.Node) {
+	b.opcodeMsg = noise.RegisterMessage(noise.NextAvailableOpcode(), (*msg)(nil))
+	b.receiver = make(chan interface{}, 1)
+}
+
+func (b *receiverBlock) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
+	return peer.SendMessage(msg{})
+}
+
+func (b *receiverBlock) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
+	b.receiver <- <-peer.Receive(b.opcodeMsg)
+	return nil
+}
+
+func TestBlock_OnBeginSuccessful(t *testing.T) {
+	log.Disable()
+	defer log.Enable()
+
+	ephemeralSharedKey, err := hex.DecodeString("d8747263b4d54588c2c8f17862d827dee6d3893a02fb7a84800b001ad4f1cee8")
+	assert.NoError(t, err)
+
+	params := noise.DefaultParams()
+	params.Port = 3000
+	params.Transport = transport.NewBuffered()
+
+	alice, err := noise.NewNode(params)
+	assert.NoError(t, err)
+
+	alice.OnPeerInit(func(node *noise.Node, peer *noise.Peer) error {
+		peer.Set(protocol.KeySharedKey, ephemeralSharedKey)
+		return nil
+	})
+
+	params.Port++
+	bob, err := noise.NewNode(params)
+	assert.NoError(t, err)
+
+	bob.OnPeerInit(func(node *noise.Node, peer *noise.Peer) error {
+		peer.Set(protocol.KeySharedKey, ephemeralSharedKey)
+		return nil
+	})
+
+	go alice.Listen()
+	go bob.Listen()
+
+	aliceReceiver, bobReceiver := new(receiverBlock), new(receiverBlock)
+
+	p := protocol.New()
+	p.Register(New())
+	p.Register(aliceReceiver)
+	p.Enforce(alice)
+
+	p = protocol.New()
+	p.Register(New())
+	p.Register(bobReceiver)
+	p.Enforce(bob)
+
+	_, err = alice.Dial(":" + strconv.Itoa(int(bob.Port())))
+	assert.NoError(t, err)
+
+	<-aliceReceiver.receiver
+	<-bobReceiver.receiver
 }
