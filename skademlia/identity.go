@@ -17,11 +17,7 @@ const (
 	// DefaultC2 is the prefix-matching length for the dynamic cryptopuzzle.
 	DefaultC2 = 16
 
-	maxPuzzleIterations = 100000000
-)
-
-var (
-	_ identity.Manager = (*IdentityAdapter)(nil)
+	maxPuzzleIterations = 10000000000
 )
 
 // IdentityAdapter implements the identity interface for S/Kademlia node IDs.
@@ -72,6 +68,14 @@ func NewIdentityFromKeypair(kp identity.Manager, c1, c2 int) (*IdentityAdapter, 
 	}, nil
 }
 
+func (a *IdentityAdapter) CreateID(address string) protocol.ID {
+	return ID{
+		address:   address,
+		publicKey: a.keypair.PublicID(),
+		hash:      a.nodeID,
+	}
+}
+
 // PublicID returns the S/Kademlia public key ID.
 func (a *IdentityAdapter) PublicID() []byte {
 	return a.keypair.PublicID()
@@ -115,16 +119,6 @@ func (a *IdentityAdapter) SignatureSize() int {
 // GetKeyPair returns the key pair used to create the idenity
 func (a *IdentityAdapter) GetKeyPair() identity.Manager {
 	return a.keypair
-}
-
-func (a *IdentityAdapter) String() string {
-	return fmt.Sprintf("skademlia-id{keypair: %s, nodeID: %s, Nonce:%s, c1: %d, c2: %d}",
-		a.keypair.String(),
-		hex.EncodeToString(a.nodeID),
-		hex.EncodeToString(a.Nonce),
-		a.c1,
-		a.c2,
-	)
 }
 
 // generateKeyPair generates an S/Kademlia keypair with cryptopuzzle
