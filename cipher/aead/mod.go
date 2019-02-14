@@ -15,19 +15,19 @@ import (
 )
 
 var (
-	curve crypto.EllipticSuite = edwards25519.NewBlakeSHA256Ed25519()
-
 	_ protocol.Block = (*block)(nil)
 )
 
 type block struct {
 	opcodeACK noise.Opcode
 
-	hash func() hash.Hash
+	ackTimeout time.Duration
+	curve      crypto.EllipticSuite
+	hash       func() hash.Hash
 }
 
 func New() *block {
-	return &block{hash: sha256.New}
+	return &block{hash: sha256.New, curve: edwards25519.NewBlakeSHA256Ed25519(), ackTimeout: 3 * time.Second}
 }
 
 func (b *block) WithHash(hash func() hash.Hash) *block {
@@ -35,8 +35,13 @@ func (b *block) WithHash(hash func() hash.Hash) *block {
 	return b
 }
 
-func (b *block) WithSuite(suite crypto.EllipticSuite) *block {
-	curve = suite
+func (b *block) WithCurve(curve crypto.EllipticSuite) *block {
+	b.curve = curve
+	return b
+}
+
+func (b *block) WithACKTimeout(ackTimeout time.Duration) *block {
+	b.ackTimeout = ackTimeout
 	return b
 }
 
@@ -51,7 +56,7 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		return errors.Wrap(protocol.DisconnectPeer, "session was established, but no ephemeral shared key found")
 	}
 
-	ephemeralSharedKey := curve.Point()
+	ephemeralSharedKey := b.curve.Point()
 
 	err := ephemeralSharedKey.UnmarshalBinary(ephemeralSharedKeyBuf)
 	if err != nil {
@@ -72,7 +77,7 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	defer peer.LeaveCriticalReadMode()
 
 	select {
-	case <-time.After(3 * time.Second):
+	case <-time.After(b.ackTimeout):
 		return errors.Wrap(protocol.DisconnectPeer, "timed out waiting for AEAD ACK")
 	case <-peer.Receive(b.opcodeACK):
 	}
