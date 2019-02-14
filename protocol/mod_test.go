@@ -16,7 +16,6 @@ type DummyBlock struct {
 }
 
 func (b *DummyBlock) OnRegister(p *Protocol, node *noise.Node) {
-	noise.RegisterMessage(noise.NextAvailableOpcode(), (*DummyID)(nil))
 }
 
 func (b *DummyBlock) OnBegin(p *Protocol, peer *noise.Peer) error {
@@ -68,17 +67,11 @@ func TestProtocol(t *testing.T) {
 	assert.NoError(t, err)
 	_, bobCount := setup(bob, 10, 5)
 
-	peerBob, err := alice.Dial(bob.ExternalAddress())
+	_, err = alice.Dial(bob.ExternalAddress())
 	assert.NoError(t, err)
-	peerBob.SendMessage(&DummyID{})
-
-	peerAlice, err := bob.Dial(alice.ExternalAddress())
-	assert.NoError(t, err)
-	peerAlice.SendMessage(&DummyID{})
 
 	time.Sleep(100 * time.Millisecond) // Race condition!
 
-	// FIXME: Messages seem to be processed twice
 	assert.Equal(t, atomic.LoadUint32(aliceCount), uint32(10))
 	assert.Equal(t, atomic.LoadUint32(bobCount), uint32(6))
 }
