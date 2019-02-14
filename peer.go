@@ -13,7 +13,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -41,8 +40,6 @@ type Peer struct {
 
 	kill     chan struct{}
 	killOnce sync.Once
-
-	workersRunning uint32
 
 	metadata sync.Map
 
@@ -79,15 +76,11 @@ func (p *Peer) init() {
 }
 
 func (p *Peer) spawnReceiveWorker() {
-	atomic.AddUint32(&p.workersRunning, 1)
-
 	reader := bufio.NewReader(p.conn)
 
 	for {
 		select {
 		case <-p.kill:
-			p.onDisconnectCallbacks.RunCallbacks(p.node)
-			close(p.kill)
 			return
 		default:
 		}
@@ -393,15 +386,13 @@ func (p *Peer) Disconnect() {
 	}
 
 	p.killOnce.Do(func() {
-		workersRunning := atomic.LoadUint32(&p.workersRunning)
-
-		for i := 0; i < int(workersRunning); i++ {
-			p.kill <- struct{}{}
-		}
-
 		if err := p.conn.Close(); err != nil {
 			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrapf(err, "got errors closing peer connection"))
 		}
+
+		p.onDisconnectCallbacks.RunCallbacks(p.node)
+
+		p.kill <- struct{}{}
 	})
 }
 

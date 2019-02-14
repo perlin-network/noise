@@ -9,11 +9,22 @@ import (
 	"time"
 )
 
-func testTransport(t *testing.T, layer Layer, port uint16, host string) {
+func testBadHost(t *testing.T, layer Layer) {
+	_, err := layer.Listen("bad host", 10000)
+	assert.NotNil(t, err)
+}
+
+func testPortZero(t *testing.T, layer Layer) {
+	lis, err := layer.Listen("127.0.0.1", 0)
+	assert.Nil(t, err)
+	assert.True(t, layer.Port(lis.Addr()) > 1024)
+}
+
+func testTransport(t *testing.T, layer Layer, host string, port uint16) {
 	errChan := make(chan error)
 	var lisConn net.Conn
 	go func() {
-		lis, err := layer.Listen(port)
+		lis, err := layer.Listen(host, port)
 		assert.Nil(t, err)
 		if lisConn, err = lis.Accept(); err != nil {
 			errChan <- err
@@ -24,13 +35,13 @@ func testTransport(t *testing.T, layer Layer, port uint16, host string) {
 	time.Sleep(10 * time.Millisecond)
 
 	// dial
-	dialConn, err := layer.Dial(fmt.Sprintf(":%d", port))
+	dialConn, err := layer.Dial(fmt.Sprintf("%s:%d", host, port))
 	assert.Nilf(t, err, "Dial error: %v", err)
 	err = <-errChan
 	assert.Nilf(t, err, "Listen error: %v", err)
 
 	// check the IP and port
-	assert.Equal(t, host, string(layer.IP(dialConn.RemoteAddr())))
+	assert.Equal(t, host, layer.IP(dialConn.RemoteAddr()).String())
 	assert.Equal(t, port, layer.Port(dialConn.RemoteAddr()))
 
 	// Write some data on both sides of the connection.
@@ -60,28 +71,38 @@ func TestBuffered(t *testing.T) {
 	layer := NewBuffered()
 	var wg sync.WaitGroup
 
+	assert.Equal(t, "buffered", layer.String())
+
 	// run the test over several ports
 	for i := 8900; i < 8910; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			testTransport(t, layer, uint16(i), "bufconn")
+			testTransport(t, layer, "127.0.0.1", uint16(i))
 		}(i)
 	}
 	wg.Wait()
+
+	testBadHost(t, layer)
+	testPortZero(t, layer)
 }
 
 func TestTCP(t *testing.T) {
 	layer := NewTCP()
 	var wg sync.WaitGroup
 
+	assert.Equal(t, "tcp", layer.String())
+
 	// run the test over several ports
 	for i := 8900; i < 8910; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			testTransport(t, layer, uint16(i), "\u007f\x00\x00\x01")
+			testTransport(t, layer, "127.0.0.1", uint16(i))
 		}(i)
 	}
 	wg.Wait()
+
+	testBadHost(t, layer)
+	testPortZero(t, layer)
 }

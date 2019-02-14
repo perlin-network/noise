@@ -1,6 +1,7 @@
 package noise
 
 import (
+	"fmt"
 	"github.com/perlin-network/noise/callbacks"
 	"github.com/perlin-network/noise/identity"
 	"github.com/perlin-network/noise/log"
@@ -8,7 +9,6 @@ import (
 	"github.com/perlin-network/noise/transport"
 	"github.com/pkg/errors"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -20,6 +20,7 @@ type Node struct {
 	transport transport.Layer
 
 	listener net.Listener
+	host     string
 	port     uint16
 
 	maxMessageSize uint64
@@ -44,7 +45,7 @@ func NewNode(params parameters) (*Node, error) {
 		return nil, errors.New("no transport layer was registered; try set params.Transport to transport.NewTCP()")
 	}
 
-	listener, err := params.Transport.Listen(params.Port)
+	listener, err := params.Transport.Listen(params.Host, params.Port)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to start listening for peers on port %d", params.Port)
 	}
@@ -58,6 +59,7 @@ func NewNode(params parameters) (*Node, error) {
 		transport: params.Transport,
 
 		listener: listener,
+		host:     params.Host,
 		port:     params.Port,
 
 		maxMessageSize: params.MaxMessageSize,
@@ -67,7 +69,7 @@ func NewNode(params parameters) (*Node, error) {
 		onPeerDialedCallbacks:    callbacks.NewSequentialCallbackManager(),
 		onPeerInitCallbacks:      callbacks.NewSequentialCallbackManager(),
 
-		kill: make(chan struct{}, 1),
+		kill: make(chan struct{}),
 	}
 
 	for key, val := range params.Metadata {
@@ -77,7 +79,7 @@ func NewNode(params parameters) (*Node, error) {
 	if node.nat != nil {
 		err = node.nat.AddMapping(node.transport.String(), node.port, node.port, 1*time.Hour)
 		if err != nil {
-			panic(errors.Wrap(err, "nat: failed to port-forward"))
+			return nil, errors.Wrap(err, "nat: failed to port-forward")
 		}
 	}
 
@@ -93,7 +95,6 @@ func (n *Node) Listen() {
 	for {
 		select {
 		case <-n.kill:
-			n.listener = nil
 			return
 		default:
 		}
@@ -102,6 +103,7 @@ func (n *Node) Listen() {
 
 		if err != nil {
 			n.onListenerErrorCallbacks.RunCallbacks(err)
+			continue
 		}
 
 		peer := newPeer(n, conn)
@@ -246,11 +248,11 @@ func (n *Node) Fence() {
 
 func (n *Node) Kill() {
 	n.killOnce.Do(func() {
-		n.kill <- struct{}{}
-
 		if err := n.listener.Close(); err != nil {
 			n.onListenerErrorCallbacks.RunCallbacks(err)
 		}
+
+		n.kill <- struct{}{}
 	})
 }
 
@@ -261,8 +263,8 @@ func (n *Node) ExternalAddress() string {
 			panic(err)
 		}
 
-		return externalIP.String() + ":" + strconv.Itoa(int(n.port))
+		return fmt.Sprintf("%s:%d", externalIP.String(), n.port)
 	}
 
-	return "127.0.0.1" + ":" + strconv.Itoa(int(n.port))
+	return fmt.Sprintf("%s:%d", n.host, n.Port())
 }

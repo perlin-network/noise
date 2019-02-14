@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/perlin-network/noise/transport/bufconn"
 	"github.com/pkg/errors"
+	"math/rand"
 	"net"
 	"strconv"
 	"strings"
@@ -21,15 +22,24 @@ func (t *Buffered) String() string {
 	return "buffered"
 }
 
-func (t *Buffered) Listen(port uint16) (net.Listener, error) {
+func (t *Buffered) Listen(host string, port uint16) (net.Listener, error) {
 	t.Lock()
 	defer t.Unlock()
 
-	addr := fmt.Sprintf("%d", port)
+	if net.ParseIP(host) == nil {
+		return nil, errors.Errorf("unable to parse host as IP: %s", host)
+	}
+
+	if port == 0 {
+		port = uint16(rand.Intn(50000) + 10000)
+	}
+
+	addr := fmt.Sprintf("%s:%d", host, port)
 	if l, ok := t.listeners[addr]; ok {
 		return l, nil
 	}
-	t.listeners[addr] = bufconn.Listen(port)
+
+	t.listeners[addr] = bufconn.Listen(host, port)
 	return t.listeners[addr], nil
 }
 
@@ -37,18 +47,17 @@ func (t *Buffered) Dial(address string) (net.Conn, error) {
 	t.Lock()
 	defer t.Unlock()
 
-	split := strings.Split(address, ":")
-	addr := split[len(split)-1]
-	if l, ok := t.listeners[addr]; ok {
+	if l, ok := t.listeners[address]; ok {
 		return l.Dial()
 	}
-	return nil, errors.Errorf("no listener setup for address %s, port %s", address, addr)
+
+	return nil, errors.Errorf("no listener setup for address %s", address)
 }
 
 func (t *Buffered) IP(address net.Addr) net.IP {
 	split := strings.Split(address.String(), ":")
 	addr := split[0]
-	return net.IP(addr)
+	return net.ParseIP(addr)
 }
 
 func (t *Buffered) Port(address net.Addr) uint16 {

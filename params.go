@@ -7,6 +7,7 @@ import (
 )
 
 type parameters struct {
+	Host string
 	Port uint16
 
 	NAT       nat.Provider
@@ -20,10 +21,9 @@ type parameters struct {
 
 func DefaultParams() parameters {
 	return parameters{
-		Transport: transport.NewTCP(),
-
-		Metadata: map[string]interface{}{},
-
+		Host:           "127.0.0.1",
+		Transport:      transport.NewTCP(),
+		Metadata:       map[string]interface{}{},
 		MaxMessageSize: 1048576,
 	}
 }
