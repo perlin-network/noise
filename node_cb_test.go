@@ -3,6 +3,7 @@ package noise_test
 import (
 	"fmt"
 	"github.com/perlin-network/noise"
+	"github.com/perlin-network/noise/log"
 	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
@@ -62,7 +63,9 @@ func TestNodeMetadata(t *testing.T) {
 }
 
 func TestCallbacks(t *testing.T) {
-	t.Parallel()
+	log.Disable()
+	defer log.Enable()
+
 	numNodes := 2
 	var nodes []*noise.Node
 	var callbacks []*counter
@@ -111,51 +114,94 @@ func TestCallbacks(t *testing.T) {
 		go n.Listen()
 	}
 
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(25 * time.Millisecond)
 
-	for i := 0; i < numNodes; i++ {
-		// clear out all the lists
+	compareCB := func(actuals *counter, expected map[string]int) {
+		for _, key := range allTypes {
+			if _, ok := expected[key]; ok {
+				assert.Equalf(t, expected[key], actuals.Get(key), "count mismatch for key %s", key)
+			} else {
+				assert.Equalf(t, 0, actuals.Get(key), "count mismatch for key %s", key)
+			}
+		}
+	}
+	clearCounters := func() {
 		for _, cb := range callbacks {
 			cb.Clear()
 		}
+	}
+
+	for i := 0; i < numNodes; i++ {
+		clearCounters()
 
 		// dial the next node
 		src := i
 		dst := (i + 1) % numNodes
-		_, err := nodes[src].Dial(nodes[dst].ExternalAddress())
+		peer, err := nodes[src].Dial(nodes[dst].ExternalAddress())
 		assert.Nil(t, err)
 
 		time.Sleep(5 * time.Millisecond)
 
 		// check that the expected callbacks were called on the dialer
-		expectSrc := map[string]int{
+		compareCB(callbacks[src], map[string]int{
 			"OnPeerDialed": 1,
 			"OnPeerInit":   1,
-		}
-		for _, key := range allTypes {
-			if _, ok := expectSrc[key]; ok {
-				assert.Equal(t, expectSrc[key], callbacks[src].Get(key))
-			} else {
-				assert.Equal(t, 0, callbacks[src].Get(key))
-			}
-		}
+		})
 
 		// check that the expected callbacks were called on the reciever
-		expectDst := map[string]int{
+		compareCB(callbacks[dst], map[string]int{
 			"OnPeerConnected": 1,
 			"OnPeerInit":      1,
-		}
-		for _, key := range allTypes {
-			if _, ok := expectDst[key]; ok {
-				assert.Equal(t, expectDst[key], callbacks[dst].Get(key))
-			} else {
-				assert.Equal(t, 0, callbacks[dst].Get(key))
-			}
-		}
+		})
 
+		clearCounters()
+
+		peer.Disconnect()
+
+		// seems there is a delay for the disconnect callback
+		time.Sleep(5 * time.Millisecond)
+
+		// check that the expected callbacks were called on the dialer
+		compareCB(callbacks[src], map[string]int{
+			"OnPeerDisconnected": 1,
+		})
+
+		// check that the expected callbacks were called on the reciever
+		compareCB(callbacks[dst], map[string]int{
+			"OnPeerDisconnected": 1,
+		})
 	}
 }
 
+func TestNodeKill(t *testing.T) {
+	numNodes := 2
+	var nodes []*noise.Node
+
+	for i := 0; i < numNodes; i++ {
+		p := noise.DefaultParams()
+		p.Port = uint16(7100 + i)
+		//p.Transport = transport.NewBuffered()
+
+		n, err := noise.NewNode(p)
+		assert.Nil(t, err)
+		nodes = append(nodes, n)
+
+		go n.Listen()
+	}
+
+	time.Sleep(25 * time.Millisecond)
+
+	_, err := nodes[0].Dial(nodes[1].ExternalAddress())
+	assert.Nil(t, err)
+
+	time.Sleep(5 * time.Millisecond)
+
+	for i := 0; i < numNodes; i++ {
+		nodes[i].Kill()
+	}
+}
+
+// counter is a concurrent safe map of counters
 type counter struct {
 	mu     sync.Mutex
 	values map[string]int
