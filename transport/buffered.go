@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/perlin-network/noise/transport/bufconn"
 	"github.com/pkg/errors"
+	"math/rand"
 	"net"
 	"strconv"
 	"strings"
@@ -27,6 +28,10 @@ func (t *Buffered) Listen(host string, port uint16) (net.Listener, error) {
 
 	if net.ParseIP(host) == nil {
 		return nil, errors.Errorf("unable to parse host as IP: %s", host)
+	}
+
+	if port == 0 {
+		port = uint16(rand.Intn(50000) + 10000)
 	}
 
 	addr := fmt.Sprintf("%s:%d", host, port)

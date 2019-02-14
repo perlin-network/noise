@@ -10,9 +10,14 @@ import (
 )
 
 func testBadHost(t *testing.T, layer Layer) {
-	// test a bad host
-	_, err := layer.Listen("badhost", 10000)
+	_, err := layer.Listen("bad host", 10000)
 	assert.NotNil(t, err)
+}
+
+func testPortZero(t *testing.T, layer Layer) {
+	lis, err := layer.Listen("127.0.0.1", 0)
+	assert.Nil(t, err)
+	assert.True(t, layer.Port(lis.Addr()) > 1024)
 }
 
 func testTransport(t *testing.T, layer Layer, host string, port uint16) {
@@ -79,6 +84,7 @@ func TestBuffered(t *testing.T) {
 	wg.Wait()
 
 	testBadHost(t, layer)
+	testPortZero(t, layer)
 }
 
 func TestTCP(t *testing.T) {
@@ -98,4 +104,5 @@ func TestTCP(t *testing.T) {
 	wg.Wait()
 
 	testBadHost(t, layer)
+	testPortZero(t, layer)
 }

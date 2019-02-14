@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	bufferSize = 16 // bytes
+	bufferSize = 256 * 1024 // bytes
 )
 
 // Listener implements a net.Listener that creates local, buffered net.Conns
@@ -52,7 +52,7 @@ func Listen(host string, port uint16) *Listener {
 		ch:   make(chan net.Conn),
 		done: make(chan struct{}),
 		a: &addr{
-			network: "tcp",
+			network: "bufconn",
 			ip:      host,
 			port:    port,
 		},
