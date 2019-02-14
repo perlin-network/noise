@@ -449,3 +449,7 @@ func (p *Peer) EnterCriticalReadMode() {
 func (p *Peer) LeaveCriticalReadMode() {
 	<-p.criticalReadLock
 }
+
+func (p *Peer) Debug_SetNode(node *Node) {
+	p.node = node
+}
