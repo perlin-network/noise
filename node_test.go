@@ -76,7 +76,6 @@ func TestNewNode(t *testing.T) {
 			name: "use mock transport",
 			params: func() parameters {
 				p := DefaultParams()
-				p.Port = 1234
 				p.Transport = transport.NewBuffered()
 				return p
 			}(),

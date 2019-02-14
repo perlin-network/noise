@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/transport"
 	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
@@ -63,9 +64,11 @@ func TestNodeMetadata(t *testing.T) {
 }
 
 func TestCallbacks(t *testing.T) {
+	t.Parallel()
 	log.Disable()
 	defer log.Enable()
 
+	layer := transport.NewBuffered()
 	numNodes := 2
 	var nodes []*noise.Node
 	var callbacks []*counter
@@ -80,7 +83,7 @@ func TestCallbacks(t *testing.T) {
 	for i := 0; i < numNodes; i++ {
 		p := noise.DefaultParams()
 		p.Port = uint16(7000 + i)
-		//p.Transport = transport.NewBuffered()
+		p.Transport = layer
 
 		n, err := noise.NewNode(p)
 		assert.Nil(t, err)
@@ -174,13 +177,15 @@ func TestCallbacks(t *testing.T) {
 }
 
 func TestNodeKill(t *testing.T) {
+	t.Parallel()
 	numNodes := 2
 	var nodes []*noise.Node
+	layer := transport.NewBuffered()
 
 	for i := 0; i < numNodes; i++ {
 		p := noise.DefaultParams()
 		p.Port = uint16(7100 + i)
-		//p.Transport = transport.NewBuffered()
+		p.Transport = layer
 
 		n, err := noise.NewNode(p)
 		assert.Nil(t, err)

@@ -101,6 +101,8 @@ func (n *Node) Listen() {
 		default:
 		}
 
+		log.Debug().Msgf("Node is listening on address %s", n.ExternalAddress())
+
 		conn, err := n.listener.Accept()
 
 		if err != nil {
