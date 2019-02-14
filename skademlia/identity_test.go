@@ -183,16 +183,17 @@ func TestVerifyPuzzle(t *testing.T) {
 			kp := ed25519.New(privateKey)
 
 			id, err := NewIdentityFromKeypair(kp, DefaultC1, DefaultC2)
-			assert.NotNil(t, err)
+			assert.Nil(t, err)
+			assert.NotNil(t, id)
 
 			nonce, err := hex.DecodeString(tt.encodedX)
 			assert.Nil(t, err)
 
 			id, err = NewIdentityFromKeypair(kp, 16, 16)
-			assert.NotNil(t, err)
+			assert.Nil(t, err)
+			assert.NotNil(t, id)
 
-			id.Nonce = nonce
-			assert.Equal(t, tt.valid, VerifyPuzzle(id.PublicID(), id.NodeID(), id.Nonce, 16, 16))
+			assert.Equal(t, tt.valid, VerifyPuzzle(id.PublicID(), id.NodeID(), nonce, 16, 16))
 		})
 	}
 }
