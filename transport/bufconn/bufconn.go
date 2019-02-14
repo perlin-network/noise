@@ -46,14 +46,14 @@ var errClosed = fmt.Errorf("Closed")
 
 // Listen returns a Listener that can only be contacted by its own Dialers and
 // creates buffered connections between the two.
-func Listen(port uint16) *Listener {
+func Listen(host string, port uint16) *Listener {
 	return &Listener{
 		sz:   bufferSize,
 		ch:   make(chan net.Conn),
 		done: make(chan struct{}),
 		a: &addr{
 			network: "tcp",
-			ip:      "bufconn",
+			ip:      host,
 			port:    port,
 		},
 	}

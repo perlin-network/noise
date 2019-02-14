@@ -1,8 +1,8 @@
 package transport
 
 import (
+	"fmt"
 	"net"
-	"strconv"
 )
 
 var _ Layer = (*tcp)(nil)
@@ -13,8 +13,8 @@ func (t tcp) String() string {
 	return "tcp"
 }
 
-func (t tcp) Listen(port uint16) (net.Listener, error) {
-	listener, err := net.Listen("tcp", ":"+strconv.Itoa(int(port)))
+func (t tcp) Listen(host string, port uint16) (net.Listener, error) {
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
 		return nil, err
 	}

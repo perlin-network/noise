@@ -21,7 +21,7 @@ func (t *Buffered) String() string {
 	return "buffered"
 }
 
-func (t *Buffered) Listen(port uint16) (net.Listener, error) {
+func (t *Buffered) Listen(host string, port uint16) (net.Listener, error) {
 	t.Lock()
 	defer t.Unlock()
 
@@ -29,7 +29,7 @@ func (t *Buffered) Listen(port uint16) (net.Listener, error) {
 	if l, ok := t.listeners[addr]; ok {
 		return l, nil
 	}
-	t.listeners[addr] = bufconn.Listen(port)
+	t.listeners[addr] = bufconn.Listen(host, port)
 	return t.listeners[addr], nil
 }
 
@@ -48,7 +48,7 @@ func (t *Buffered) Dial(address string) (net.Conn, error) {
 func (t *Buffered) IP(address net.Addr) net.IP {
 	split := strings.Split(address.String(), ":")
 	addr := split[0]
-	return net.IP(addr)
+	return net.ParseIP(addr)
 }
 
 func (t *Buffered) Port(address net.Addr) uint16 {
