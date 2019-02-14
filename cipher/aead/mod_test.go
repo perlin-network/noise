@@ -88,11 +88,16 @@ func (b *receiverBlock) OnRegister(p *protocol.Protocol, node *noise.Node) {
 }
 
 func (b *receiverBlock) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
-	return peer.SendMessage(msg{})
+	err := peer.SendMessage(msg{})
+	if err != nil {
+		return err
+	}
+
+	b.receiver <- <-peer.Receive(b.opcodeMsg)
+	return nil
 }
 
 func (b *receiverBlock) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
-	b.receiver <- <-peer.Receive(b.opcodeMsg)
 	return nil
 }
 

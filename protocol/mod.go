@@ -89,11 +89,6 @@ func (p *Protocol) Enforce(node *noise.Node) {
 							return
 						}
 					} else {
-						err := p.blocks[blockIndex].OnEnd(p, peer)
-						if err != nil {
-							log.Warn().Err(err).Msg("Received an error transitioning to the next part of the protocol.")
-						}
-
 						peer.Set(KeyProtocolCurrentBlockIndex, blockIndex+1)
 					}
 				}
