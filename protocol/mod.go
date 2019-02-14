@@ -64,6 +64,8 @@ func (p *Protocol) Enforce(node *noise.Node) {
 						return nil
 					}
 
+					// FIXME: Iterate through all blocks
+
 					return p.blocks[blockIndex].OnEnd(p, peer)
 				})
 
