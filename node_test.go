@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"testing/quick"
+	"time"
 )
 
 func TestNewNode(t *testing.T) {
@@ -155,7 +156,105 @@ func TestNodeMetadata(t *testing.T) {
 		return checkInterface(key, val1, val2)
 	}
 
+	// quick test all the parameter types
 	assert.Nil(t, quick.Check(checkInts, nil))
 	assert.Nil(t, quick.Check(checkFloats, nil))
 	assert.Nil(t, quick.Check(checkStrings, nil))
+}
+
+func TestCallbacks(t *testing.T) {
+	t.Parallel()
+	numNodes := 2
+	var nodes []*Node
+	var callbacks []map[string]int
+	allTypes := []string{
+		"OnListenerError",
+		"OnPeerConnected",
+		"OnPeerDisconnected",
+		"OnPeerDialed",
+		"OnPeerInit",
+	}
+
+	for i := 0; i < numNodes; i++ {
+		p := DefaultParams()
+		p.Port = uint16(7000 + i)
+		//p.Transport = transport.NewBuffered()
+
+		n, err := NewNode(p)
+		assert.Nil(t, err)
+		nodes = append(nodes, n)
+
+		cb := map[string]int{}
+		callbacks = append(callbacks, cb)
+
+		// setup callbacks
+		n.OnListenerError(func(node *Node, err error) error {
+			cb["OnListenerError"]++
+			return nil
+		})
+		n.OnPeerConnected(func(node *Node, peer *Peer) error {
+			cb["OnPeerConnected"]++
+			return nil
+		})
+		n.OnPeerDisconnected(func(node *Node, peer *Peer) error {
+			cb["OnPeerDisconnected"]++
+			return nil
+		})
+		n.OnPeerDialed(func(node *Node, peer *Peer) error {
+			cb["OnPeerDialed"]++
+			return nil
+		})
+		n.OnPeerInit(func(node *Node, peer *Peer) error {
+			cb["OnPeerInit"]++
+			return nil
+		})
+
+		go n.Listen()
+	}
+
+	time.Sleep(10 * time.Millisecond)
+
+	for i := 0; i < numNodes; i++ {
+		// clear out all the lists
+		for _, cb := range callbacks {
+			for k := range cb {
+				delete(cb, k)
+			}
+		}
+
+		// dial the next node
+		src := i
+		dst := (i + 1) % numNodes
+		_, err := nodes[src].Dial(nodes[dst].ExternalAddress())
+		assert.Nil(t, err)
+
+		time.Sleep(5 * time.Millisecond)
+
+		// check that the expected callbacks were called on the dialer
+		expectSrc := map[string]int{
+			"OnPeerDialed": 1,
+			"OnPeerInit":   1,
+		}
+		for _, key := range allTypes {
+			if _, ok := expectSrc[key]; ok {
+				assert.Equal(t, expectSrc[key], callbacks[src][key])
+			} else {
+				assert.Equal(t, 0, callbacks[src][key])
+			}
+		}
+
+		// check that the expected callbacks were called on the reciever
+		expectDst := map[string]int{
+			"OnPeerConnected": 1,
+			"OnPeerInit":      1,
+		}
+		for _, key := range allTypes {
+			if _, ok := expectDst[key]; ok {
+				assert.Equal(t, expectDst[key], callbacks[dst][key])
+			} else {
+				assert.Equal(t, 0, callbacks[dst][key])
+			}
+		}
+
+	}
 }

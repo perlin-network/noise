@@ -96,6 +96,7 @@ func (n *Node) Listen() {
 		select {
 		case <-n.kill:
 			n.listener = nil
+			log.Debug().Msg("Node is killed")
 			return
 		default:
 		}
