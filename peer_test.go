@@ -109,7 +109,7 @@ func TestPeer(t *testing.T) {
 		_, err = io.ReadFull(reader, buf)
 		assert.Nil(t, err, "failed to read message")
 		_, msg, err := p.DecodeMessage(buf)
-		assert.Equal(t, "hello", msg.(testMsg).text, "invalid text. expected %s, actual %s", text, msg.(testMsg).text)
+		assert.Equal(t, text, msg.(testMsg).text, "invalid text. expected %s, actual %s", text, msg.(testMsg).text)
 
 		// create a new message
 		sendMessage, err := p.EncodeMessage(testMsg{text: text})
@@ -197,7 +197,7 @@ func TestPeer(t *testing.T) {
 
 	// read a message
 	msg := <-p.Receive(opcodeTest)
-	assert.Equal(t, "hello", msg.(testMsg).text, "invalid text. expected %s, actual %s", text, msg.(testMsg).text)
+	assert.Equal(t, text, msg.(testMsg).text, "invalid text. expected %s, actual %s", text, msg.(testMsg).text)
 
 	checkState(t, &state, 8)
 
