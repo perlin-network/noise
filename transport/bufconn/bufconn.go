@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	bufferSize = 256 * 1024 // bytes
+	bufferSize = 16 // bytes
 )
 
 // Listener implements a net.Listener that creates local, buffered net.Conns
