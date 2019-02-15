@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	ttc1 = 8
-	ttc2 = 8
+	ttc1 = 4
+	ttc2 = 4
 
 	ttid1 = NewID("0000", newIdentityRandom(ttc1, ttc2).PublicID())
 	ttid2 = NewID("0001", newIdentityRandom(ttc1, ttc2).PublicID())

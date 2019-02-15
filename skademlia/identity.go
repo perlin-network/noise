@@ -28,9 +28,9 @@ var (
 // IdentityManager implements the identity interface for S/Kademlia node IDs.
 type IdentityManager struct {
 	keypair *crypto.KeyPair
-	nodeID  []byte
-	nonce   []byte
-	c1, c2  int
+	NodeID  []byte
+	Nonce   []byte
+	C1, C2  int
 	signer  crypto.SignaturePolicy
 	hasher  crypto.HashPolicy
 }
@@ -75,10 +75,10 @@ func newIdentityFromPrivateKey(privateKeyBuf []byte, c1, c2 int) (*IdentityManag
 	}
 	return &IdentityManager{
 		keypair: kp,
-		nodeID:  nodeID,
-		nonce:   nonce,
-		c1:      c1,
-		c2:      c2,
+		NodeID:  nodeID,
+		Nonce:   nonce,
+		C1:      c1,
+		C2:      c2,
 		signer:  sp,
 		hasher:  b,
 	}, nil

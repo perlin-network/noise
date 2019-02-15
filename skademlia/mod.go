@@ -65,6 +65,8 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		return errors.Wrap(protocol.DisconnectPeer, "skademlia: timed out waiting for pong")
 	}
 
+	// TODO: Validate skademlia id
+
 	// Register peer.
 	protocol.SetPeerID(peer, ping.ID)
 	enforceSignatures(peer, b.enforceSignatures)

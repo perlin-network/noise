@@ -15,7 +15,7 @@ func TestNewIdentityRandom(t *testing.T) {
 
 	id := NewIdentityRandom()
 	assert.NotNil(t, id)
-	assert.True(t, VerifyPuzzle(id.PublicID(), id.nodeID, id.nonce, DefaultC1, DefaultC2))
+	assert.True(t, VerifyPuzzle(id.PublicID(), id.NodeID, id.Nonce, DefaultC1, DefaultC2))
 }
 
 func TestNewSKademliaIdentityFromPrivateKey(t *testing.T) {
@@ -186,7 +186,7 @@ func TestVerifyPuzzle(t *testing.T) {
 			assert.Nil(t, err)
 			assert.NotNil(t, id)
 
-			assert.Equal(t, tt.valid, VerifyPuzzle(id.PublicID(), id.nodeID, nonce, 16, 16))
+			assert.Equal(t, tt.valid, VerifyPuzzle(id.PublicID(), id.NodeID, nonce, 16, 16))
 		})
 	}
 }
