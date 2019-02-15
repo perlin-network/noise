@@ -142,13 +142,7 @@ func Test_block_VerifyHandshake(t *testing.T) {
 
 	idm := skademlia.NewIdentityRandom()
 	b := handshake.New()
-	params := noise.DefaultParams()
-	params.ID = idm
-	params.Transport = transportLayer
-	node, err := noise.NewNode(params)
-	assert.Nil(t, err)
-
-	b.OnRegister(nil, node)
+	b.IDMgr = idm
 
 	tests := []struct {
 		name    string
@@ -248,7 +242,7 @@ func Test_block_VerifyHandshake(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err = b.VerifyHandshake(tt.args)
+			err := b.VerifyHandshake(tt.args)
 			assert.Equal(t, tt.wantErr, (err != nil), err)
 		})
 	}

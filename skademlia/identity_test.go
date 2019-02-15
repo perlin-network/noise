@@ -13,9 +13,9 @@ import (
 func TestNewIdentityRandom(t *testing.T) {
 	t.Parallel()
 
-	id := NewIdentityRandom()
-	assert.NotNil(t, id)
-	assert.True(t, VerifyPuzzle(id.PublicID(), id.NodeID, id.Nonce, DefaultC1, DefaultC2))
+	idm := NewIdentityRandom()
+	assert.NotNil(t, idm)
+	assert.True(t, VerifyPuzzle(idm.PublicID(), idm.NodeID, idm.Nonce, DefaultC1, DefaultC2))
 }
 
 func TestNewSKademliaIdentityFromPrivateKey(t *testing.T) {
@@ -36,13 +36,13 @@ func TestNewSKademliaIdentityFromPrivateKey(t *testing.T) {
 			privateKey, err := hex.DecodeString(tt.privateKeyHex)
 			assert.Nil(t, err)
 
-			id, err := newIdentityFromPrivateKey(privateKey, tt.c1, DefaultC2)
+			idm, err := newIdentityFromPrivateKey(privateKey, tt.c1, DefaultC2)
 			if tt.valid {
 				assert.Nil(t, err)
-				assert.NotNil(t, id)
+				assert.NotNil(t, idm)
 			} else {
 				assert.NotNil(t, err)
-				assert.Nil(t, id)
+				assert.Nil(t, idm)
 			}
 		})
 	}
@@ -59,14 +59,14 @@ func TestSignAndVerify(t *testing.T) {
 	privateKey, err := hex.DecodeString(privateKeyHex)
 	assert.Nil(t, err)
 
-	id, err := NewIdentityFromPrivateKey(privateKey)
+	idm, err := NewIdentityFromPrivateKey(privateKey)
 	assert.Nil(t, err)
 
-	sign, err := id.Sign([]byte(data))
+	sign, err := idm.Sign([]byte(data))
 	assert.Nil(t, err)
 	assert.Equal(t, ed25519.SignatureSize, len(sign))
 
-	assert.Nil(t, id.Verify(id.PublicID(), data, sign))
+	assert.Nil(t, idm.Verify(idm.PublicID(), data, sign))
 }
 
 func TestGenerateKeyPairAndID(t *testing.T) {
@@ -180,18 +180,18 @@ func TestVerifyPuzzle(t *testing.T) {
 			privateKey, err := hex.DecodeString(tt.privateKeyHex)
 			assert.Nil(t, err)
 
-			id, err := NewIdentityFromPrivateKey(privateKey)
+			idm, err := NewIdentityFromPrivateKey(privateKey)
 			assert.Nil(t, err)
-			assert.NotNil(t, id)
+			assert.NotNil(t, idm)
 
 			nonce, err := hex.DecodeString(tt.encodedX)
 			assert.Nil(t, err)
 
-			id, err = newIdentityFromPrivateKey(privateKey, 16, 16)
+			idm, err = newIdentityFromPrivateKey(privateKey, 16, 16)
 			assert.Nil(t, err)
-			assert.NotNil(t, id)
+			assert.NotNil(t, idm)
 
-			assert.Equal(t, tt.valid, VerifyPuzzle(id.PublicID(), id.NodeID, nonce, 16, 16))
+			assert.Equal(t, tt.valid, VerifyPuzzle(idm.PublicID(), idm.NodeID, nonce, 16, 16))
 		})
 	}
 }

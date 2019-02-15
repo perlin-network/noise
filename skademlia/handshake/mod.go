@@ -13,33 +13,33 @@ import (
 const KeySkademliaHandshake = ".noise.skademlia.handshake"
 
 var (
-	_ protocol.Block = (*block)(nil)
+	_ protocol.Block = (*Block)(nil)
 )
 
-type block struct {
+type Block struct {
 	timeout         time.Duration
 	opcodeHandshake noise.Opcode
-	nodeID          *skademlia.IdentityManager
+	IDMgr           *skademlia.IdentityManager
 }
 
-func New() *block {
-	return &block{
+func New() *Block {
+	return &Block{
 		timeout: 5 * time.Second,
 	}
 }
 
-func (b *block) WithTimeout(timeout time.Duration) *block {
+func (b *Block) WithTimeout(timeout time.Duration) *Block {
 	b.timeout = timeout
 	return b
 }
 
-func (b *block) OnRegister(p *protocol.Protocol, node *noise.Node) {
+func (b *Block) OnRegister(p *protocol.Protocol, node *noise.Node) {
 	b.opcodeHandshake = noise.RegisterMessage(noise.NextAvailableOpcode(), (*Handshake)(nil))
-	b.nodeID = node.ID.(*skademlia.IdentityManager)
+	b.IDMgr = node.ID.(*skademlia.IdentityManager)
 }
 
-func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
-	if b.nodeID == nil {
+func (b *Block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
+	if b.IDMgr == nil {
 		return errors.New("node not setup with skademlia properly")
 	}
 
@@ -78,31 +78,31 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	return nil
 }
 
-func (b *block) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
+func (b *Block) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
 	return nil
 }
 
-func (b *block) makeMessage(msg string) *Handshake {
+func (b *Block) makeMessage(msg string) *Handshake {
 	return &Handshake{
 		Msg:       msg,
-		PublicKey: b.nodeID.PublicID(),
-		ID:        b.nodeID.NodeID,
-		Nonce:     b.nodeID.Nonce,
-		C1:        uint16(b.nodeID.C1),
-		C2:        uint16(b.nodeID.C2),
+		PublicKey: b.IDMgr.PublicID(),
+		ID:        b.IDMgr.NodeID,
+		Nonce:     b.IDMgr.Nonce,
+		C1:        uint16(b.IDMgr.C1),
+		C2:        uint16(b.IDMgr.C2),
 	}
 }
 
 // VerifyHandshake checks if a handshake is valid
-func (b *block) VerifyHandshake(msg Handshake) error {
+func (b *Block) VerifyHandshake(msg Handshake) error {
 
-	if msg.C1 < uint16(b.nodeID.C1) || msg.C2 < uint16(b.nodeID.C2) {
+	if msg.C1 < uint16(b.IDMgr.C1) || msg.C2 < uint16(b.IDMgr.C2) {
 		return errors.Errorf("skademlia: S/Kademlia constants (%d, %d) for (c1, c2) do not satisfy local constants (%d, %d)",
-			msg.C1, msg.C2, b.nodeID.C1, b.nodeID.C2)
+			msg.C1, msg.C2, b.IDMgr.C1, b.IDMgr.C2)
 	}
 
 	// Verify that the remote peer ID is valid for the current node's c1 and c2 settings
-	if ok := skademlia.VerifyPuzzle(msg.PublicKey, msg.ID, msg.Nonce, b.nodeID.C1, b.nodeID.C2); !ok {
+	if ok := skademlia.VerifyPuzzle(msg.PublicKey, msg.ID, msg.Nonce, b.IDMgr.C1, b.IDMgr.C2); !ok {
 		return errors.New("skademlia: keypair failed skademlia verification")
 	}
 

@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	ttc1 = 4
-	ttc2 = 4
+	ttc1 = 8
+	ttc2 = 8
 
 	ttid1 = NewID("0000", newIdentityRandom(ttc1, ttc2).PublicID())
 	ttid2 = NewID("0001", newIdentityRandom(ttc1, ttc2).PublicID())
@@ -212,7 +212,7 @@ func TestFindClosestConcurrent(t *testing.T) {
 	const IDPoolSize = 16
 	const concurrentCount = 16
 
-	ids := make([]unsafe.Pointer, IDPoolSize) // Element type: *peer.Id
+	ids := make([]unsafe.Pointer, IDPoolSize) // Element type: *skademlia.ID
 
 	id := NewID("0000", newIdentityRandom(ttc1, ttc2).PublicID())
 	table := newTable(id)
@@ -234,7 +234,7 @@ func TestFindClosestConcurrent(t *testing.T) {
 						addrRaw := MustReadRand(8)
 						addr := hex.EncodeToString(addrRaw)
 
-						id := NewID(addr, NewIdentityRandom().PublicID())
+						id := NewID(addr, newIdentityRandom(ttc1, ttc2).PublicID())
 						table.Update(id)
 
 						atomic.StorePointer(&ids[int(RandByte())%IDPoolSize], unsafe.Pointer(&id))
