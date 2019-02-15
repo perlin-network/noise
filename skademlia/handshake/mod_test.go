@@ -2,6 +2,9 @@ package handshake_test
 
 import (
 	"encoding/hex"
+	"testing"
+	"testing/quick"
+
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/payload"
@@ -10,12 +13,12 @@ import (
 	"github.com/perlin-network/noise/skademlia/handshake"
 	"github.com/perlin-network/noise/transport"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"testing/quick"
 )
 
-var transportLayer = transport.NewBuffered()
-var port = 3000
+var (
+	transportLayer = transport.NewBuffered()
+	port           = 3000
+)
 
 func node(t *testing.T) *noise.Node {
 	params := noise.DefaultParams()
@@ -64,6 +67,7 @@ func (b *receiverBlock) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
 }
 
 func TestBlock_OnBeginSuccessful(t *testing.T) {
+	t.Parallel()
 	log.Disable()
 	defer log.Enable()
 
@@ -95,6 +99,8 @@ func TestBlock_OnBeginSuccessful(t *testing.T) {
 }
 
 func TestHandshakeMessage(t *testing.T) {
+	t.Parallel()
+
 	checkHandshake := func(Msg string,
 		ID []byte,
 		PublicKey []byte,
@@ -129,4 +135,121 @@ func TestHandshakeMessage(t *testing.T) {
 	}
 	// quick test all the parameter types
 	assert.Nil(t, quick.Check(checkHandshake, nil))
+}
+
+func Test_block_VerifyHandshake(t *testing.T) {
+	t.Parallel()
+
+	idm := skademlia.NewIdentityRandom()
+	b := handshake.New()
+	params := noise.DefaultParams()
+	params.ID = idm
+	params.Transport = transportLayer
+	node, err := noise.NewNode(params)
+	assert.Nil(t, err)
+
+	b.OnRegister(nil, node)
+
+	tests := []struct {
+		name    string
+		args    handshake.Handshake
+		wantErr bool
+	}{
+		{
+			name: "good case",
+			args: func() handshake.Handshake {
+				return handshake.Handshake{
+					PublicKey: idm.PublicID(),
+					ID:        idm.NodeID,
+					Nonce:     idm.Nonce,
+					C1:        uint16(idm.C1),
+					C2:        uint16(idm.C2),
+				}
+			}(),
+			wantErr: false,
+		},
+		{
+			name: "bad public key",
+			args: func() handshake.Handshake {
+				changed := make([]byte, len(idm.PublicID()))
+				copy(changed, idm.PublicID())
+				changed[0] = 0
+				changed[1] = 0
+				return handshake.Handshake{
+					PublicKey: changed,
+					ID:        idm.NodeID,
+					Nonce:     idm.Nonce,
+					C1:        uint16(idm.C1),
+					C2:        uint16(idm.C2),
+				}
+			}(),
+			wantErr: true,
+		},
+		{
+			name: "bad node id",
+			args: func() handshake.Handshake {
+				changed := make([]byte, len(idm.NodeID))
+				copy(changed, idm.NodeID)
+				changed[0] = 0
+				changed[1] = 0
+				return handshake.Handshake{
+					PublicKey: idm.PublicID(),
+					ID:        changed,
+					Nonce:     idm.Nonce,
+					C1:        uint16(idm.C1),
+					C2:        uint16(idm.C2),
+				}
+			}(),
+			wantErr: true,
+		},
+		{
+			name: "bad nonce",
+			args: func() handshake.Handshake {
+				changed := make([]byte, len(idm.Nonce))
+				copy(changed, idm.Nonce)
+				changed[0] = 0
+				changed[1] = 0
+				return handshake.Handshake{
+					PublicKey: idm.PublicID(),
+					ID:        idm.NodeID,
+					Nonce:     changed,
+					C1:        uint16(idm.C1),
+					C2:        uint16(idm.C2),
+				}
+			}(),
+			wantErr: true,
+		},
+		{
+			name: "bad c1",
+			args: func() handshake.Handshake {
+				return handshake.Handshake{
+					PublicKey: idm.PublicID(),
+					ID:        idm.NodeID,
+					Nonce:     idm.Nonce,
+					C1:        uint16(idm.C1 - 8),
+					C2:        uint16(idm.C2),
+				}
+			}(),
+			wantErr: true,
+		},
+		{
+			name: "bad c2",
+			args: func() handshake.Handshake {
+				return handshake.Handshake{
+					PublicKey: idm.PublicID(),
+					ID:        idm.NodeID,
+					Nonce:     idm.Nonce,
+					C1:        uint16(idm.C1),
+					C2:        uint16(idm.C2 - 8),
+				}
+			}(),
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err = b.VerifyHandshake(tt.args)
+			assert.Equal(t, tt.wantErr, (err != nil), err)
+		})
+	}
 }
