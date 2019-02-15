@@ -67,13 +67,6 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to validate skademlia id")
 	}
 
-	// if it was an init, then acknowledge it
-	if res.Msg == "init" {
-		if err := peer.SendMessage(b.makeMessage("ack")); err != nil {
-			return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to send our skademlia ack to our peer")
-		}
-	}
-
 	// store the public ID in the metadata for further debugging
 	publicIDHex := hex.EncodeToString(res.PublicKey)
 	peer.Set(KeySkademliaHandshake, publicIDHex)
@@ -95,15 +88,15 @@ func (b *block) makeMessage(msg string) *Handshake {
 		PublicKey: b.nodeID.PublicID(),
 		ID:        b.nodeID.NodeID,
 		Nonce:     b.nodeID.Nonce,
-		C1:        b.nodeID.C1,
-		C2:        b.nodeID.C2,
+		C1:        uint16(b.nodeID.C1),
+		C2:        uint16(b.nodeID.C2),
 	}
 }
 
 // VerifyHandshake checks if a handshake is valid
 func (b *block) VerifyHandshake(msg Handshake) error {
 
-	if msg.C1 < b.nodeID.C1 || msg.C2 < b.nodeID.C2 {
+	if msg.C1 < uint16(b.nodeID.C1) || msg.C2 < uint16(b.nodeID.C2) {
 		return errors.Errorf("skademlia: S/Kademlia constants (%d, %d) for (c1, c2) do not satisfy local constants (%d, %d)",
 			msg.C1, msg.C2, b.nodeID.C1, b.nodeID.C2)
 	}

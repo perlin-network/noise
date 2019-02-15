@@ -13,8 +13,8 @@ type Handshake struct {
 	ID        []byte
 	PublicKey []byte
 	Nonce     []byte
-	C1        int
-	C2        int
+	C1        uint16
+	C2        uint16
 }
 
 func (Handshake) Read(reader payload.Reader) (noise.Message, error) {
@@ -53,8 +53,8 @@ func (Handshake) Read(reader payload.Reader) (noise.Message, error) {
 		ID:        nodeID,
 		PublicKey: publicKey,
 		Nonce:     nonce,
-		C1:        int(c1),
-		C2:        int(c2),
+		C1:        c1,
+		C2:        c2,
 	}, nil
 }
 
@@ -64,7 +64,7 @@ func (m Handshake) Write() []byte {
 		WriteBytes(m.ID).
 		WriteBytes(m.PublicKey).
 		WriteBytes(m.Nonce).
-		WriteUint16(uint16(m.C1)).
-		WriteUint16(uint16(m.C2)).
+		WriteUint16(m.C1).
+		WriteUint16(m.C2).
 		Bytes()
 }
