@@ -2,7 +2,6 @@ package skademlia
 
 import (
 	"encoding/json"
-	"github.com/perlin-network/noise"
 	"github.com/pkg/errors"
 )
 
@@ -24,19 +23,14 @@ type HandshakeMessage struct {
 }
 
 // ActivelyInitHandshake sends the current node's public key, id, and nonce to be verified by a peer
-func (p *HandshakeProcessor) ActivelyInitHandshake(node *noise.Node) ([]byte, interface{}, error) {
-	id, ok := node.ID.(*IdentityManager)
-	if !ok {
-		return nil, nil, errors.New("skademlia: identity manager not compatible")
-	}
-
+func (p *HandshakeProcessor) ActivelyInitHandshake() ([]byte, *HandshakeState, error) {
 	msg := &HandshakeMessage{
 		Msg:       "init",
-		PublicKey: id.PublicID(),
-		ID:        id.nodeID,
-		Nonce:     id.nonce,
-		C1:        id.c1,
-		C2:        id.c2,
+		PublicKey: p.nodeID.PublicID(),
+		ID:        p.nodeID.nodeID,
+		Nonce:     p.nodeID.nonce,
+		C1:        p.nodeID.c1,
+		C2:        p.nodeID.c2,
 	}
 	b, err := json.Marshal(msg)
 	if err != nil {
@@ -47,7 +41,7 @@ func (p *HandshakeProcessor) ActivelyInitHandshake(node *noise.Node) ([]byte, in
 }
 
 // PassivelyInitHandshake initiates a passive handshake to a peer
-func (p *HandshakeProcessor) PassivelyInitHandshake() (interface{}, error) {
+func (p *HandshakeProcessor) PassivelyInitHandshake() (*HandshakeState, error) {
 	return &HandshakeState{passive: true}, nil
 }
 
