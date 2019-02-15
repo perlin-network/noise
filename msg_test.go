@@ -87,6 +87,8 @@ func TestEncodeMessageError(t *testing.T) {
 }
 
 func TestDecodeMessageError(t *testing.T) {
+	resetOpcodes()
+
 	p := newPeer(nil, nil)
 	testMessage := testMsg{Text: "hello"}
 
@@ -102,7 +104,6 @@ func TestDecodeMessageError(t *testing.T) {
 	assert.Nil(t, resultM)
 	assert.Error(t, err)
 
-	resetOpcodes()
 	assert.Equal(t, o, RegisterMessage(o, (*testMsg)(nil)))
 
 	// test decode invalid opcode
