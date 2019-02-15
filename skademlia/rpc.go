@@ -131,7 +131,7 @@ func (lookup *lookupBucket) performLookup(node *noise.Node, table *table, target
 // Each disjoint lookup queries at most α peers.
 //
 // It returns at most BUCKET_SIZE S/Kademlia peer IDs closest to that of a
-// specifiedtarget T.
+// specified target T.
 func FindNode(node *noise.Node, targetID ID, alpha int, numDisjointPaths int) (results []ID) {
 	table, visited := Table(node), new(sync.Map)
 

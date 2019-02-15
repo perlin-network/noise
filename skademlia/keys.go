@@ -40,6 +40,8 @@ func (p *Keypair) ID() []byte {
 	return id[:]
 }
 
+// LoadKeys loads a S/Kademlia given an Ed25519 private key, and validates it through both a static and dynamic
+// crypto puzzle parameterized by constants C1 and C2 respectively.
 func LoadKeys(privateKeyBuf []byte, c1, c2 int) (*Keypair, error) {
 	if len(privateKeyBuf) != edwards25519.PrivateKeySize {
 		panic(errors.Errorf("skademlia: private key is not %d bytes", edwards25519.PrivateKeySize))
@@ -71,6 +73,8 @@ func LoadKeys(privateKeyBuf []byte, c1, c2 int) (*Keypair, error) {
 	}, nil
 }
 
+// LoadKeys randomly generates a set of cryptographic keys by solving both a static and dynamic
+// crypto puzzle parameterized by constants C1 = 8, and C2 = 8 respectively.
 func NewKeys() *Keypair {
 	return RandomKeys(DefaultC1, DefaultC2)
 }
