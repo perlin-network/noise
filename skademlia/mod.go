@@ -25,14 +25,26 @@ type block struct {
 	opcodeLookupResponse noise.Opcode
 
 	enforceSignatures bool
+
+	c1, c2 int
 }
 
 func New() *block {
-	return &block{enforceSignatures: false}
+	return &block{enforceSignatures: false, c1: DefaultC1, c2: DefaultC2}
 }
 
 func (b *block) EnforceSignatures() *block {
 	b.enforceSignatures = true
+	return b
+}
+
+func (b *block) WithC1(c1 int) *block {
+	b.c1 = c1
+	return b
+}
+
+func (b *block) WithC2(c2 int) *block {
+	b.c2 = c2
 	return b
 }
 
@@ -42,7 +54,11 @@ func (b *block) OnRegister(p *protocol.Protocol, node *noise.Node) {
 	b.opcodeLookupRequest = noise.RegisterMessage(noise.NextAvailableOpcode(), (*LookupRequest)(nil))
 	b.opcodeLookupResponse = noise.RegisterMessage(noise.NextAvailableOpcode(), (*LookupResponse)(nil))
 
-	var nodeID = NewID(node.ExternalAddress(), node.ID.PublicID())
+	if _, ok := node.Keys.(*Keypair); !ok {
+		panic("skademlia: node should set `params := noise.DefaultParams(); params.Keys = skademlia.NewKeys()`")
+	}
+
+	var nodeID = NewID(node.ExternalAddress(), node.Keys.PublicKey(), node.Keys.(*Keypair).Nonce)
 
 	protocol.SetNodeID(node, nodeID)
 	node.Set(keyKademliaTable, newTable(nodeID))
@@ -50,27 +66,32 @@ func (b *block) OnRegister(p *protocol.Protocol, node *noise.Node) {
 
 func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	// Send a ping.
-	err := peer.SendMessage(Ping{protocol.NodeID(peer.Node()).(ID)})
+	err := peer.SendMessage(Ping{ID: protocol.NodeID(peer.Node()).(ID)})
 	if err != nil {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to send ping")
 	}
 
-	// Receive a ping and set the peers ID.
-	var ping Ping
+	// Receive a ping and set the peers id.
+	var id Ping
 
 	select {
 	case msg := <-peer.Receive(b.opcodePing):
-		ping = msg.(Ping)
+		id = msg.(Ping)
 	case <-time.After(3 * time.Second):
 		return errors.Wrap(protocol.DisconnectPeer, "skademlia: timed out waiting for pong")
 	}
 
+	// Verify that the remote peer id is valid for the current node's c1 and c2 settings
+	if ok := VerifyPuzzle(id.PublicKey(), id.Hash(), id.nonce, b.c1, b.c2); !ok {
+		return errors.New("skademlia: peer connected with ID that fails to solve static/dynamic crpyo tpuzzle")
+	}
+
 	// Register peer.
-	protocol.SetPeerID(peer, ping.ID)
+	protocol.SetPeerID(peer, id.ID)
 	enforceSignatures(peer, b.enforceSignatures)
 
 	// Log peer into S/Kademlia table, and have all messages update the S/Kademlia table.
-	logPeerActivity(peer)
+	_ = logPeerActivity(peer)
 
 	peer.BeforeMessageReceived(func(node *noise.Node, peer *noise.Peer, msg []byte) (i []byte, e error) {
 		return msg, logPeerActivity(peer)
@@ -106,7 +127,7 @@ func enforceSignatures(peer *noise.Peer, enforce bool) {
 	if enforce {
 		// Place signature at the footer of every single message.
 		peer.OnEncodeFooter(func(node *noise.Node, peer *noise.Peer, header, msg []byte) (i []byte, e error) {
-			signature, err := node.ID.Sign(msg)
+			signature, err := node.Keys.Sign(msg)
 
 			if err != nil {
 				panic(errors.Wrap(err, "signature: failed to sign message"))
@@ -123,7 +144,7 @@ func enforceSignatures(peer *noise.Peer, enforce bool) {
 				return errors.Wrap(err, "signature: failed to read message signature")
 			}
 
-			if err = node.ID.Verify(protocol.PeerID(peer).PublicID(), msg, signature); err != nil {
+			if err = node.Keys.Verify(protocol.PeerID(peer).PublicKey(), msg, signature); err != nil {
 				peer.Disconnect()
 				return errors.Wrap(err, "signature: peer sent an invalid signature")
 			}

@@ -17,7 +17,7 @@ func (dummyID) Equals(other ID) bool {
 	panic("unreachable")
 }
 
-func (dummyID) PublicID() []byte {
+func (dummyID) PublicKey() []byte {
 	panic("unreachable")
 }
 

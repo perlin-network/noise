@@ -2,10 +2,12 @@ package identity
 
 import "fmt"
 
-type Manager interface {
+type Keypair interface {
 	fmt.Stringer
 
-	PublicID() []byte
+	ID() []byte
+	PublicKey() []byte
+	PrivateKey() []byte
 
 	Sign(buf []byte) ([]byte, error)
 	Verify(publicKeyBuf []byte, buf []byte, signature []byte) error

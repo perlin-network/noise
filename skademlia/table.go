@@ -48,7 +48,7 @@ func newTable(self protocol.ID) *table {
 		table.buckets[i] = newBucket()
 	}
 
-	table.Update(self)
+	_ = table.Update(self)
 
 	return &table
 }
@@ -148,12 +148,12 @@ func (t *table) GetPeers() (addresses []string) {
 	return
 }
 
-// bucketID returns the corresponding bucket ID based on the ID.
+// bucketID returns the corresponding bucket id based on the id.
 func (t *table) bucketID(id []byte) int {
 	return prefixLen(xor(id, t.self.Hash()))
 }
 
-// bucket returns a specific bucket by ID.
+// bucket returns a specific bucket by id.
 func (t *table) bucket(id int) *bucket {
 	if id >= 0 && id < len(t.buckets) {
 		return t.buckets[id]
@@ -248,7 +248,7 @@ func UpdateTable(node *noise.Node, target protocol.ID) (err error) {
 			}
 
 			// If the candidate peer to-be-evicted responds with an 'evict' message back, move him to the front of the bucket
-			// and do not push the target ID into the bucket. Else, evict the candidate peer and push the target ID to the
+			// and do not push the target id into the bucket. Else, evict the candidate peer and push the target id to the
 			// front of the bucket.
 			evictLastPeer := func() {
 				lastPeer.Disconnect()

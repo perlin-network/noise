@@ -17,7 +17,7 @@ type ID interface {
 
 	Equals(other ID) bool
 
-	PublicID() []byte
+	PublicKey() []byte
 	Hash() []byte
 }
 

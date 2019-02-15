@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	mtpublicKey = []byte("12345678901234567890123456789012")
-	mtid        = NewID("address", mtpublicKey)
+	publicKey = []byte("12345678901234567890123456789012")
+	id        = NewID("address", publicKey, []byte{})
 )
 
 func TestPing(t *testing.T) {
@@ -19,11 +19,11 @@ func TestPing(t *testing.T) {
 
 	// good
 	{
-		msg, err := p.Read(payload.NewReader(mtid.Write()))
+		msg, err := p.Read(payload.NewReader(id.Write()))
 		assert.Nil(t, err)
 		_, castOK := msg.(Ping)
 		assert.True(t, castOK)
-		assert.Truef(t, mtid.Equals(msg.(Ping).ID), "Expected equal %v vs %v", mtid, msg)
+		assert.Truef(t, id.Equals(msg.(Ping).ID), "Expected equal %v vs %v", id, msg)
 	}
 
 	// bad
@@ -38,7 +38,7 @@ func TestEvict(t *testing.T) {
 	e := Evict{}
 
 	// evict doesn't implement read/write
-	// so it looks the same as emptymessage
+	// so it looks the same as noise.EmptyMessage
 	msg, err := e.Read(payload.NewReader(e.Write()))
 	assert.Nil(t, err)
 	_, castOK := msg.(noise.EmptyMessage)
@@ -51,11 +51,11 @@ func TestLookupRequest(t *testing.T) {
 
 	// good
 	{
-		msg, err := lr.Read(payload.NewReader(mtid.Write()))
+		msg, err := lr.Read(payload.NewReader(id.Write()))
 		assert.Nil(t, err)
 		_, castOK := msg.(LookupRequest)
 		assert.True(t, castOK)
-		assert.Truef(t, mtid.Equals(msg.(LookupRequest).ID), "Expected equal %v vs %v", mtid, msg)
+		assert.Truef(t, id.Equals(msg.(LookupRequest).ID), "Expected equal %v vs %v", id, msg)
 	}
 
 	// bad
@@ -77,19 +77,17 @@ func TestLookupResponse(t *testing.T) {
 
 	// normal cases
 	testCases := []LookupResponse{
-		LookupResponse{
-			// blank
-			peers: []ID{},
+		{
+			peers: []ID{}, // blank
 		},
-		LookupResponse{
-			// 1 entry
-			peers: []ID{mtid},
+		{
+			peers: []ID{id}, // 1 entry
 		},
-		LookupResponse{
-			// 2 entries
-			peers: []ID{mtid, mtid},
+		{
+			peers: []ID{id, id}, // 2 entries
 		},
 	}
+
 	for i, lr := range testCases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			wrote := lr.Write()

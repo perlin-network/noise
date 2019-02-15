@@ -14,7 +14,7 @@ import (
 )
 
 type Node struct {
-	ID identity.Manager
+	Keys identity.Keypair
 
 	nat       nat.Provider
 	transport transport.Layer
@@ -53,7 +53,7 @@ func NewNode(params parameters) (*Node, error) {
 	params.Port = params.Transport.Port(listener.Addr())
 
 	node := Node{
-		ID: params.ID,
+		Keys: params.Keys,
 
 		nat:       params.NAT,
 		transport: params.Transport,
@@ -69,7 +69,7 @@ func NewNode(params parameters) (*Node, error) {
 		onPeerDialedCallbacks:    callbacks.NewSequentialCallbackManager(),
 		onPeerInitCallbacks:      callbacks.NewSequentialCallbackManager(),
 
-		kill: make(chan struct{}),
+		kill: make(chan struct{}, 1),
 	}
 
 	for key, val := range params.Metadata {

@@ -6,7 +6,6 @@ import (
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/cipher/aead"
 	"github.com/perlin-network/noise/handshake/ecdh"
-	"github.com/perlin-network/noise/identity/ed25519"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/payload"
 	"github.com/perlin-network/noise/protocol"
@@ -74,7 +73,7 @@ func main() {
 
 	params := noise.DefaultParams()
 	//params.NAT = nat.NewPMP()
-	params.ID = ed25519.Random()
+	params.Keys = skademlia.NewKeys()
 	params.Port = uint16(*portFlag)
 
 	node, err := noise.NewNode(params)

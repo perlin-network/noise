@@ -15,10 +15,11 @@ var (
 	itpublicKey2 = []byte("12345678901234567890123456789011")
 	itpublicKey3 = []byte("12345678901234567890123456789013")
 	itaddress    = "localhost:12345"
+	itnonce      = []byte("test123")
 
-	itid1 = NewID(itaddress, itpublicKey1)
-	itid2 = NewID(itaddress, itpublicKey2)
-	itid3 = NewID(itaddress, itpublicKey3)
+	itid1 = NewID(itaddress, itpublicKey1, itnonce)
+	itid2 = NewID(itaddress, itpublicKey2, itnonce)
+	itid3 = NewID(itaddress, itpublicKey3, itnonce)
 )
 
 func TestNewID(t *testing.T) {
@@ -32,7 +33,7 @@ func TestNewID(t *testing.T) {
 func TestString(t *testing.T) {
 	t.Parallel()
 
-	want := "localhost:12345(3132333435363738)(492c7f5c8f125366)"
+	want := "S/Kademlia(address: localhost:12345, publicKey: 31323334353637383930313233343536, hash: 492c7f5c8f12536665f66c693ce3566b, nonce: 74657374313233)"
 
 	assert.Equal(t, want, itid1.String())
 }
@@ -59,16 +60,16 @@ func TestXor(t *testing.T) {
 		{
 			name: "id1 xor id2",
 			args: args{
-				a: itid1.PublicID(),
-				b: itid2.PublicID(),
+				a: itid1.PublicKey(),
+				b: itid2.PublicKey(),
 			},
 			want: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3},
 		},
 		{
 			name: "id1 xor id3",
 			args: args{
-				a: itid1.PublicID(),
-				b: itid3.PublicID(),
+				a: itid1.PublicKey(),
+				b: itid3.PublicKey(),
 			},
 			want: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
 		},

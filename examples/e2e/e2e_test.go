@@ -5,7 +5,6 @@ import (
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/cipher/aead"
 	"github.com/perlin-network/noise/handshake/ecdh"
-	"github.com/perlin-network/noise/identity/ed25519"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/payload"
 	"github.com/perlin-network/noise/protocol"
@@ -74,7 +73,7 @@ func Run(startPort int, numNodes int, numTxEach int) error {
 
 	for i := 0; i < numNodes; i++ {
 		params := noise.DefaultParams()
-		params.ID = ed25519.Random()
+		params.Keys = skademlia.NewKeys()
 		params.Port = uint16(startPort + i)
 
 		node, err := noise.NewNode(params)
@@ -143,8 +142,10 @@ func Run(startPort int, numNodes int, numTxEach int) error {
 }
 
 func TestRun(t *testing.T) {
-	log.Disable()
-	defer log.Enable()
+	//log.Disable()
+	//defer log.Enable()
 
 	assert.Nil(t, Run(startPort, numNodes, numMessagesEach))
+
+	noise.DebugOpcodes()
 }

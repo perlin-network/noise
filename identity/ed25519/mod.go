@@ -3,76 +3,77 @@ package ed25519
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/identity"
+	"github.com/perlin-network/noise/internal/edwards25519"
 	"github.com/pkg/errors"
-	"go.dedis.ch/kyber/v3"
-	"go.dedis.ch/kyber/v3/group/edwards25519"
-	"go.dedis.ch/kyber/v3/sign/schnorr"
 )
 
 var (
-	_     identity.Manager     = (*Manager)(nil)
-	suite crypto.EllipticSuite = edwards25519.NewBlakeSHA256Ed25519()
+	_ identity.Keypair = (*Keypair)(nil)
 )
 
-type Manager struct {
-	privateKey kyber.Scalar
-	publicKey  kyber.Point
-
-	publicKeyBuf []byte
+type Keypair struct {
+	privateKey edwards25519.PrivateKey
+	publicKey  edwards25519.PublicKey
 }
 
-func New(privateKeyBuf []byte) *Manager {
-	privateKey := suite.Scalar().SetBytes(privateKeyBuf)
-	publicKey := suite.Point().Mul(privateKey, suite.Point().Base())
+func LoadKeys(privateKeyBuf []byte) *Keypair {
+	if len(privateKeyBuf) != edwards25519.PrivateKeySize {
+		panic(errors.Errorf("edwards25519: private key is not %d bytes", edwards25519.PrivateKeySize))
+	}
 
-	publicKeyBuf, err := publicKey.MarshalBinary()
+	privateKey := edwards25519.PrivateKey(privateKeyBuf)
 
+	return &Keypair{
+		privateKey: privateKey,
+		publicKey:  privateKey.Public().(edwards25519.PublicKey),
+	}
+}
+
+func RandomKeys() *Keypair {
+	publicKey, privateKey, err := edwards25519.GenerateKey(nil)
 	if err != nil {
-		panic(errors.Wrap(err, "failed to marshal public key"))
+		panic(errors.Wrap(err, "edwards25519: failed to generate random keypair"))
 	}
 
-	return &Manager{
-		privateKey:   privateKey,
-		publicKey:    publicKey,
-		publicKeyBuf: publicKeyBuf,
+	return &Keypair{
+		privateKey: privateKey,
+		publicKey:  publicKey,
 	}
 }
 
-func Random() *Manager {
-	privateKey := suite.Scalar().Pick(suite.RandomStream())
+func (p *Keypair) ID() []byte {
+	return p.publicKey
+}
 
-	privateKeyBytes, err := hex.DecodeString(privateKey.String())
-	if err != nil {
-		panic(errors.Wrap(err, "failed to marshal private key"))
+func (p *Keypair) PublicKey() []byte {
+	return p.publicKey
+}
+
+func (p *Keypair) Sign(buf []byte) ([]byte, error) {
+	if len(p.privateKey) != edwards25519.PrivateKeySize {
+		return nil, errors.Errorf("edwards25519: private key expected to be %d bytes, but is %d bytes", edwards25519.PrivateKeySize, len(p.privateKey))
 	}
 
-	return New(privateKeyBytes)
+	return edwards25519.Sign(p.privateKey, buf), nil
 }
 
-func (p *Manager) PublicID() []byte {
-	return p.publicKeyBuf
-}
-
-func (p *Manager) Sign(buf []byte) ([]byte, error) {
-	return schnorr.Sign(suite, p.privateKey, buf)
-}
-
-func (p *Manager) Verify(publicKeyBuf []byte, buf []byte, signature []byte) error {
-	point := suite.Point()
-
-	if err := point.UnmarshalBinary(publicKeyBuf); err != nil {
-		return errors.Wrap(err, "an invalid public key was provided")
+func (p *Keypair) Verify(publicKeyBuf []byte, buf []byte, signature []byte) error {
+	if len(publicKeyBuf) != edwards25519.PublicKeySize {
+		return errors.Errorf("edwards25519: public key expected to be %d bytes, but is %d bytes", edwards25519.PublicKeySize, len(publicKeyBuf))
 	}
 
-	return schnorr.Verify(suite, point, buf, signature)
+	if edwards25519.Verify(publicKeyBuf, buf, signature) {
+		return nil
+	} else {
+		return errors.New("unable to verify signature")
+	}
 }
 
-func (p *Manager) String() string {
-	return fmt.Sprintf("Ed25519(public: %s, private: %s)", p.publicKey.String(), p.privateKey.String())
+func (p *Keypair) String() string {
+	return fmt.Sprintf("Ed25519(public: %s, private: %s)", hex.EncodeToString(p.PublicKey()), hex.EncodeToString(p.PrivateKey()))
 }
 
-func (p *Manager) PrivateKey() string {
-	return p.privateKey.String()
+func (p *Keypair) PrivateKey() []byte {
+	return p.privateKey
 }

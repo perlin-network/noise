@@ -2,14 +2,13 @@ package ed25519_test
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"github.com/perlin-network/noise/identity/ed25519"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func BenchmarkSign(b *testing.B) {
-	p := ed25519.Random()
+	p := ed25519.RandomKeys()
 
 	message := make([]byte, 32)
 	if _, err := rand.Read(message); err != nil {
@@ -27,14 +26,14 @@ func BenchmarkSign(b *testing.B) {
 }
 
 func BenchmarkVerify(b *testing.B) {
-	p := ed25519.Random()
+	p := ed25519.RandomKeys()
 
 	message := make([]byte, 32)
 	if _, err := rand.Read(message); err != nil {
 		panic(err)
 	}
 
-	publicKey := p.PublicID()
+	publicKey := p.PublicKey()
 
 	b.ResetTimer()
 
@@ -52,11 +51,11 @@ func BenchmarkVerify(b *testing.B) {
 
 func TestEd25519(t *testing.T) {
 	t.Parallel()
-	p := ed25519.Random()
+	p := ed25519.RandomKeys()
 
-	publicKey := p.PublicID()
-	privateKeyHex := (*ed25519.Manager)(p).PrivateKey()
-	assert.True(t, len(p.PublicID()) > 0)
+	publicKey := p.PublicKey()
+	privateKey := p.PrivateKey()
+	assert.True(t, len(p.PublicKey()) > 0)
 	assert.True(t, len(p.String()) > 0)
 
 	message := []byte("test message")
@@ -80,16 +79,13 @@ func TestEd25519(t *testing.T) {
 	err = p.Verify(publicKey, wrongMessage, sig)
 	assert.NotNil(t, err)
 
-	privateKey, err := hex.DecodeString(privateKeyHex)
-	assert.Nil(t, err)
-
 	// try reloading the private key, should make the same object
-	mgr := ed25519.New(privateKey)
+	mgr := ed25519.LoadKeys(privateKey)
 	assert.NotNil(t, mgr)
-	assert.EqualValues(t, mgr.PublicID(), publicKey)
+	assert.EqualValues(t, mgr.PublicKey(), publicKey)
 
 	// make sure signing is different
-	badMgr := ed25519.New([]byte("bad"))
+	badMgr := ed25519.LoadKeys(ed25519.RandomKeys().PrivateKey())
 	badSig, err := badMgr.Sign(message)
 	assert.Nil(t, err)
 	assert.NotEqual(t, sig, badSig)
