@@ -4,80 +4,60 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/blake2b"
+	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/perlin-network/noise/identity"
 	"github.com/pkg/errors"
-	"go.dedis.ch/kyber/v3"
-	"go.dedis.ch/kyber/v3/group/edwards25519"
-	"go.dedis.ch/kyber/v3/sign/schnorr"
 )
 
 var (
-	_     identity.Manager     = (*Manager)(nil)
-	suite crypto.EllipticSuite = edwards25519.NewBlakeSHA256Ed25519()
+	_ identity.Manager = (*Manager)(nil)
 )
 
 type Manager struct {
-	privateKey kyber.Scalar
-	publicKey  kyber.Point
-
-	publicKeyBuf []byte
+	keypair *crypto.KeyPair
+	signer  crypto.SignaturePolicy
+	hasher  crypto.HashPolicy
 }
 
 func New(privateKeyBuf []byte) *Manager {
-	privateKey := suite.Scalar().SetBytes(privateKeyBuf)
-	publicKey := suite.Point().Mul(privateKey, suite.Point().Base())
-
-	publicKeyBuf, err := publicKey.MarshalBinary()
-
+	b := blake2b.New()
+	sp := ed25519.New()
+	kp, err := crypto.FromPrivateKey(sp, hex.EncodeToString(privateKeyBuf))
 	if err != nil {
 		panic(errors.Wrap(err, "failed to marshal public key"))
 	}
-
 	return &Manager{
-		privateKey:   privateKey,
-		publicKey:    publicKey,
-		publicKeyBuf: publicKeyBuf,
+		keypair: kp,
+		signer:  sp,
+		hasher:  b,
 	}
 }
 
 func Random() *Manager {
-	privateKey := suite.Scalar().Pick(suite.RandomStream())
-
-	privateKeyBytes, err := hex.DecodeString(privateKey.String())
-	if err != nil {
-		panic(errors.Wrap(err, "failed to marshal private key"))
-	}
-
-	return New(privateKeyBytes)
+	privateKey := ed25519.RandomKeyPair().PrivateKey
+	return New(privateKey)
 }
 
 func (p *Manager) PublicID() []byte {
-	return p.publicKeyBuf
+	return p.keypair.PublicKey
 }
 
 func (p *Manager) Sign(buf []byte) ([]byte, error) {
-	return schnorr.Sign(suite, p.privateKey, buf)
+	return p.keypair.Sign(p.signer, p.hasher, buf)
 }
 
 func (p *Manager) Verify(publicKeyBuf []byte, buf []byte, signature []byte) error {
-	point := suite.Point()
-
-	if err := point.UnmarshalBinary(publicKeyBuf); err != nil {
-		return errors.Wrap(err, "an invalid public key was provided")
+	if crypto.Verify(p.signer, p.hasher, publicKeyBuf, buf, signature) {
+		return nil
 	}
-
-	return schnorr.Verify(suite, point, buf, signature)
+	return errors.New("unable to verify signature")
 }
 
 func (p *Manager) String() string {
-	return fmt.Sprintf("Ed25519(public: %s, private: %s)", p.publicKey.String(), p.privateKey.String())
+	return fmt.Sprintf("Ed25519(public: %s, private: %s)", hex.EncodeToString(p.PublicID()), hex.EncodeToString(p.PrivateKey()))
 }
 
 func (p *Manager) PrivateKey() []byte {
-	privateKeyBytes, err := hex.DecodeString(p.privateKey.String())
-	if err != nil {
-		panic(errors.Wrap(err, "failed to marshal private key"))
-	}
-
-	return privateKeyBytes
+	return p.keypair.PrivateKey
 }

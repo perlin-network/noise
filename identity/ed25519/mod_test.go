@@ -85,7 +85,7 @@ func TestEd25519(t *testing.T) {
 	assert.EqualValues(t, mgr.PublicID(), publicKey)
 
 	// make sure signing is different
-	badMgr := ed25519.New([]byte("bad"))
+	badMgr := ed25519.New(ed25519.Random().PrivateKey())
 	badSig, err := badMgr.Sign(message)
 	assert.Nil(t, err)
 	assert.NotEqual(t, sig, badSig)
