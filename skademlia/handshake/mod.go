@@ -1,28 +1,36 @@
 package handshake
 
 import (
-	"encoding/json"
+	"encoding/hex"
 	"github.com/perlin-network/noise"
+	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/skademlia"
 	"github.com/pkg/errors"
+	"time"
 )
+
+const KeySkademliaHandshake = ".noise.skademlia.handshake"
 
 var (
 	_ protocol.Block = (*block)(nil)
 )
 
 type block struct {
+	timeout         time.Duration
 	opcodeHandshake noise.Opcode
 	nodeID          *skademlia.IdentityManager
 }
 
-type HandshakeState struct {
-	passive bool
+func New() *block {
+	return &block{
+		timeout: 5 * time.Second,
+	}
 }
 
-func New() *block {
-	return &block{}
+func (b *block) WithTimeout(timeout time.Duration) *block {
+	b.timeout = timeout
+	return b
 }
 
 func (b *block) OnRegister(p *protocol.Protocol, node *noise.Node) {
@@ -35,7 +43,44 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		return errors.New("node not setup with skademlia properly")
 	}
 
-	// TODO: need to fill this in
+	// Send your
+	if err := peer.SendMessage(b.makeMessage("init")); err != nil {
+		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to send our skademlia init to our peer")
+	}
+
+	// Wait for handshake response.
+	var res Handshake
+	var ok bool
+
+	select {
+	case <-time.After(b.timeout):
+		return errors.Wrap(protocol.DisconnectPeer, "timed out receiving handshake request")
+	case msg := <-peer.Receive(b.opcodeHandshake):
+		res, ok = msg.(Handshake)
+		if !ok {
+			return errors.Wrap(protocol.DisconnectPeer, "did not get a handshake response back")
+		}
+	}
+
+	// verify the handshake is okay
+	if err := b.VerifyHandshake(res); err != nil {
+		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to validate skademlia id")
+	}
+
+	// if it was an init, then acknowledge it
+	if res.Msg == "init" {
+		if err := peer.SendMessage(b.makeMessage("ack")); err != nil {
+			return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to send our skademlia ack to our peer")
+		}
+	}
+
+	// store the public ID in the metadata for further debugging
+	publicIDHex := hex.EncodeToString(res.PublicKey)
+	peer.Set(KeySkademliaHandshake, publicIDHex)
+
+	log.Debug().
+		Str("publicIDHex", publicIDHex).
+		Msg("Successfully performed SKademlia ID verification with our peer.")
 
 	return nil
 }
@@ -44,61 +89,29 @@ func (b *block) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
 	return nil
 }
 
-// ActivelyInitHandshake sends the current node's public key, id, and nonce to be verified by a peer
-func (b *block) ActivelyInitHandshake() ([]byte, *HandshakeState, error) {
-	msg := &Handshake{
-		Msg:       "init",
+func (b *block) makeMessage(msg string) *Handshake {
+	return &Handshake{
+		Msg:       msg,
 		PublicKey: b.nodeID.PublicID(),
 		ID:        b.nodeID.NodeID,
 		Nonce:     b.nodeID.Nonce,
 		C1:        b.nodeID.C1,
 		C2:        b.nodeID.C2,
 	}
-
-	return msg.Write(), &HandshakeState{passive: false}, nil
 }
 
-// PassivelyInitHandshake initiates a passive handshake to a peer
-func (b *block) PassivelyInitHandshake() (*HandshakeState, error) {
-	return &HandshakeState{passive: true}, nil
-}
-
-// ProcessHandshakeMessage takes a handshake state and payload and sends a handshake message to a peer
-func (b *block) ProcessHandshakeMessage(handshakeState *HandshakeState, payload []byte) ([]byte, error) {
-	var msg Handshake
-	if err := json.Unmarshal(payload, &msg); err != nil {
-		return nil, errors.New("skademlia: failed to unmarshal handshake payload")
-	}
+// VerifyHandshake checks if a handshake is valid
+func (b *block) VerifyHandshake(msg Handshake) error {
 
 	if msg.C1 < b.nodeID.C1 || msg.C2 < b.nodeID.C2 {
-		return nil, errors.Errorf("skademlia: S/Kademlia constants (%d, %d) for (c1, c2) do not satisfy local constants (%d, %d)",
+		return errors.Errorf("skademlia: S/Kademlia constants (%d, %d) for (c1, c2) do not satisfy local constants (%d, %d)",
 			msg.C1, msg.C2, b.nodeID.C1, b.nodeID.C2)
 	}
 
 	// Verify that the remote peer ID is valid for the current node's c1 and c2 settings
 	if ok := skademlia.VerifyPuzzle(msg.PublicKey, msg.ID, msg.Nonce, b.nodeID.C1, b.nodeID.C2); !ok {
-		return nil, errors.New("skademlia: keypair failed skademlia verification")
+		return errors.New("skademlia: keypair failed skademlia verification")
 	}
 
-	if handshakeState.passive {
-		if msg.Msg == "init" {
-			// If the handshake state is passive, construct a message to send the peer with this node's public key,
-			// id and nonce for verification
-			msg := &Handshake{
-				Msg:       "ack",
-				PublicKey: b.nodeID.PublicID(),
-				ID:        b.nodeID.NodeID,
-				Nonce:     b.nodeID.Nonce,
-				C1:        b.nodeID.C1,
-				C2:        b.nodeID.C2,
-			}
-			return msg.Write(), nil
-		}
-		return nil, errors.New("skademlia: invalid handshake (passive)")
-	}
-
-	if msg.Msg == "ack" {
-		return nil, nil
-	}
-	return nil, errors.New("skademlia: invalid handshake (active)")
+	return nil
 }

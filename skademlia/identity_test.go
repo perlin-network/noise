@@ -80,10 +80,15 @@ func TestGenerateKeyPairAndID(t *testing.T) {
 
 	nodeID := blake2b.New().HashBytes(kp.PublicKey)
 
+	// this is a good nonce check
 	assert.True(t, checkHashedBytesPrefixLen(nodeID, c1))
-
 	nonce := getNonce(nodeID, c2)
 	assert.True(t, len(nonce) > 0)
+
+	// fail the prefix len, difficulty setting is too high
+	assert.False(t, checkHashedBytesPrefixLen(nodeID, c1*4))
+	nonce = getNonce(nodeID, c2*4)
+	assert.Equal(t, 0, len(nonce))
 }
 
 func TestCheckHashedBytesPrefixLen(t *testing.T) {

@@ -18,7 +18,8 @@ const (
 	// DefaultC2 is the prefix-matching length for the dynamic cryptopuzzle.
 	DefaultC2 = 16
 	// maxPuzzleIterations is an internal limit for performing crytographic puzzles for skademlia
-	maxPuzzleIterations = 10000000000
+	// this is set to stop the puzzle after about 10sec of failed continuous checks
+	maxPuzzleIterations = 10000000
 )
 
 var (
