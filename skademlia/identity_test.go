@@ -3,9 +3,10 @@ package skademlia
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/perlin-network/noise/identity/ed25519"
+	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/crypto/blake2b"
+	"github.com/perlin-network/noise/crypto/ed25519"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/crypto/blake2b"
 	"testing"
 )
 
@@ -32,10 +33,8 @@ func TestNewSKademliaIdentityFromKeypair(t *testing.T) {
 	}
 	for i, tt := range testCases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			privateKey, err := hex.DecodeString(tt.privateKeyHex)
-			assert.Nil(t, err)
-
-			kp := ed25519.New(privateKey)
+			sp := ed25519.New()
+			kp, err := crypto.FromPrivateKey(sp, tt.privateKeyHex)
 			assert.Nil(t, err)
 
 			id, err := NewIdentityFromKeypair(kp, tt.c1, DefaultC2)
@@ -57,10 +56,9 @@ func TestSignAndVerify(t *testing.T) {
 	assert.Nil(t, err)
 
 	privateKeyHex := "1946e455ca6072bcdfd3182799c2ceb1557c2a56c5f810478ac0eb279ad4c93e8e8b6a97551342fd70ec03bea8bae5b05bc5dc0f54b2721dff76f06fab909263"
-	privateKey, err := hex.DecodeString(privateKeyHex)
-	assert.Nil(t, err)
 
-	kp := ed25519.New(privateKey)
+	sp := ed25519.New()
+	kp, err := crypto.FromPrivateKey(sp, privateKeyHex)
 	assert.Nil(t, err)
 
 	id, err := NewIdentityFromKeypair(kp, DefaultC1, DefaultC2)
@@ -70,7 +68,7 @@ func TestSignAndVerify(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, id.SignatureSize(), len(sign))
 
-	assert.Nil(t, id.Verify(kp.PublicID(), data, sign))
+	assert.True(t, id.Verify(kp.PublicKey, data, sign))
 }
 
 func TestGenerateKeyPairAndID(t *testing.T) {
@@ -79,8 +77,7 @@ func TestGenerateKeyPairAndID(t *testing.T) {
 	kp := generateKeyPair(DefaultC1, DefaultC2)
 	assert.NotNil(t, kp)
 
-	hash := blake2b.Sum256(kp.PublicID())
-	nodeID := hash[:]
+	nodeID := blake2b.New().HashBytes(kp.PublicKey)
 
 	assert.True(t, checkHashedBytesPrefixLen(nodeID, DefaultC1))
 
@@ -103,12 +100,11 @@ func TestCheckHashedBytesPrefixLen(t *testing.T) {
 	}
 	for i, tt := range testCases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			privateKey, err := hex.DecodeString(tt.privateKeyHex)
+			sp := ed25519.New()
+			kp, err := crypto.FromPrivateKey(sp, tt.privateKeyHex)
 			assert.Nil(t, err)
 
-			kp := ed25519.New(privateKey)
-			hash := blake2b.Sum256(kp.PublicID())
-			nodeID := hash[:]
+			nodeID := blake2b.New().HashBytes(kp.PublicKey)
 
 			assert.Equal(t, tt.valid, checkHashedBytesPrefixLen(nodeID, tt.c1))
 		})
@@ -149,12 +145,11 @@ func TestCheckDynamicPuzzle(t *testing.T) {
 	}
 	for i, tt := range testCases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			privateKey, err := hex.DecodeString(tt.privateKeyHex)
+			sp := ed25519.New()
+			kp, err := crypto.FromPrivateKey(sp, tt.privateKeyHex)
 			assert.Nil(t, err)
 
-			kp := ed25519.New(privateKey)
-			hash := blake2b.Sum256(kp.PublicID())
-			nodeID := hash[:]
+			nodeID := blake2b.New().HashBytes(kp.PublicKey)
 
 			x, err := hex.DecodeString(tt.encodedX)
 			assert.Nil(t, err)
@@ -176,11 +171,9 @@ func TestVerifyPuzzle(t *testing.T) {
 	}
 	for i, tt := range testCases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-
-			privateKey, err := hex.DecodeString(tt.privateKeyHex)
+			sp := ed25519.New()
+			kp, err := crypto.FromPrivateKey(sp, tt.privateKeyHex)
 			assert.Nil(t, err)
-
-			kp := ed25519.New(privateKey)
 
 			id, err := NewIdentityFromKeypair(kp, DefaultC1, DefaultC2)
 			assert.Nil(t, err)
