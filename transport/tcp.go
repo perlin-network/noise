@@ -1,8 +1,9 @@
 package transport
 
 import (
+	"fmt"
+	"github.com/pkg/errors"
 	"net"
-	"strconv"
 )
 
 var _ Layer = (*tcp)(nil)
@@ -13,8 +14,12 @@ func (t tcp) String() string {
 	return "tcp"
 }
 
-func (t tcp) Listen(port uint16) (net.Listener, error) {
-	listener, err := net.Listen("tcp", ":"+strconv.Itoa(int(port)))
+func (t tcp) Listen(host string, port uint16) (net.Listener, error) {
+	if net.ParseIP(host) == nil {
+		return nil, errors.Errorf("unable to parse host as IP: %s", host)
+	}
+
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
 		return nil, err
 	}

@@ -13,7 +13,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -41,8 +40,6 @@ type Peer struct {
 
 	kill     chan struct{}
 	killOnce sync.Once
-
-	workersRunning uint32
 
 	metadata sync.Map
 
@@ -79,22 +76,17 @@ func (p *Peer) init() {
 }
 
 func (p *Peer) spawnReceiveWorker() {
-	atomic.AddUint32(&p.workersRunning, 1)
-
 	reader := bufio.NewReader(p.conn)
 
 	for {
 		select {
 		case <-p.kill:
-			p.onDisconnectCallbacks.RunCallbacks(p.node)
-			close(p.kill)
 			return
 		default:
 		}
 
 		size, err := binary.ReadUvarint(reader)
 		if err != nil {
-			// TODO(kenta): Hacky fix, but any errors w/ Error() = use of closed network connection is not considered a conn error.
 			if errors.Cause(err) != io.EOF && !strings.Contains(errors.Cause(err).Error(), "use of closed network connection") && !strings.Contains(errors.Cause(err).Error(), "read: connection reset by peer") {
 				p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrap(err, "failed to read message size"))
 			}
@@ -145,7 +137,6 @@ func (p *Peer) spawnReceiveWorker() {
 			p.criticalReadLock <- struct{}{}
 			<-p.criticalReadLock
 		case <-time.After(3 * time.Second):
-			// TODO(kenta): message was unhandled for 3 seconds; disconnect peer.
 			p.Disconnect()
 			continue
 		}
@@ -393,15 +384,13 @@ func (p *Peer) Disconnect() {
 	}
 
 	p.killOnce.Do(func() {
-		workersRunning := atomic.LoadUint32(&p.workersRunning)
-
-		for i := 0; i < int(workersRunning); i++ {
-			p.kill <- struct{}{}
-		}
-
 		if err := p.conn.Close(); err != nil {
 			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrapf(err, "got errors closing peer connection"))
 		}
+
+		p.onDisconnectCallbacks.RunCallbacks(p.node)
+
+		p.kill <- struct{}{}
 	})
 }
 
@@ -457,4 +446,8 @@ func (p *Peer) EnterCriticalReadMode() {
 
 func (p *Peer) LeaveCriticalReadMode() {
 	<-p.criticalReadLock
+}
+
+func (p *Peer) Debug_SetNode(node *Node) {
+	p.node = node
 }

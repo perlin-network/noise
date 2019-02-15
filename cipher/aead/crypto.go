@@ -19,22 +19,15 @@ func deriveCipherSuite(fn func() hash.Hash, ephemeralSharedKey kyber.Point, cont
 		return nil, nil, errors.Wrap(err, "failed to marshal ephemeral shared key for AEAD")
 	}
 
-	reader := hkdf.New(fn, ephemeralBuf, nil, context)
+	deriver := hkdf.New(fn, ephemeralBuf, nil, context)
 
 	sharedKey := make([]byte, sharedKeyLength)
-	if _, err := reader.Read(sharedKey); err != nil {
+	if _, err := deriver.Read(sharedKey); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to derive key via HKDF")
 	}
 
-	block, err := aes.NewCipher(sharedKey)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to init AES-256")
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to init GCM (Galois Counter Mode) for AES-256 cipher")
-	}
+	block, _ := aes.NewCipher(sharedKey)
+	gcm, _ := cipher.NewGCM(block)
 
 	return gcm, sharedKey, nil
 }

@@ -143,8 +143,8 @@ func Run(startPort int, numNodes int, numTxEach int) error {
 }
 
 func TestRun(t *testing.T) {
-	assert.Nil(t, Run(startPort, numNodes, numMessagesEach))
+	log.Disable()
+	defer log.Enable()
 
-	noise.DebugOpcodes()
-	t.Log("Done")
+	assert.Nil(t, Run(startPort, numNodes, numMessagesEach))
 }
