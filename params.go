@@ -11,7 +11,7 @@ type parameters struct {
 	Port uint16
 
 	NAT       nat.Provider
-	ID        identity.Manager
+	Keys      identity.Keypair
 	Transport transport.Layer
 
 	Metadata map[string]interface{}

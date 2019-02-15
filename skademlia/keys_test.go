@@ -3,19 +3,20 @@ package skademlia
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/perlin-network/noise/crypto"
-	"github.com/perlin-network/noise/crypto/blake2b"
-	"github.com/perlin-network/noise/crypto/ed25519"
+	"github.com/perlin-network/noise/identity/ed25519"
+	"github.com/perlin-network/noise/internal/edwards25519"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/crypto/blake2b"
 	"testing"
 )
 
 func TestNewIdentityRandom(t *testing.T) {
 	t.Parallel()
 
-	idm := NewIdentityRandom()
-	assert.NotNil(t, idm)
-	assert.True(t, VerifyPuzzle(idm.PublicID(), idm.NodeID, idm.Nonce, DefaultC1, DefaultC2))
+	keys := NewKeys()
+
+	assert.NotNil(t, keys)
+	assert.True(t, VerifyPuzzle(keys.PublicKey(), keys.ID(), keys.Nonce, DefaultC1, DefaultC2))
 }
 
 func TestNewSKademliaIdentityFromPrivateKey(t *testing.T) {
@@ -36,13 +37,14 @@ func TestNewSKademliaIdentityFromPrivateKey(t *testing.T) {
 			privateKey, err := hex.DecodeString(tt.privateKeyHex)
 			assert.Nil(t, err)
 
-			idm, err := newIdentityFromPrivateKey(privateKey, tt.c1, DefaultC2)
+			keys, err := LoadKeys(privateKey, tt.c1, 16)
+
 			if tt.valid {
-				assert.Nil(t, err)
-				assert.NotNil(t, idm)
+				assert.NoError(t, err)
+				assert.NotNil(t, keys)
 			} else {
-				assert.NotNil(t, err)
-				assert.Nil(t, idm)
+				assert.Error(t, err)
+				assert.Nil(t, keys)
 			}
 		})
 	}
@@ -52,21 +54,23 @@ func TestSignAndVerify(t *testing.T) {
 	t.Parallel()
 
 	data, err := randomBytes(1024)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	privateKeyHex := "1946e455ca6072bcdfd3182799c2ceb1557c2a56c5f810478ac0eb279ad4c93e8e8b6a97551342fd70ec03bea8bae5b05bc5dc0f54b2721dff76f06fab909263"
 
 	privateKey, err := hex.DecodeString(privateKeyHex)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
-	idm, err := NewIdentityFromPrivateKey(privateKey)
-	assert.Nil(t, err)
+	keys, err := LoadKeys(privateKey, DefaultC1, DefaultC2)
+	assert.NoError(t, err)
+	assert.NotNil(t, keys)
 
-	sign, err := idm.Sign([]byte(data))
-	assert.Nil(t, err)
-	assert.Equal(t, ed25519.SignatureSize, len(sign))
+	signature, err := keys.Sign([]byte(data))
 
-	assert.Nil(t, idm.Verify(idm.PublicID(), data, sign))
+	assert.NoError(t, err)
+	assert.Len(t, signature, edwards25519.SignatureSize)
+
+	assert.Nil(t, keys.Verify(keys.publicKey, data, signature))
 }
 
 func TestGenerateKeyPairAndID(t *testing.T) {
@@ -75,19 +79,17 @@ func TestGenerateKeyPairAndID(t *testing.T) {
 	c1 := 8
 	c2 := 8
 
-	kp := generateKeyPair(c1, c2)
-	assert.NotNil(t, kp)
+	keys := RandomKeys(c1, c2)
+	assert.NotNil(t, keys)
 
-	nodeID := blake2b.New().HashBytes(kp.PublicKey)
-
-	// this is a good nonce check
-	assert.True(t, checkHashedBytesPrefixLen(nodeID, c1))
-	nonce := getNonce(nodeID, c2)
+	// Check if we can validate correct nonces.
+	assert.True(t, checkHashedBytesPrefixLen(keys.ID(), c1))
+	nonce := generateNonce(keys.ID(), c2)
 	assert.True(t, len(nonce) > 0)
 
-	// fail the prefix len, difficulty setting is too high
-	assert.False(t, checkHashedBytesPrefixLen(nodeID, c1*4))
-	nonce = getNonce(nodeID, c2*4)
+	// Check what happens if we generate the nonce with an invalid prefix length.
+	assert.False(t, checkHashedBytesPrefixLen(keys.ID(), c1*4))
+	nonce = generateNonce(keys.ID(), c2*4)
 	assert.Equal(t, 0, len(nonce))
 }
 
@@ -104,15 +106,16 @@ func TestCheckHashedBytesPrefixLen(t *testing.T) {
 		{"1946e455ca6072bcdfd3182799c2ceb1557c2a56c5f810478ac0eb279ad4c93e8e8b6a97551342fd70ec03bea8bae5b05bc5dc0f54b2721dff76f06fab909263", 10, true},
 		{"078e11ac002673b20922a777d827a68191163fa87ce897f55be672a508b5c5a017246e17eb3aa6d3eed0150044d426e899525665b86574f11dbcf150ac65a988", 16, false},
 	}
+
 	for i, tt := range testCases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			sp := ed25519.New()
-			kp, err := crypto.FromPrivateKey(sp, tt.privateKeyHex)
-			assert.Nil(t, err)
+			buf, err := hex.DecodeString(tt.privateKeyHex)
+			assert.NoError(t, err)
 
-			nodeID := blake2b.New().HashBytes(kp.PublicKey)
+			keys := ed25519.LoadKeys(buf)
+			id := blake2b.Sum256(keys.PublicKey())
 
-			assert.Equal(t, tt.valid, checkHashedBytesPrefixLen(nodeID, tt.c1))
+			assert.Equal(t, tt.valid, checkHashedBytesPrefixLen(id[:], tt.c1))
 		})
 	}
 }
@@ -141,7 +144,7 @@ func TestCheckDynamicPuzzle(t *testing.T) {
 
 	testCases := []struct {
 		privateKeyHex string
-		encodedX      string
+		nonceHex      string
 		prefixLength  int
 	}{
 		{"d4a4936c626e53af8d7db5585df855c3f845bf13480f5c18e8dbf228f9d2c56589632630a2c7069424e7fb46a7d9efc1e017f39f72eb119c3c9151edd11787b9", "421e8f9ebab772d12562e0908286ccaef7672640f340f714c0734819bb078c99", 8},
@@ -151,15 +154,15 @@ func TestCheckDynamicPuzzle(t *testing.T) {
 	}
 	for i, tt := range testCases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			sp := ed25519.New()
-			kp, err := crypto.FromPrivateKey(sp, tt.privateKeyHex)
-			assert.Nil(t, err)
+			buf, err := hex.DecodeString(tt.privateKeyHex)
+			assert.NoError(t, err)
 
-			nodeID := blake2b.New().HashBytes(kp.PublicKey)
+			keys := ed25519.LoadKeys(buf)
+			id := blake2b.Sum256(keys.PublicKey())
 
-			x, err := hex.DecodeString(tt.encodedX)
+			nonce, err := hex.DecodeString(tt.nonceHex)
 			assert.Nil(t, err)
-			assert.True(t, checkDynamicPuzzle(nodeID, x, tt.prefixLength))
+			assert.True(t, checkDynamicPuzzle(id[:], nonce, tt.prefixLength))
 		})
 	}
 }
@@ -180,18 +183,14 @@ func TestVerifyPuzzle(t *testing.T) {
 			privateKey, err := hex.DecodeString(tt.privateKeyHex)
 			assert.Nil(t, err)
 
-			idm, err := NewIdentityFromPrivateKey(privateKey)
-			assert.Nil(t, err)
-			assert.NotNil(t, idm)
+			keys, err := LoadKeys(privateKey, 16, 16)
+			assert.NoError(t, err)
+			assert.NotNil(t, keys)
 
 			nonce, err := hex.DecodeString(tt.encodedX)
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 
-			idm, err = newIdentityFromPrivateKey(privateKey, 16, 16)
-			assert.Nil(t, err)
-			assert.NotNil(t, idm)
-
-			assert.Equal(t, tt.valid, VerifyPuzzle(idm.PublicID(), idm.NodeID, nonce, 16, 16))
+			assert.Equal(t, tt.valid, VerifyPuzzle(keys.PublicKey(), keys.ID(), nonce, 16, 16))
 		})
 	}
 }

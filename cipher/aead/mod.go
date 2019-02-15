@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+const keyAuthChannel = "aead.auth.ch"
+
 var (
 	_ protocol.Block = (*block)(nil)
 )
@@ -98,10 +100,15 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	})
 
 	log.Debug().Hex("derived_shared_key", sharedKey).Msg("Derived HMAC, and successfully initialized session w/ AEAD cipher suite.")
+
+	close(peer.LoadOrStore(keyAuthChannel, make(chan struct{})).(chan struct{}))
 	return nil
 }
 
 func (b *block) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
-
 	return nil
+}
+
+func WaitUntilAuthenticated(peer *noise.Peer) {
+	<-peer.LoadOrStore(keyAuthChannel, make(chan struct{}, 1)).(chan struct{})
 }

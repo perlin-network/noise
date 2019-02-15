@@ -18,12 +18,11 @@ var (
 	ttc1 = 8
 	ttc2 = 8
 
-	ttid1 = NewID("0000", newIdentityRandom(ttc1, ttc2).PublicID())
-	ttid2 = NewID("0001", newIdentityRandom(ttc1, ttc2).PublicID())
-	ttid3 = NewID("0002", newIdentityRandom(ttc1, ttc2).PublicID())
-	ttid4 = NewID("0003", newIdentityRandom(ttc1, ttc2).PublicID())
+	ttid1 = NewID("0000", RandomKeys(ttc1, ttc2).PublicKey(), []byte{})
+	ttid2 = NewID("0001", RandomKeys(ttc1, ttc2).PublicKey(), []byte{})
+	ttid3 = NewID("0002", RandomKeys(ttc1, ttc2).PublicKey(), []byte{})
 
-	ttidBytes = ttid1.PublicID()
+	ttidBytes = ttid1.PublicKey()
 )
 
 func MustReadRand(size int) []byte {
@@ -43,19 +42,19 @@ func TestSelf(t *testing.T) {
 	t.Parallel()
 
 	routingTable := newTable(ttid1)
-	routingTable.Update(ttid2)
-	routingTable.Update(ttid3)
+	assert.NoError(t, routingTable.Update(ttid2))
+	assert.NoError(t, routingTable.Update(ttid3))
 
 	assert.Equal(t, "0000", routingTable.self.(ID).address)
-	assert.EqualValues(t, routingTable.self.PublicID(), ttidBytes)
+	assert.EqualValues(t, routingTable.self.PublicKey(), ttidBytes)
 }
 
 func TestGetPeerAddresses(t *testing.T) {
 	t.Parallel()
 
 	routingTable := newTable(ttid1)
-	routingTable.Update(ttid2)
-	routingTable.Update(ttid3)
+	assert.NoError(t, routingTable.Update(ttid2))
+	assert.NoError(t, routingTable.Update(ttid3))
 
 	tester := routingTable.GetPeers()
 	sort.Strings(tester)
@@ -68,7 +67,7 @@ func TestGet(t *testing.T) {
 	t.Parallel()
 
 	routingTable := newTable(ttid1)
-	routingTable.Update(ttid2)
+	assert.NoError(t, routingTable.Update(ttid2))
 
 	// exists
 	found, ok := routingTable.Get(ttid1)
@@ -82,13 +81,13 @@ func TestGet(t *testing.T) {
 	assert.Nil(t, found)
 
 	// add new
-	routingTable.Update(ttid3)
+	assert.NoError(t, routingTable.Update(ttid3))
 	found, ok = routingTable.Get(ttid3)
 	assert.True(t, ok)
 	assert.NotNil(t, found)
 	assert.EqualValues(t, ttid3, found)
 
-	routingTable.Delete(ttid1)
+	assert.True(t, routingTable.Delete(ttid1))
 	found, ok = routingTable.Get(ttid1)
 	assert.False(t, ok)
 	assert.Nil(t, found)
@@ -110,10 +109,10 @@ func TestRemovePeer(t *testing.T) {
 	t.Parallel()
 
 	routingTable := newTable(ttid1)
-	routingTable.Update(ttid2)
-	routingTable.Update(ttid3)
+	assert.NoError(t, routingTable.Update(ttid2))
+	assert.NoError(t, routingTable.Update(ttid3))
 
-	routingTable.Delete(ttid2)
+	assert.True(t, routingTable.Delete(ttid2))
 	testee := routingTable.GetPeers()
 	sort.Strings(testee)
 	tester := []string{"0002"}
@@ -130,15 +129,15 @@ func TestUpdate(t *testing.T) {
 
 	// self key generates bucket id 255
 	idKey1 := []byte{124, 224, 147, 208, 211, 103, 166, 113, 153, 104, 83, 62, 61, 145, 8, 211, 144, 164, 224, 191, 177, 205, 198, 94, 92, 35, 76, 83, 229, 46, 219, 110}
-	id1 := NewID("0001", idKey1)
+	id1 := NewID("0001", idKey1, []byte{})
 
 	// key generates bucket id 8
 	idKey2 := []byte{210, 127, 212, 137, 47, 66, 40, 189, 231, 239, 210, 168, 52, 15, 223, 66, 199, 199, 156, 61, 132, 56, 102, 223, 32, 175, 169, 241, 156, 46, 83, 98}
-	id2 := NewID("0002", idKey2)
+	id2 := NewID("0002", idKey2, []byte{})
 
 	// key generates bucket id 8
 	idKey3 := []byte{228, 61, 230, 169, 243, 78, 244, 44, 82, 76, 54, 56, 98, 135, 227, 158, 114, 251, 56, 160, 208, 60, 121, 41, 197, 63, 235, 41, 236, 66, 222, 219}
-	id3 := NewID("0003", idKey3)
+	id3 := NewID("0003", idKey3, []byte{})
 
 	bucketSize = 1
 	routingTable := newTable(id1)
@@ -163,26 +162,28 @@ func TestFindClosestPeers(t *testing.T) {
 	nodes := []ID{}
 
 	nodes = append(nodes,
-		ID{address: "0000", hash: []byte("12345678901234567890123456789010")},
-		ID{address: "0001", hash: []byte("12345678901234567890123456789011")},
-		ID{address: "0002", hash: []byte("12345678901234567890123456789012")},
-		ID{address: "0003", hash: []byte("12345678901234567890123456789013")},
-		ID{address: "0004", hash: []byte("12345678901234567890123456789014")},
-		ID{address: "0005", hash: []byte("00000000000000000000000000000000")},
+		ID{address: "0000", buf: []byte("12345678901234567890123456789010")},
+		ID{address: "0001", buf: []byte("12345678901234567890123456789011")},
+		ID{address: "0002", buf: []byte("12345678901234567890123456789012")},
+		ID{address: "0003", buf: []byte("12345678901234567890123456789013")},
+		ID{address: "0004", buf: []byte("12345678901234567890123456789014")},
+		ID{address: "0005", buf: []byte("00000000000000000000000000000000")},
 	)
 	for _, node := range nodes {
-		node.publicKey = node.hash
+		node.publicKey = node.buf
 	}
 
 	routingTable := newTable(nodes[0])
 	for i := 1; i <= 5; i++ {
-		routingTable.Update(nodes[i])
+		assert.NoError(t, routingTable.Update(nodes[i]))
 	}
-	testee := []ID{}
+
+	var testee []ID
 	for _, peer := range FindClosestPeers(routingTable, nodes[5].Hash(), 3) {
 		testee = append(testee, peer.(ID))
 	}
 	assert.Equalf(t, 3, len(testee), "expected 3 peers got %+v", testee)
+
 	answerKeys := []int{5, 2, 3}
 	for i, key := range answerKeys {
 		_answer := nodes[key]
@@ -212,9 +213,10 @@ func TestFindClosestConcurrent(t *testing.T) {
 	const IDPoolSize = 16
 	const concurrentCount = 16
 
-	ids := make([]unsafe.Pointer, IDPoolSize) // Element type: *skademlia.ID
+	ids := make([]unsafe.Pointer, IDPoolSize) // Element type: *skademlia.id
 
-	id := NewID("0000", newIdentityRandom(ttc1, ttc2).PublicID())
+	keys := RandomKeys(ttc1, ttc2)
+	id := NewID("0000", keys.PublicKey(), keys.Nonce)
 	table := newTable(id)
 
 	wg := &sync.WaitGroup{}
@@ -227,15 +229,17 @@ func TestFindClosestConcurrent(t *testing.T) {
 			}()
 			indices := MustReadRand(16)
 
-			for _, indice := range indices {
-				switch int(indice) % 4 {
+			for _, i := range indices {
+				switch int(i) % 4 {
 				case 0:
 					{
 						addrRaw := MustReadRand(8)
 						addr := hex.EncodeToString(addrRaw)
 
-						id := NewID(addr, newIdentityRandom(ttc1, ttc2).PublicID())
-						table.Update(id)
+						keys := RandomKeys(ttc1, ttc2)
+
+						id := NewID(addr, keys.PublicKey(), keys.Nonce)
+						_ = table.Update(id)
 
 						atomic.StorePointer(&ids[int(RandByte())%IDPoolSize], unsafe.Pointer(&id))
 					}
@@ -269,14 +273,18 @@ func TestFindClosestConcurrent(t *testing.T) {
 }
 
 func TestTable(t *testing.T) {
+	keys := RandomKeys(ttc1, ttc2)
+
 	// make the node and table
 	params := noise.DefaultParams()
-	params.ID = newIdentityRandom(ttc1, ttc2)
+	params.Keys = keys
 	params.Port = uint16(3000)
-	id := NewID(fmt.Sprintf("127.0.0.1:%d", params.Port), params.ID.PublicID())
+
+	id := NewID(fmt.Sprintf("127.0.0.1:%d", params.Port), keys.PublicKey(), keys.Nonce)
 
 	node, err := noise.NewNode(params)
 	assert.Nil(t, err)
+	defer node.Kill()
 
 	p := protocol.New()
 	p.Register(New())

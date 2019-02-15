@@ -7,7 +7,7 @@
 //
 // These functions are also compatible with the “Ed25519” function defined in
 // https://tools.ietf.org/html/draft-irtf-cfrg-eddsa-05.
-package ed25519
+package edwards25519
 
 // This code is a port of the public domain, “ref10” implementation of ed25519
 // from SUPERCOP.
@@ -20,8 +20,6 @@ import (
 	"errors"
 	"io"
 	"strconv"
-
-	"github.com/perlin-network/noise/crypto/ed25519/internal/edwards25519"
 )
 
 const (
@@ -53,7 +51,7 @@ func (priv PrivateKey) Public() crypto.PublicKey {
 // crypto.Hash(0) as the value for opts.
 func (priv PrivateKey) Sign(rand io.Reader, message []byte, opts crypto.SignerOpts) (signature []byte, err error) {
 	if opts.HashFunc() != crypto.Hash(0) {
-		return nil, errors.New("ed25519: cannot sign hashed message")
+		return nil, errors.New("edwards25519: cannot sign hashed message")
 	}
 
 	return Sign(priv, message), nil
@@ -78,10 +76,10 @@ func GenerateKey(rand io.Reader) (publicKey PublicKey, privateKey PrivateKey, er
 	digest[31] &= 127
 	digest[31] |= 64
 
-	var A edwards25519.ExtendedGroupElement
+	var A ExtendedGroupElement
 	var hBytes [32]byte
 	copy(hBytes[:], digest[:])
-	edwards25519.GeScalarMultBase(&A, &hBytes)
+	GeScalarMultBase(&A, &hBytes)
 	var publicKeyBytes [32]byte
 	A.ToBytes(&publicKeyBytes)
 
@@ -95,7 +93,7 @@ func GenerateKey(rand io.Reader) (publicKey PublicKey, privateKey PrivateKey, er
 // panic if len(privateKey) is not PrivateKeySize.
 func Sign(privateKey PrivateKey, message []byte) []byte {
 	if l := len(privateKey); l != PrivateKeySize {
-		panic("ed25519: bad private key length: " + strconv.Itoa(l))
+		panic("edwards25519: bad private key length: " + strconv.Itoa(l))
 	}
 
 	h := sha512.New()
@@ -115,9 +113,9 @@ func Sign(privateKey PrivateKey, message []byte) []byte {
 	h.Sum(messageDigest[:0])
 
 	var messageDigestReduced [32]byte
-	edwards25519.ScReduce(&messageDigestReduced, &messageDigest)
-	var R edwards25519.ExtendedGroupElement
-	edwards25519.GeScalarMultBase(&R, &messageDigestReduced)
+	ScReduce(&messageDigestReduced, &messageDigest)
+	var R ExtendedGroupElement
+	GeScalarMultBase(&R, &messageDigestReduced)
 
 	var encodedR [32]byte
 	R.ToBytes(&encodedR)
@@ -128,10 +126,10 @@ func Sign(privateKey PrivateKey, message []byte) []byte {
 	h.Write(message)
 	h.Sum(hramDigest[:0])
 	var hramDigestReduced [32]byte
-	edwards25519.ScReduce(&hramDigestReduced, &hramDigest)
+	ScReduce(&hramDigestReduced, &hramDigest)
 
 	var s [32]byte
-	edwards25519.ScMulAdd(&s, &hramDigestReduced, &expandedSecretKey, &messageDigestReduced)
+	ScMulAdd(&s, &hramDigestReduced, &expandedSecretKey, &messageDigestReduced)
 
 	signature := make([]byte, SignatureSize)
 	copy(signature, encodedR[:])
@@ -144,21 +142,21 @@ func Sign(privateKey PrivateKey, message []byte) []byte {
 // will panic if len(publicKey) is not PublicKeySize.
 func Verify(publicKey PublicKey, message, sig []byte) bool {
 	if l := len(publicKey); l != PublicKeySize {
-		panic("ed25519: bad public key length: " + strconv.Itoa(l))
+		panic("edwards25519: bad public key length: " + strconv.Itoa(l))
 	}
 
 	if len(sig) != SignatureSize || sig[63]&224 != 0 {
 		return false
 	}
 
-	var A edwards25519.ExtendedGroupElement
+	var A ExtendedGroupElement
 	var publicKeyBytes [32]byte
 	copy(publicKeyBytes[:], publicKey)
 	if !A.FromBytes(&publicKeyBytes) {
 		return false
 	}
-	edwards25519.FeNeg(&A.X, &A.X)
-	edwards25519.FeNeg(&A.T, &A.T)
+	FeNeg(&A.X, &A.X)
+	FeNeg(&A.T, &A.T)
 
 	h := sha512.New()
 	h.Write(sig[:32])
@@ -168,12 +166,12 @@ func Verify(publicKey PublicKey, message, sig []byte) bool {
 	h.Sum(digest[:0])
 
 	var hReduced [32]byte
-	edwards25519.ScReduce(&hReduced, &digest)
+	ScReduce(&hReduced, &digest)
 
-	var R edwards25519.ProjectiveGroupElement
+	var R ProjectiveGroupElement
 	var b [32]byte
 	copy(b[:], sig[32:])
-	edwards25519.GeDoubleScalarMultVartime(&R, &hReduced, &A, &b)
+	GeDoubleScalarMultVartime(&R, &hReduced, &A, &b)
 
 	var checkR [32]byte
 	R.ToBytes(&checkR)

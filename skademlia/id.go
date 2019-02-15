@@ -2,7 +2,6 @@ package skademlia
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/payload"
@@ -20,51 +19,60 @@ type ID struct {
 	address   string
 	publicKey []byte
 
-	hash []byte
+	buf   []byte
+	nonce []byte
 }
 
 func (a ID) Equals(other protocol.ID) bool {
 	if other, ok := other.(ID); ok {
-		return bytes.Equal(a.hash, other.hash)
+		return bytes.Equal(a.buf, other.buf)
 	}
 
 	return false
 }
 
-func (a ID) PublicID() []byte {
+func (a ID) PublicKey() []byte {
 	return a.publicKey
 }
 
 func (a ID) Hash() []byte {
-	return a.hash
+	return a.buf
 }
 
-func NewID(address string, publicKey []byte) ID {
+func NewID(address string, publicKey, nonce []byte) ID {
 	hash := blake2b.Sum256(publicKey)
+
 	return ID{
 		address:   address,
 		publicKey: publicKey,
-		hash:      hash[:],
+
+		buf:   hash[:],
+		nonce: nonce,
 	}
 }
 
 func (a ID) String() string {
-	return fmt.Sprintf("%s(%s)(%s)", a.address, hex.EncodeToString(a.publicKey)[:16], hex.EncodeToString(a.hash)[:16])
+	return fmt.Sprintf("S/Kademlia(address: %s, publicKey: %x, hash: %x, nonce: %x)", a.address, a.publicKey[:16], a.buf[:16], a.nonce)
 }
 
 func (a ID) Read(reader payload.Reader) (msg noise.Message, err error) {
 	a.address, err = reader.ReadString()
 	if err != nil {
-		return nil, errors.Wrap(err, "kademlia: failed to deserialize ID address")
+		return nil, errors.Wrap(err, "skademlia: failed to deserialize ID address")
 	}
 
 	a.publicKey, err = reader.ReadBytes()
 	if err != nil {
-		return nil, errors.Wrap(err, "kademlia: failed to deserialize ID public key")
+		return nil, errors.Wrap(err, "skademlia: failed to deserialize ID public key")
 	}
 
 	hash := blake2b.Sum256(a.publicKey)
-	a.hash = hash[:]
+	a.buf = hash[:]
+
+	a.nonce, err = reader.ReadBytes()
+	if err != nil {
+		return nil, errors.Wrap(err, "skademlia: failed to deserialize ID nonce")
+	}
 
 	return a, nil
 }
@@ -72,7 +80,9 @@ func (a ID) Read(reader payload.Reader) (msg noise.Message, err error) {
 func (a ID) Write() []byte {
 	return payload.NewWriter(nil).
 		WriteString(a.address).
-		WriteBytes(a.publicKey).Bytes()
+		WriteBytes(a.publicKey).
+		WriteBytes(a.nonce).
+		Bytes()
 }
 
 func prefixLen(buf []byte) int {
@@ -87,7 +97,7 @@ func prefixLen(buf []byte) int {
 
 func xor(a, b []byte) []byte {
 	if len(a) != len(b) {
-		panic("kademlia: len(a) and len(b) must be equal for xor(a, b)")
+		panic("skademlia: len(a) and len(b) must be equal for xor(a, b)")
 	}
 
 	c := make([]byte, len(a))
@@ -100,9 +110,9 @@ func xor(a, b []byte) []byte {
 }
 
 func prefixDiff(a, b []byte, n int) int {
-	bytes, total := xor(a, b), 0
+	buf, total := xor(a, b), 0
 
-	for i, b := range bytes {
+	for i, b := range buf {
 		if n <= 8*i {
 			break
 		} else if n > 8*i && n < 8*(i+1) {

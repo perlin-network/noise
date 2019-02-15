@@ -245,7 +245,7 @@ func check(t *testing.T, currentState *int32, expectedState int32) {
 
 func peer(t *testing.T, layer transport.Layer, conn net.Conn, port uint16) *Peer {
 	params := DefaultParams()
-	params.ID = ed25519.Random()
+	params.Keys = ed25519.RandomKeys()
 	params.Port = port
 	params.Transport = layer
 
