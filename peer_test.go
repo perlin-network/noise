@@ -18,7 +18,7 @@ import (
 )
 
 type testMsg struct {
-	text string
+	Text string
 }
 
 func (testMsg) Read(reader payload.Reader) (Message, error) {
@@ -27,11 +27,11 @@ func (testMsg) Read(reader payload.Reader) (Message, error) {
 		return nil, errors.Wrap(err, "failed to read test message")
 	}
 
-	return testMsg{text: text}, nil
+	return testMsg{Text: text}, nil
 }
 
 func (m testMsg) Write() []byte {
-	return payload.NewWriter(nil).WriteString(m.text).Bytes()
+	return payload.NewWriter(nil).WriteString(m.Text).Bytes()
 }
 
 // What this test does:
@@ -85,10 +85,10 @@ func TestPeerFlow(t *testing.T) {
 		assert.NoError(t, err)
 
 		_, msg, err := peer.DecodeMessage(buf)
-		assert.Equal(t, text, msg.(testMsg).text)
+		assert.Equal(t, text, msg.(testMsg).Text)
 
 		// Create a new message.
-		payload, err := peer.EncodeMessage(testMsg{text: text})
+		payload, err := peer.EncodeMessage(testMsg{Text: text})
 		assert.NoError(t, err)
 
 		buf = make([]byte, binary.MaxVarintLen64)
@@ -169,12 +169,12 @@ func TestPeerFlow(t *testing.T) {
 	p.init()
 
 	// Send a message.
-	err = p.SendMessage(testMsg{text: text})
+	err = p.SendMessage(testMsg{Text: text})
 	assert.NoError(t, err)
 
 	// Read a message.
 	msg := <-p.Receive(opcodeTest)
-	assert.Equal(t, text, msg.(testMsg).text)
+	assert.Equal(t, text, msg.(testMsg).Text)
 
 	check(t, &state, 8)
 
