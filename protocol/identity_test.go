@@ -62,7 +62,7 @@ func TestNodeID(t *testing.T) {
 func TestPeerID(t *testing.T) {
 	node := &noise.Node{}
 	peer := &noise.Peer{}
-	peer.Debug_SetNode(node)
+	peer.SetNode(node)
 
 	assert.False(t, HasPeerID(peer))
 	assert.Nil(t, PeerID(peer))

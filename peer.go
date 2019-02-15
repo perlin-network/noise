@@ -391,6 +391,7 @@ func (p *Peer) Disconnect() {
 		p.onDisconnectCallbacks.RunCallbacks(p.node)
 
 		p.kill <- struct{}{}
+		close(p.kill)
 	})
 }
 
@@ -448,6 +449,6 @@ func (p *Peer) LeaveCriticalReadMode() {
 	<-p.criticalReadLock
 }
 
-func (p *Peer) Debug_SetNode(node *Node) {
+func (p *Peer) SetNode(node *Node) {
 	p.node = node
 }

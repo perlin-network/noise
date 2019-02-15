@@ -81,6 +81,7 @@ func TestBlock_OnBeginEdgeCases(t *testing.T) {
 	// Have Alice dial Bob.
 	peerBob1, err := alice.Dial(bob.ExternalAddress())
 	assert.NoError(t, err)
+	defer peerBob1.Disconnect()
 
 	// Check opcode is registered.
 	assert.True(t, block.opcodeACK != noise.OpcodeNil)
@@ -91,6 +92,7 @@ func TestBlock_OnBeginEdgeCases(t *testing.T) {
 	// Now set an invalid ephemeral shared key to Bob, and check OnBegin fails
 	peerBob2, err := alice.Dial(bob.ExternalAddress())
 	assert.NoError(t, err)
+	defer peerBob2.Disconnect()
 
 	protocol.SetSharedKey(peerBob2, []byte("test ephemeral key"))
 	assert.True(t, strings.Contains(block.OnBegin(proto, peerBob2).Error(), "failed to unmarshal ephemeral shared key buf"))
@@ -101,6 +103,7 @@ func TestBlock_OnBeginEdgeCases(t *testing.T) {
 
 	peerBob3, err := alice.Dial(bob.ExternalAddress())
 	assert.NoError(t, err)
+	defer peerBob3.Disconnect()
 
 	protocol.SetSharedKey(peerBob3, ephemeralSharedKey)
 	assert.True(t, errors.Cause(block.OnBegin(proto, peerBob3)) == protocol.DisconnectPeer)
@@ -133,8 +136,9 @@ func TestBlock_OnBeginSuccessful(t *testing.T) {
 	protocol.New().Register(New()).Register(aliceReceiver).Enforce(alice)
 	protocol.New().Register(New()).Register(bobReceiver).Enforce(bob)
 
-	_, err = alice.Dial(bob.ExternalAddress())
+	peer, err := alice.Dial(bob.ExternalAddress())
 	assert.NoError(t, err)
+	defer peer.Disconnect()
 
 	<-aliceReceiver.receiver
 	<-bobReceiver.receiver
