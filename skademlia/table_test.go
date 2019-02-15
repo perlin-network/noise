@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/identity/ed25519"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/stretchr/testify/assert"
 	"sort"
@@ -16,10 +15,13 @@ import (
 )
 
 var (
-	ttid1 = NewID("0000", ed25519.Random().PublicID())
-	ttid2 = NewID("0001", ed25519.Random().PublicID())
-	ttid3 = NewID("0002", ed25519.Random().PublicID())
-	ttid4 = NewID("0003", ed25519.Random().PublicID())
+	ttc1 = 8
+	ttc2 = 8
+
+	ttid1 = NewID("0000", newIdentityRandom(ttc1, ttc2).PublicID())
+	ttid2 = NewID("0001", newIdentityRandom(ttc1, ttc2).PublicID())
+	ttid3 = NewID("0002", newIdentityRandom(ttc1, ttc2).PublicID())
+	ttid4 = NewID("0003", newIdentityRandom(ttc1, ttc2).PublicID())
 
 	ttidBytes = ttid1.PublicID()
 )
@@ -212,7 +214,7 @@ func TestFindClosestConcurrent(t *testing.T) {
 
 	ids := make([]unsafe.Pointer, IDPoolSize) // Element type: *peer.Id
 
-	id := NewID("0000", ed25519.Random().PublicID())
+	id := NewID("0000", newIdentityRandom(ttc1, ttc2).PublicID())
 	table := newTable(id)
 
 	wg := &sync.WaitGroup{}
@@ -232,7 +234,7 @@ func TestFindClosestConcurrent(t *testing.T) {
 						addrRaw := MustReadRand(8)
 						addr := hex.EncodeToString(addrRaw)
 
-						id := NewID(addr, ed25519.Random().PublicID())
+						id := NewID(addr, NewIdentityRandom().PublicID())
 						table.Update(id)
 
 						atomic.StorePointer(&ids[int(RandByte())%IDPoolSize], unsafe.Pointer(&id))
@@ -269,7 +271,7 @@ func TestFindClosestConcurrent(t *testing.T) {
 func TestTable(t *testing.T) {
 	// make the node and table
 	params := noise.DefaultParams()
-	params.ID = ed25519.Random()
+	params.ID = newIdentityRandom(ttc1, ttc2)
 	params.Port = uint16(3000)
 	id := NewID(fmt.Sprintf("127.0.0.1:%d", params.Port), params.ID.PublicID())
 

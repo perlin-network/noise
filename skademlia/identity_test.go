@@ -10,16 +10,15 @@ import (
 	"testing"
 )
 
-func TestNewIdentity(t *testing.T) {
+func TestNewIdentityRandom(t *testing.T) {
 	t.Parallel()
 
-	id, err := NewIdentityRandomDefault()
-	assert.Nil(t, err)
+	id := NewIdentityRandom()
 	assert.NotNil(t, id)
 	assert.True(t, VerifyPuzzle(id.PublicID(), id.nodeID, id.nonce, DefaultC1, DefaultC2))
 }
 
-func TestNewSKademliaIdentityFromKeypair(t *testing.T) {
+func TestNewSKademliaIdentityFromPrivateKey(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
@@ -34,11 +33,10 @@ func TestNewSKademliaIdentityFromKeypair(t *testing.T) {
 	}
 	for i, tt := range testCases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			sp := ed25519.New()
-			kp, err := crypto.FromPrivateKey(sp, tt.privateKeyHex)
+			privateKey, err := hex.DecodeString(tt.privateKeyHex)
 			assert.Nil(t, err)
 
-			id, err := NewIdentityFromKeypair(kp, tt.c1, DefaultC2)
+			id, err := newIdentityFromPrivateKey(privateKey, tt.c1, DefaultC2)
 			if tt.valid {
 				assert.Nil(t, err)
 				assert.NotNil(t, id)
@@ -58,31 +56,33 @@ func TestSignAndVerify(t *testing.T) {
 
 	privateKeyHex := "1946e455ca6072bcdfd3182799c2ceb1557c2a56c5f810478ac0eb279ad4c93e8e8b6a97551342fd70ec03bea8bae5b05bc5dc0f54b2721dff76f06fab909263"
 
-	sp := ed25519.New()
-	kp, err := crypto.FromPrivateKey(sp, privateKeyHex)
+	privateKey, err := hex.DecodeString(privateKeyHex)
 	assert.Nil(t, err)
 
-	id, err := NewIdentityFromKeypair(kp, DefaultC1, DefaultC2)
+	id, err := NewIdentityFromPrivateKey(privateKey)
 	assert.Nil(t, err)
 
 	sign, err := id.Sign([]byte(data))
 	assert.Nil(t, err)
 	assert.Equal(t, ed25519.SignatureSize, len(sign))
 
-	assert.Nil(t, id.Verify(kp.PublicKey, data, sign))
+	assert.Nil(t, id.Verify(id.PublicID(), data, sign))
 }
 
 func TestGenerateKeyPairAndID(t *testing.T) {
 	t.Parallel()
 
-	kp := generateKeyPair(DefaultC1, DefaultC2)
+	c1 := 8
+	c2 := 8
+
+	kp := generateKeyPair(c1, c2)
 	assert.NotNil(t, kp)
 
 	nodeID := blake2b.New().HashBytes(kp.PublicKey)
 
-	assert.True(t, checkHashedBytesPrefixLen(nodeID, DefaultC1))
+	assert.True(t, checkHashedBytesPrefixLen(nodeID, c1))
 
-	nonce := getNonce(nodeID, DefaultC2)
+	nonce := getNonce(nodeID, c2)
 	assert.True(t, len(nonce) > 0)
 }
 
@@ -172,18 +172,17 @@ func TestVerifyPuzzle(t *testing.T) {
 	}
 	for i, tt := range testCases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			sp := ed25519.New()
-			kp, err := crypto.FromPrivateKey(sp, tt.privateKeyHex)
+			privateKey, err := hex.DecodeString(tt.privateKeyHex)
 			assert.Nil(t, err)
 
-			id, err := NewIdentityFromKeypair(kp, DefaultC1, DefaultC2)
+			id, err := NewIdentityFromPrivateKey(privateKey)
 			assert.Nil(t, err)
 			assert.NotNil(t, id)
 
 			nonce, err := hex.DecodeString(tt.encodedX)
 			assert.Nil(t, err)
 
-			id, err = NewIdentityFromKeypair(kp, 16, 16)
+			id, err = newIdentityFromPrivateKey(privateKey, 16, 16)
 			assert.Nil(t, err)
 			assert.NotNil(t, id)
 

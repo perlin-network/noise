@@ -35,30 +35,36 @@ type IdentityManager struct {
 	hasher  crypto.HashPolicy
 }
 
-// NewIdentityRandomDefault creates a new SKademlia IdentityManager with sound default values.
-func NewIdentityRandomDefault() (*IdentityManager, error) {
-	return NewIdentityRandom(DefaultC1, DefaultC2)
+// NewIdentityRandom creates a new SKademlia IdentityManager with sound default values.
+func NewIdentityRandom() *IdentityManager {
+	return newIdentityRandom(DefaultC1, DefaultC2)
 }
 
-// NewIdentityRandom creates a new SKademlia IdentityManager with the given cryptopuzzle constants.
-func NewIdentityRandom(c1, c2 int) (*IdentityManager, error) {
+// NewIdentityFromPrivateKey creates a new SKademlia IdentityManager with the given cryptopuzzle
+// constants from an existing keypair with sound default values.
+func NewIdentityFromPrivateKey(privateKeyBuf []byte) (*IdentityManager, error) {
+	return newIdentityFromPrivateKey(privateKeyBuf, DefaultC1, DefaultC2)
+}
+
+// newIdentityRandom creates a new SKademlia IdentityManager with the given cryptopuzzle constants.
+func newIdentityRandom(c1, c2 int) *IdentityManager {
 	kp := generateKeyPair(c1, c2)
 	if kp == nil {
-		return nil, errors.New("skademlia: unable to generate a random valid node ID ")
+		return nil
 	}
-	return NewIdentityFromKeypair(kp, c1, c2)
+	id, _ := newIdentityFromPrivateKey(kp.PrivateKey, c1, c2)
+	return id
 }
 
-// NewIdentityDefaultFromKeypair creates a new SKademlia IdentityManager with the given cryptopuzzle
-// constants from an existing keypair with sound default values.
-func NewIdentityDefaultFromKeypair(kp *crypto.KeyPair) (*IdentityManager, error) {
-	return NewIdentityFromKeypair(kp, DefaultC1, DefaultC2)
-}
-
-// NewIdentityFromKeypair creates a new SKademlia IdentityManager with the given cryptopuzzle
+// newIdentityFromPrivateKey creates a new SKademlia IdentityManager with the given cryptopuzzle
 // constants from an existing keypair.
-func NewIdentityFromKeypair(kp *crypto.KeyPair, c1, c2 int) (*IdentityManager, error) {
+func newIdentityFromPrivateKey(privateKeyBuf []byte, c1, c2 int) (*IdentityManager, error) {
 	b := blake2b.New()
+	sp := ed25519.New()
+	kp, err := crypto.FromPrivateKey(sp, hex.EncodeToString(privateKeyBuf))
+	if err != nil {
+		return nil, errors.Errorf("skademlia: private key not compatible with ed25519")
+	}
 	nodeID := b.HashBytes(kp.PublicKey)
 	if !checkHashedBytesPrefixLen(nodeID, c1) {
 		return nil, errors.Errorf("skademlia: provided keypair does not generate a valid node ID for c1: %d", c1)
@@ -73,7 +79,7 @@ func NewIdentityFromKeypair(kp *crypto.KeyPair, c1, c2 int) (*IdentityManager, e
 		nonce:   nonce,
 		c1:      c1,
 		c2:      c2,
-		signer:  ed25519.New(),
+		signer:  sp,
 		hasher:  b,
 	}, nil
 }
