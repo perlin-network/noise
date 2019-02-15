@@ -35,6 +35,10 @@ func (a ID) PublicID() []byte {
 	return a.publicKey
 }
 
+func (a ID) Hash() []byte {
+	return a.hash
+}
+
 func NewID(address string, publicKey []byte) ID {
 	hash := blake2b.Sum256(publicKey)
 	return ID{
@@ -69,10 +73,6 @@ func (a ID) Write() []byte {
 	return payload.NewWriter(nil).
 		WriteString(a.address).
 		WriteBytes(a.publicKey).Bytes()
-}
-
-func (a ID) Hash() []byte {
-	return a.hash
 }
 
 func prefixLen(buf []byte) int {

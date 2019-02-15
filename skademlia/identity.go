@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/crypto/blake2b"
 	"github.com/perlin-network/noise/crypto/ed25519"
+	"github.com/perlin-network/noise/identity"
 	"github.com/pkg/errors"
 )
 
@@ -15,55 +17,60 @@ const (
 	DefaultC1 = 16
 	// DefaultC2 is the prefix-matching length for the dynamic cryptopuzzle.
 	DefaultC2 = 16
-
+	// maxPuzzleIterations is an internal limit for performing crytographic puzzles for skademlia
 	maxPuzzleIterations = 10000000000
 )
 
-// IdentityAdapter implements the identity interface for S/Kademlia node IDs.
-type IdentityAdapter struct {
+var (
+	_ identity.Manager = (*IdentityManager)(nil)
+)
+
+// IdentityManager implements the identity interface for S/Kademlia node IDs.
+type IdentityManager struct {
 	keypair *crypto.KeyPair
 	nodeID  []byte
-	Nonce   []byte
+	nonce   []byte
 	c1, c2  int
 	signer  crypto.SignaturePolicy
 	hasher  crypto.HashPolicy
 }
 
-// NewIdentityRandomDefault creates a new SKademlia IdentityAdapter with sound default values.
-func NewIdentityRandomDefault() *IdentityAdapter {
+// NewIdentityRandomDefault creates a new SKademlia IdentityManager with sound default values.
+func NewIdentityRandomDefault() (*IdentityManager, error) {
 	return NewIdentityRandom(DefaultC1, DefaultC2)
 }
 
-// NewIdentityRandom creates a new SKademlia IdentityAdapter with the given cryptopuzzle constants.
-func NewIdentityRandom(c1, c2 int) *IdentityAdapter {
+// NewIdentityRandom creates a new SKademlia IdentityManager with the given cryptopuzzle constants.
+func NewIdentityRandom(c1, c2 int) (*IdentityManager, error) {
 	kp := generateKeyPair(c1, c2)
 	if kp == nil {
-		return nil
+		return nil, errors.New("skademlia: unable to generate a random valid node ID ")
 	}
-	if a, err := NewIdentityFromKeypair(kp, c1, c2); err == nil {
-		return a
-	}
-	return nil
+	return NewIdentityFromKeypair(kp, c1, c2)
 }
 
-// NewIdentityDefaultFromKeypair creates a new SKademlia IdentityAdapter with the given cryptopuzzle
+// NewIdentityDefaultFromKeypair creates a new SKademlia IdentityManager with the given cryptopuzzle
 // constants from an existing keypair with sound default values.
-func NewIdentityDefaultFromKeypair(kp *crypto.KeyPair) (*IdentityAdapter, error) {
+func NewIdentityDefaultFromKeypair(kp *crypto.KeyPair) (*IdentityManager, error) {
 	return NewIdentityFromKeypair(kp, DefaultC1, DefaultC2)
 }
 
-// NewIdentityFromKeypair creates a new SKademlia IdentityAdapter with the given cryptopuzzle
+// NewIdentityFromKeypair creates a new SKademlia IdentityManager with the given cryptopuzzle
 // constants from an existing keypair.
-func NewIdentityFromKeypair(kp *crypto.KeyPair, c1, c2 int) (*IdentityAdapter, error) {
+func NewIdentityFromKeypair(kp *crypto.KeyPair, c1, c2 int) (*IdentityManager, error) {
 	b := blake2b.New()
 	nodeID := b.HashBytes(kp.PublicKey)
 	if !checkHashedBytesPrefixLen(nodeID, c1) {
 		return nil, errors.Errorf("skademlia: provided keypair does not generate a valid node ID for c1: %d", c1)
 	}
-	return &IdentityAdapter{
+	nonce := getNonce(nodeID, c2)
+	if nonce == nil {
+		return nil, errors.New("skademlia: keypair has an invalid nonce")
+	}
+	return &IdentityManager{
 		keypair: kp,
 		nodeID:  nodeID,
-		Nonce:   getNonce(nodeID, c2),
+		nonce:   nonce,
 		c1:      c1,
 		c2:      c2,
 		signer:  ed25519.New(),
@@ -72,48 +79,30 @@ func NewIdentityFromKeypair(kp *crypto.KeyPair, c1, c2 int) (*IdentityAdapter, e
 }
 
 // PublicID returns the S/Kademlia public key ID.
-func (a *IdentityAdapter) PublicID() []byte {
+func (a *IdentityManager) PublicID() []byte {
 	return a.keypair.PublicKey
 }
 
-// PublicIDHex returns the S/Kademlia hex-encoded node's public key.
-func (a *IdentityAdapter) PublicIDHex() string {
-	return a.keypair.PrivateKeyHex()
-}
-
 // PrivateKey returns the S/Kademlia private key for this ID.
-func (a *IdentityAdapter) PrivateKey() []byte {
+func (a *IdentityManager) PrivateKey() []byte {
 	return a.keypair.PrivateKey
 }
 
-// NodeID returns the S/Kademlia node ID. The node ID is used for routing.
-func (a *IdentityAdapter) NodeID() []byte {
-	return a.nodeID
-}
-
-// NodeIDHex returns the S/Kademlia hex-encoded node ID.
-func (a *IdentityAdapter) NodeIDHex() string {
-	return hex.EncodeToString(a.nodeID)
-}
-
 // Sign signs the input bytes with the identity's private key.
-func (a *IdentityAdapter) Sign(input []byte) ([]byte, error) {
-	return a.keypair.Sign(ed25519.New(), blake2b.New(), input)
+func (a *IdentityManager) Sign(input []byte) ([]byte, error) {
+	return a.keypair.Sign(a.signer, a.hasher, input)
 }
 
 // Verify checks whether the signature matches the signed data
-func (a *IdentityAdapter) Verify(publicKey, data, signature []byte) bool {
-	return crypto.Verify(ed25519.New(), blake2b.New(), publicKey, data, signature)
+func (a *IdentityManager) Verify(publicKeyBuf, data, signature []byte) error {
+	if crypto.Verify(a.signer, a.hasher, publicKeyBuf, data, signature) {
+		return nil
+	}
+	return errors.New("unable to verify signature")
 }
 
-// SignatureSize specifies the byte length for signatures generated with the keypair
-func (a *IdentityAdapter) SignatureSize() int {
-	return ed25519.SignatureSize
-}
-
-// GetKeyPair returns the key pair used to create the idenity
-func (a *IdentityAdapter) GetKeyPair() *crypto.KeyPair {
-	return a.keypair
+func (a *IdentityManager) String() string {
+	return fmt.Sprintf("skademlia(public: %s, private: %s)", hex.EncodeToString(a.PublicID()), hex.EncodeToString(a.PrivateKey()))
 }
 
 // generateKeyPair generates an S/Kademlia keypair with cryptopuzzle

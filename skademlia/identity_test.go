@@ -13,9 +13,10 @@ import (
 func TestNewIdentity(t *testing.T) {
 	t.Parallel()
 
-	id := NewIdentityRandomDefault()
+	id, err := NewIdentityRandomDefault()
+	assert.Nil(t, err)
 	assert.NotNil(t, id)
-	assert.True(t, VerifyPuzzle(id.PublicID(), id.NodeID(), id.Nonce, DefaultC1, DefaultC2))
+	assert.True(t, VerifyPuzzle(id.PublicID(), id.nodeID, id.nonce, DefaultC1, DefaultC2))
 }
 
 func TestNewSKademliaIdentityFromKeypair(t *testing.T) {
@@ -66,9 +67,9 @@ func TestSignAndVerify(t *testing.T) {
 
 	sign, err := id.Sign([]byte(data))
 	assert.Nil(t, err)
-	assert.Equal(t, id.SignatureSize(), len(sign))
+	assert.Equal(t, ed25519.SignatureSize, len(sign))
 
-	assert.True(t, id.Verify(kp.PublicKey, data, sign))
+	assert.Nil(t, id.Verify(kp.PublicKey, data, sign))
 }
 
 func TestGenerateKeyPairAndID(t *testing.T) {
@@ -186,7 +187,7 @@ func TestVerifyPuzzle(t *testing.T) {
 			assert.Nil(t, err)
 			assert.NotNil(t, id)
 
-			assert.Equal(t, tt.valid, VerifyPuzzle(id.PublicID(), id.NodeID(), nonce, 16, 16))
+			assert.Equal(t, tt.valid, VerifyPuzzle(id.PublicID(), id.nodeID, nonce, 16, 16))
 		})
 	}
 }
