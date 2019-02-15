@@ -71,7 +71,7 @@ func TestDecodeMessage(t *testing.T) {
 // 2. Check receive message
 // 3. Check the callbacks must be called in sequence
 // 4. Check the callbacks must be called exactly once
-func TestPeer(t *testing.T) {
+func TestPeerFlow(t *testing.T) {
 	log.Disable()
 	defer log.Enable()
 
@@ -215,6 +215,58 @@ func TestPeer(t *testing.T) {
 	wgDisconnect.Wait()
 
 	check(t, &state, 10)
+}
+
+func TestPeer(t *testing.T) {
+	log.Disable()
+	defer log.Enable()
+
+	var port uint16 = 8888
+	var err error
+
+	var wgListen sync.WaitGroup
+	wgListen.Add(1)
+
+	layer := transport.NewBuffered()
+
+	go func() {
+		listener, err := layer.Listen("127.0.0.1", port)
+		assert.Nil(t, err)
+
+		wgListen.Done()
+
+		_, err = listener.Accept()
+		assert.NoError(t, err)
+	}()
+
+	wgListen.Wait()
+
+	conn, err := layer.Dial(fmt.Sprintf("%s:%d", "127.0.0.1", port))
+	assert.NoError(t, err)
+
+	p := peer(t, layer, conn, port)
+
+	// check net
+	assert.Equal(t, net.IPv4(127, 0, 0, 1), p.LocalIP(), "found invalid local IP")
+	assert.Equal(t, port, p.LocalPort(), "found invalid local port")
+	assert.Equal(t, net.IPv4(127, 0, 0, 1), p.RemoteIP(), "found invalid remote IP")
+	assert.Equal(t, port, p.RemotePort(), "found invalid remote port")
+
+	// check store
+
+	assert.Nil(t, p.Get("key"))
+	assert.False(t, p.Has("key"))
+
+	assert.Equal(t, "value", p.LoadOrStore("key", "value"))
+	p.Delete("key")
+	assert.Nil(t, p.Get("key"))
+	assert.False(t, p.Has("key"))
+
+	p.Set("key", "value")
+	assert.Equal(t, "value", p.Get("key"))
+	assert.True(t, p.Has("key"))
+
+	p.Disconnect()
 }
 
 // check the state equal to the expected state, and then increment it by 1
