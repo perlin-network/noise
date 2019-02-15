@@ -18,7 +18,7 @@ import (
 )
 
 type testMsg struct {
-	text string
+	Text string
 }
 
 func (testMsg) Read(reader payload.Reader) (Message, error) {
@@ -27,43 +27,11 @@ func (testMsg) Read(reader payload.Reader) (Message, error) {
 		return nil, errors.Wrap(err, "failed to read test message")
 	}
 
-	return testMsg{text: text}, nil
+	return testMsg{Text: text}, nil
 }
 
 func (m testMsg) Write() []byte {
-	return payload.NewWriter(nil).WriteString(m.text).Bytes()
-}
-
-func TestEncodeMessage(t *testing.T) {
-	resetOpcodes()
-	o := RegisterMessage(Opcode(123), (*testMsg)(nil))
-
-	msg := testMsg{
-		text: "hello",
-	}
-
-	p := newPeer(nil, nil)
-
-	bytes, err := p.EncodeMessage(msg)
-	assert.Nil(t, err)
-	assert.Equal(t, append([]byte{byte(o)}, msg.Write()...), bytes)
-}
-
-func TestDecodeMessage(t *testing.T) {
-	resetOpcodes()
-	o := RegisterMessage(Opcode(45), (*testMsg)(nil))
-
-	msg := testMsg{
-		text: "world",
-	}
-	assert.Equal(t, o, RegisterMessage(o, (*testMsg)(nil)))
-
-	p := newPeer(nil, nil)
-
-	resultO, resultM, err := p.DecodeMessage(append([]byte{byte(o)}, msg.Write()...))
-	assert.Nil(t, err)
-	assert.Equal(t, o, resultO)
-	assert.Equal(t, msg, resultM)
+	return payload.NewWriter(nil).WriteString(m.Text).Bytes()
 }
 
 // What this test does:
@@ -71,7 +39,7 @@ func TestDecodeMessage(t *testing.T) {
 // 2. Check receive message
 // 3. Check the callbacks must be called in sequence
 // 4. Check the callbacks must be called exactly once
-func TestPeer(t *testing.T) {
+func TestPeerFlow(t *testing.T) {
 	log.Disable()
 	defer log.Enable()
 
@@ -117,10 +85,10 @@ func TestPeer(t *testing.T) {
 		assert.NoError(t, err)
 
 		_, msg, err := peer.DecodeMessage(buf)
-		assert.Equal(t, text, msg.(testMsg).text)
+		assert.Equal(t, text, msg.(testMsg).Text)
 
 		// Create a new message.
-		payload, err := peer.EncodeMessage(testMsg{text: text})
+		payload, err := peer.EncodeMessage(testMsg{Text: text})
 		assert.NoError(t, err)
 
 		buf = make([]byte, binary.MaxVarintLen64)
@@ -201,12 +169,12 @@ func TestPeer(t *testing.T) {
 	p.init()
 
 	// Send a message.
-	err = p.SendMessage(testMsg{text: text})
+	err = p.SendMessage(testMsg{Text: text})
 	assert.NoError(t, err)
 
 	// Read a message.
 	msg := <-p.Receive(opcodeTest)
-	assert.Equal(t, text, msg.(testMsg).text)
+	assert.Equal(t, text, msg.(testMsg).Text)
 
 	check(t, &state, 8)
 
@@ -215,6 +183,58 @@ func TestPeer(t *testing.T) {
 	wgDisconnect.Wait()
 
 	check(t, &state, 10)
+}
+
+func TestPeer(t *testing.T) {
+	log.Disable()
+	defer log.Enable()
+
+	var port uint16 = 8888
+	var err error
+
+	var wgListen sync.WaitGroup
+	wgListen.Add(1)
+
+	layer := transport.NewBuffered()
+
+	go func() {
+		listener, err := layer.Listen("127.0.0.1", port)
+		assert.Nil(t, err)
+
+		wgListen.Done()
+
+		_, err = listener.Accept()
+		assert.NoError(t, err)
+	}()
+
+	wgListen.Wait()
+
+	conn, err := layer.Dial(fmt.Sprintf("%s:%d", "127.0.0.1", port))
+	assert.NoError(t, err)
+
+	p := peer(t, layer, conn, port)
+
+	// check net
+	assert.Equal(t, net.IPv4(127, 0, 0, 1), p.LocalIP(), "found invalid local IP")
+	assert.Equal(t, port, p.LocalPort(), "found invalid local port")
+	assert.Equal(t, net.IPv4(127, 0, 0, 1), p.RemoteIP(), "found invalid remote IP")
+	assert.Equal(t, port, p.RemotePort(), "found invalid remote port")
+
+	// check store
+
+	assert.Nil(t, p.Get("key"))
+	assert.False(t, p.Has("key"))
+
+	assert.Equal(t, "value", p.LoadOrStore("key", "value"))
+	p.Delete("key")
+	assert.Nil(t, p.Get("key"))
+	assert.False(t, p.Has("key"))
+
+	p.Set("key", "value")
+	assert.Equal(t, "value", p.Get("key"))
+	assert.True(t, p.Has("key"))
+
+	p.Disconnect()
 }
 
 // check the state equal to the expected state, and then increment it by 1

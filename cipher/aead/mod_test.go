@@ -65,48 +65,37 @@ func TestBlock_OnBeginEdgeCases(t *testing.T) {
 	log.Disable()
 	defer log.Enable()
 
-	setup := func(node *noise.Node) (*protocol.Protocol, *block) {
-		block := New()
-		block.WithHash(sha512.New)
-		block.WithCurve(edwards25519.NewBlakeSHA256Ed25519())
-		block.WithACKTimeout(1 * time.Millisecond)
-
-		p := protocol.New()
-		p.Register(block)
-
-		return p, block
-	}
-
 	// Setup Alice and Bob.
 	alice, bob := node(t), node(t)
 
 	defer alice.Kill()
 	defer bob.Kill()
 
-	// Register protocols.
-	aliceProtocol, aliceBlock := setup(alice)
-	bobProtocol, bobBlock := setup(bob)
+	// Enforce protocols.
+	block := New().WithHash(sha512.New).WithCurve(edwards25519.NewBlakeSHA256Ed25519()).WithACKTimeout(1 * time.Millisecond)
+	proto := protocol.New().Register(block)
 
-	aliceProtocol.Enforce(alice)
-	bobProtocol.Enforce(bob)
+	proto.Enforce(alice)
+	proto.Enforce(bob)
 
 	// Have Alice dial Bob.
 	peerBob1, err := alice.Dial(bob.ExternalAddress())
 	assert.NoError(t, err)
+	defer peerBob1.Disconnect()
 
 	// Check opcode is registered.
-	assert.True(t, aliceBlock.opcodeACK != noise.OpcodeNil)
-	assert.True(t, bobBlock.opcodeACK != noise.OpcodeNil)
+	assert.True(t, block.opcodeACK != noise.OpcodeNil)
 
 	// Expect a disconnect calling OnBegin without Bob yet having an ephemeral shared key.
-	assert.True(t, errors.Cause(aliceBlock.OnBegin(aliceProtocol, peerBob1)) == protocol.DisconnectPeer)
+	assert.True(t, errors.Cause(block.OnBegin(proto, peerBob1)) == protocol.DisconnectPeer)
 
 	// Now set an invalid ephemeral shared key to Bob, and check OnBegin fails
 	peerBob2, err := alice.Dial(bob.ExternalAddress())
 	assert.NoError(t, err)
+	defer peerBob2.Disconnect()
 
 	protocol.SetSharedKey(peerBob2, []byte("test ephemeral key"))
-	assert.True(t, strings.Contains(aliceBlock.OnBegin(aliceProtocol, peerBob2).Error(), "failed to unmarshal ephemeral shared key buf"))
+	assert.True(t, strings.Contains(block.OnBegin(proto, peerBob2).Error(), "failed to unmarshal ephemeral shared key buf"))
 
 	// Now restart connections, and set a proper ephemeral shared key to Bob.
 	ephemeralSharedKey, err := hex.DecodeString("d8747263b4d54588c2c8f17862d827dee6d3893a02fb7a84800b001ad4f1cee8")
@@ -114,9 +103,10 @@ func TestBlock_OnBeginEdgeCases(t *testing.T) {
 
 	peerBob3, err := alice.Dial(bob.ExternalAddress())
 	assert.NoError(t, err)
+	defer peerBob3.Disconnect()
 
 	protocol.SetSharedKey(peerBob3, ephemeralSharedKey)
-	assert.True(t, errors.Cause(aliceBlock.OnBegin(aliceProtocol, peerBob3)) == protocol.DisconnectPeer)
+	assert.True(t, errors.Cause(block.OnBegin(proto, peerBob3)) == protocol.DisconnectPeer)
 }
 
 func TestBlock_OnBeginSuccessful(t *testing.T) {
@@ -143,18 +133,12 @@ func TestBlock_OnBeginSuccessful(t *testing.T) {
 
 	aliceReceiver, bobReceiver := new(receiverBlock), new(receiverBlock)
 
-	p := protocol.New()
-	p.Register(New())
-	p.Register(aliceReceiver)
-	p.Enforce(alice)
+	protocol.New().Register(New()).Register(aliceReceiver).Enforce(alice)
+	protocol.New().Register(New()).Register(bobReceiver).Enforce(bob)
 
-	p = protocol.New()
-	p.Register(New())
-	p.Register(bobReceiver)
-	p.Enforce(bob)
-
-	_, err = alice.Dial(bob.ExternalAddress())
+	peer, err := alice.Dial(bob.ExternalAddress())
 	assert.NoError(t, err)
+	defer peer.Disconnect()
 
 	<-aliceReceiver.receiver
 	<-bobReceiver.receiver

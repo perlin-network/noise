@@ -17,10 +17,18 @@ func TestNextAvailableOpcode(t *testing.T) {
 	_, err = MessageFromOpcode(Opcode(1))
 	assert.NotNil(t, err)
 
+	// an unset opcode should be an error
+	_, err = OpcodeFromMessage(testMsg{})
+	assert.NotNil(t, err)
+
 	RegisterMessage(Opcode(1), (*testMsg)(nil))
 
 	// an opcode should still exist after the loop
 	msg, err = MessageFromOpcode(Opcode(1))
 	assert.Nil(t, err)
 	assert.Equal(t, testMsg{}, msg)
+
+	o, err := OpcodeFromMessage(testMsg{})
+	assert.Nil(t, err)
+	assert.Equal(t, Opcode(1), o)
 }
