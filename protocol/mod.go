@@ -32,12 +32,14 @@ func New() *Protocol {
 }
 
 // Register registers a block to this protocol sequentially.
-func (p *Protocol) Register(blk Block) {
+func (p *Protocol) Register(blk Block) *Protocol {
 	// This is not a strict check. Only here to help users find their mistakes.
 	if atomic.LoadUint32(&p.blocksSealed) == 1 {
 		panic("Register() cannot be called after Enforce().")
 	}
+
 	p.blocks = append(p.blocks, blk)
+	return p
 }
 
 // Enforce enforces that all peers of a node follow the given protocol.
