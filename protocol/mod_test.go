@@ -61,14 +61,12 @@ func runTestProtocol(t *testing.T, stopByDisconnect bool) {
 	defer log.Enable()
 
 	params := noise.DefaultParams()
-	params.Port = 3000
 	params.Transport = transport.NewBuffered()
 
 	alice, err := noise.NewNode(params)
 	assert.NoError(t, err)
 	_, aliceCount := setupNodeForTest(alice, 10, -1, false)
 
-	params.Port++
 	bob, err := noise.NewNode(params)
 	assert.NoError(t, err)
 	_, bobCount := setupNodeForTest(bob, 10, 5, stopByDisconnect)

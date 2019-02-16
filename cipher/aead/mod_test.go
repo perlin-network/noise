@@ -15,14 +15,10 @@ import (
 )
 
 var transportLayer = transport.NewBuffered()
-var port = 3000
 
 func node(t *testing.T) *noise.Node {
 	params := noise.DefaultParams()
 	params.Transport = transportLayer
-	params.Port = uint16(port)
-
-	port++
 
 	node, err := noise.NewNode(params)
 	assert.NoError(t, err)

@@ -32,13 +32,11 @@ func TestECDH(t *testing.T) {
 	defer log.Enable()
 
 	params := noise.DefaultParams()
-	params.Port = 3000
 	params.Transport = transport.NewBuffered()
 
 	alice, err := noise.NewNode(params)
 	assert.NoError(t, err)
 
-	params.Port++
 	bob, err := noise.NewNode(params)
 	assert.NoError(t, err)
 

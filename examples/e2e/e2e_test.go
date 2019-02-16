@@ -66,7 +66,7 @@ func setup(node *noise.Node, opcodeTest noise.Opcode) {
 	})
 }
 
-func Run(startPort int, numNodes int, numTxEach int) error {
+func Run(numNodes int, numTxEach int) error {
 	opcodeTest := noise.RegisterMessage(noise.NextAvailableOpcode(), (*testMessage)(nil))
 	var nodes []*noise.Node
 	var allErrs []error
@@ -74,7 +74,6 @@ func Run(startPort int, numNodes int, numTxEach int) error {
 	for i := 0; i < numNodes; i++ {
 		params := noise.DefaultParams()
 		params.Keys = skademlia.NewKeys()
-		params.Port = uint16(startPort + i)
 
 		node, err := noise.NewNode(params)
 		if err != nil {
@@ -97,7 +96,7 @@ func Run(startPort int, numNodes int, numTxEach int) error {
 	time.Sleep(100 * time.Millisecond)
 
 	for i := 1; i < numNodes; i++ {
-		peer, err := nodes[i].Dial(fmt.Sprintf("127.0.0.1:%d", startPort))
+		peer, err := nodes[i].Dial(nodes[0].ExternalAddress())
 		if err != nil {
 			log.Error().Msgf("got error %+v", err)
 			allErrs = append(allErrs, err)
@@ -145,7 +144,7 @@ func TestRun(t *testing.T) {
 	//log.Disable()
 	//defer log.Enable()
 
-	assert.Nil(t, Run(startPort, numNodes, numMessagesEach))
+	assert.Nil(t, Run(numNodes, numMessagesEach))
 
 	noise.DebugOpcodes()
 }
