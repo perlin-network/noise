@@ -13,7 +13,7 @@ import (
 func TestNewIdentityRandom(t *testing.T) {
 	t.Parallel()
 
-	keys := NewKeys()
+	keys := RandomKeys()
 
 	assert.NotNil(t, keys)
 	assert.True(t, VerifyPuzzle(keys.PublicKey(), keys.ID(), keys.Nonce, DefaultC1, DefaultC2))
@@ -79,7 +79,7 @@ func TestGenerateKeyPairAndID(t *testing.T) {
 	c1 := 8
 	c2 := 8
 
-	keys := RandomKeys(c1, c2)
+	keys := NewKeys(c1, c2)
 	assert.NotNil(t, keys)
 
 	// Check if we can validate correct nonces.

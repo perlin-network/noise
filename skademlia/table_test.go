@@ -3,7 +3,6 @@ package skademlia
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/stretchr/testify/assert"
@@ -18,9 +17,9 @@ var (
 	ttc1 = 8
 	ttc2 = 8
 
-	ttid1 = NewID("0000", RandomKeys(ttc1, ttc2).PublicKey(), []byte{})
-	ttid2 = NewID("0001", RandomKeys(ttc1, ttc2).PublicKey(), []byte{})
-	ttid3 = NewID("0002", RandomKeys(ttc1, ttc2).PublicKey(), []byte{})
+	ttid1 = NewID("0000", NewKeys(ttc1, ttc2).PublicKey(), []byte{})
+	ttid2 = NewID("0001", NewKeys(ttc1, ttc2).PublicKey(), []byte{})
+	ttid3 = NewID("0002", NewKeys(ttc1, ttc2).PublicKey(), []byte{})
 
 	ttidBytes = ttid1.PublicKey()
 )
@@ -215,7 +214,7 @@ func TestFindClosestConcurrent(t *testing.T) {
 
 	ids := make([]unsafe.Pointer, IDPoolSize) // Element type: *skademlia.id
 
-	keys := RandomKeys(ttc1, ttc2)
+	keys := NewKeys(ttc1, ttc2)
 	id := NewID("0000", keys.PublicKey(), keys.Nonce)
 	table := newTable(id)
 
@@ -236,7 +235,7 @@ func TestFindClosestConcurrent(t *testing.T) {
 						addrRaw := MustReadRand(8)
 						addr := hex.EncodeToString(addrRaw)
 
-						keys := RandomKeys(ttc1, ttc2)
+						keys := NewKeys(ttc1, ttc2)
 
 						id := NewID(addr, keys.PublicKey(), keys.Nonce)
 						_ = table.Update(id)
@@ -273,18 +272,17 @@ func TestFindClosestConcurrent(t *testing.T) {
 }
 
 func TestTable(t *testing.T) {
-	keys := RandomKeys(ttc1, ttc2)
+	keys := NewKeys(ttc1, ttc2)
 
 	// make the node and table
 	params := noise.DefaultParams()
 	params.Keys = keys
-	params.Port = uint16(3000)
-
-	id := NewID(fmt.Sprintf("127.0.0.1:%d", params.Port), keys.PublicKey(), keys.Nonce)
 
 	node, err := noise.NewNode(params)
 	assert.Nil(t, err)
 	defer node.Kill()
+
+	id := NewID(node.ExternalAddress(), keys.PublicKey(), keys.Nonce)
 
 	p := protocol.New()
 	p.Register(New())

@@ -73,7 +73,7 @@ func main() {
 
 	params := noise.DefaultParams()
 	//params.NAT = nat.NewPMP()
-	params.Keys = skademlia.NewKeys()
+	params.Keys = skademlia.RandomKeys()
 	params.Port = uint16(*portFlag)
 
 	node, err := noise.NewNode(params)

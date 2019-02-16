@@ -6,10 +6,10 @@ import (
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/cipher/aead"
 	"github.com/perlin-network/noise/handshake/ecdh"
-	"github.com/perlin-network/noise/identity/ed25519"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/payload"
 	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/skademlia"
 	"github.com/pkg/errors"
 	"strconv"
 	"sync/atomic"
@@ -42,7 +42,7 @@ func (m benchmarkMessage) Write() []byte {
 
 func spawnNode(port uint16) *noise.Node {
 	params := noise.DefaultParams()
-	params.Keys = ed25519.RandomKeys()
+	params.Keys = skademlia.RandomKeys()
 	params.Port = port
 
 	node, err := noise.NewNode(params)
@@ -53,6 +53,7 @@ func spawnNode(port uint16) *noise.Node {
 	p := protocol.New()
 	p.Register(ecdh.New())
 	p.Register(aead.New())
+	p.Register(skademlia.New())
 	p.Enforce(node)
 
 	go node.Listen()

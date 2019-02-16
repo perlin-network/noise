@@ -73,7 +73,7 @@ func Run(numNodes int, numTxEach int) error {
 
 	for i := 0; i < numNodes; i++ {
 		params := noise.DefaultParams()
-		params.Keys = skademlia.NewKeys()
+		params.Keys = skademlia.RandomKeys()
 
 		node, err := noise.NewNode(params)
 		if err != nil {

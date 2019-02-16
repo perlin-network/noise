@@ -73,15 +73,15 @@ func LoadKeys(privateKeyBuf []byte, c1, c2 int) (*Keypair, error) {
 	}, nil
 }
 
-// LoadKeys randomly generates a set of cryptographic keys by solving both a static and dynamic
+// RandomKeys randomly generates a set of cryptographic keys by solving both a static and dynamic
 // crypto puzzle parameterized by constants C1 = 8, and C2 = 8 respectively.
-func NewKeys() *Keypair {
-	return RandomKeys(DefaultC1, DefaultC2)
+func RandomKeys() *Keypair {
+	return NewKeys(DefaultC1, DefaultC2)
 }
 
-// RandomKeys randomly generates a set of cryptographic keys by solving both a static and dynamic
+// NewKeys randomly generates a set of cryptographic keys by solving both a static and dynamic
 // crypto puzzle parameterized by constants C1 and C2 respectively.
-func RandomKeys(c1, c2 int) *Keypair {
+func NewKeys(c1, c2 int) *Keypair {
 	var publicKey edwards25519.PublicKey
 	var privateKey edwards25519.PrivateKey
 	var id [32]byte
