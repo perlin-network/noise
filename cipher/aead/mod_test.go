@@ -9,7 +9,6 @@ import (
 	"github.com/perlin-network/noise/transport"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	"go.dedis.ch/kyber/v3/group/edwards25519"
 	"strings"
 	"testing"
 	"time"
@@ -72,7 +71,7 @@ func TestBlock_OnBeginEdgeCases(t *testing.T) {
 	defer bob.Kill()
 
 	// Enforce protocols.
-	block := New().WithHash(sha512.New).WithCurve(edwards25519.NewBlakeSHA256Ed25519()).WithACKTimeout(1 * time.Millisecond)
+	block := New().WithHash(sha512.New).WithACKTimeout(1 * time.Millisecond)
 	proto := protocol.New().Register(block)
 
 	proto.Enforce(alice)

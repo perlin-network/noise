@@ -11,19 +11,19 @@ import (
 	"time"
 )
 
-type DummyBlock struct {
+type dummyBlock struct {
 	reachable uint32
 }
 
-func (b *DummyBlock) OnRegister(p *protocol.Protocol, node *noise.Node) {
+func (b *dummyBlock) OnRegister(p *protocol.Protocol, node *noise.Node) {
 }
 
-func (b *DummyBlock) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
+func (b *dummyBlock) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	atomic.StoreUint32(&b.reachable, 1)
 	return nil
 }
 
-func (b *DummyBlock) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
+func (b *dummyBlock) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
 	return nil
 }
 
@@ -45,7 +45,10 @@ func TestECDH(t *testing.T) {
 	go alice.Listen()
 	go bob.Listen()
 
-	blockAlice, blockBob := &DummyBlock{}, &DummyBlock{}
+	defer alice.Kill()
+	defer bob.Kill()
+
+	blockAlice, blockBob := new(dummyBlock), new(dummyBlock)
 
 	p := protocol.New()
 	p.Register(New())
@@ -57,7 +60,8 @@ func TestECDH(t *testing.T) {
 	p.Register(blockBob)
 	p.Enforce(bob)
 
-	alice.Dial(bob.ExternalAddress())
+	_, err = alice.Dial(bob.ExternalAddress())
+	assert.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
 

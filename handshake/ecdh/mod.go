@@ -1,13 +1,12 @@
 package ecdh
 
 import (
+	"crypto"
 	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/crypto"
+	"github.com/perlin-network/noise/internal/edwards25519"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
-	"go.dedis.ch/kyber/v3/group/edwards25519"
-	"go.dedis.ch/kyber/v3/sign/schnorr"
 	"time"
 )
 
@@ -19,25 +18,17 @@ var (
 
 type block struct {
 	opcodeHandshake noise.Opcode
-
-	suite           crypto.EllipticSuite
 	timeoutDuration time.Duration
 }
 
 // New returns an ECDH policy with sensible defaults.
 //
 // By default, should a peer not complete the handshake protocol in 10 seconds, they will be disconnected.
-// All handshake-related messages are appended with Schnorr signatures that are automatically verified.
+// All handshake-related messages are appended with ECDSA signatures that are automatically verified.
 func New() *block {
 	return &block{
-		suite:           edwards25519.NewBlakeSHA256Ed25519(),
 		timeoutDuration: 10 * time.Second,
 	}
-}
-
-func (b *block) WithSuite(suite crypto.EllipticSuite) *block {
-	b.suite = suite
-	return b
 }
 
 func (b *block) TimeoutAfter(timeoutDuration time.Duration) *block {
@@ -51,20 +42,15 @@ func (b *block) OnRegister(p *protocol.Protocol, node *noise.Node) {
 
 func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	// Send a handshake request with a generated ephemeral keypair.
-	ephemeralPrivateKey := b.suite.Scalar().Pick(b.suite.RandomStream())
-	ephemeralPublicKey := b.suite.Point().Mul(ephemeralPrivateKey, b.suite.Point().Base())
-
-	var err error
-	var req Handshake
-
-	req.publicKey, err = ephemeralPublicKey.MarshalBinary()
+	ephemeralPublicKey, ephemeralPrivateKey, err := edwards25519.GenerateKey(nil)
 	if err != nil {
-		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to marshal ephemeral public key into binary")
+		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to generate ephemeral keypair")
 	}
 
-	req.signature, err = schnorr.Sign(b.suite, ephemeralPrivateKey, []byte(msgEphemeralHandshake))
+	req := Handshake{publicKey: ephemeralPublicKey}
+	req.signature, err = ephemeralPrivateKey.Sign(nil, []byte(msgEphemeralHandshake), crypto.Hash(0))
 	if err != nil {
-		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to sign handshake message using Schnorr signature scheme")
+		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to sign handshake message using ECDSA")
 	}
 
 	err = peer.SendMessage(req)
@@ -86,30 +72,21 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		}
 	}
 
-	peersPublicKey := b.suite.Point()
+	peersPublicKey := edwards25519.PublicKey(res.publicKey)
 
-	err = peersPublicKey.UnmarshalBinary(res.publicKey)
-	if err != nil {
-		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to unmarshal our peers ephemeral public key")
+	if !isEd25519GroupElement(peersPublicKey) {
+		return errors.Wrap(protocol.DisconnectPeer, "failed to unmarshal our peers ephemeral public key")
 	}
 
-	err = schnorr.Verify(b.suite, peersPublicKey, []byte(msgEphemeralHandshake), res.signature)
-	if err != nil {
-		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to verify signature in handshake request")
+	if !edwards25519.Verify(peersPublicKey, []byte(msgEphemeralHandshake), res.signature) {
+		return errors.Wrap(protocol.DisconnectPeer, "failed to verify signature in handshake request")
 	}
 
-	ephemeralSharedKey := computeSharedKey(b.suite, ephemeralPrivateKey, peersPublicKey)
-
-	sharedKeyBuf, err := ephemeralSharedKey.MarshalBinary()
-	if err != nil {
-		peer.Disconnect()
-		return errors.Wrap(err, "failed to marshal post-handshake shared key")
-	}
-
-	protocol.SetSharedKey(peer, sharedKeyBuf)
+	ephemeralSharedKey := computeSharedKey(ephemeralPrivateKey, peersPublicKey)
+	protocol.SetSharedKey(peer, ephemeralSharedKey[:])
 
 	log.Debug().
-		Str("ephemeral_shared_key", ephemeralSharedKey.String()).
+		Hex("ephemeral_shared_key", ephemeralSharedKey[:]).
 		Msg("Successfully performed ECDH with our peer.")
 
 	return nil

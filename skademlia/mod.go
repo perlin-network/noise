@@ -139,6 +139,7 @@ func enforceSignatures(peer *noise.Peer, enforce bool) {
 		// Validate signature situated inside every single messages header.
 		peer.OnDecodeFooter(func(node *noise.Node, peer *noise.Peer, msg []byte, reader payload.Reader) error {
 			signature, err := reader.ReadBytes()
+
 			if err != nil {
 				peer.Disconnect()
 				return errors.Wrap(err, "signature: failed to read message signature")

@@ -398,3 +398,93 @@ func GeScalarMultBase(h *ExtendedGroupElement, a *[32]byte) {
 		r.ToExtended(h)
 	}
 }
+
+func selectCached(c *CachedGroupElement, Ai *[8]CachedGroupElement, b int32) {
+	bNegative := negative(b)
+	bAbs := b - (((-bNegative) & b) << 1)
+
+	// in constant-time pick cached multiplier for exponent 0 through 8
+	FeOne(&c.yPlusX)
+	FeOne(&c.yMinusX)
+	FeOne(&c.Z)
+	FeZero(&c.T2d)
+
+	for i := int32(0); i < 8; i++ {
+		FeCMove(&c.yPlusX, &Ai[i].yPlusX, equal(bAbs, i+1))
+		FeCMove(&c.yMinusX, &Ai[i].yMinusX, equal(bAbs, i+1))
+		FeCMove(&c.Z, &Ai[i].Z, equal(bAbs, i+1))
+		FeCMove(&c.T2d, &Ai[i].T2d, equal(bAbs, i+1))
+	}
+
+	// in constant-time compute negated version, conditionally use it
+	var minusC CachedGroupElement
+
+	FeCopy(&minusC.yPlusX, &c.yMinusX)
+	FeCopy(&minusC.yMinusX, &c.yPlusX)
+	FeCopy(&minusC.Z, &c.Z)
+	FeNeg(&minusC.T2d, &c.T2d)
+
+	FeCMove(&c.yPlusX, &minusC.yPlusX, bNegative)
+	FeCMove(&c.yMinusX, &minusC.yMinusX, bNegative)
+	FeCMove(&c.Z, &minusC.Z, bNegative)
+	FeCMove(&c.T2d, &minusC.T2d, bNegative)
+}
+
+func GeScalarMult(h *ExtendedGroupElement, a *[32]byte, A *ExtendedGroupElement) {
+	var t CompletedGroupElement
+	var u ExtendedGroupElement
+	var r ProjectiveGroupElement
+	var c CachedGroupElement
+	var i int
+
+	// Break the exponent into 4-bit nybbles.
+	var e [64]int8
+	for i, v := range a {
+		e[2*i] = int8(v & 15)
+		e[2*i+1] = int8((v >> 4) & 15)
+	}
+	// each e[i] is between 0 and 15 and e[63] is between 0 and 7.
+
+	carry := int8(0)
+	for i := 0; i < 63; i++ {
+		e[i] += carry
+		carry = (e[i] + 8) >> 4
+		e[i] -= carry << 4
+	}
+	e[63] += carry
+	// each e[i] is between -8 and 8.
+
+	// compute cached array of multiples of A from 1A through 8A
+	var Ai [8]CachedGroupElement // A,1A,2A,3A,4A,5A,6A,7A
+	A.ToCached(&Ai[0])
+	for i := 0; i < 7; i++ {
+		geAdd(&t, A, &Ai[i])
+		t.ToExtended(&u)
+		u.ToCached(&Ai[i+1])
+	}
+
+	// special case for exponent nybble i == 63
+	u.Zero()
+	selectCached(&c, &Ai, int32(e[63]))
+	geAdd(&t, &u, &c)
+
+	for i = 62; i >= 0; i-- {
+
+		// t <<= 4
+		t.ToProjective(&r)
+		r.Double(&t)
+		t.ToProjective(&r)
+		r.Double(&t)
+		t.ToProjective(&r)
+		r.Double(&t)
+		t.ToProjective(&r)
+		r.Double(&t)
+
+		// Add next nybble
+		t.ToExtended(&u)
+		selectCached(&c, &Ai, int32(e[i]))
+		geAdd(&t, &u, &c)
+	}
+
+	t.ToExtended(h)
+}

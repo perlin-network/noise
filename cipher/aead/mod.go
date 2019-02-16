@@ -4,11 +4,9 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/crypto"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
-	"go.dedis.ch/kyber/v3/group/edwards25519"
 	"hash"
 	"sync/atomic"
 	"time"
@@ -24,21 +22,15 @@ type block struct {
 	opcodeACK noise.Opcode
 
 	ackTimeout time.Duration
-	curve      crypto.EllipticSuite
 	hash       func() hash.Hash
 }
 
 func New() *block {
-	return &block{hash: sha256.New, curve: edwards25519.NewBlakeSHA256Ed25519(), ackTimeout: 3 * time.Second}
+	return &block{hash: sha256.New, ackTimeout: 3 * time.Second}
 }
 
 func (b *block) WithHash(hash func() hash.Hash) *block {
 	b.hash = hash
-	return b
-}
-
-func (b *block) WithCurve(curve crypto.EllipticSuite) *block {
-	b.curve = curve
 	return b
 }
 
@@ -52,17 +44,14 @@ func (b *block) OnRegister(p *protocol.Protocol, node *noise.Node) {
 }
 
 func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
-	ephemeralSharedKeyBuf := protocol.LoadSharedKey(peer)
+	ephemeralSharedKey := protocol.LoadSharedKey(peer)
 
-	if ephemeralSharedKeyBuf == nil {
+	if ephemeralSharedKey == nil {
 		return errors.Wrap(protocol.DisconnectPeer, "session was established, but no ephemeral shared key found")
 	}
 
-	ephemeralSharedKey := b.curve.Point()
-
-	err := ephemeralSharedKey.UnmarshalBinary(ephemeralSharedKeyBuf)
-	if err != nil {
-		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to unmarshal ephemeral shared key buf")
+	if !isEd25519GroupElement(ephemeralSharedKey) {
+		return errors.Wrap(protocol.DisconnectPeer, "failed to unmarshal ephemeral shared key buf")
 	}
 
 	suite, sharedKey, err := deriveCipherSuite(b.hash, ephemeralSharedKey, nil)
