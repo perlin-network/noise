@@ -15,7 +15,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 )
 
 var (
@@ -69,7 +68,7 @@ func setup(node *noise.Node, opcodeTest noise.Opcode) {
 func Run(numNodes int, numTxEach int) error {
 	opcodeTest := noise.RegisterMessage(noise.NextAvailableOpcode(), (*testMessage)(nil))
 	var nodes []*noise.Node
-	var allErrs []error
+	var errors []error
 
 	for i := 0; i < numNodes; i++ {
 		params := noise.DefaultParams()
@@ -90,27 +89,26 @@ func Run(numNodes int, numTxEach int) error {
 		go node.Listen()
 
 		nodes = append(nodes, node)
-		log.Info().Msgf("Listening for peers on port %d.", node.Port())
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	defer func() {
+		for _, node := range nodes {
+			node.Kill()
+		}
+	}()
 
 	for i := 1; i < numNodes; i++ {
 		peer, err := nodes[i].Dial(nodes[0].ExternalAddress())
 		if err != nil {
-			log.Error().Msgf("got error %+v", err)
-			allErrs = append(allErrs, err)
+			errors = append(errors, err)
 		}
 
 		skademlia.WaitUntilAuthenticated(peer)
-
-		peers := skademlia.FindNode(nodes[i], protocol.NodeID(nodes[i]).(skademlia.ID), skademlia.BucketSize(), 8)
-		log.Info().Msgf("Bootstrapped with peers: %+v", peers)
-
+		_ = skademlia.FindNode(nodes[i], protocol.NodeID(nodes[i]).(skademlia.ID), skademlia.BucketSize(), 8)
 	}
 
-	if len(allErrs) > 0 {
-		return allErrs[0]
+	if len(errors) > 0 {
+		return errors[0]
 	}
 
 	var wg sync.WaitGroup
@@ -121,20 +119,19 @@ func Run(numNodes int, numTxEach int) error {
 			defer wg.Done()
 
 			for j := 0; j < numTxEach; j++ {
-				txt := fmt.Sprintf("Sending from %d tx %d", i, j)
+				txt := fmt.Sprintf("sending from %d tx %d", i, j)
 
 				errs := skademlia.Broadcast(nodes[i], testMessage{text: strings.TrimSpace(txt)})
 				if len(errs) > 0 {
-					log.Error().Msgf("got errors %+v", errs)
-					allErrs = append(allErrs, errs...)
+					errors = append(errors, errs...)
 				}
 			}
 		}(i)
 	}
 	wg.Wait()
 
-	if len(allErrs) > 0 {
-		return allErrs[0]
+	if len(errors) > 0 {
+		return errors[0]
 	}
 
 	return nil

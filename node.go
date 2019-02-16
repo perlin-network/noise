@@ -32,7 +32,7 @@ type Node struct {
 
 	metadata sync.Map
 
-	kill     chan struct{}
+	kill     chan chan struct{}
 	killOnce sync.Once
 }
 
@@ -69,7 +69,7 @@ func NewNode(params parameters) (*Node, error) {
 		onPeerDialedCallbacks:    callbacks.NewSequentialCallbackManager(),
 		onPeerInitCallbacks:      callbacks.NewSequentialCallbackManager(),
 
-		kill: make(chan struct{}, 1),
+		kill: make(chan chan struct{}, 1),
 	}
 
 	for key, val := range params.Metadata {
@@ -94,7 +94,8 @@ func (n *Node) Port() uint16 {
 func (n *Node) Listen() {
 	for {
 		select {
-		case <-n.kill:
+		case signal := <-n.kill:
+			close(signal)
 			return
 		default:
 		}
@@ -248,11 +249,14 @@ func (n *Node) Fence() {
 
 func (n *Node) Kill() {
 	n.killOnce.Do(func() {
+		signal := make(chan struct{}, 1)
+		n.kill <- signal
+
 		if err := n.listener.Close(); err != nil {
 			n.onListenerErrorCallbacks.RunCallbacks(err)
 		}
 
-		n.kill <- struct{}{}
+		<-signal
 	})
 }
 

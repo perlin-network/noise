@@ -64,29 +64,28 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to send AEAD ACK")
 	}
 
-	peer.EnterCriticalReadMode()
-	defer peer.LeaveCriticalReadMode()
+	peer.ReceiveAtomically(b.opcodeACK, func() {
+		var ourNonce uint64
+		var theirNonce uint64
 
-	select {
-	case <-time.After(b.ackTimeout):
-		return errors.Wrap(protocol.DisconnectPeer, "timed out waiting for AEAD ACK")
-	case <-peer.Receive(b.opcodeACK):
-	}
+		peer.BeforeMessageSent(func(node *noise.Node, peer *noise.Peer, msg []byte) (bytes []byte, e error) {
+			ourNonceBuf := make([]byte, suite.NonceSize())
+			binary.LittleEndian.PutUint64(ourNonceBuf, atomic.AddUint64(&ourNonce, 1))
+			return suite.Seal(msg[:0], ourNonceBuf, msg, nil), nil
+		})
 
-	var ourNonce uint64
-	var theirNonce uint64
-
-	peer.BeforeMessageSent(func(node *noise.Node, peer *noise.Peer, msg []byte) (bytes []byte, e error) {
-		ourNonceBuf := make([]byte, suite.NonceSize())
-		binary.LittleEndian.PutUint64(ourNonceBuf, atomic.AddUint64(&ourNonce, 1))
-		return suite.Seal(msg[:0], ourNonceBuf, msg, nil), nil
+		peer.BeforeMessageReceived(func(node *noise.Node, peer *noise.Peer, msg []byte) (bytes []byte, e error) {
+			theirNonceBuf := make([]byte, suite.NonceSize())
+			binary.LittleEndian.PutUint64(theirNonceBuf, atomic.AddUint64(&theirNonce, 1))
+			return suite.Open(msg[:0], theirNonceBuf, msg, nil)
+		})
 	})
 
-	peer.BeforeMessageReceived(func(node *noise.Node, peer *noise.Peer, msg []byte) (bytes []byte, e error) {
-		theirNonceBuf := make([]byte, suite.NonceSize())
-		binary.LittleEndian.PutUint64(theirNonceBuf, atomic.AddUint64(&theirNonce, 1))
-		return suite.Open(msg[:0], theirNonceBuf, msg, nil)
-	})
+	//select {
+	//case <-time.After(b.ackTimeout):
+	//	return errors.Wrap(protocol.DisconnectPeer, "timed out waiting for AEAD ACK")
+	//case <-peer.Receive(b.opcodeACK):
+	//}
 
 	log.Debug().Hex("derived_shared_key", sharedKey).Msg("Derived HMAC, and successfully initialized session w/ AEAD cipher suite.")
 

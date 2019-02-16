@@ -4,11 +4,13 @@ import (
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/log"
 	"github.com/pkg/errors"
+	"sync"
 	"sync/atomic"
 )
 
 const (
 	KeyProtocolCurrentBlockIndex = "protocol.current_block_index"
+	KeyProtocolEnforceOnce       = "protocol.enforce_once"
 )
 
 var (
@@ -46,47 +48,49 @@ func (p *Protocol) Register(blk Block) *Protocol {
 func (p *Protocol) Enforce(node *noise.Node) {
 	atomic.StoreUint32(&p.blocksSealed, 1)
 
-	for _, block := range p.blocks {
-		block.OnRegister(p, node)
-	}
+	node.LoadOrStore(KeyProtocolEnforceOnce, new(sync.Once)).(*sync.Once).Do(func() {
+		for _, block := range p.blocks {
+			block.OnRegister(p, node)
+		}
 
-	node.OnPeerInit(func(node *noise.Node, peer *noise.Peer) error {
-		go func() {
-			peer.OnDisconnect(func(node *noise.Node, peer *noise.Peer) error {
-				blockIndex := peer.LoadOrStore(KeyProtocolCurrentBlockIndex, 0).(int)
+		node.OnPeerInit(func(node *noise.Node, peer *noise.Peer) error {
+			go func() {
+				peer.OnDisconnect(func(node *noise.Node, peer *noise.Peer) error {
+					blockIndex := peer.LoadOrStore(KeyProtocolCurrentBlockIndex, 0).(int)
 
-				if blockIndex >= len(p.blocks) {
-					return nil
-				}
+					if blockIndex >= len(p.blocks) {
+						return nil
+					}
 
-				return p.blocks[blockIndex].OnEnd(p, peer)
-			})
+					return p.blocks[blockIndex].OnEnd(p, peer)
+				})
 
-			for {
-				blockIndex := peer.LoadOrStore(KeyProtocolCurrentBlockIndex, 0).(int)
+				for {
+					blockIndex := peer.LoadOrStore(KeyProtocolCurrentBlockIndex, 0).(int)
 
-				if blockIndex >= len(p.blocks) {
-					return
-				}
-
-				err := p.blocks[blockIndex].OnBegin(p, peer)
-
-				if err != nil {
-					log.Warn().Err(err).Msg("Received an error following protocol.")
-
-					switch errors.Cause(err) {
-					case DisconnectPeer:
-						peer.Disconnect()
-						return
-					case CompletedAllBlocks:
+					if blockIndex >= len(p.blocks) {
 						return
 					}
-				} else {
-					peer.Set(KeyProtocolCurrentBlockIndex, blockIndex+1)
-				}
-			}
-		}()
 
-		return nil
+					err := p.blocks[blockIndex].OnBegin(p, peer)
+
+					if err != nil {
+						log.Warn().Err(err).Msg("Received an error following protocol.")
+
+						switch errors.Cause(err) {
+						case DisconnectPeer:
+							peer.Disconnect()
+							return
+						case CompletedAllBlocks:
+							return
+						}
+					} else {
+						peer.Set(KeyProtocolCurrentBlockIndex, blockIndex+1)
+					}
+				}
+			}()
+
+			return nil
+		})
 	})
 }

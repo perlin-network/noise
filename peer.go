@@ -16,6 +16,15 @@ import (
 	"time"
 )
 
+type receiver struct {
+	hub  chan Message
+	lock chan struct{}
+}
+
+func (r *receiver) Done() {
+	close(r.lock)
+}
+
 type Peer struct {
 	node *Node
 	conn net.Conn
@@ -42,8 +51,6 @@ type Peer struct {
 	killOnce sync.Once
 
 	metadata sync.Map
-
-	criticalReadLock chan struct{}
 }
 
 func newPeer(node *Node, conn net.Conn) *Peer {
@@ -66,8 +73,7 @@ func newPeer(node *Node, conn net.Conn) *Peer {
 		afterMessageReceivedCallbacks: callbacks.NewSequentialCallbackManager(),
 		afterMessageSentCallbacks:     callbacks.NewSequentialCallbackManager(),
 
-		kill:             make(chan struct{}, 1),
-		criticalReadLock: make(chan struct{}, 1),
+		kill: make(chan struct{}, 1),
 	}
 }
 
@@ -130,12 +136,14 @@ func (p *Peer) spawnReceiveWorker() {
 			continue
 		}
 
-		c, _ := p.messageHub.LoadOrStore(opcode, make(chan Message, 1))
+		c, _ := p.messageHub.LoadOrStore(opcode, &receiver{hub: make(chan Message, 1)})
+		receiver := c.(*receiver)
 
 		select {
-		case c.(chan Message) <- msg:
-			p.criticalReadLock <- struct{}{}
-			<-p.criticalReadLock
+		case receiver.hub <- msg:
+			if receiver.lock != nil {
+				<-receiver.lock
+			}
 		case <-time.After(3 * time.Second):
 			p.Disconnect()
 			continue
@@ -373,8 +381,9 @@ func (p *Peer) OnDisconnect(srcCallbacks ...OnPeerDisconnectCallback) {
 }
 
 func (p *Peer) Receive(o Opcode) <-chan Message {
-	c, _ := p.messageHub.LoadOrStore(o, make(chan Message, 1))
-	return c.(chan Message)
+	c, _ := p.messageHub.LoadOrStore(o, &receiver{hub: make(chan Message, 1)})
+	c.(*receiver).lock = nil
+	return c.(*receiver).hub
 }
 
 func (p *Peer) Disconnect() {
@@ -441,12 +450,18 @@ func (p *Peer) Node() *Node {
 	return p.node
 }
 
-func (p *Peer) EnterCriticalReadMode() {
-	p.criticalReadLock <- struct{}{}
-}
+func (p *Peer) ReceiveAtomically(o Opcode, lockCallback func()) Message {
+	c, _ := p.messageHub.LoadOrStore(o, &receiver{hub: make(chan Message, 1)})
+	receiver := c.(*receiver)
 
-func (p *Peer) LeaveCriticalReadMode() {
-	<-p.criticalReadLock
+	receiver.lock = make(chan struct{})
+
+	msg := <-receiver.hub
+
+	lockCallback()
+	close(receiver.lock)
+
+	return msg
 }
 
 func (p *Peer) SetNode(node *Node) {

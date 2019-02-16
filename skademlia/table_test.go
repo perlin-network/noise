@@ -280,7 +280,6 @@ func TestTable(t *testing.T) {
 
 	node, err := noise.NewNode(params)
 	assert.Nil(t, err)
-	defer node.Kill()
 
 	id := NewID(node.ExternalAddress(), keys.PublicKey(), keys.Nonce)
 
