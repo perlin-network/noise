@@ -8,8 +8,8 @@ import (
 )
 
 type parameters struct {
-	Host string
-	Port uint16
+	Host               string
+	Port, ExternalPort uint16
 
 	NAT       nat.Provider
 	Keys      identity.Keypair

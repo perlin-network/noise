@@ -20,9 +20,9 @@ type Node struct {
 	nat       nat.Provider
 	transport transport.Layer
 
-	listener net.Listener
-	host     string
-	port     uint16
+	listener                   net.Listener
+	host                       string
+	internalPort, externalPort uint16
 
 	maxMessageSize uint64
 
@@ -66,7 +66,8 @@ func NewNode(params parameters) (*Node, error) {
 
 		listener: listener,
 		host:     params.Host,
-		port:     params.Port,
+
+		internalPort: params.Port,
 
 		maxMessageSize: params.MaxMessageSize,
 
@@ -83,12 +84,18 @@ func NewNode(params parameters) (*Node, error) {
 		kill: make(chan chan struct{}, 1),
 	}
 
+	if params.ExternalPort > 0 {
+		node.externalPort = params.ExternalPort
+	} else {
+		node.externalPort = params.Port
+	}
+
 	for key, val := range params.Metadata {
 		node.Set(key, val)
 	}
 
 	if node.nat != nil {
-		err = node.nat.AddMapping(node.transport.String(), node.port, node.port, 1*time.Hour)
+		err = node.nat.AddMapping(node.transport.String(), node.internalPort, node.externalPort, 1*time.Hour)
 		if err != nil {
 			return nil, errors.Wrap(err, "nat: failed to port-forward")
 		}
@@ -97,8 +104,12 @@ func NewNode(params parameters) (*Node, error) {
 	return &node, nil
 }
 
-func (n *Node) Port() uint16 {
-	return n.port
+func (n *Node) InternalPort() uint16 {
+	return n.internalPort
+}
+
+func (n *Node) ExternalPort() uint16 {
+	return n.externalPort
 }
 
 // Listen makes our node start listening for peers.
@@ -274,7 +285,7 @@ func (n *Node) Kill() {
 	close(n.kill)
 
 	if n.nat != nil {
-		err := n.nat.DeleteMapping(n.transport.String(), n.port, n.port)
+		err := n.nat.DeleteMapping(n.transport.String(), n.internalPort, n.externalPort)
 
 		if err != nil {
 			panic(errors.Wrap(err, "nat: failed to remove port-forward"))
@@ -289,8 +300,8 @@ func (n *Node) ExternalAddress() string {
 			panic(err)
 		}
 
-		return fmt.Sprintf("%s:%d", externalIP.String(), n.port)
+		return fmt.Sprintf("%s:%d", externalIP.String(), n.externalPort)
 	}
 
-	return fmt.Sprintf("%s:%d", n.host, n.Port())
+	return fmt.Sprintf("%s:%d", n.host, n.ExternalPort())
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/skademlia"
 	"github.com/pkg/errors"
-	"strconv"
 	"sync/atomic"
 	"time"
 )
@@ -58,7 +57,7 @@ func spawnNode(port uint16) *noise.Node {
 
 	go node.Listen()
 
-	log.Info().Msgf("Listening for peers on port %d.", node.Port())
+	log.Info().Msgf("Listening for peers on port %d.", node.ExternalPort())
 
 	return node
 }
@@ -103,7 +102,7 @@ func main() {
 		return nil
 	})
 
-	_, err := client.Dial("127.0.0.1:" + strconv.Itoa(int(server.Port())))
+	_, err := client.Dial(server.ExternalAddress())
 	if err != nil {
 		panic(err)
 	}

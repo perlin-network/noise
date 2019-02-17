@@ -101,11 +101,11 @@ func TestNewNode(t *testing.T) {
 
 			// check the port
 			if tt.params.Port == 0 {
-				assert.True(t, node.Port() > 1024)
+				assert.True(t, node.InternalPort() > 1024)
 			} else {
-				assert.Equal(t, tt.params.Port, node.Port())
+				assert.Equal(t, tt.params.Port, node.InternalPort())
 			}
-			assert.Equal(t, fmt.Sprintf("%s:%d", tt.params.Host, node.Port()), node.ExternalAddress())
+			assert.Equal(t, fmt.Sprintf("%s:%d", tt.params.Host, node.InternalPort()), node.ExternalAddress())
 		})
 	}
 }

@@ -91,7 +91,7 @@ func main() {
 	setup(node)
 	go node.Listen()
 
-	log.Info().Msgf("Listening for peers on port %d.", node.Port())
+	log.Info().Msgf("Listening for peers on port %d.", node.ExternalPort())
 
 	if len(flag.Args()) > 0 {
 		for _, address := range flag.Args() {
