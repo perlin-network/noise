@@ -213,15 +213,20 @@ func (p *Peer) SendMessage(message Message) error {
 	}
 
 	cmd := &sendHandle{payload: payload, result: make(chan error, 1)}
-	p.queue <- cmd
+	defer close(cmd.result)
 
-	err = <-cmd.result
-
-	if err != nil {
-		return err
+	select {
+	case <-time.After(3 * time.Second):
+		return errors.New("noise: send message queue is full and not being processed")
+	case p.queue <- cmd:
 	}
 
-	return nil
+	select {
+	case <-time.After(3 * time.Second):
+		return errors.New("noise: timed out attempting to send a message")
+	case err = <-cmd.result:
+		return err
+	}
 }
 
 func (p *Peer) BeforeMessageSent(c BeforeMessageSentCallback) {
