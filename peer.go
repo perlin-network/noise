@@ -46,6 +46,7 @@ type Peer struct {
 
 	// map[Opcode]chan Message
 	messageHub sync.Map
+	sendQueue  chan []byte
 
 	kill     chan struct{}
 	killOnce sync.Once
@@ -73,12 +74,55 @@ func newPeer(node *Node, conn net.Conn) *Peer {
 		afterMessageReceivedCallbacks: callbacks.NewSequentialCallbackManager(),
 		afterMessageSentCallbacks:     callbacks.NewSequentialCallbackManager(),
 
-		kill: make(chan struct{}, 1),
+		kill:      make(chan struct{}, 1),
+		sendQueue: make(chan []byte, 128),
 	}
 }
 
 func (p *Peer) init() {
 	go p.spawnReceiveWorker()
+	go p.spawnSendWorker()
+}
+
+func (p *Peer) spawnSendWorker() {
+	for {
+		select {
+		case <-p.kill:
+			return
+		case msg := <-p.sendQueue:
+			_payload, errs := p.beforeMessageSentCallbacks.RunCallbacks(msg, p.node)
+			if len(errs) > 0 {
+				log.Warn().Errs("errors", errs).Msg("failed to run beforeMessageSentCallbacks")
+				continue
+			}
+			payload := _payload.([]byte)
+
+			size := len(payload)
+
+			// Prepend message length to packet.
+			buf := make([]byte, binary.MaxVarintLen64)
+			prepended := binary.PutUvarint(buf[:], uint64(size))
+
+			buf = append(buf[:prepended], payload[:]...)
+
+			copied, err := io.Copy(p.conn, bytes.NewReader(buf))
+
+			if copied != int64(size+prepended) {
+				log.Warn().Msgf("only written %d bytes when expected to write %d bytes to peer", copied, size+prepended)
+				continue
+			}
+
+			if err != nil {
+				log.Warn().Err(err).Msg("failed to send message to peer")
+				continue
+			}
+
+			if errs := p.afterMessageSentCallbacks.RunCallbacks(p.node); len(errs) > 0 {
+				log.Warn().Errs("errors", errs).Msg("Got errors running AfterMessageSent callbacks.")
+				continue
+			}
+		}
+	}
 }
 
 func (p *Peer) spawnReceiveWorker() {
@@ -165,29 +209,7 @@ func (p *Peer) SendMessage(message Message) error {
 		return errors.Wrap(err, "failed to serialize message contents to be sent to a peer")
 	}
 
-	payload = p.beforeMessageSentCallbacks.MustRunCallbacks(payload, p.node).([]byte)
-
-	size := len(payload)
-
-	// Prepend message length to packet.
-	buf := make([]byte, binary.MaxVarintLen64)
-	prepended := binary.PutUvarint(buf[:], uint64(size))
-
-	buf = append(buf[:prepended], payload[:]...)
-
-	copied, err := io.Copy(p.conn, bytes.NewReader(buf))
-
-	if copied != int64(size+prepended) {
-		return errors.Errorf("only written %d bytes when expected to write %d bytes to peer", copied, size+prepended)
-	}
-
-	if err != nil {
-		return errors.Wrap(err, "failed to send message to peer")
-	}
-
-	if errs := p.afterMessageSentCallbacks.RunCallbacks(p.node); len(errs) > 0 {
-		log.Warn().Errs("errors", errs).Msg("Got errors running AfterMessageSent callbacks.")
-	}
+	p.sendQueue <- payload
 
 	return nil
 }
