@@ -55,7 +55,7 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to derive AEAD cipher suite given ephemeral shared key")
 	}
 
-	locker := peer.ReceiveAndLock(b.opcodeACK)
+	locker := peer.LockOnReceive(b.opcodeACK)
 	defer locker.Unlock()
 
 	err = peer.SendMessage(ACK{})
@@ -76,22 +76,14 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		theirNonceBuf := make([]byte, suite.NonceSize())
 		binary.LittleEndian.PutUint64(theirNonceBuf, atomic.AddUint64(&theirNonce, 1))
 
-		buf, err = suite.Open(msg[:0], theirNonceBuf, msg, nil)
-
-		if err != nil {
-			panic(err)
-		}
-
-		return
+		return suite.Open(msg[:0], theirNonceBuf, msg, nil)
 	})
 
 	peer.BeforeMessageSent(func(node *noise.Node, peer *noise.Peer, msg []byte) (buf []byte, err error) {
 		ourNonceBuf := make([]byte, suite.NonceSize())
 		binary.LittleEndian.PutUint64(ourNonceBuf, atomic.AddUint64(&ourNonce, 1))
 
-		buf = suite.Seal(msg[:0], ourNonceBuf, msg, nil)
-
-		return
+		return suite.Seal(msg[:0], ourNonceBuf, msg, nil), nil
 	})
 
 	log.Debug().Hex("derived_shared_key", sharedKey).Msg("Derived HMAC, and successfully initialized session w/ AEAD cipher suite.")

@@ -10,19 +10,23 @@ import (
 	"github.com/pkg/errors"
 	"io"
 	"net"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 )
 
-type receiver struct {
+type receiveHandle struct {
 	hub  chan Message
 	lock chan struct{}
 }
 
-func (r *receiver) Unlock() {
+func (r *receiveHandle) Unlock() {
 	<-r.lock
+}
+
+type sendHandle struct {
+	payload []byte
+	result  chan error
 }
 
 type Peer struct {
@@ -46,12 +50,13 @@ type Peer struct {
 
 	// map[Opcode]chan Message
 	messageHub sync.Map
-	sendQueue  chan sendState
 
 	kill     chan struct{}
 	killOnce sync.Once
 
 	metadata sync.Map
+
+	queue chan *sendHandle
 }
 
 func newPeer(node *Node, conn net.Conn) *Peer {
@@ -74,61 +79,56 @@ func newPeer(node *Node, conn net.Conn) *Peer {
 		afterMessageReceivedCallbacks: callbacks.NewSequentialCallbackManager(),
 		afterMessageSentCallbacks:     callbacks.NewSequentialCallbackManager(),
 
-		kill:      make(chan struct{}, 1),
-		sendQueue: make(chan sendState, 128),
+		kill:  make(chan struct{}, 1),
+		queue: make(chan *sendHandle, 128),
 	}
 }
 
-type sendState struct {
-	buffer []byte
-	result chan error
-}
-
 func (p *Peer) init() {
-	go p.spawnReceiveWorker()
 	go p.spawnSendWorker()
+	go p.spawnReceiveWorker()
 }
 
 func (p *Peer) spawnSendWorker() {
 	for {
+		var cmd *sendHandle
+
 		select {
-		case <-p.kill:
-			return
-		case msg := <-p.sendQueue:
-			_payload, errs := p.beforeMessageSentCallbacks.RunCallbacks(msg.buffer, p.node)
-			if len(errs) > 0 {
-				msg.result <- errors.Errorf("failed to run beforeMessageSentCallbacks: %+v", errs)
-				continue
-			}
-			payload := _payload.([]byte)
-
-			size := len(payload)
-
-			// Prepend message length to packet.
-			buf := make([]byte, binary.MaxVarintLen64)
-			prepended := binary.PutUvarint(buf[:], uint64(size))
-
-			buf = append(buf[:prepended], payload[:]...)
-
-			copied, err := io.Copy(p.conn, bytes.NewReader(buf))
-
-			if copied != int64(size+prepended) {
-				msg.result <- errors.Errorf("only written %d bytes when expected to write %d bytes to peer", copied, size+prepended)
-				continue
-			}
-
-			if err != nil {
-				msg.result <- errors.Wrap(err, "failed to send message to peer")
-				continue
-			}
-
-			if errs := p.afterMessageSentCallbacks.RunCallbacks(p.node); len(errs) > 0 {
-				msg.result <- errors.Errorf("Got errors running AfterMessageSent callbacks: %+v", errs)
-				continue
-			}
-
-			msg.result <- nil
+		//case <-p.kill: // TODO(kenta): kill switch is broken
+		//	return
+		case cmd = <-p.queue:
 		}
+
+		payload := cmd.payload
+
+		payload = p.beforeMessageSentCallbacks.MustRunCallbacks(payload, p.node).([]byte)
+
+		size := len(payload)
+
+		// Prepend message length to packet.
+		buf := make([]byte, binary.MaxVarintLen64)
+		prepended := binary.PutUvarint(buf[:], uint64(size))
+
+		buf = append(buf[:prepended], payload[:]...)
+
+		copied, err := io.Copy(p.conn, bytes.NewReader(buf))
+
+		if copied != int64(size+prepended) {
+			cmd.result <- errors.Errorf("only written %d bytes when expected to write %d bytes to peer", copied, size+prepended)
+			continue
+		}
+
+		if err != nil {
+			cmd.result <- errors.Wrap(err, "failed to send message to peer")
+			continue
+		}
+
+		if errs := p.afterMessageSentCallbacks.RunCallbacks(p.node); len(errs) > 0 {
+			log.Warn().Errs("errors", errs).Msg("Got errors running AfterMessageSent callbacks.")
+			continue
+		}
+
+		cmd.result <- nil
 	}
 }
 
@@ -183,22 +183,18 @@ func (p *Peer) spawnReceiveWorker() {
 		if opcode == OpcodeNil || err != nil {
 			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrap(err, "failed to decode message"))
 
-			panic(err)
-
 			p.Disconnect()
 			continue
 		}
 
-		c, _ := p.messageHub.LoadOrStore(opcode, &receiver{hub: make(chan Message), lock: make(chan struct{}, 1)})
-		recv := c.(*receiver)
+		c, _ := p.messageHub.LoadOrStore(opcode, &receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
+		recv := c.(*receiveHandle)
 
 		select {
 		case recv.hub <- msg:
 			recv.lock <- struct{}{}
 			<-recv.lock
 		case <-time.After(3 * time.Second):
-			DebugOpcodes()
-			log.Fatal().Msgf("Failed to receive opcode %d because of buffering.", opcode)
 			p.Disconnect()
 			continue
 		}
@@ -211,28 +207,21 @@ func (p *Peer) spawnReceiveWorker() {
 }
 
 func (p *Peer) SendMessage(message Message) error {
-	result, err := p.SendMessageNB(message)
+	payload, err := p.EncodeMessage(message)
+	if err != nil {
+		return errors.Wrap(err, "failed to serialize message contents to be sent to a peer")
+	}
+
+	cmd := &sendHandle{payload: payload, result: make(chan error, 1)}
+	p.queue <- cmd
+
+	err = <-cmd.result
+
 	if err != nil {
 		return err
 	}
 
-	return <-result
-}
-
-func (p *Peer) SendMessageNB(message Message) (chan error, error) {
-	payload, err := p.EncodeMessage(message)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to serialize message contents to be sent to a peer")
-	}
-
-	ch := make(chan error, 1)
-
-	p.sendQueue <- sendState{
-		buffer: payload,
-		result: ch,
-	}
-
-	return ch, nil
+	return nil
 }
 
 func (p *Peer) BeforeMessageSent(c BeforeMessageSentCallback) {
@@ -427,8 +416,8 @@ func (p *Peer) OnDisconnect(srcCallbacks ...OnPeerDisconnectCallback) {
 }
 
 func (p *Peer) Receive(o Opcode) <-chan Message {
-	c, _ := p.messageHub.LoadOrStore(o, &receiver{hub: make(chan Message), lock: make(chan struct{}, 1)})
-	return c.(*receiver).hub
+	c, _ := p.messageHub.LoadOrStore(o, &receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
+	return c.(*receiveHandle).hub
 }
 
 func (p *Peer) Disconnect() {
@@ -438,8 +427,6 @@ func (p *Peer) Disconnect() {
 	//}
 
 	p.killOnce.Do(func() {
-		debug.PrintStack()
-
 		if err := p.conn.Close(); err != nil {
 			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrapf(err, "got errors closing peer connection"))
 		}
@@ -497,9 +484,9 @@ func (p *Peer) Node() *Node {
 	return p.node
 }
 
-func (p *Peer) ReceiveAndLock(opcode Opcode) *receiver {
-	c, _ := p.messageHub.LoadOrStore(opcode, &receiver{hub: make(chan Message), lock: make(chan struct{}, 1)})
-	recv := c.(*receiver)
+func (p *Peer) LockOnReceive(opcode Opcode) *receiveHandle {
+	c, _ := p.messageHub.LoadOrStore(opcode, &receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
+	recv := c.(*receiveHandle)
 
 	recv.lock <- struct{}{}
 
