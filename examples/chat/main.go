@@ -80,6 +80,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	defer node.Kill()
 
 	p := protocol.New()
 	p.Register(ecdh.New())

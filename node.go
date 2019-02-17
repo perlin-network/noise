@@ -272,6 +272,14 @@ func (n *Node) Kill() {
 
 	<-signal
 	close(n.kill)
+
+	if n.nat != nil {
+		err := n.nat.DeleteMapping(n.transport.String(), n.port, n.port)
+
+		if err != nil {
+			panic(errors.Wrap(err, "nat: failed to remove port-forward"))
+		}
+	}
 }
 
 func (n *Node) ExternalAddress() string {

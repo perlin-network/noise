@@ -271,13 +271,13 @@ func (p *Peer) SendMessage(message Message) error {
 	select {
 	case <-time.After(p.node.sendWorkerBusyTimeout):
 		close(cmd.result)
-		return errors.New("noise: send message queue is full and not being processed")
+		return errors.New("send message queue is full and not being processed")
 	case p.sendQueue <- cmd:
 	}
 
 	select {
 	case <-time.After(p.node.sendMessageTimeout):
-		return errors.New("noise: timed out attempting to send a message")
+		return errors.New("timed out attempting to send a message")
 	case err = <-cmd.result:
 		return err
 	}
