@@ -10,6 +10,9 @@ import (
 )
 
 const (
+	DefaultPrefixDiffLen = 128
+	DefaultPrefixDiffMin = 32
+
 	keyKademliaTable = "kademlia.table"
 	keyAuthChannel   = "kademlia.auth.ch"
 )
@@ -27,10 +30,12 @@ type block struct {
 	enforceSignatures bool
 
 	c1, c2 int
+
+	prefixDiffLen, prefixDiffMin int
 }
 
 func New() *block {
-	return &block{enforceSignatures: false, c1: DefaultC1, c2: DefaultC2}
+	return &block{enforceSignatures: false, c1: DefaultC1, c2: DefaultC2, prefixDiffLen: DefaultPrefixDiffLen, prefixDiffMin: DefaultPrefixDiffMin}
 }
 
 func (b *block) EnforceSignatures() *block {
@@ -45,6 +50,16 @@ func (b *block) WithC1(c1 int) *block {
 
 func (b *block) WithC2(c2 int) *block {
 	b.c2 = c2
+	return b
+}
+
+func (b *block) WithPrefixDiffLen(prefixDiffLen int) *block {
+	b.prefixDiffLen = prefixDiffLen
+	return b
+}
+
+func (b *block) WithPrefixDiffMin(prefixDiffMin int) *block {
+	b.prefixDiffMin = prefixDiffMin
 	return b
 }
 
@@ -91,10 +106,10 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	enforceSignatures(peer, b.enforceSignatures)
 
 	// Log peer into S/Kademlia table, and have all messages update the S/Kademlia table.
-	_ = logPeerActivity(peer)
+	_ = b.logPeerActivity(peer)
 
 	peer.BeforeMessageReceived(func(node *noise.Node, peer *noise.Peer, msg []byte) (i []byte, e error) {
-		return msg, logPeerActivity(peer)
+		return msg, b.logPeerActivity(peer)
 	})
 
 	go b.handleLookups(peer)
@@ -112,12 +127,14 @@ func (b *block) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
 	return nil
 }
 
-func logPeerActivity(peer *noise.Peer) error {
-	err := UpdateTable(peer.Node(), protocol.PeerID(peer))
+func (b *block) logPeerActivity(peer *noise.Peer) error {
+	if prefixDiff(protocol.NodeID(peer.Node()).Hash(), protocol.PeerID(peer).Hash(), b.prefixDiffLen) > b.prefixDiffMin {
+		err := UpdateTable(peer.Node(), protocol.PeerID(peer))
 
-	if err != nil {
-		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()),
-			"kademlia: failed to update table with peer ID")
+		if err != nil {
+			return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()),
+				"kademlia: failed to update table with peer ID")
+		}
 	}
 
 	return nil
