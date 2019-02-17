@@ -48,15 +48,13 @@ type Peer struct {
 	afterMessageSentCallbacks     *callbacks.SequentialCallbackManager
 	afterMessageReceivedCallbacks *callbacks.SequentialCallbackManager
 
-	// map[Opcode]chan Message
-	messageHub sync.Map
+	sendQueue     chan sendHandle
+	receiveQueues sync.Map // map[Opcode]chan receiveHandle
 
 	kill     chan struct{}
 	killOnce sync.Once
 
 	metadata sync.Map
-
-	queue chan *sendHandle
 }
 
 func newPeer(node *Node, conn net.Conn) *Peer {
@@ -79,8 +77,8 @@ func newPeer(node *Node, conn net.Conn) *Peer {
 		afterMessageReceivedCallbacks: callbacks.NewSequentialCallbackManager(),
 		afterMessageSentCallbacks:     callbacks.NewSequentialCallbackManager(),
 
-		kill:  make(chan struct{}, 1),
-		queue: make(chan *sendHandle, 128),
+		kill:      make(chan struct{}, 1),
+		sendQueue: make(chan sendHandle, 128),
 	}
 }
 
@@ -91,12 +89,12 @@ func (p *Peer) init() {
 
 func (p *Peer) spawnSendWorker() {
 	for {
-		var cmd *sendHandle
+		var cmd sendHandle
 
 		select {
 		//case <-p.kill: // TODO(kenta): kill switch is broken
 		//	return
-		case cmd = <-p.queue:
+		case cmd = <-p.sendQueue:
 		}
 
 		payload := cmd.payload
@@ -187,8 +185,8 @@ func (p *Peer) spawnReceiveWorker() {
 			continue
 		}
 
-		c, _ := p.messageHub.LoadOrStore(opcode, &receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
-		recv := c.(*receiveHandle)
+		c, _ := p.receiveQueues.LoadOrStore(opcode, receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
+		recv := c.(receiveHandle)
 
 		select {
 		case recv.hub <- msg:
@@ -212,13 +210,13 @@ func (p *Peer) SendMessage(message Message) error {
 		return errors.Wrap(err, "failed to serialize message contents to be sent to a peer")
 	}
 
-	cmd := &sendHandle{payload: payload, result: make(chan error, 1)}
+	cmd := sendHandle{payload: payload, result: make(chan error, 1)}
 	defer close(cmd.result)
 
 	select {
 	case <-time.After(3 * time.Second):
 		return errors.New("noise: send message queue is full and not being processed")
-	case p.queue <- cmd:
+	case p.sendQueue <- cmd:
 	}
 
 	select {
@@ -421,8 +419,8 @@ func (p *Peer) OnDisconnect(srcCallbacks ...OnPeerDisconnectCallback) {
 }
 
 func (p *Peer) Receive(o Opcode) <-chan Message {
-	c, _ := p.messageHub.LoadOrStore(o, &receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
-	return c.(*receiveHandle).hub
+	c, _ := p.receiveQueues.LoadOrStore(o, receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
+	return c.(receiveHandle).hub
 }
 
 func (p *Peer) Disconnect() {
@@ -489,9 +487,9 @@ func (p *Peer) Node() *Node {
 	return p.node
 }
 
-func (p *Peer) LockOnReceive(opcode Opcode) *receiveHandle {
-	c, _ := p.messageHub.LoadOrStore(opcode, &receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
-	recv := c.(*receiveHandle)
+func (p *Peer) LockOnReceive(opcode Opcode) receiveHandle {
+	c, _ := p.receiveQueues.LoadOrStore(opcode, receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
+	recv := c.(receiveHandle)
 
 	recv.lock <- struct{}{}
 
