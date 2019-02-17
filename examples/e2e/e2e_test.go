@@ -109,6 +109,7 @@ func Run(numNodes int, numTxEach int) error {
 			peer, err := nodes[i].Dial(nodes[0].ExternalAddress())
 			if err != nil {
 				errors = append(errors, err)
+				return
 			}
 
 			skademlia.WaitUntilAuthenticated(peer)
