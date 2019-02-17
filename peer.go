@@ -46,7 +46,7 @@ type Peer struct {
 
 	// map[Opcode]chan Message
 	messageHub sync.Map
-	sendQueue  chan []byte
+	sendQueue  chan sendState
 
 	kill     chan struct{}
 	killOnce sync.Once
@@ -75,8 +75,13 @@ func newPeer(node *Node, conn net.Conn) *Peer {
 		afterMessageSentCallbacks:     callbacks.NewSequentialCallbackManager(),
 
 		kill:      make(chan struct{}, 1),
-		sendQueue: make(chan []byte, 128),
+		sendQueue: make(chan sendState, 128),
 	}
+}
+
+type sendState struct {
+	buffer []byte
+	result chan error
 }
 
 func (p *Peer) init() {
@@ -90,9 +95,9 @@ func (p *Peer) spawnSendWorker() {
 		case <-p.kill:
 			return
 		case msg := <-p.sendQueue:
-			_payload, errs := p.beforeMessageSentCallbacks.RunCallbacks(msg, p.node)
+			_payload, errs := p.beforeMessageSentCallbacks.RunCallbacks(msg.buffer, p.node)
 			if len(errs) > 0 {
-				log.Warn().Errs("errors", errs).Msg("failed to run beforeMessageSentCallbacks")
+				msg.result <- errors.Errorf("failed to run beforeMessageSentCallbacks: %+v", errs)
 				continue
 			}
 			payload := _payload.([]byte)
@@ -108,19 +113,21 @@ func (p *Peer) spawnSendWorker() {
 			copied, err := io.Copy(p.conn, bytes.NewReader(buf))
 
 			if copied != int64(size+prepended) {
-				log.Warn().Msgf("only written %d bytes when expected to write %d bytes to peer", copied, size+prepended)
+				msg.result <- errors.Errorf("only written %d bytes when expected to write %d bytes to peer", copied, size+prepended)
 				continue
 			}
 
 			if err != nil {
-				log.Warn().Err(err).Msg("failed to send message to peer")
+				msg.result <- errors.Wrap(err, "failed to send message to peer")
 				continue
 			}
 
 			if errs := p.afterMessageSentCallbacks.RunCallbacks(p.node); len(errs) > 0 {
-				log.Warn().Errs("errors", errs).Msg("Got errors running AfterMessageSent callbacks.")
+				msg.result <- errors.Errorf("Got errors running AfterMessageSent callbacks: %+v", errs)
 				continue
 			}
+
+			msg.result <- nil
 		}
 	}
 }
@@ -204,14 +211,28 @@ func (p *Peer) spawnReceiveWorker() {
 }
 
 func (p *Peer) SendMessage(message Message) error {
-	payload, err := p.EncodeMessage(message)
+	result, err := p.SendMessageNB(message)
 	if err != nil {
-		return errors.Wrap(err, "failed to serialize message contents to be sent to a peer")
+		return err
 	}
 
-	p.sendQueue <- payload
+	return <-result
+}
 
-	return nil
+func (p *Peer) SendMessageNB(message Message) (chan error, error) {
+	payload, err := p.EncodeMessage(message)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to serialize message contents to be sent to a peer")
+	}
+
+	ch := make(chan error, 1)
+
+	p.sendQueue <- sendState{
+		buffer: payload,
+		result: ch,
+	}
+
+	return ch, nil
 }
 
 func (p *Peer) BeforeMessageSent(c BeforeMessageSentCallback) {
