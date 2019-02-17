@@ -152,7 +152,7 @@ func TestPeerFlow(t *testing.T) {
 	})
 
 	p.OnConnError(func(node *Node, peer *Peer, err error) error {
-		check(t, &state, 11)
+		check(t, &state, 10)
 		return nil
 	})
 
@@ -161,7 +161,6 @@ func TestPeerFlow(t *testing.T) {
 
 	p.OnDisconnect(func(node *Node, peer *Peer) error {
 		defer wgDisconnect.Done()
-
 		check(t, &state, 9)
 		return nil
 	})
@@ -182,7 +181,7 @@ func TestPeerFlow(t *testing.T) {
 
 	wgDisconnect.Wait()
 
-	check(t, &state, 10)
+	check(t, &state, 11)
 }
 
 func TestPeer(t *testing.T) {
@@ -213,6 +212,7 @@ func TestPeer(t *testing.T) {
 	assert.NoError(t, err)
 
 	p := peer(t, layer, conn, port)
+	p.init()
 
 	// check net
 	assert.Equal(t, net.IPv4(127, 0, 0, 1), p.LocalIP(), "found invalid local IP")
@@ -239,7 +239,7 @@ func TestPeer(t *testing.T) {
 
 // check the state equal to the expected state, and then increment it by 1
 func check(t *testing.T, currentState *int32, expectedState int32) {
-	assert.Equal(t, atomic.LoadInt32(currentState), expectedState)
+	assert.Equal(t, expectedState, atomic.LoadInt32(currentState))
 	atomic.AddInt32(currentState, 1)
 }
 

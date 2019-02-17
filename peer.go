@@ -12,6 +12,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -51,8 +52,8 @@ type Peer struct {
 	sendQueue     chan sendHandle
 	receiveQueues sync.Map // map[Opcode]chan receiveHandle
 
-	kill     chan struct{}
-	killOnce sync.Once
+	kill     chan *sync.WaitGroup
+	killOnce uint32
 
 	metadata sync.Map
 }
@@ -77,7 +78,8 @@ func newPeer(node *Node, conn net.Conn) *Peer {
 		afterMessageReceivedCallbacks: callbacks.NewSequentialCallbackManager(),
 		afterMessageSentCallbacks:     callbacks.NewSequentialCallbackManager(),
 
-		kill:      make(chan struct{}, 1),
+		kill: make(chan *sync.WaitGroup, 2),
+
 		sendQueue: make(chan sendHandle, 128),
 	}
 }
@@ -92,8 +94,9 @@ func (p *Peer) spawnSendWorker() {
 		var cmd sendHandle
 
 		select {
-		//case <-p.kill: // TODO(kenta): kill switch is broken
-		//	return
+		case wg := <-p.kill:
+			wg.Done()
+			return
 		case cmd = <-p.sendQueue:
 		}
 
@@ -170,7 +173,8 @@ func (p *Peer) spawnReceiveWorker() {
 
 	for {
 		select {
-		case <-p.kill:
+		case wg := <-p.kill:
+			wg.Done()
 			return
 		default:
 		}
@@ -505,21 +509,24 @@ func (p *Peer) Receive(o Opcode) <-chan Message {
 }
 
 func (p *Peer) Disconnect() {
-	//_, file, no, ok := runtime.Caller(1)
-	//if ok {
-	//	log.Debug().Msgf("Disconnect() called from %s#%d.", file, no)
-	//}
+	if !atomic.CompareAndSwapUint32(&p.killOnce, 0, 1) {
+		return
+	}
 
-	p.killOnce.Do(func() {
-		if err := p.conn.Close(); err != nil {
-			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrapf(err, "got errors closing peer connection"))
-		}
+	var wg sync.WaitGroup
+	wg.Add(2)
 
-		p.onDisconnectCallbacks.RunCallbacks(p.node)
+	for i := 0; i < 2; i++ {
+		p.kill <- &wg
+	}
 
-		p.kill <- struct{}{}
-		close(p.kill)
-	})
+	if err := p.conn.Close(); err != nil {
+		p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrapf(err, "got errors closing peer connection"))
+	}
+	p.onDisconnectCallbacks.RunCallbacks(p.node)
+
+	wg.Wait()
+	close(p.kill)
 }
 
 func (p *Peer) LocalIP() net.IP {

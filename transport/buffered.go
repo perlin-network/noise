@@ -2,7 +2,7 @@ package transport
 
 import (
 	"fmt"
-	"github.com/perlin-network/noise/transport/bufconn"
+	"github.com/perlin-network/noise/internal/bufconn"
 	"github.com/pkg/errors"
 	"math/rand"
 	"net"
