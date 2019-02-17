@@ -152,7 +152,7 @@ func TestPeerFlow(t *testing.T) {
 	})
 
 	p.OnConnError(func(node *Node, peer *Peer, err error) error {
-		check(t, &state, 10)
+		check(t, &state, 9)
 		return nil
 	})
 
@@ -161,7 +161,7 @@ func TestPeerFlow(t *testing.T) {
 
 	p.OnDisconnect(func(node *Node, peer *Peer) error {
 		defer wgDisconnect.Done()
-		check(t, &state, 9)
+		check(t, &state, 10)
 		return nil
 	})
 

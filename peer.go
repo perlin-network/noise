@@ -523,10 +523,11 @@ func (p *Peer) Disconnect() {
 	if err := p.conn.Close(); err != nil {
 		p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrapf(err, "got errors closing peer connection"))
 	}
-	p.onDisconnectCallbacks.RunCallbacks(p.node)
 
 	wg.Wait()
 	close(p.kill)
+
+	p.onDisconnectCallbacks.RunCallbacks(p.node)
 }
 
 func (p *Peer) LocalIP() net.IP {

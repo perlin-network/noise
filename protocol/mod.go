@@ -14,8 +14,7 @@ const (
 )
 
 var (
-	CompletedAllBlocks = errors.New("completed all blocks")
-	DisconnectPeer     = errors.New("peer disconnect requested")
+	DisconnectPeer = errors.New("peer disconnect requested")
 )
 
 type Block interface {

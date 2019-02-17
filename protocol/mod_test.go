@@ -11,9 +11,8 @@ import (
 )
 
 type dummyBlock struct {
-	earlyStop        bool
-	stopByDisconnect bool
-	blockCount       *uint32
+	earlyStop  bool
+	blockCount *uint32
 }
 
 func (b *dummyBlock) OnRegister(p *Protocol, node *noise.Node) {}
@@ -22,11 +21,7 @@ func (b *dummyBlock) OnBegin(p *Protocol, peer *noise.Peer) error {
 	atomic.AddUint32(b.blockCount, 1)
 
 	if b.earlyStop {
-		if b.stopByDisconnect {
-			return DisconnectPeer
-		} else {
-			return CompletedAllBlocks
-		}
+		return DisconnectPeer
 	} else {
 		return nil
 	}
@@ -36,7 +31,7 @@ func (b *dummyBlock) OnEnd(p *Protocol, peer *noise.Peer) error {
 	return nil
 }
 
-func setupNodeForTest(node *noise.Node, totalBlocks, earlyStopIdx int, stopByDisconnect bool) (*Protocol, *uint32) {
+func setupNodeForTest(node *noise.Node, totalBlocks, earlyStopIdx int) (*Protocol, *uint32) {
 	p := New()
 	count := new(uint32)
 
@@ -46,7 +41,6 @@ func setupNodeForTest(node *noise.Node, totalBlocks, earlyStopIdx int, stopByDis
 		}
 		if i == earlyStopIdx {
 			blk.earlyStop = true
-			blk.stopByDisconnect = stopByDisconnect
 		}
 		p.Register(blk)
 	}
@@ -56,7 +50,7 @@ func setupNodeForTest(node *noise.Node, totalBlocks, earlyStopIdx int, stopByDis
 	return p, count
 }
 
-func runTestProtocol(t *testing.T, stopByDisconnect bool) {
+func TestProtocol(t *testing.T) {
 	log.Disable()
 	defer log.Enable()
 
@@ -65,11 +59,11 @@ func runTestProtocol(t *testing.T, stopByDisconnect bool) {
 
 	alice, err := noise.NewNode(params)
 	assert.NoError(t, err)
-	_, aliceCount := setupNodeForTest(alice, 10, -1, false)
+	_, aliceCount := setupNodeForTest(alice, 10, -1)
 
 	bob, err := noise.NewNode(params)
 	assert.NoError(t, err)
-	_, bobCount := setupNodeForTest(bob, 10, 5, stopByDisconnect)
+	_, bobCount := setupNodeForTest(bob, 10, 5)
 
 	alicePeer, err := alice.Dial(bob.ExternalAddress())
 	assert.NoError(t, err)
@@ -81,22 +75,10 @@ func runTestProtocol(t *testing.T, stopByDisconnect bool) {
 		return nil
 	})
 
-	time.Sleep(100 * time.Millisecond) // Race condition!
+	time.Sleep(1 * time.Millisecond) // Race condition!
 
 	assert.Equal(t, atomic.LoadUint32(aliceCount), uint32(10))
 	assert.Equal(t, atomic.LoadUint32(bobCount), uint32(6))
 
-	if stopByDisconnect {
-		assert.Equal(t, atomic.LoadUint32(&aliceDisconnected), uint32(1))
-	} else {
-		assert.Equal(t, atomic.LoadUint32(&aliceDisconnected), uint32(0))
-	}
-}
-
-func TestProtocol_NoDisconnect(t *testing.T) {
-	runTestProtocol(t, false)
-}
-
-func TestProtocol_Disconnect(t *testing.T) {
-	runTestProtocol(t, true)
+	assert.Equal(t, atomic.LoadUint32(&aliceDisconnected), uint32(0))
 }
