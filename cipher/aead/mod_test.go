@@ -9,7 +9,6 @@ import (
 	"github.com/perlin-network/noise/transport"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	"strings"
 	"testing"
 	"time"
 )
@@ -83,14 +82,6 @@ func TestBlock_OnBeginEdgeCases(t *testing.T) {
 
 	// Expect a disconnect calling OnBegin without Bob yet having an ephemeral shared key.
 	assert.True(t, errors.Cause(block.OnBegin(proto, peerBob1)) == protocol.DisconnectPeer)
-
-	// Now set an invalid ephemeral shared key to Bob, and check OnBegin fails
-	peerBob2, err := alice.Dial(bob.ExternalAddress())
-	assert.NoError(t, err)
-	defer peerBob2.Disconnect()
-
-	protocol.SetSharedKey(peerBob2, []byte("test ephemeral key"))
-	assert.True(t, strings.Contains(block.OnBegin(proto, peerBob2).Error(), "failed to unmarshal ephemeral shared key buf"))
 
 	// Now restart connections, and set a proper ephemeral shared key to Bob.
 	ephemeralSharedKey, err := hex.DecodeString("d8747263b4d54588c2c8f17862d827dee6d3893a02fb7a84800b001ad4f1cee8")

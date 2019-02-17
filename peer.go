@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"io"
 	"net"
-	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -21,8 +21,8 @@ type receiver struct {
 	lock chan struct{}
 }
 
-func (r *receiver) Done() {
-	close(r.lock)
+func (r *receiver) Unlock() {
+	<-r.lock
 }
 
 type Peer struct {
@@ -132,19 +132,22 @@ func (p *Peer) spawnReceiveWorker() {
 		if opcode == OpcodeNil || err != nil {
 			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrap(err, "failed to decode message"))
 
+			panic(err)
+
 			p.Disconnect()
 			continue
 		}
 
-		c, _ := p.messageHub.LoadOrStore(opcode, &receiver{hub: make(chan Message, 1)})
-		receiver := c.(*receiver)
+		c, _ := p.messageHub.LoadOrStore(opcode, &receiver{hub: make(chan Message), lock: make(chan struct{}, 1)})
+		recv := c.(*receiver)
 
 		select {
-		case receiver.hub <- msg:
-			if receiver.lock != nil {
-				<-receiver.lock
-			}
+		case recv.hub <- msg:
+			recv.lock <- struct{}{}
+			<-recv.lock
 		case <-time.After(3 * time.Second):
+			DebugOpcodes()
+			log.Fatal().Msgf("Failed to receive opcode %d because of buffering.", opcode)
 			p.Disconnect()
 			continue
 		}
@@ -381,18 +384,19 @@ func (p *Peer) OnDisconnect(srcCallbacks ...OnPeerDisconnectCallback) {
 }
 
 func (p *Peer) Receive(o Opcode) <-chan Message {
-	c, _ := p.messageHub.LoadOrStore(o, &receiver{hub: make(chan Message, 1)})
-	c.(*receiver).lock = nil
+	c, _ := p.messageHub.LoadOrStore(o, &receiver{hub: make(chan Message), lock: make(chan struct{}, 1)})
 	return c.(*receiver).hub
 }
 
 func (p *Peer) Disconnect() {
-	_, file, no, ok := runtime.Caller(1)
-	if ok {
-		log.Debug().Msgf("Disconnect() called from %s#%d.", file, no)
-	}
+	//_, file, no, ok := runtime.Caller(1)
+	//if ok {
+	//	log.Debug().Msgf("Disconnect() called from %s#%d.", file, no)
+	//}
 
 	p.killOnce.Do(func() {
+		debug.PrintStack()
+
 		if err := p.conn.Close(); err != nil {
 			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrapf(err, "got errors closing peer connection"))
 		}
@@ -450,18 +454,13 @@ func (p *Peer) Node() *Node {
 	return p.node
 }
 
-func (p *Peer) ReceiveAtomically(o Opcode, lockCallback func()) Message {
-	c, _ := p.messageHub.LoadOrStore(o, &receiver{hub: make(chan Message, 1)})
-	receiver := c.(*receiver)
+func (p *Peer) ReceiveAndLock(opcode Opcode) *receiver {
+	c, _ := p.messageHub.LoadOrStore(opcode, &receiver{hub: make(chan Message), lock: make(chan struct{}, 1)})
+	recv := c.(*receiver)
 
-	receiver.lock = make(chan struct{})
+	recv.lock <- struct{}{}
 
-	msg := <-receiver.hub
-
-	lockCallback()
-	close(receiver.lock)
-
-	return msg
+	return recv
 }
 
 func (p *Peer) SetNode(node *Node) {

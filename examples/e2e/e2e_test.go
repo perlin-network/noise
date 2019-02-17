@@ -97,24 +97,35 @@ func Run(numNodes int, numTxEach int) error {
 		}
 	}()
 
-	for i := 1; i < numNodes; i++ {
-		peer, err := nodes[i].Dial(nodes[0].ExternalAddress())
-		if err != nil {
-			errors = append(errors, err)
-		}
+	var wg sync.WaitGroup
+	wg.Add(numNodes - 1)
 
-		skademlia.WaitUntilAuthenticated(peer)
-		_ = skademlia.FindNode(nodes[i], protocol.NodeID(nodes[i]).(skademlia.ID), skademlia.BucketSize(), 8)
+	for i := 1; i < numNodes; i++ {
+		i := i
+
+		go func() {
+			defer wg.Done()
+
+			peer, err := nodes[i].Dial(nodes[0].ExternalAddress())
+			if err != nil {
+				errors = append(errors, err)
+			}
+
+			skademlia.WaitUntilAuthenticated(peer)
+
+			_ = skademlia.FindNode(nodes[i], protocol.NodeID(nodes[i]).(skademlia.ID), skademlia.BucketSize(), 8)
+		}()
 	}
+
+	wg.Wait()
 
 	if len(errors) > 0 {
 		return errors[0]
 	}
 
-	var wg sync.WaitGroup
+	wg.Add(numNodes)
 
 	for i := 0; i < numNodes; i++ {
-		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 
@@ -128,6 +139,7 @@ func Run(numNodes int, numTxEach int) error {
 			}
 		}(i)
 	}
+
 	wg.Wait()
 
 	if len(errors) > 0 {
@@ -138,10 +150,8 @@ func Run(numNodes int, numTxEach int) error {
 }
 
 func TestRun(t *testing.T) {
-	//log.Disable()
-	//defer log.Enable()
+	log.Disable()
+	defer log.Enable()
 
 	assert.Nil(t, Run(numNodes, numMessagesEach))
-
-	noise.DebugOpcodes()
 }

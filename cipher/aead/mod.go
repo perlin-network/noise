@@ -50,42 +50,49 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		return errors.Wrap(protocol.DisconnectPeer, "session was established, but no ephemeral shared key found")
 	}
 
-	if !isEd25519GroupElement(ephemeralSharedKey) {
-		return errors.Wrap(protocol.DisconnectPeer, "failed to unmarshal ephemeral shared key buf")
-	}
-
 	suite, sharedKey, err := deriveCipherSuite(b.hash, ephemeralSharedKey, nil)
 	if err != nil {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to derive AEAD cipher suite given ephemeral shared key")
 	}
+
+	locker := peer.ReceiveAndLock(b.opcodeACK)
+	defer locker.Unlock()
 
 	err = peer.SendMessage(ACK{})
 	if err != nil {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to send AEAD ACK")
 	}
 
-	peer.ReceiveAtomically(b.opcodeACK, func() {
-		var ourNonce uint64
-		var theirNonce uint64
+	select {
+	case <-time.After(b.ackTimeout):
+		return errors.Wrap(protocol.DisconnectPeer, "timed out waiting for AEAD ACK")
+	case <-peer.Receive(b.opcodeACK):
+	}
 
-		peer.BeforeMessageSent(func(node *noise.Node, peer *noise.Peer, msg []byte) (bytes []byte, e error) {
-			ourNonceBuf := make([]byte, suite.NonceSize())
-			binary.LittleEndian.PutUint64(ourNonceBuf, atomic.AddUint64(&ourNonce, 1))
-			return suite.Seal(msg[:0], ourNonceBuf, msg, nil), nil
-		})
+	var ourNonce uint64
+	var theirNonce uint64
 
-		peer.BeforeMessageReceived(func(node *noise.Node, peer *noise.Peer, msg []byte) (bytes []byte, e error) {
-			theirNonceBuf := make([]byte, suite.NonceSize())
-			binary.LittleEndian.PutUint64(theirNonceBuf, atomic.AddUint64(&theirNonce, 1))
-			return suite.Open(msg[:0], theirNonceBuf, msg, nil)
-		})
+	peer.BeforeMessageReceived(func(node *noise.Node, peer *noise.Peer, msg []byte) (buf []byte, err error) {
+		theirNonceBuf := make([]byte, suite.NonceSize())
+		binary.LittleEndian.PutUint64(theirNonceBuf, atomic.AddUint64(&theirNonce, 1))
+
+		buf, err = suite.Open(msg[:0], theirNonceBuf, msg, nil)
+
+		if err != nil {
+			panic(err)
+		}
+
+		return
 	})
 
-	//select {
-	//case <-time.After(b.ackTimeout):
-	//	return errors.Wrap(protocol.DisconnectPeer, "timed out waiting for AEAD ACK")
-	//case <-peer.Receive(b.opcodeACK):
-	//}
+	peer.BeforeMessageSent(func(node *noise.Node, peer *noise.Peer, msg []byte) (buf []byte, err error) {
+		ourNonceBuf := make([]byte, suite.NonceSize())
+		binary.LittleEndian.PutUint64(ourNonceBuf, atomic.AddUint64(&ourNonce, 1))
+
+		buf = suite.Seal(msg[:0], ourNonceBuf, msg, nil)
+
+		return
+	})
 
 	log.Debug().Hex("derived_shared_key", sharedKey).Msg("Derived HMAC, and successfully initialized session w/ AEAD cipher suite.")
 
@@ -98,5 +105,5 @@ func (b *block) OnEnd(p *protocol.Protocol, peer *noise.Peer) error {
 }
 
 func WaitUntilAuthenticated(peer *noise.Peer) {
-	<-peer.LoadOrStore(keyAuthChannel, make(chan struct{}, 1)).(chan struct{})
+	<-peer.LoadOrStore(keyAuthChannel, make(chan struct{})).(chan struct{})
 }

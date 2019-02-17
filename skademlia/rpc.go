@@ -47,6 +47,8 @@ func queryPeerByID(node *noise.Node, peerID, targetID ID, responses chan []ID) {
 			responses <- []ID{}
 			return
 		}
+
+		WaitUntilAuthenticated(peer)
 	}
 
 	opcodeLookupResponse, err := noise.OpcodeFromMessage((*LookupResponse)(nil))
@@ -55,21 +57,18 @@ func queryPeerByID(node *noise.Node, peerID, targetID ID, responses chan []ID) {
 	}
 
 	// Send lookup request.
-	err = peer.SendMessage(LookupRequest{targetID})
+	err = peer.SendMessage(LookupRequest{ID: targetID})
 	if err != nil {
 		responses <- []ID{}
 		return
 	}
 
 	// Handle lookup response.
-	for {
-		select {
-		case msg := <-peer.Receive(opcodeLookupResponse):
-			responses <- msg.(LookupResponse).peers
-		case <-time.After(3 * time.Second):
-			responses <- []ID{}
-			return
-		}
+	select {
+	case msg := <-peer.Receive(opcodeLookupResponse):
+		responses <- msg.(LookupResponse).peers
+	case <-time.After(3 * time.Second):
+		responses <- []ID{}
 	}
 }
 
@@ -155,7 +154,8 @@ func FindNode(node *noise.Node, targetID ID, alpha int, numDisjointPaths int) (r
 		results = append(results, peerID.(ID))
 	}
 
-	wait, mutex := new(sync.WaitGroup), new(sync.Mutex)
+	var wait sync.WaitGroup
+	var mutex sync.Mutex
 
 	for _, lookup := range lookups {
 		go func(lookup *lookupBucket) {
