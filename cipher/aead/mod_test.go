@@ -19,6 +19,10 @@ func node(t *testing.T) *noise.Node {
 	params := noise.DefaultParams()
 	params.Transport = transportLayer
 
+	params.ReceiveMessageTimeout = 10 * time.Millisecond
+	params.SendMessageTimeout = 10 * time.Millisecond
+	params.SendWorkerBusyTimeout = 10 * time.Millisecond
+
 	node, err := noise.NewNode(params)
 	assert.NoError(t, err)
 

@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -38,7 +39,7 @@ type Node struct {
 	metadata sync.Map
 
 	kill     chan chan struct{}
-	killOnce sync.Once
+	killOnce uint32
 }
 
 func NewNode(params parameters) (*Node, error) {
@@ -258,16 +259,19 @@ func (n *Node) Fence() {
 }
 
 func (n *Node) Kill() {
-	n.killOnce.Do(func() {
-		signal := make(chan struct{}, 1)
-		n.kill <- signal
+	if !atomic.CompareAndSwapUint32(&n.killOnce, 0, 1) {
+		return
+	}
 
-		if err := n.listener.Close(); err != nil {
-			n.onListenerErrorCallbacks.RunCallbacks(err)
-		}
+	signal := make(chan struct{})
+	n.kill <- signal
 
-		<-signal
-	})
+	if err := n.listener.Close(); err != nil {
+		n.onListenerErrorCallbacks.RunCallbacks(err)
+	}
+
+	<-signal
+	close(n.kill)
 }
 
 func (n *Node) ExternalAddress() string {

@@ -28,7 +28,6 @@ func (r *receiveHandle) Unlock() {
 type sendHandle struct {
 	payload []byte
 	result  chan error
-	kill    *sync.WaitGroup
 }
 
 type Peer struct {
@@ -54,9 +53,7 @@ type Peer struct {
 	receiveQueues sync.Map // map[Opcode]chan receiveHandle
 
 	kill     chan *sync.WaitGroup
-	killOnce sync.Once
-
-	disconnectRunning int32
+	killOnce uint32
 
 	metadata sync.Map
 }
@@ -81,7 +78,8 @@ func newPeer(node *Node, conn net.Conn) *Peer {
 		afterMessageReceivedCallbacks: callbacks.NewSequentialCallbackManager(),
 		afterMessageSentCallbacks:     callbacks.NewSequentialCallbackManager(),
 
-		kill:      make(chan *sync.WaitGroup, 1),
+		kill: make(chan *sync.WaitGroup, 2),
+
 		sendQueue: make(chan sendHandle, 128),
 	}
 }
@@ -93,10 +91,13 @@ func (p *Peer) init() {
 
 func (p *Peer) spawnSendWorker() {
 	for {
-		cmd := <-p.sendQueue
-		if cmd.kill != nil {
-			cmd.kill.Done()
+		var cmd sendHandle
+
+		select {
+		case wg := <-p.kill:
+			wg.Done()
 			return
+		case cmd = <-p.sendQueue:
 		}
 
 		payload := cmd.payload
@@ -508,36 +509,24 @@ func (p *Peer) Receive(o Opcode) <-chan Message {
 }
 
 func (p *Peer) Disconnect() {
-	if atomic.LoadInt32(&p.disconnectRunning) == 1 {
+	if !atomic.CompareAndSwapUint32(&p.killOnce, 0, 1) {
 		return
 	}
 
-	atomic.AddInt32(&p.disconnectRunning, 1)
-	defer atomic.StoreInt32(&p.disconnectRunning, 0)
+	var wg sync.WaitGroup
+	wg.Add(2)
 
-	//_, file, no, ok := runtime.Caller(1)
-	//if ok {
-	//	log.Debug().Msgf("Disconnect() called from %s#%d.", file, no)
-	//}
-
-	p.killOnce.Do(func() {
-		var wg sync.WaitGroup
-		wg.Add(2)
-
+	for i := 0; i < 2; i++ {
 		p.kill <- &wg
+	}
 
-		if err := p.conn.Close(); err != nil {
-			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrapf(err, "got errors closing peer connection"))
-		}
+	if err := p.conn.Close(); err != nil {
+		p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrapf(err, "got errors closing peer connection"))
+	}
+	p.onDisconnectCallbacks.RunCallbacks(p.node)
 
-		p.sendQueue <- sendHandle{payload: nil, result: nil, kill: &wg}
-
-		wg.Wait()
-
-		close(p.kill)
-
-		p.onDisconnectCallbacks.RunCallbacks(p.node)
-	})
+	wg.Wait()
+	close(p.kill)
 }
 
 func (p *Peer) LocalIP() net.IP {
