@@ -25,6 +25,11 @@ type Node struct {
 
 	maxMessageSize uint64
 
+	sendMessageTimeout    time.Duration
+	receiveMessageTimeout time.Duration
+
+	sendWorkerBusyTimeout time.Duration
+
 	onListenerErrorCallbacks *callbacks.SequentialCallbackManager
 	onPeerConnectedCallbacks *callbacks.SequentialCallbackManager
 	onPeerDialedCallbacks    *callbacks.SequentialCallbackManager
@@ -63,6 +68,11 @@ func NewNode(params parameters) (*Node, error) {
 		port:     params.Port,
 
 		maxMessageSize: params.MaxMessageSize,
+
+		sendMessageTimeout:    params.SendMessageTimeout,
+		receiveMessageTimeout: params.ReceiveMessageTimeout,
+
+		sendWorkerBusyTimeout: params.SendWorkerBusyTimeout,
 
 		onListenerErrorCallbacks: callbacks.NewSequentialCallbackManager(),
 		onPeerConnectedCallbacks: callbacks.NewSequentialCallbackManager(),

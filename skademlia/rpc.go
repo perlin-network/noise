@@ -13,7 +13,7 @@ import (
 // closest in terms of XOR distance to that of a specified node instances ID.
 //
 // Every message sent will be blocking. To have every message sent not block the current
-// goroutine, refer to `BroadcastAsync(node *noise.Node, message noise.Message) (errs []error)`
+// goroutine, refer to `BroadcastAsync(node *noise.Node, message noise.Message) <-chan error`
 //
 // It returns a list of errors which have occurred in sending any messages to peers
 // closest to a given node instance.
@@ -41,20 +41,28 @@ func Broadcast(node *noise.Node, message noise.Message) (errs []error) {
 //
 // It returns a list of errors which have occurred in sending any messages to peers
 // closest to a given node instance.
-func BroadcastAsync(node *noise.Node, message noise.Message) (errs []error) {
-	for _, peerID := range FindClosestPeers(Table(node), protocol.NodeID(node).Hash(), BucketSize()) {
+func BroadcastAsync(node *noise.Node, message noise.Message) <-chan error {
+	errs := make(chan error)
+
+	peerIDs := FindClosestPeers(Table(node), protocol.NodeID(node).Hash(), BucketSize())
+
+	for _, peerID := range peerIDs {
 		peer := protocol.Peer(node, peerID)
 
 		if peer == nil {
 			continue
 		}
 
-		if err := peer.SendMessageAsync(message); err != nil {
-			errs = append(errs, err)
-		}
+		errChan := peer.SendMessageAsync(message)
+
+		go func() {
+			for err := range errChan {
+				errs <- err
+			}
+		}()
 	}
 
-	return
+	return errs
 }
 
 func queryPeerByID(node *noise.Node, peerID, targetID ID, responses chan []ID) {

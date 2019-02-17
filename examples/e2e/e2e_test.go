@@ -133,9 +133,18 @@ func Run(numNodes int, numTxEach int) error {
 			for j := 0; j < numTxEach; j++ {
 				txt := fmt.Sprintf("sending from %d tx %d", i, j)
 
-				errs := skademlia.BroadcastAsync(nodes[i], testMessage{text: strings.TrimSpace(txt)})
-				if len(errs) > 0 {
-					errors = append(errors, errs...)
+				errCh := skademlia.BroadcastAsync(nodes[i], testMessage{text: strings.TrimSpace(txt)})
+
+				for {
+					select {
+					case err := <-errCh:
+						if err != nil {
+							errors = append(errors, err)
+						}
+					default:
+					}
+
+					break
 				}
 			}
 		}(i)

@@ -99,7 +99,22 @@ func (p *Peer) spawnSendWorker() {
 
 		payload := cmd.payload
 
-		payload = p.beforeMessageSentCallbacks.MustRunCallbacks(payload, p.node).([]byte)
+		pp, errs := p.beforeMessageSentCallbacks.RunCallbacks(payload, p.node)
+		if len(errs) > 0 {
+			if cmd.result != nil {
+				var err = errs[0]
+
+				if len(errs) > 1 {
+					for _, e := range errs[1:] {
+						err = errors.Wrap(err, e.Error())
+					}
+				}
+
+				cmd.result <- errors.Wrap(err, "got errors running BeforeMessageSent callbacks")
+				close(cmd.result)
+			}
+		}
+		payload = pp.([]byte)
 
 		size := len(payload)
 
@@ -114,6 +129,7 @@ func (p *Peer) spawnSendWorker() {
 		if copied != int64(size+prepended) {
 			if cmd.result != nil {
 				cmd.result <- errors.Errorf("only written %d bytes when expected to write %d bytes to peer", copied, size+prepended)
+				close(cmd.result)
 			}
 			continue
 		}
@@ -121,6 +137,7 @@ func (p *Peer) spawnSendWorker() {
 		if err != nil {
 			if cmd.result != nil {
 				cmd.result <- errors.Wrap(err, "failed to send message to peer")
+				close(cmd.result)
 			}
 			continue
 		}
@@ -136,12 +153,14 @@ func (p *Peer) spawnSendWorker() {
 				}
 
 				cmd.result <- errors.Wrap(err, "got errors running AfterMessageSent callbacks")
+				close(cmd.result)
 			}
 			continue
 		}
 
 		if cmd.result != nil {
 			cmd.result <- nil
+			close(cmd.result)
 		}
 	}
 }
@@ -190,7 +209,14 @@ func (p *Peer) spawnReceiveWorker() {
 			continue
 		}
 
-		buf = p.beforeMessageReceivedCallbacks.MustRunCallbacks(buf, p.node).([]byte)
+		b, errs := p.beforeMessageReceivedCallbacks.RunCallbacks(buf, p.node)
+		if len(errs) > 0 {
+			log.Warn().Errs("errors", errs).Msg("Got errors running BeforeMessageReceived callbacks.")
+
+			p.Disconnect()
+			continue
+		}
+		buf = b.([]byte)
 
 		opcode, msg, err := p.DecodeMessage(buf)
 
@@ -208,21 +234,23 @@ func (p *Peer) spawnReceiveWorker() {
 		case recv.hub <- msg:
 			recv.lock <- struct{}{}
 			<-recv.lock
-		case <-time.After(3 * time.Second):
+		case <-time.After(p.node.receiveMessageTimeout):
 			p.Disconnect()
 			continue
 		}
 
 		if errs := p.afterMessageReceivedCallbacks.RunCallbacks(p.node); len(errs) > 0 {
 			log.Warn().Errs("errors", errs).Msg("Got errors running AfterMessageReceived callbacks.")
-		}
 
+			p.Disconnect()
+			continue
+		}
 	}
 }
 
 // SendMessage sends a message whose type is registered with Noise to a specified peer. Calling
 // this function will block the current goroutine until the message is successfully sent. In
-// order to not block, refer to `SendMessageAsync(message Message) error`.
+// order to not block, refer to `SendMessageAsync(message Message) <-chan error`.
 //
 // It is guaranteed that all messages are sent in a linearized order.
 //
@@ -235,16 +263,16 @@ func (p *Peer) SendMessage(message Message) error {
 	}
 
 	cmd := sendHandle{payload: payload, result: make(chan error, 1)}
-	defer close(cmd.result)
 
 	select {
-	case <-time.After(3 * time.Second):
+	case <-time.After(p.node.sendWorkerBusyTimeout):
+		close(cmd.result)
 		return errors.New("noise: send message queue is full and not being processed")
 	case p.sendQueue <- cmd:
 	}
 
 	select {
-	case <-time.After(3 * time.Second):
+	case <-time.After(p.node.sendMessageTimeout):
 		return errors.New("noise: timed out attempting to send a message")
 	case err = <-cmd.result:
 		return err
@@ -259,21 +287,25 @@ func (p *Peer) SendMessage(message Message) error {
 //
 // It returns an error should the message not be registered with Noise, or there are message that are
 // blocking the peers send worker.
-func (p *Peer) SendMessageAsync(message Message) error {
+func (p *Peer) SendMessageAsync(message Message) <-chan error {
+	result := make(chan error, 1)
+
 	payload, err := p.EncodeMessage(message)
 	if err != nil {
-		return errors.Wrap(err, "failed to serialize message contents to be sent to a peer")
+		result <- errors.Wrap(err, "failed to serialize message contents to be sent to a peer")
+		return result
 	}
 
-	cmd := sendHandle{payload: payload, result: nil}
+	cmd := sendHandle{payload: payload, result: result}
 
 	select {
-	case <-time.After(3 * time.Second):
-		return errors.New("noise: send message queue is full and not being processed")
+	case <-time.After(p.node.sendWorkerBusyTimeout):
+		result <- errors.New("send message queue is full and not being processed")
+		return result
 	case p.sendQueue <- cmd:
 	}
 
-	return nil
+	return result
 }
 
 func (p *Peer) BeforeMessageSent(c BeforeMessageSentCallback) {
