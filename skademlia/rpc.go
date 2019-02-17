@@ -42,9 +42,8 @@ func Broadcast(node *noise.Node, message noise.Message) (errs []error) {
 // It returns a list of errors which have occurred in sending any messages to peers
 // closest to a given node instance.
 func BroadcastAsync(node *noise.Node, message noise.Message) <-chan error {
-	errs := make(chan error)
-
 	peerIDs := FindClosestPeers(Table(node), protocol.NodeID(node).Hash(), BucketSize())
+	errs := make(chan error, len(peerIDs))
 
 	for _, peerID := range peerIDs {
 		peer := protocol.Peer(node, peerID)
@@ -57,7 +56,9 @@ func BroadcastAsync(node *noise.Node, message noise.Message) <-chan error {
 
 		go func() {
 			for err := range errChan {
-				errs <- err
+				if err != nil {
+					errs <- err
+				}
 			}
 		}()
 	}

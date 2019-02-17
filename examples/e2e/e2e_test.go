@@ -19,7 +19,6 @@ import (
 
 var (
 	_               noise.Message = (*testMessage)(nil)
-	startPort                     = 4000
 	numNodes                      = 10
 	numMessagesEach               = 100
 )
@@ -68,7 +67,8 @@ func setup(node *noise.Node, opcodeTest noise.Opcode) {
 func Run(numNodes int, numTxEach int) error {
 	opcodeTest := noise.RegisterMessage(noise.NextAvailableOpcode(), (*testMessage)(nil))
 	var nodes []*noise.Node
-	var errors []error
+	var errs []error
+	var mutex sync.Mutex
 
 	for i := 0; i < numNodes; i++ {
 		params := noise.DefaultParams()
@@ -108,7 +108,9 @@ func Run(numNodes int, numTxEach int) error {
 
 			peer, err := nodes[i].Dial(nodes[0].ExternalAddress())
 			if err != nil {
-				errors = append(errors, err)
+				mutex.Lock()
+				errs = append(errs, err)
+				mutex.Unlock()
 				return
 			}
 
@@ -120,8 +122,8 @@ func Run(numNodes int, numTxEach int) error {
 
 	wg.Wait()
 
-	if len(errors) > 0 {
-		return errors[0]
+	if len(errs) > 0 {
+		return errs[0]
 	}
 
 	wg.Add(numNodes)
@@ -138,9 +140,9 @@ func Run(numNodes int, numTxEach int) error {
 				for {
 					select {
 					case err := <-errCh:
-						if err != nil {
-							errors = append(errors, err)
-						}
+						mutex.Lock()
+						errs = append(errs, err)
+						mutex.Unlock()
 					default:
 					}
 
@@ -152,8 +154,8 @@ func Run(numNodes int, numTxEach int) error {
 
 	wg.Wait()
 
-	if len(errors) > 0 {
-		return errors[0]
+	if len(errs) > 0 {
+		return errs[0]
 	}
 
 	return nil
