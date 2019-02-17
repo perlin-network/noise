@@ -31,10 +31,3 @@ func (m *ReduceCallbackManager) RunCallbacks(in interface{}, params ...interface
 	res = in
 	return
 }
-
-// MustRunCallbacks runs all callbacks on a variadic parameter list, and de-registers callbacks
-// that throw an error. Errors are ignored.
-func (m *ReduceCallbackManager) MustRunCallbacks(in interface{}, params ...interface{}) interface{} {
-	out, _ := m.RunCallbacks(in, params...)
-	return out
-}

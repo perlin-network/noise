@@ -184,5 +184,5 @@ func (b *block) handleLookups(peer *noise.Peer) {
 }
 
 func WaitUntilAuthenticated(peer *noise.Peer) {
-	<-peer.LoadOrStore(keyAuthChannel, make(chan struct{}, 1)).(chan struct{})
+	<-peer.LoadOrStore(keyAuthChannel, make(chan struct{})).(chan struct{})
 }

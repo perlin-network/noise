@@ -115,6 +115,6 @@ func main() {
 			panic(err)
 		}
 
-		_ = skademlia.Broadcast(node, chatMessage{text: strings.TrimSpace(txt)})
+		_ = skademlia.BroadcastAsync(node, chatMessage{text: strings.TrimSpace(txt)})
 	}
 }

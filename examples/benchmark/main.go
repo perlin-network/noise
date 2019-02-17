@@ -85,7 +85,7 @@ func main() {
 				_, _ = rand.Read(payload)
 
 				atomic.AddUint64(&messagesSentPerSecond, 1)
-				_ = peer.SendMessage(benchmarkMessage{string(payload)})
+				_ = peer.SendMessageAsync(benchmarkMessage{text: string(payload)})
 			}
 		}()
 

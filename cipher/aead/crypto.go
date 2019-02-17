@@ -3,7 +3,6 @@ package aead
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"github.com/perlin-network/noise/internal/edwards25519"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/hkdf"
 	"hash"
@@ -25,16 +24,4 @@ func deriveCipherSuite(fn func() hash.Hash, ephemeralSharedKey []byte, context [
 	gcm, _ := cipher.NewGCM(block)
 
 	return gcm, sharedKey, nil
-}
-
-func isEd25519GroupElement(buf []byte) bool {
-	if len(buf) != edwards25519.PublicKeySize {
-		return false
-	}
-
-	var buff [32]byte
-	copy(buff[:], buf)
-
-	var A edwards25519.ExtendedGroupElement
-	return A.FromBytes(&buff)
 }

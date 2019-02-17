@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"net"
+	"time"
 )
 
 var _ Layer = (*tcp)(nil)
@@ -28,12 +29,7 @@ func (t tcp) Listen(host string, port uint16) (net.Listener, error) {
 }
 
 func (t tcp) Dial(address string) (net.Conn, error) {
-	resolved, err := net.ResolveTCPAddr("tcp", address)
-	if err != nil {
-		return nil, err
-	}
-
-	conn, err := net.DialTCP("tcp", nil, resolved)
+	conn, err := net.DialTimeout("tcp", address, 3*time.Second)
 	if err != nil {
 		return nil, err
 	}

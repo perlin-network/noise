@@ -12,6 +12,9 @@ import (
 // Broadcast sends a message denoted by its opcode and content to all S/Kademlia IDs
 // closest in terms of XOR distance to that of a specified node instances ID.
 //
+// Every message sent will be blocking. To have every message sent not block the current
+// goroutine, refer to `BroadcastAsync(node *noise.Node, message noise.Message) <-chan error`
+//
 // It returns a list of errors which have occurred in sending any messages to peers
 // closest to a given node instance.
 func Broadcast(node *noise.Node, message noise.Message) (errs []error) {
@@ -28,6 +31,39 @@ func Broadcast(node *noise.Node, message noise.Message) (errs []error) {
 	}
 
 	return
+}
+
+// BroadcastAsync sends a message denoted by its opcode and content to all S/Kademlia IDs
+// closest in terms of XOR distance to that of a specified node instances ID.
+//
+// Every message sent will be non-blocking. To have every message sent block the current
+// goroutine, refer to `Broadcast(node *noise.Node, message noise.Message) (errs []error)`
+//
+// It returns a list of errors which have occurred in sending any messages to peers
+// closest to a given node instance.
+func BroadcastAsync(node *noise.Node, message noise.Message) <-chan error {
+	peerIDs := FindClosestPeers(Table(node), protocol.NodeID(node).Hash(), BucketSize())
+	errs := make(chan error, len(peerIDs))
+
+	for _, peerID := range peerIDs {
+		peer := protocol.Peer(node, peerID)
+
+		if peer == nil {
+			continue
+		}
+
+		errChan := peer.SendMessageAsync(message)
+
+		go func() {
+			for err := range errChan {
+				if err != nil {
+					errs <- err
+				}
+			}
+		}()
+	}
+
+	return errs
 }
 
 func queryPeerByID(node *noise.Node, peerID, targetID ID, responses chan []ID) {
@@ -47,6 +83,8 @@ func queryPeerByID(node *noise.Node, peerID, targetID ID, responses chan []ID) {
 			responses <- []ID{}
 			return
 		}
+
+		WaitUntilAuthenticated(peer)
 	}
 
 	opcodeLookupResponse, err := noise.OpcodeFromMessage((*LookupResponse)(nil))
@@ -55,21 +93,18 @@ func queryPeerByID(node *noise.Node, peerID, targetID ID, responses chan []ID) {
 	}
 
 	// Send lookup request.
-	err = peer.SendMessage(LookupRequest{targetID})
+	err = peer.SendMessage(LookupRequest{ID: targetID})
 	if err != nil {
 		responses <- []ID{}
 		return
 	}
 
 	// Handle lookup response.
-	for {
-		select {
-		case msg := <-peer.Receive(opcodeLookupResponse):
-			responses <- msg.(LookupResponse).peers
-		case <-time.After(3 * time.Second):
-			responses <- []ID{}
-			return
-		}
+	select {
+	case msg := <-peer.Receive(opcodeLookupResponse):
+		responses <- msg.(LookupResponse).peers
+	case <-time.After(3 * time.Second):
+		responses <- []ID{}
 	}
 }
 
@@ -155,7 +190,8 @@ func FindNode(node *noise.Node, targetID ID, alpha int, numDisjointPaths int) (r
 		results = append(results, peerID.(ID))
 	}
 
-	wait, mutex := new(sync.WaitGroup), new(sync.Mutex)
+	var wait sync.WaitGroup
+	var mutex sync.Mutex
 
 	for _, lookup := range lookups {
 		go func(lookup *lookupBucket) {

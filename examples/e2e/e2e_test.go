@@ -15,12 +15,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 )
 
 var (
 	_               noise.Message = (*testMessage)(nil)
-	startPort                     = 4000
 	numNodes                      = 10
 	numMessagesEach               = 100
 )
@@ -69,7 +67,8 @@ func setup(node *noise.Node, opcodeTest noise.Opcode) {
 func Run(numNodes int, numTxEach int) error {
 	opcodeTest := noise.RegisterMessage(noise.NextAvailableOpcode(), (*testMessage)(nil))
 	var nodes []*noise.Node
-	var allErrs []error
+	var errs []error
+	var mutex sync.Mutex
 
 	for i := 0; i < numNodes; i++ {
 		params := noise.DefaultParams()
@@ -90,61 +89,81 @@ func Run(numNodes int, numTxEach int) error {
 		go node.Listen()
 
 		nodes = append(nodes, node)
-		log.Info().Msgf("Listening for peers on port %d.", node.Port())
 	}
 
-	time.Sleep(100 * time.Millisecond)
-
-	for i := 1; i < numNodes; i++ {
-		peer, err := nodes[i].Dial(nodes[0].ExternalAddress())
-		if err != nil {
-			log.Error().Msgf("got error %+v", err)
-			allErrs = append(allErrs, err)
+	defer func() {
+		for _, node := range nodes {
+			node.Kill()
 		}
-
-		skademlia.WaitUntilAuthenticated(peer)
-
-		peers := skademlia.FindNode(nodes[i], protocol.NodeID(nodes[i]).(skademlia.ID), skademlia.BucketSize(), 8)
-		log.Info().Msgf("Bootstrapped with peers: %+v", peers)
-
-	}
-
-	if len(allErrs) > 0 {
-		return allErrs[0]
-	}
+	}()
 
 	var wg sync.WaitGroup
+	wg.Add(numNodes - 1)
+
+	for i := 1; i < numNodes; i++ {
+		i := i
+
+		go func() {
+			defer wg.Done()
+
+			peer, err := nodes[i].Dial(nodes[0].ExternalAddress())
+			if err != nil {
+				mutex.Lock()
+				errs = append(errs, err)
+				mutex.Unlock()
+				return
+			}
+
+			skademlia.WaitUntilAuthenticated(peer)
+
+			_ = skademlia.FindNode(nodes[i], protocol.NodeID(nodes[i]).(skademlia.ID), skademlia.BucketSize(), 8)
+		}()
+	}
+
+	wg.Wait()
+
+	if len(errs) > 0 {
+		return errs[0]
+	}
+
+	wg.Add(numNodes)
 
 	for i := 0; i < numNodes; i++ {
-		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 
 			for j := 0; j < numTxEach; j++ {
-				txt := fmt.Sprintf("Sending from %d tx %d", i, j)
+				txt := fmt.Sprintf("sending from %d tx %d", i, j)
 
-				errs := skademlia.Broadcast(nodes[i], testMessage{text: strings.TrimSpace(txt)})
-				if len(errs) > 0 {
-					log.Error().Msgf("got errors %+v", errs)
-					allErrs = append(allErrs, errs...)
+				errCh := skademlia.BroadcastAsync(nodes[i], testMessage{text: strings.TrimSpace(txt)})
+
+				for {
+					select {
+					case err := <-errCh:
+						mutex.Lock()
+						errs = append(errs, err)
+						mutex.Unlock()
+					default:
+					}
+
+					break
 				}
 			}
 		}(i)
 	}
+
 	wg.Wait()
 
-	if len(allErrs) > 0 {
-		return allErrs[0]
+	if len(errs) > 0 {
+		return errs[0]
 	}
 
 	return nil
 }
 
 func TestRun(t *testing.T) {
-	//log.Disable()
-	//defer log.Enable()
+	log.Disable()
+	defer log.Enable()
 
 	assert.Nil(t, Run(numNodes, numMessagesEach))
-
-	noise.DebugOpcodes()
 }
