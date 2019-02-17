@@ -112,21 +112,37 @@ func (p *Peer) spawnSendWorker() {
 		copied, err := io.Copy(p.conn, bytes.NewReader(buf))
 
 		if copied != int64(size+prepended) {
-			cmd.result <- errors.Errorf("only written %d bytes when expected to write %d bytes to peer", copied, size+prepended)
+			if cmd.result != nil {
+				cmd.result <- errors.Errorf("only written %d bytes when expected to write %d bytes to peer", copied, size+prepended)
+			}
 			continue
 		}
 
 		if err != nil {
-			cmd.result <- errors.Wrap(err, "failed to send message to peer")
+			if cmd.result != nil {
+				cmd.result <- errors.Wrap(err, "failed to send message to peer")
+			}
 			continue
 		}
 
 		if errs := p.afterMessageSentCallbacks.RunCallbacks(p.node); len(errs) > 0 {
-			log.Warn().Errs("errors", errs).Msg("Got errors running AfterMessageSent callbacks.")
+			if cmd.result != nil {
+				var err = errs[0]
+
+				if len(errs) > 1 {
+					for _, e := range errs[1:] {
+						err = errors.Wrap(err, e.Error())
+					}
+				}
+
+				cmd.result <- errors.Wrap(err, "got errors running AfterMessageSent callbacks")
+			}
 			continue
 		}
 
-		cmd.result <- nil
+		if cmd.result != nil {
+			cmd.result <- nil
+		}
 	}
 }
 
@@ -204,6 +220,14 @@ func (p *Peer) spawnReceiveWorker() {
 	}
 }
 
+// SendMessage sends a message whose type is registered with Noise to a specified peer. Calling
+// this function will block the current goroutine until the message is successfully sent. In
+// order to not block, refer to `SendMessageAsync(message Message) error`.
+//
+// It is guaranteed that all messages are sent in a linearized order.
+//
+// It returns an error should it take too long to send a message, the message is not registered
+// with Noise, or there are message that are blocking the peers send worker.
 func (p *Peer) SendMessage(message Message) error {
 	payload, err := p.EncodeMessage(message)
 	if err != nil {
@@ -225,6 +249,31 @@ func (p *Peer) SendMessage(message Message) error {
 	case err = <-cmd.result:
 		return err
 	}
+}
+
+// SendMessageAsync sends a message whose type is registered with Noise to a specified peer. Calling
+// this function will not block the current goroutine until the message is successfully sent. In
+// order to block, refer to `SendMessage(message Message) error`.
+//
+// It is guaranteed that all messages are sent in a linearized order.
+//
+// It returns an error should the message not be registered with Noise, or there are message that are
+// blocking the peers send worker.
+func (p *Peer) SendMessageAsync(message Message) error {
+	payload, err := p.EncodeMessage(message)
+	if err != nil {
+		return errors.Wrap(err, "failed to serialize message contents to be sent to a peer")
+	}
+
+	cmd := sendHandle{payload: payload, result: nil}
+
+	select {
+	case <-time.After(3 * time.Second):
+		return errors.New("noise: send message queue is full and not being processed")
+	case p.sendQueue <- cmd:
+	}
+
+	return nil
 }
 
 func (p *Peer) BeforeMessageSent(c BeforeMessageSentCallback) {
