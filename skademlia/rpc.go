@@ -18,6 +18,8 @@ import (
 // It returns a list of errors which have occurred in sending any messages to peers
 // closest to a given node instance.
 func Broadcast(node *noise.Node, message noise.Message) (errs []error) {
+	errorChannels := make([]<-chan error, 0)
+
 	for _, peerID := range FindClosestPeers(Table(node), protocol.NodeID(node).Hash(), BucketSize()) {
 		peer := protocol.Peer(node, peerID)
 
@@ -25,7 +27,12 @@ func Broadcast(node *noise.Node, message noise.Message) (errs []error) {
 			continue
 		}
 
-		if err := peer.SendMessage(message); err != nil {
+		errorChannels = append(errorChannels, peer.SendMessageAsync(message))
+	}
+
+	for _, ch := range errorChannels {
+		err := <-ch
+		if err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -41,29 +48,16 @@ func Broadcast(node *noise.Node, message noise.Message) (errs []error) {
 //
 // It returns a list of errors which have occurred in sending any messages to peers
 // closest to a given node instance.
-func BroadcastAsync(node *noise.Node, message noise.Message) <-chan error {
-	peerIDs := FindClosestPeers(Table(node), protocol.NodeID(node).Hash(), BucketSize())
-	errs := make(chan error, len(peerIDs))
-
-	for _, peerID := range peerIDs {
+func BroadcastAsync(node *noise.Node, message noise.Message) {
+	for _, peerID := range FindClosestPeers(Table(node), protocol.NodeID(node).Hash(), BucketSize()) {
 		peer := protocol.Peer(node, peerID)
 
 		if peer == nil {
 			continue
 		}
 
-		errChan := peer.SendMessageAsync(message)
-
-		go func() {
-			for err := range errChan {
-				if err != nil {
-					errs <- err
-				}
-			}
-		}()
+		peer.SendMessageAsync(message)
 	}
-
-	return errs
 }
 
 func queryPeerByID(node *noise.Node, peerID, targetID ID, responses chan []ID) {
