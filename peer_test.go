@@ -212,6 +212,7 @@ func TestPeer(t *testing.T) {
 	assert.NoError(t, err)
 
 	p := peer(t, layer, conn, port)
+	p.init()
 
 	// check net
 	assert.Equal(t, net.IPv4(127, 0, 0, 1), p.LocalIP(), "found invalid local IP")
