@@ -53,6 +53,10 @@ func testTransport(t *testing.T, layer Layer, host string, port uint16) {
 
 	// Close dial-side; writes from either side should fail.
 	dialConn.Close()
+
+	// Close is not instant
+	time.Sleep(10 * time.Millisecond)
+
 	_, err = lisConn.Write([]byte("hello"))
 	assert.Truef(t, err != nil, "lisConn.Write() = _, <nil>; want _, <non-nil>")
 	_, err = dialConn.Write([]byte("hello"))
