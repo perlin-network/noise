@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const msgEphemeralHandshake = ".noise_handshake"
+const DefaultHandshakeMessage = ".noise_handshake"
 
 var (
 	_ protocol.Block = (*block)(nil)
@@ -19,6 +19,8 @@ var (
 type block struct {
 	opcodeHandshake noise.Opcode
 	timeoutDuration time.Duration
+
+	handshakeMessage string
 }
 
 // New returns an ECDH policy with sensible defaults.
@@ -27,12 +29,18 @@ type block struct {
 // All handshake-related messages are appended with ECDSA signatures that are automatically verified.
 func New() *block {
 	return &block{
-		timeoutDuration: 10 * time.Second,
+		timeoutDuration:  10 * time.Second,
+		handshakeMessage: DefaultHandshakeMessage,
 	}
 }
 
 func (b *block) TimeoutAfter(timeoutDuration time.Duration) *block {
 	b.timeoutDuration = timeoutDuration
+	return b
+}
+
+func (b *block) WithHandshakeMessage(handshakeMessage string) *block {
+	b.handshakeMessage = handshakeMessage
 	return b
 }
 
