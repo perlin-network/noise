@@ -1,21 +1,45 @@
-# This is a weird way of telling Travis to use the fast container-based test
-# runner instead of the slow VM-based runner.
 sudo: false
 
-language: go
-
-go:
-    - "1.11"
-
-# Only clone the most recent commit.
 git:
-    depth: 1
+  depth: 1
 
-# Skip the install step. Don't `go get` dependencies. Only build with the code in vendor/
-install: true
+matrix:
+  include:
+    - language: go
 
-script:
-    - GO111MODULE=on go test -coverprofile=coverage.txt -covermode=atomic -bench -race ./...
+      go:
+        - "1.11"
 
-after_success:
-    - bash <(curl -s https://codecov.io/bash)
+      install: true
+
+      script:
+        - GO111MODULE=on go test -coverprofile=coverage.txt -covermode=atomic -bench -race ./...
+
+      after_success:
+        - bash <(curl -s https://codecov.io/bash)
+
+    - language: rust
+
+      cache:
+        - cargo
+
+      rust:
+        - stable
+
+      before_script:
+        - (test -x $HOME/.cargo/bin/cargo-install-update || cargo install cargo-update)
+        - (test -x $HOME/.cargo/bin/mdbook || cargo install --vers "^0.1" mdbook)
+        - cargo install-update -a
+
+      script:
+        - cd docs && mdbook build && mdbook test
+
+      deploy:
+        provider: pages
+          skip-cleanup: true
+          github-token: $GITHUB_TOKEN
+          local-dir: docs/book
+          keep-history: false
+          on:
+            branch: master
+

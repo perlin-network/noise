@@ -2,84 +2,122 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"flag"
-	"os"
-	"strings"
-
-	"github.com/perlin-network/noise/crypto/ed25519"
-	"github.com/perlin-network/noise/examples/chat/messages"
+	"github.com/perlin-network/noise"
+	"github.com/perlin-network/noise/cipher/aead"
+	"github.com/perlin-network/noise/handshake/ecdh"
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/network"
-	"github.com/perlin-network/noise/network/discovery"
-	"github.com/perlin-network/noise/types/opcode"
+	"github.com/perlin-network/noise/payload"
+	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/skademlia"
+	"github.com/pkg/errors"
+	"os"
+	"strconv"
+	"strings"
 )
 
-type ChatPlugin struct{ *network.Plugin }
+/** DEFINE MESSAGES **/
+var (
+	opcodeChat noise.Opcode
+	_          noise.Message = (*chatMessage)(nil)
+)
 
-func (state *ChatPlugin) Receive(ctx *network.PluginContext) error {
-	switch msg := ctx.Message().(type) {
-	case *messages.ChatMessage:
-		log.Info().Msgf("<%s> %s", ctx.Client().ID.Address, msg.Message)
+type chatMessage struct {
+	text string
+}
+
+func (chatMessage) Read(reader payload.Reader) (noise.Message, error) {
+	text, err := reader.ReadString()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to read chat msg")
 	}
 
-	return nil
+	return chatMessage{text: text}, nil
+}
+
+func (m chatMessage) Write() []byte {
+	return payload.NewWriter(nil).WriteString(m.text).Bytes()
+}
+
+/** ENTRY POINT **/
+func setup(node *noise.Node) {
+	opcodeChat = noise.RegisterMessage(noise.NextAvailableOpcode(), (*chatMessage)(nil))
+
+	node.OnPeerInit(func(node *noise.Node, peer *noise.Peer) error {
+		peer.OnConnError(func(node *noise.Node, peer *noise.Peer, err error) error {
+			log.Info().Msgf("Got an error: %v", err)
+
+			return nil
+		})
+
+		peer.OnDisconnect(func(node *noise.Node, peer *noise.Peer) error {
+			log.Info().Msgf("Peer %v has disconnected.", peer.RemoteIP().String()+":"+strconv.Itoa(int(peer.RemotePort())))
+
+			return nil
+		})
+
+		go func() {
+			for {
+				msg := <-peer.Receive(opcodeChat)
+				log.Info().Msgf("[%s]: %s", protocol.PeerID(peer), msg.(chatMessage).text)
+			}
+		}()
+
+		return nil
+	})
 }
 
 func main() {
-	// process other flags
-	portFlag := flag.Int("port", 3000, "port to listen to")
-	hostFlag := flag.String("host", "localhost", "host to listen to")
-	protocolFlag := flag.String("protocol", "tcp", "protocol to use (kcp/tcp)")
-	peersFlag := flag.String("peers", "", "peers to connect to")
+	hostFlag := flag.String("h", "127.0.0.1", "host to listen for peers on")
+	portFlag := flag.Uint("p", 3000, "port to listen for peers on")
 	flag.Parse()
 
-	port := uint16(*portFlag)
-	host := *hostFlag
-	protocol := *protocolFlag
-	peers := strings.Split(*peersFlag, ",")
+	params := noise.DefaultParams()
+	//params.NAT = nat.NewPMP()
+	params.Keys = skademlia.RandomKeys()
+	params.Host = *hostFlag
+	params.Port = uint16(*portFlag)
 
-	keys := ed25519.RandomKeyPair()
-
-	log.Info().Msgf("Private Key: %s", keys.PrivateKeyHex())
-	log.Info().Msgf("Public Key: %s", keys.PublicKeyHex())
-
-	opcode.RegisterMessageType(opcode.Opcode(1000), &messages.ChatMessage{})
-	builder := network.NewBuilder()
-	builder.SetKeys(keys)
-	builder.SetAddress(network.FormatAddress(protocol, host, port))
-
-	// Register peer discovery plugin.
-	builder.AddPlugin(new(discovery.Plugin))
-
-	// Add custom chat plugin.
-	builder.AddPlugin(new(ChatPlugin))
-
-	net, err := builder.Build()
+	node, err := noise.NewNode(params)
 	if err != nil {
-		log.Fatal().Err(err)
-		return
+		panic(err)
 	}
+	defer node.Kill()
 
-	go net.Listen()
+	p := protocol.New()
+	p.Register(ecdh.New())
+	p.Register(aead.New())
+	p.Register(skademlia.New())
+	p.Enforce(node)
 
-	if len(peers) > 0 {
-		net.Bootstrap(peers...)
+	setup(node)
+	go node.Listen()
+
+	log.Info().Msgf("Listening for peers on port %d.", node.ExternalPort())
+
+	if len(flag.Args()) > 0 {
+		for _, address := range flag.Args() {
+			peer, err := node.Dial(address)
+			if err != nil {
+				panic(err)
+			}
+
+			skademlia.WaitUntilAuthenticated(peer)
+		}
+
+		peers := skademlia.FindNode(node, protocol.NodeID(node).(skademlia.ID), skademlia.BucketSize(), 8)
+		log.Info().Msgf("Bootstrapped with peers: %+v", peers)
 	}
 
 	reader := bufio.NewReader(os.Stdin)
-	for {
-		input, _ := reader.ReadString('\n')
 
-		// skip blank lines
-		if len(strings.TrimSpace(input)) == 0 {
-			continue
+	for {
+		txt, err := reader.ReadString('\n')
+
+		if err != nil {
+			panic(err)
 		}
 
-		log.Info().Msgf("<%s> %s", net.Address, input)
-
-		ctx := network.WithSignMessage(context.Background(), true)
-		net.Broadcast(ctx, &messages.ChatMessage{Message: input})
+		skademlia.BroadcastAsync(node, chatMessage{text: strings.TrimSpace(txt)})
 	}
-
 }

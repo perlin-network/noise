@@ -5,10 +5,7 @@ vendor/
 coverage.txt
 
 *.exe
-*.test
 
-noise
-chat
-debug
+*.iml
 
-go.sum
+docs/book
