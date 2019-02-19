@@ -1,9 +1,9 @@
 package transport
 
 import (
-	"fmt"
 	"github.com/pkg/errors"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -20,7 +20,7 @@ func (t tcp) Listen(host string, port uint16) (net.Listener, error) {
 		return nil, errors.Errorf("unable to parse host as IP: %s", host)
 	}
 
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
+	listener, err := net.Listen("tcp", ":"+strconv.Itoa(int(port)))
 	if err != nil {
 		return nil, err
 	}
