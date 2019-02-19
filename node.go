@@ -221,6 +221,11 @@ func (n *Node) OnPeerDialed(c OnPeerInitCallback) {
 	})
 }
 
+// OnPeerInit registers a callback for whenever a peer has either been successfully
+// dialed, or otherwise accepted by our node.
+//
+// In essence a helper function that registers callbacks for both `OnPeerConnected`
+// and `OnPeerDialed` at once.
 func (n *Node) OnPeerInit(srcCallbacks ...OnPeerInitCallback) {
 	targetCallbacks := make([]callbacks.Callback, 0, len(srcCallbacks))
 

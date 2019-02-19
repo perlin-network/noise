@@ -312,6 +312,8 @@ func (p *Peer) SendMessageAsync(message Message) <-chan error {
 	return result
 }
 
+// BeforeMessageSent registers a callback to be called before a message
+// is sent to a specified peer.
 func (p *Peer) BeforeMessageSent(c BeforeMessageSentCallback) {
 	p.beforeMessageSentCallbacks.RegisterCallback(func(in interface{}, params ...interface{}) (i interface{}, e error) {
 		if len(params) != 1 {
@@ -327,6 +329,8 @@ func (p *Peer) BeforeMessageSent(c BeforeMessageSentCallback) {
 	})
 }
 
+// BeforeMessageReceived registers a callback to be called before a message
+// is to be received from a specified peer.
 func (p *Peer) BeforeMessageReceived(c BeforeMessageReceivedCallback) {
 	p.beforeMessageReceivedCallbacks.RegisterCallback(func(in interface{}, params ...interface{}) (i interface{}, e error) {
 		if len(params) != 1 {
@@ -342,6 +346,8 @@ func (p *Peer) BeforeMessageReceived(c BeforeMessageReceivedCallback) {
 	})
 }
 
+// AfterMessageSent registers a callback to be called after a message
+// is sent to a specified peer.
 func (p *Peer) AfterMessageSent(c AfterMessageSentCallback) {
 	p.afterMessageSentCallbacks.RegisterCallback(func(params ...interface{}) error {
 		if len(params) != 1 {
@@ -357,6 +363,8 @@ func (p *Peer) AfterMessageSent(c AfterMessageSentCallback) {
 	})
 }
 
+// AfterMessageReceived registers a callback to be called after a message
+// is to be received from a specified peer.
 func (p *Peer) AfterMessageReceived(c AfterMessageReceivedCallback) {
 	p.afterMessageReceivedCallbacks.RegisterCallback(func(params ...interface{}) error {
 		if len(params) != 1 {
@@ -372,6 +380,8 @@ func (p *Peer) AfterMessageReceived(c AfterMessageReceivedCallback) {
 	})
 }
 
+// OnDecodeHeader registers a callback that is fed in the contents of the
+// header portion of an incoming message from a specified peer.
 func (p *Peer) OnDecodeHeader(c OnPeerDecodeHeaderCallback) {
 	p.onDecodeHeaderCallbacks.RegisterCallback(func(params ...interface{}) error {
 		if len(params) != 2 {
@@ -393,6 +403,8 @@ func (p *Peer) OnDecodeHeader(c OnPeerDecodeHeaderCallback) {
 	})
 }
 
+// OnDecodeFooter registers a callback that is fed in the contents of the
+// footer portion of an incoming message from a specified peer.
 func (p *Peer) OnDecodeFooter(c OnPeerDecodeFooterCallback) {
 	p.onDecodeFooterCallbacks.RegisterCallback(func(params ...interface{}) error {
 		if len(params) != 3 {
@@ -420,6 +432,9 @@ func (p *Peer) OnDecodeFooter(c OnPeerDecodeFooterCallback) {
 	})
 }
 
+// OnEncodeHeader registers a callback that is fed in the raw contents of
+// a message to be sent, which then outputs bytes that are to be appended
+// to the header of an outgoing message.
 func (p *Peer) OnEncodeHeader(c AfterMessageEncodedCallback) {
 	p.onEncodeHeaderCallbacks.RegisterCallback(func(header interface{}, params ...interface{}) (i interface{}, e error) {
 		if len(params) != 2 {
@@ -441,6 +456,9 @@ func (p *Peer) OnEncodeHeader(c AfterMessageEncodedCallback) {
 	})
 }
 
+// OnEncodeFooter registers a callback that is fed in the raw contents of
+// a message to be sent, which then outputs bytes that are to be appended
+// to the footer of an outgoing message.
 func (p *Peer) OnEncodeFooter(c AfterMessageEncodedCallback) {
 	p.onEncodeFooterCallbacks.RegisterCallback(func(footer interface{}, params ...interface{}) (i interface{}, e error) {
 		if len(params) != 2 {
@@ -462,7 +480,8 @@ func (p *Peer) OnEncodeFooter(c AfterMessageEncodedCallback) {
 	})
 }
 
-// OnConnError registers a callback for whenever somethings wrong with our peers connection
+// OnConnError registers a callback for whenever something goes wrong with the
+// connection to our peer.
 func (p *Peer) OnConnError(c OnPeerErrorCallback) {
 	p.onConnErrorCallbacks.RegisterCallback(func(params ...interface{}) error {
 		if len(params) != 2 {
