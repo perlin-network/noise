@@ -253,7 +253,7 @@ func TestCallbacks(t *testing.T) {
 
 		clearCounters()
 
-		peer.Disconnect()
+		<-peer.DisconnectAsync()
 
 		// check that the expected callbacks were called on the dialer
 		compareCB(callbacks[src], map[string]int{

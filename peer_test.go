@@ -146,8 +146,11 @@ func TestPeerFlow(t *testing.T) {
 		return nil
 	})
 
+	afterMessageReceivedSignal := make(chan struct{})
+
 	p.AfterMessageReceived(func(node *Node, peer *Peer) error {
 		check(t, &state, 7)
+		close(afterMessageReceivedSignal)
 		return nil
 	})
 
@@ -174,6 +177,8 @@ func TestPeerFlow(t *testing.T) {
 	// Read a message.
 	msg := <-p.Receive(opcodeTest)
 	assert.Equal(t, text, msg.(testMsg).Text)
+
+	<-afterMessageReceivedSignal
 
 	check(t, &state, 8)
 

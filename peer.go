@@ -530,6 +530,37 @@ func (p *Peer) Disconnect() {
 	p.onDisconnectCallbacks.RunCallbacks(p.node)
 }
 
+func (p *Peer) DisconnectAsync() <-chan struct{} {
+	signal := make(chan struct{})
+
+	if !atomic.CompareAndSwapUint32(&p.killOnce, 0, 1) {
+		close(signal)
+		return signal
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	for i := 0; i < 2; i++ {
+		p.kill <- &wg
+	}
+
+	if err := p.conn.Close(); err != nil {
+		p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrapf(err, "got errors closing peer connection"))
+	}
+
+	go func() {
+		wg.Wait()
+		close(p.kill)
+
+		p.onDisconnectCallbacks.RunCallbacks(p.node)
+
+		close(signal)
+	}()
+
+	return signal
+}
+
 func (p *Peer) LocalIP() net.IP {
 	return p.node.transport.IP(p.conn.LocalAddr())
 }
