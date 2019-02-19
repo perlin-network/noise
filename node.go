@@ -294,7 +294,7 @@ func (n *Node) Kill() {
 }
 
 func (n *Node) ExternalAddress() string {
-	if n.nat != nil {
+	if n.nat != nil && nat.IsPrivateIP(net.ParseIP(n.host)) {
 		externalIP, err := n.nat.ExternalIP()
 		if err != nil {
 			panic(err)
@@ -303,5 +303,5 @@ func (n *Node) ExternalAddress() string {
 		return fmt.Sprintf("%s:%d", externalIP.String(), n.externalPort)
 	}
 
-	return fmt.Sprintf("%s:%d", n.host, n.ExternalPort())
+	return fmt.Sprintf("%s:%d", n.host, n.externalPort)
 }

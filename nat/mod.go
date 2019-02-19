@@ -30,8 +30,8 @@ func parseCIDR(s string) *net.IPNet {
 	return block
 }
 
-// isPrivateIP returns whether or not an IP is within a private range.
-func isPrivateIP(ip net.IP) bool {
+// IsPrivateIP returns whether or not an IP is within a private range.
+func IsPrivateIP(ip net.IP) bool {
 	for _, ipnet := range privateBlocks {
 		if ipnet.Contains(ip) {
 			return true
@@ -65,7 +65,7 @@ func activeGateways() ([]net.IP, error) {
 				continue
 			}
 
-			if isPrivateIP(address.IP) {
+			if IsPrivateIP(address.IP) {
 				if ip := address.IP.Mask(address.Mask).To4(); ip != nil {
 					ip[3] = ip[3] | 0x01
 					gateways = append(gateways, ip)

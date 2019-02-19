@@ -7,6 +7,7 @@ import (
 	"github.com/perlin-network/noise/cipher/aead"
 	"github.com/perlin-network/noise/handshake/ecdh"
 	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/nat"
 	"github.com/perlin-network/noise/payload"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/skademlia"
@@ -68,12 +69,14 @@ func setup(node *noise.Node) {
 }
 
 func main() {
+	hostFlag := flag.String("h", "127.0.0.1", "host to listen for peers on")
 	portFlag := flag.Uint("p", 3000, "port to listen for peers on")
 	flag.Parse()
 
 	params := noise.DefaultParams()
-	//params.NAT = nat.NewPMP()
+	params.NAT = nat.NewPMP()
 	params.Keys = skademlia.RandomKeys()
+	params.Host = *hostFlag
 	params.Port = uint16(*portFlag)
 
 	node, err := noise.NewNode(params)
