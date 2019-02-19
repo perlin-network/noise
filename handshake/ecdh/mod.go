@@ -56,7 +56,7 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 	}
 
 	req := Handshake{publicKey: ephemeralPublicKey}
-	req.signature, err = ephemeralPrivateKey.Sign(nil, []byte(msgEphemeralHandshake), crypto.Hash(0))
+	req.signature, err = ephemeralPrivateKey.Sign(nil, []byte(b.handshakeMessage), crypto.Hash(0))
 	if err != nil {
 		return errors.Wrap(errors.Wrap(protocol.DisconnectPeer, err.Error()), "failed to sign handshake message using ECDSA")
 	}
@@ -86,7 +86,7 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 		return errors.Wrap(protocol.DisconnectPeer, "failed to unmarshal our peers ephemeral public key")
 	}
 
-	if !edwards25519.Verify(peersPublicKey, []byte(msgEphemeralHandshake), res.signature) {
+	if !edwards25519.Verify(peersPublicKey, []byte(b.handshakeMessage), res.signature) {
 		return errors.Wrap(protocol.DisconnectPeer, "failed to verify signature in handshake request")
 	}
 
