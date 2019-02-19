@@ -74,7 +74,7 @@ func main() {
 	flag.Parse()
 
 	params := noise.DefaultParams()
-	params.NAT = nat.NewPMP()
+	//params.NAT = nat.NewPMP()
 	params.Keys = skademlia.RandomKeys()
 	params.Host = *hostFlag
 	params.Port = uint16(*portFlag)
