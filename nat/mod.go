@@ -15,6 +15,9 @@ type Provider interface {
 }
 
 var privateBlocks = []*net.IPNet{
+	parseCIDR("127.0.0.1/8"),
+	parseCIDR("::1/128"),
+	parseCIDR("fe80::/10"),
 	parseCIDR("10.0.0.0/8"),
 	parseCIDR("172.16.0.0/12"),
 	parseCIDR("192.168.0.0/16"),
