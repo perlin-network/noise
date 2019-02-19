@@ -8,8 +8,10 @@ import (
 )
 
 func TestDeriveSharedKey(t *testing.T) {
+	block := New()
+
 	check := func(ephemeralSharedKey []byte, context []byte) bool {
-		_, _, err := deriveCipherSuite(sha256.New, ephemeralSharedKey, context)
+		_, _, err := block.deriveCipherSuite(sha256.New, ephemeralSharedKey, context)
 
 		if err != nil {
 			return false
