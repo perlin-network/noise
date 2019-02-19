@@ -7,7 +7,6 @@ import (
 	"github.com/perlin-network/noise/cipher/aead"
 	"github.com/perlin-network/noise/handshake/ecdh"
 	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/nat"
 	"github.com/perlin-network/noise/payload"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/skademlia"
