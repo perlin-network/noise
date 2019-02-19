@@ -7,3 +7,5 @@ coverage.txt
 *.exe
 
 *.iml
+
+docs/book

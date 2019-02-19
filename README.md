@@ -16,7 +16,7 @@
 [14]: https://codecov.io/gh/perlin-network/noise
 
 
-<img align="right" width=400 src="media/chat.gif">
+<img align="right" width=400 src="docs/media/chat.gif">
 
 **noise** is an opinionated, easy-to-use P2P network stack for
 *decentralized applications, and cryptographic protocols* written in
