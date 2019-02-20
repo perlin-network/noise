@@ -233,6 +233,11 @@ func UpdateTable(node *noise.Node, target protocol.ID) (err error) {
 		panic("skademlia: Evict{} message not registered")
 	}
 
+	targetPeer := protocol.Peer(node, target)
+	if targetPeer == nil {
+		return errors.New("skademlia: target peer could not be found actually connected to our node")
+	}
+
 	table := Table(node)
 
 	if err = table.Update(target); err != nil {
@@ -244,7 +249,7 @@ func UpdateTable(node *noise.Node, target protocol.ID) (err error) {
 			lastPeer := protocol.Peer(node, last.Value.(protocol.ID))
 
 			if lastPeer == nil {
-				return errors.New("kademlia: last peer in bucket was not actually connected to our node")
+				return errors.New("skademlia: last peer in bucket was not actually connected to our node")
 			}
 
 			// If the candidate peer to-be-evicted responds with an 'evict' message back, move him to the front of the bucket
@@ -257,6 +262,12 @@ func UpdateTable(node *noise.Node, target protocol.ID) (err error) {
 				bucket.PushFront(target)
 			}
 
+			evictTargetPeer := func() {
+				targetPeer.Disconnect()
+
+				bucket.MoveToFront(last)
+			}
+
 			// Send an 'evict' message to the candidate peer to-be-evicted.
 			err := lastPeer.SendMessage(Evict{})
 
@@ -267,7 +278,7 @@ func UpdateTable(node *noise.Node, target protocol.ID) (err error) {
 
 			select {
 			case <-lastPeer.Receive(opcodeEvict):
-				bucket.MoveToFront(last)
+				evictTargetPeer()
 			case <-time.After(3 * time.Second):
 				evictLastPeer()
 			}
