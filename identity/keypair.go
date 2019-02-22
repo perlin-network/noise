@@ -8,7 +8,4 @@ type Keypair interface {
 	ID() []byte
 	PublicKey() []byte
 	PrivateKey() []byte
-
-	Sign(buf []byte) ([]byte, error)
-	Verify(publicKeyBuf []byte, buf []byte, signature []byte) error
 }

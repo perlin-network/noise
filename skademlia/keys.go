@@ -112,26 +112,6 @@ func (p *Keypair) PublicKey() []byte {
 	return p.publicKey
 }
 
-func (p *Keypair) Sign(buf []byte) ([]byte, error) {
-	if len(p.privateKey) != edwards25519.PrivateKeySize {
-		return nil, errors.Errorf("ed25519: private key expected to be %d bytes, but is %d bytes", edwards25519.PrivateKeySize, len(p.privateKey))
-	}
-
-	return edwards25519.Sign(p.privateKey, buf), nil
-}
-
-func (p *Keypair) Verify(publicKeyBuf []byte, buf []byte, signature []byte) error {
-	if len(publicKeyBuf) != edwards25519.PublicKeySize {
-		return errors.Errorf("ed25519: public key expected to be %d bytes, but is %d bytes", edwards25519.PublicKeySize, len(publicKeyBuf))
-	}
-
-	if edwards25519.Verify(publicKeyBuf, buf, signature) {
-		return nil
-	} else {
-		return errors.New("unable to verify signature")
-	}
-}
-
 func (p *Keypair) String() string {
 	return fmt.Sprintf("S/Kademlia(public: %s, private: %s)", hex.EncodeToString(p.PublicKey()), hex.EncodeToString(p.PrivateKey()))
 }

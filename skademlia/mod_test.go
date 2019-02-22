@@ -1,6 +1,7 @@
 package skademlia
 
 import (
+	"github.com/perlin-network/noise/signature/eddsa"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"testing/quick"
@@ -9,7 +10,12 @@ import (
 func TestNew(t *testing.T) {
 	block := New()
 
-	assert.Equal(t, false, block.enforceSignatures)
+	scheme := eddsa.New()
+
+	assert.Equal(t, nil, block.scheme)
+	block.WithSignatureScheme(scheme)
+	assert.Equal(t, scheme, block.scheme)
+
 	assert.Equal(t, DefaultC1, block.c1)
 	assert.Equal(t, DefaultC2, block.c2)
 	assert.Equal(t, DefaultPrefixDiffLen, block.prefixDiffLen)
