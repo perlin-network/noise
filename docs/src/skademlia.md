@@ -149,6 +149,11 @@ block.WithC2(int(16))
 block.WithPrefixDiffLen(int(128))
 block.WithPrefixDiffMaxLen(int(32))
 
+// Additionally, have all S/Kademlia messages and future
+// messages be appended with EdDSA signatures that are
+// validated for every incoming message.
+block.WithSignatureScheme(eddsa.New())
+
 // Register the protocol block and enforce it on our node.
 protocol.New().Register(block).Enforce(node)
 ```
