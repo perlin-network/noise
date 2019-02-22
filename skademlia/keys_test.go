@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/perlin-network/noise/identity/ed25519"
-	"github.com/perlin-network/noise/internal/edwards25519"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/blake2b"
 	"testing"
@@ -48,29 +47,6 @@ func TestNewSKademliaIdentityFromPrivateKey(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestSignAndVerify(t *testing.T) {
-	t.Parallel()
-
-	data, err := randomBytes(1024)
-	assert.NoError(t, err)
-
-	privateKeyHex := "1946e455ca6072bcdfd3182799c2ceb1557c2a56c5f810478ac0eb279ad4c93e8e8b6a97551342fd70ec03bea8bae5b05bc5dc0f54b2721dff76f06fab909263"
-
-	privateKey, err := hex.DecodeString(privateKeyHex)
-	assert.NoError(t, err)
-
-	keys, err := LoadKeys(privateKey, DefaultC1, DefaultC2)
-	assert.NoError(t, err)
-	assert.NotNil(t, keys)
-
-	signature, err := keys.Sign([]byte(data))
-
-	assert.NoError(t, err)
-	assert.Len(t, signature, edwards25519.SignatureSize)
-
-	assert.Nil(t, keys.Verify(keys.publicKey, data, signature))
 }
 
 func TestGenerateKeyPairAndID(t *testing.T) {

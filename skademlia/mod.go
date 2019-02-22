@@ -5,6 +5,7 @@ import (
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/payload"
 	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/signature"
 	"github.com/pkg/errors"
 	"time"
 )
@@ -27,7 +28,7 @@ type block struct {
 	opcodeLookupRequest  noise.Opcode
 	opcodeLookupResponse noise.Opcode
 
-	enforceSignatures bool
+	scheme signature.Scheme
 
 	c1, c2 int
 
@@ -35,12 +36,7 @@ type block struct {
 }
 
 func New() *block {
-	return &block{enforceSignatures: false, c1: DefaultC1, c2: DefaultC2, prefixDiffLen: DefaultPrefixDiffLen, prefixDiffMin: DefaultPrefixDiffMin}
-}
-
-func (b *block) EnforceSignatures() *block {
-	b.enforceSignatures = true
-	return b
+	return &block{c1: DefaultC1, c2: DefaultC2, prefixDiffLen: DefaultPrefixDiffLen, prefixDiffMin: DefaultPrefixDiffMin}
 }
 
 func (b *block) WithC1(c1 int) *block {
@@ -60,6 +56,11 @@ func (b *block) WithPrefixDiffLen(prefixDiffLen int) *block {
 
 func (b *block) WithPrefixDiffMin(prefixDiffMin int) *block {
 	b.prefixDiffMin = prefixDiffMin
+	return b
+}
+
+func (b *block) WithSignatureScheme(scheme signature.Scheme) *block {
+	b.scheme = scheme
 	return b
 }
 
@@ -103,7 +104,7 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 
 	// Register peer.
 	protocol.SetPeerID(peer, id.ID)
-	enforceSignatures(peer, b.enforceSignatures)
+	enforceSignatures(peer, b.scheme)
 
 	// Log peer into S/Kademlia table, and have all messages update the S/Kademlia table.
 	_ = b.logPeerActivity(peer)
@@ -140,11 +141,11 @@ func (b *block) logPeerActivity(peer *noise.Peer) error {
 	return nil
 }
 
-func enforceSignatures(peer *noise.Peer, enforce bool) {
-	if enforce {
+func enforceSignatures(peer *noise.Peer, scheme signature.Scheme) {
+	if scheme != nil {
 		// Place signature at the footer of every single message.
 		peer.OnEncodeFooter(func(node *noise.Node, peer *noise.Peer, header, msg []byte) (i []byte, e error) {
-			signature, err := node.Keys.Sign(msg)
+			signature, err := scheme.Sign(node.Keys.PrivateKey(), msg)
 
 			if err != nil {
 				panic(errors.Wrap(err, "signature: failed to sign message"))
@@ -162,7 +163,7 @@ func enforceSignatures(peer *noise.Peer, enforce bool) {
 				return errors.Wrap(err, "signature: failed to read message signature")
 			}
 
-			if err = node.Keys.Verify(protocol.PeerID(peer).PublicKey(), msg, signature); err != nil {
+			if err = scheme.Verify(protocol.PeerID(peer).PublicKey(), msg, signature); err != nil {
 				peer.Disconnect()
 				return errors.Wrap(err, "signature: peer sent an invalid signature")
 			}
