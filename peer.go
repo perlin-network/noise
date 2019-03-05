@@ -185,14 +185,14 @@ func (p *Peer) spawnReceiveWorker() {
 				p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrap(err, "failed to read message size"))
 			}
 
-			p.Disconnect()
+			p.DisconnectAsync()
 			continue
 		}
 
 		if size > p.node.maxMessageSize {
 			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Errorf("exceeded max message size; got size %d", size))
 
-			p.Disconnect()
+			p.DisconnectAsync()
 			continue
 		}
 
@@ -202,14 +202,14 @@ func (p *Peer) spawnReceiveWorker() {
 		if err != nil {
 			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrap(err, "failed to read remaining message contents"))
 
-			p.Disconnect()
+			p.DisconnectAsync()
 			continue
 		}
 
 		if seen < int(size) {
 			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Errorf("only read %d bytes when expected to read %d from peer", seen, size))
 
-			p.Disconnect()
+			p.DisconnectAsync()
 			continue
 		}
 
@@ -217,7 +217,7 @@ func (p *Peer) spawnReceiveWorker() {
 		if len(errs) > 0 {
 			log.Warn().Errs("errors", errs).Msg("Got errors running BeforeMessageReceived callbacks.")
 
-			p.Disconnect()
+			p.DisconnectAsync()
 			continue
 		}
 		buf = b.([]byte)
@@ -227,7 +227,7 @@ func (p *Peer) spawnReceiveWorker() {
 		if opcode == OpcodeNil || err != nil {
 			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrap(err, "failed to decode message"))
 
-			p.Disconnect()
+			p.DisconnectAsync()
 			continue
 		}
 
@@ -239,14 +239,14 @@ func (p *Peer) spawnReceiveWorker() {
 			recv.lock <- struct{}{}
 			<-recv.lock
 		case <-time.After(p.node.receiveMessageTimeout):
-			p.Disconnect()
+			p.DisconnectAsync()
 			continue
 		}
 
 		if errs := p.afterMessageReceivedCallbacks.RunCallbacks(p.node); len(errs) > 0 {
 			log.Warn().Errs("errors", errs).Msg("Got errors running AfterMessageReceived callbacks.")
 
-			p.Disconnect()
+			p.DisconnectAsync()
 			continue
 		}
 	}

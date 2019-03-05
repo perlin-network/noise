@@ -80,5 +80,5 @@ func TestProtocol(t *testing.T) {
 	assert.Equal(t, atomic.LoadUint32(aliceCount), uint32(10))
 	assert.Equal(t, atomic.LoadUint32(bobCount), uint32(6))
 
-	assert.Equal(t, atomic.LoadUint32(&aliceDisconnected), uint32(0))
+	assert.Equal(t, atomic.LoadUint32(&aliceDisconnected), uint32(1))
 }
