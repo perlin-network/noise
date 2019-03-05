@@ -242,6 +242,70 @@ func TestPeer(t *testing.T) {
 	p.Disconnect()
 }
 
+// Test dialler the peer's connection
+func TestPeerConnDisconnected(t *testing.T) {
+	log.Disable()
+	defer log.Enable()
+
+	resetOpcodes()
+	opcode := RegisterMessage(NextAvailableOpcode(), (*testMsg)(nil))
+
+	var port uint16 = 8888
+	var err error
+
+	var wgListen sync.WaitGroup
+	wgListen.Add(1)
+
+	layer := transport.NewBuffered()
+
+	go func() {
+		params := DefaultParams()
+		params.Keys = ed25519.RandomKeys()
+		params.Host = "127.0.0.1"
+		params.Port = port
+		params.Transport = layer
+
+		node, err := NewNode(params)
+		assert.Nil(t, err)
+		wgListen.Done()
+
+		node.OnPeerConnected(func(node *Node, peer *Peer) error {
+			<- peer.Receive(opcode)
+
+			peer.Disconnect()
+			return nil
+		})
+
+		node.Listen()
+	}()
+
+	wgListen.Wait()
+	conn, err := layer.Dial(fmt.Sprintf("%s:%d", "127.0.0.1", port))
+	assert.NoError(t, err)
+
+	p := peer(t, layer, conn, port)
+
+	p.OnConnError(func(node *Node, peer *Peer, err error) error {
+		assert.FailNow(t, "OnConnError should never be called")
+		return nil
+	})
+
+	var wgDisconnect sync.WaitGroup
+	wgDisconnect.Add(1)
+
+	p.OnDisconnect(func(node *Node, peer *Peer) error {
+		wgDisconnect.Done()
+		return nil
+	})
+
+	p.init()
+
+	err = p.SendMessage(testMsg{Text: "hello"})
+	assert.NoError(t, err)
+
+	wgDisconnect.Wait()
+}
+
 // check the state equal to the expected state, and then increment it by 1
 func check(t *testing.T, currentState *int32, expectedState int32) {
 	assert.Equal(t, expectedState, atomic.LoadInt32(currentState))
