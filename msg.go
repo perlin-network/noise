@@ -29,13 +29,18 @@ type Message interface {
 //
 // Refer to the functions `OnEncodeHeader` and `OnEncodeFooter` available in `noise.Peer`
 // to prepend/append additional information on every single message sent over the wire.
-func (p *Peer) EncodeMessage(message Message) ([]byte, error) {
+func (p *Peer) EncodeMessage(channelID [ChannelIDSize]byte, message Message) ([]byte, error) {
 	opcode, err := OpcodeFromMessage(message)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not find opcode registered for message")
 	}
 
 	var buf bytes.Buffer
+
+	_, err = buf.Write(channelID[:])
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to serialize channel id")
+	}
 
 	_, err = buf.Write(payload.NewWriter(nil).WriteByte(byte(opcode)).Bytes())
 	if err != nil {
@@ -74,7 +79,14 @@ func (p *Peer) EncodeMessage(message Message) ([]byte, error) {
 	return append(header.([]byte), append(buf.Bytes(), footer.([]byte)...)...), nil
 }
 
-func (p *Peer) DecodeMessage(buf []byte) (Opcode, Message, error) {
+func (p *Peer) DecodeMessage(buf []byte) ([ChannelIDSize]byte, Opcode, Message, error) {
+	var channelID [ChannelIDSize]byte
+	if len(buf) < ChannelIDSize {
+		return [ChannelIDSize]byte{}, OpcodeNil, nil, errors.New("unable to read channel id")
+	}
+	copy(channelID[:], buf)
+	buf = buf[ChannelIDSize:]
+
 	reader := payload.NewReader(buf)
 
 	// Read custom header from network packet.
@@ -87,24 +99,24 @@ func (p *Peer) DecodeMessage(buf []byte) (Opcode, Message, error) {
 			err = errors.Wrap(e, e.Error())
 		}
 
-		return OpcodeNil, nil, errors.Wrap(err, "failed to decode custom headers")
+		return [ChannelIDSize]byte{}, OpcodeNil, nil, errors.Wrap(err, "failed to decode custom headers")
 	}
 
 	afterHeaderSize := len(buf) - reader.Len()
 
 	opcode, err := reader.ReadByte()
 	if err != nil {
-		return OpcodeNil, nil, errors.Wrap(err, "failed to read opcode")
+		return [ChannelIDSize]byte{}, OpcodeNil, nil, errors.Wrap(err, "failed to read opcode")
 	}
 
 	message, err := MessageFromOpcode(Opcode(opcode))
 	if err != nil {
-		return Opcode(opcode), nil, errors.Wrap(err, "opcode<->message pairing not registered")
+		return [ChannelIDSize]byte{}, Opcode(opcode), nil, errors.Wrap(err, "opcode<->message pairing not registered")
 	}
 
 	message, err = message.Read(reader)
 	if err != nil {
-		return Opcode(opcode), nil, errors.Wrap(err, "failed to read message contents")
+		return [ChannelIDSize]byte{}, Opcode(opcode), nil, errors.Wrap(err, "failed to read message contents")
 	}
 
 	afterMessageSize := len(buf) - reader.Len()
@@ -119,8 +131,8 @@ func (p *Peer) DecodeMessage(buf []byte) (Opcode, Message, error) {
 			err = errors.Wrap(e, e.Error())
 		}
 
-		return OpcodeNil, nil, errors.Wrap(err, "failed to decode custom footer")
+		return [ChannelIDSize]byte{}, OpcodeNil, nil, errors.Wrap(err, "failed to decode custom footer")
 	}
 
-	return Opcode(opcode), message, nil
+	return channelID, Opcode(opcode), message, nil
 }

@@ -84,11 +84,11 @@ func TestPeerFlow(t *testing.T) {
 		_, err = io.ReadFull(reader, buf)
 		assert.NoError(t, err)
 
-		_, msg, err := peer.DecodeMessage(buf)
+		_, _, msg, err := peer.DecodeMessage(buf)
 		assert.Equal(t, text, msg.(testMsg).Text)
 
 		// Create a new message.
-		payload, err := peer.EncodeMessage(testMsg{Text: text})
+		payload, err := peer.EncodeMessage([ChannelIDSize]byte{}, testMsg{Text: text})
 		assert.NoError(t, err)
 
 		buf = make([]byte, binary.MaxVarintLen64)
@@ -270,7 +270,7 @@ func TestPeerConnDisconnected(t *testing.T) {
 		wgListen.Done()
 
 		node.OnPeerConnected(func(node *Node, peer *Peer) error {
-			<- peer.Receive(opcode)
+			<-peer.Receive(opcode)
 
 			peer.Disconnect()
 			return nil

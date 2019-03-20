@@ -16,6 +16,10 @@ import (
 	"time"
 )
 
+const ChannelIDSize = 12 // in bytes
+
+type RecvQueueKey [ChannelIDSize + 1]byte
+
 type receiveHandle struct {
 	hub  chan Message
 	lock chan struct{}
@@ -50,7 +54,7 @@ type Peer struct {
 	afterMessageReceivedCallbacks *callbacks.SequentialCallbackManager
 
 	sendQueue     chan sendHandle
-	receiveQueues sync.Map // map[Opcode]chan receiveHandle
+	receiveQueues sync.Map // map[RecvQueueKey]chan receiveHandle
 
 	kill     chan *sync.WaitGroup
 	killOnce uint32
@@ -222,7 +226,7 @@ func (p *Peer) spawnReceiveWorker() {
 		}
 		buf = b.([]byte)
 
-		opcode, msg, err := p.DecodeMessage(buf)
+		channelID, opcode, msg, err := p.DecodeMessage(buf)
 
 		if opcode == OpcodeNil || err != nil {
 			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrap(err, "failed to decode message"))
@@ -231,7 +235,11 @@ func (p *Peer) spawnReceiveWorker() {
 			continue
 		}
 
-		c, _ := p.receiveQueues.LoadOrStore(opcode, receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
+		var queueKey RecvQueueKey
+		copy(queueKey[:], channelID[:])
+		queueKey[len(queueKey)-1] = byte(opcode)
+
+		c, _ := p.receiveQueues.LoadOrStore(queueKey, receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
 		recv := c.(receiveHandle)
 
 		select {
@@ -261,7 +269,11 @@ func (p *Peer) spawnReceiveWorker() {
 // It returns an error should it take too long to send a message, the message is not registered
 // with Noise, or there are message that are blocking the peers send worker.
 func (p *Peer) SendMessage(message Message) error {
-	payload, err := p.EncodeMessage(message)
+	return p.SendMessageMux([ChannelIDSize]byte{}, message)
+}
+
+func (p *Peer) SendMessageMux(channelID [ChannelIDSize]byte, message Message) error {
+	payload, err := p.EncodeMessage(channelID, message)
 	if err != nil {
 		return errors.Wrap(err, "failed to serialize message contents to be sent to a peer")
 	}
@@ -292,9 +304,13 @@ func (p *Peer) SendMessage(message Message) error {
 // It returns an error should the message not be registered with Noise, or there are message that are
 // blocking the peers send worker.
 func (p *Peer) SendMessageAsync(message Message) <-chan error {
+	return p.SendMessageMuxAsync([ChannelIDSize]byte{}, message)
+}
+
+func (p *Peer) SendMessageMuxAsync(channelID [ChannelIDSize]byte, message Message) <-chan error {
 	result := make(chan error, 1)
 
-	payload, err := p.EncodeMessage(message)
+	payload, err := p.EncodeMessage(channelID, message)
 	if err != nil {
 		result <- errors.Wrap(err, "failed to serialize message contents to be sent to a peer")
 		return result
@@ -523,7 +539,15 @@ func (p *Peer) OnDisconnect(srcCallbacks ...OnPeerDisconnectCallback) {
 }
 
 func (p *Peer) Receive(o Opcode) <-chan Message {
-	c, _ := p.receiveQueues.LoadOrStore(o, receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
+	return p.ReceiveMux([ChannelIDSize]byte{}, o)
+}
+
+func (p *Peer) ReceiveMux(channelID [ChannelIDSize]byte, o Opcode) <-chan Message {
+	var queueKey RecvQueueKey
+	copy(queueKey[:], channelID[:])
+	queueKey[len(queueKey)-1] = byte(o)
+
+	c, _ := p.receiveQueues.LoadOrStore(queueKey, receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
 	return c.(receiveHandle).hub
 }
 
@@ -627,7 +651,10 @@ func (p *Peer) Node() *Node {
 }
 
 func (p *Peer) LockOnReceive(opcode Opcode) receiveHandle {
-	c, _ := p.receiveQueues.LoadOrStore(opcode, receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
+	var queueKey RecvQueueKey
+	queueKey[len(queueKey)-1] = byte(opcode)
+
+	c, _ := p.receiveQueues.LoadOrStore(queueKey, receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
 	recv := c.(receiveHandle)
 
 	recv.lock <- struct{}{}
