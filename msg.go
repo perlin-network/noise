@@ -29,7 +29,7 @@ type Message interface {
 //
 // Refer to the functions `OnEncodeHeader` and `OnEncodeFooter` available in `noise.Peer`
 // to prepend/append additional information on every single message sent over the wire.
-func (p *Peer) EncodeMessage(channelID [ChannelIDSize]byte, message Message) ([]byte, error) {
+func (p *Peer) EncodeMessage(channelID ChannelID, message Message) ([]byte, error) {
 	opcode, err := OpcodeFromMessage(message)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not find opcode registered for message")
@@ -79,8 +79,8 @@ func (p *Peer) EncodeMessage(channelID [ChannelIDSize]byte, message Message) ([]
 	return append(header.([]byte), append(buf.Bytes(), footer.([]byte)...)...), nil
 }
 
-func (p *Peer) DecodeMessage(buf []byte) ([ChannelIDSize]byte, Opcode, Message, error) {
-	var channelID [ChannelIDSize]byte
+func (p *Peer) DecodeMessage(buf []byte) (ChannelID, Opcode, Message, error) {
+	var channelID ChannelID
 	if len(buf) < ChannelIDSize {
 		return [ChannelIDSize]byte{}, OpcodeNil, nil, errors.New("unable to read channel id")
 	}

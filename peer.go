@@ -19,6 +19,7 @@ import (
 const ChannelIDSize = 12 // in bytes
 
 type RecvQueueKey [ChannelIDSize + 1]byte
+type ChannelID [ChannelIDSize]byte
 
 type receiveHandle struct {
 	hub  chan Message
@@ -53,8 +54,10 @@ type Peer struct {
 	afterMessageSentCallbacks     *callbacks.SequentialCallbackManager
 	afterMessageReceivedCallbacks *callbacks.SequentialCallbackManager
 
-	sendQueue     chan sendHandle
-	receiveQueues sync.Map // map[RecvQueueKey]chan receiveHandle
+	sendQueue        chan sendHandle
+	receiveQueues    sync.Map // map[RecvQueueKey]chan receiveHandle
+	muxChannelQueues sync.Map // map[Opcode]chan ChannelID
+	peerMuxAlive     sync.Map // map[ChannelID]struct{}
 
 	kill     chan *sync.WaitGroup
 	killOnce uint32
@@ -241,6 +244,11 @@ func (p *Peer) spawnReceiveWorker() {
 
 		c, _ := p.receiveQueues.LoadOrStore(queueKey, receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
 		recv := c.(receiveHandle)
+
+		select {
+		case p.getMuxChannel(opcode) <- channelID:
+		default:
+		}
 
 		select {
 		case recv.hub <- msg:
@@ -542,13 +550,22 @@ func (p *Peer) Receive(o Opcode) <-chan Message {
 	return p.ReceiveMux([ChannelIDSize]byte{}, o)
 }
 
-func (p *Peer) ReceiveMux(channelID [ChannelIDSize]byte, o Opcode) <-chan Message {
+func (p *Peer) ReceiveMux(channelID ChannelID, o Opcode) <-chan Message {
 	var queueKey RecvQueueKey
 	copy(queueKey[:], channelID[:])
 	queueKey[len(queueKey)-1] = byte(o)
 
 	c, _ := p.receiveQueues.LoadOrStore(queueKey, receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
 	return c.(receiveHandle).hub
+}
+
+func (p *Peer) WaitForMuxChannel(o Opcode) <-chan ChannelID {
+	return p.getMuxChannel(o)
+}
+
+func (p *Peer) getMuxChannel(o Opcode) chan ChannelID {
+	orq, _ := p.muxChannelQueues.LoadOrStore(o, make(chan ChannelID, 128))
+	return orq.(chan ChannelID)
 }
 
 func (p *Peer) Disconnect() {
