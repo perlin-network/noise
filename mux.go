@@ -2,7 +2,6 @@ package noise
 
 import (
 	"crypto/rand"
-	"runtime"
 	"sync/atomic"
 	"time"
 )
@@ -24,14 +23,11 @@ func NewPeerMux(p *Peer) *PeerMux {
 		peer: p,
 		cid:  cid,
 	}
-	m.gcSelfRegister()
 	return m
 }
 
-func (m *PeerMux) gcSelfRegister() {
-	runtime.SetFinalizer(m, func(m *PeerMux) {
-		m.peer.peerMuxAlive.Delete(m.cid)
-	})
+func (m *PeerMux) Close() {
+	m.peer.peerMuxAlive.Delete(m.cid)
 }
 
 func (m *PeerMux) SendMessage(message Message) error {
@@ -52,7 +48,6 @@ func ListenForPeerMux(p *Peer, o Opcode, cb func(m *PeerMux)) {
 					peer: p,
 					cid:  cid,
 				}
-				m.gcSelfRegister()
 				cb(m)
 			}
 		case <-time.After(5 * time.Second):
