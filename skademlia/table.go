@@ -3,289 +3,161 @@ package skademlia
 import (
 	"bytes"
 	"container/list"
-	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/blake2b"
 	"sort"
 	"sync"
-	"time"
 )
 
 var (
-	bucketSize    = 16
-	ErrBucketFull = errors.New("kademlia: cannot add ID, bucket is full")
+	ErrBucketFull = errors.New("bucket is full")
 )
 
-type table struct {
-	self protocol.ID
+type Table struct {
+	self *ID
 
-	numBuckets int
-	buckets    []*bucket
+	buckets    []*Bucket
+	bucketSize int
 }
 
-type bucket struct {
-	sync.RWMutex
-	list.List
-}
+func NewTable(self *ID) *Table {
+	t := &Table{
+		self: self,
 
-func newBucket() *bucket {
-	return &bucket{}
-}
-
-func newTable(self protocol.ID) *table {
-	if self == nil {
-		panic("kademlia: self ID must not be nil")
+		buckets:    make([]*Bucket, len(self.checksum)*8),
+		bucketSize: 16,
 	}
 
-	numBuckets := len(self.Hash()) * 8
-	table := table{
-		self:       self,
-		numBuckets: numBuckets,
-		buckets:    make([]*bucket, numBuckets),
+	for i := range t.buckets {
+		t.buckets[i] = new(Bucket)
 	}
 
-	for i := 0; i < numBuckets; i++ {
-		table.buckets[i] = newBucket()
-	}
+	b := t.buckets[len(t.buckets)-1]
+	b.PushFront(self)
 
-	_ = table.Update(self)
-
-	return &table
+	return t
 }
 
-func BucketSize() int {
-	return bucketSize
-}
-
-func (t *table) Update(target protocol.ID) error {
-	if len(t.self.Hash()) != len(target.Hash()) {
-		return errors.New("kademlia: got invalid hash size for target ID on update")
+func (t Table) Find(b *Bucket, target *ID) *list.Element {
+	if target == nil {
+		return nil
 	}
-
-	bucket := t.bucket(t.bucketID(target.Hash()))
-
-	bucket.Lock()
-	defer bucket.Unlock()
 
 	var element *list.Element
 
-	// Find current peer in bucket.
-	for e := bucket.Front(); e != nil; e = e.Next() {
-		id := e.Value.(protocol.ID)
+	b.RLock()
 
-		if bytes.Equal(id.Hash(), target.Hash()) {
+	for e := b.Front(); e != nil; e = e.Next() {
+		if e.Value.(*ID).checksum == target.checksum {
 			element = e
 			break
 		}
 	}
 
-	if element == nil {
-		// Populate bucket if its not full.
-		if bucket.Len() < BucketSize() {
-			bucket.PushFront(target)
-		} else {
-			return ErrBucketFull
-		}
-	} else {
-		bucket.MoveToFront(element)
-	}
+	b.RUnlock()
 
-	return nil
+	return element
 }
 
-func (t *table) Get(target protocol.ID) (protocol.ID, bool) {
-	bucket := t.bucket(t.bucketID(target.Hash()))
+func (t Table) Delete(b *Bucket, target *ID) bool {
+	e := t.Find(b, target)
 
-	bucket.RLock()
-	defer bucket.RUnlock()
-
-	for e := bucket.Front(); e != nil; e = e.Next() {
-		if found := e.Value.(protocol.ID); bytes.Equal(found.Hash(), target.Hash()) {
-			return found, true
-		}
+	if e == nil {
+		return false
 	}
 
-	return nil, false
+	b.Lock()
+	defer b.Unlock()
+
+	return b.Remove(e) != nil
 }
 
-func (t *table) Delete(target protocol.ID) bool {
-	bucket := t.bucket(t.bucketID(target.Hash()))
-
-	bucket.Lock()
-	defer bucket.Unlock()
-
-	for e := bucket.Front(); e != nil; e = e.Next() {
-		if found := e.Value.(protocol.ID); bytes.Equal(found.Hash(), target.Hash()) {
-			bucket.Remove(e)
-			return true
-		}
+func (t Table) Update(target *ID) error {
+	if target == nil {
+		return nil
 	}
 
-	return false
+	b := t.buckets[getBucketID(t.self.checksum, target.checksum)]
+	e := t.Find(b, target)
+
+	if e != nil {
+		b.Lock()
+		b.MoveToFront(e)
+		b.Unlock()
+
+		return nil
+	}
+
+	if b.Len() < t.bucketSize {
+		b.Lock()
+		b.PushFront(target)
+		b.Unlock()
+
+		return nil
+	}
+
+	return ErrBucketFull
 }
 
-// GetPeers returns a unique list of all peers within the routing network.
-func (t *table) GetPeers() (addresses []string) {
-	visited := make(map[string]struct{})
-	visited[string(t.self.Hash())] = struct{}{}
+func (t Table) FindClosest(target *ID, k int) IDs {
+	var checksum [blake2b.Size256]byte
 
-	for _, bucket := range t.buckets {
-		bucket.RLock()
+	if target != nil {
+		checksum = target.checksum
+	}
 
-		for e := bucket.Front(); e != nil; e = e.Next() {
-			id := e.Value.(protocol.ID)
+	var closest []*ID
 
-			if _, seen := visited[string(id.Hash())]; !seen {
-				addresses = append(addresses, id.(ID).address)
+	f := func(b *Bucket) {
+		b.RLock()
 
-				visited[string(id.Hash())] = struct{}{}
+		for e := b.Front(); e != nil; e = e.Next() {
+			if id := e.Value.(*ID); id.checksum != checksum {
+				closest = append(closest, id)
 			}
 		}
 
-		bucket.RUnlock()
+		b.RUnlock()
 	}
 
-	return
-}
+	idx := getBucketID(t.self.checksum, checksum)
 
-// bucketID returns the corresponding bucket id based on the id.
-func (t *table) bucketID(id []byte) int {
-	return prefixLen(xor(id, t.self.Hash()))
-}
+	f(t.buckets[idx])
 
-// bucket returns a specific bucket by id.
-func (t *table) bucket(id int) *bucket {
-	if id >= 0 && id < len(t.buckets) {
-		return t.buckets[id]
-	}
+	for i := 1; len(closest) < k && (idx-i >= 0 || idx+i < len(t.buckets)); i++ {
+		if idx-i >= 0 {
+			f(t.buckets[idx-i])
+		}
 
-	return nil
-}
-
-func Table(node *noise.Node) *table {
-	t := node.Get(keyKademliaTable)
-
-	if t == nil {
-		panic("kademlia: node has not enforced identity policy, and thus has no table associated to it")
-	}
-
-	if t, ok := t.(*table); ok {
-		return t
-	}
-
-	panic("kademlia: table associated to node is not an instance of a kademlia table")
-}
-
-// FindClosestPeers returns a list of K peers with in order of ascending XOR distance.
-func FindClosestPeers(t *table, target []byte, K int) (peers []protocol.ID) {
-	bucketID := t.bucketID(xor(target, t.self.Hash()))
-	bucket := t.bucket(bucketID)
-
-	bucket.RLock()
-
-	for e := bucket.Front(); e != nil; e = e.Next() {
-		if !e.Value.(protocol.ID).Equals(t.self) {
-			peers = append(peers, e.Value.(protocol.ID))
+		if idx+i < len(t.buckets) {
+			f(t.buckets[idx+i])
 		}
 	}
 
-	bucket.RUnlock()
-
-	for i := 1; len(peers) < K && (bucketID-i >= 0 || bucketID+i < t.numBuckets); i++ {
-		if bucketID-i >= 0 {
-			other := t.bucket(bucketID - i)
-			other.RLock()
-			for e := other.Front(); e != nil; e = e.Next() {
-				if !e.Value.(protocol.ID).Equals(t.self) {
-					peers = append(peers, e.Value.(protocol.ID))
-				}
-			}
-			other.RUnlock()
-		}
-
-		if bucketID+i < t.numBuckets {
-			other := t.bucket(bucketID + i)
-			other.RLock()
-			for e := other.Front(); e != nil; e = e.Next() {
-				if !e.Value.(protocol.ID).Equals(t.self) {
-					peers = append(peers, e.Value.(protocol.ID))
-				}
-			}
-			other.RUnlock()
-		}
-	}
-
-	// Sort peers by XOR distance.
-	sort.Slice(peers, func(i, j int) bool {
-		return bytes.Compare(xor(peers[i].Hash(), target), xor(peers[j].Hash(), target)) == -1
+	sort.Slice(closest, func(i, j int) bool {
+		return bytes.Compare(xor(closest[i].checksum[:], checksum[:]), xor(closest[j].checksum[:], checksum[:])) == -1
 	})
 
-	if len(peers) > K {
-		peers = peers[:K]
+	if len(closest) > k {
+		closest = closest[:k]
 	}
 
-	return peers
+	return closest
 }
 
-func UpdateTable(node *noise.Node, target protocol.ID) (err error) {
-	opcodeEvict, err := noise.OpcodeFromMessage((*Evict)(nil))
-	if err != nil {
-		panic("skademlia: Evict{} message not registered")
-	}
+func getBucketID(self, target [blake2b.Size256]byte) int {
+	return prefixLen(xor(target[:], self[:]))
+}
 
-	targetPeer := protocol.Peer(node, target)
-	if targetPeer == nil {
-		return errors.New("skademlia: target peer could not be found actually connected to our node")
-	}
+type Bucket struct {
+	sync.RWMutex
+	list.List
+}
 
-	table := Table(node)
+func (b *Bucket) Len() int {
+	b.RLock()
+	size := b.List.Len()
+	b.RUnlock()
 
-	if err = table.Update(target); err != nil {
-		switch err {
-		case ErrBucketFull:
-			bucket := table.bucket(table.bucketID(target.Hash()))
-
-			last := bucket.Back()
-			lastPeer := protocol.Peer(node, last.Value.(protocol.ID))
-
-			if lastPeer == nil {
-				return errors.New("skademlia: last peer in bucket was not actually connected to our node")
-			}
-
-			// If the candidate peer to-be-evicted responds with an 'evict' message back, move him to the front of the bucket
-			// and do not push the target id into the bucket. Else, evict the candidate peer and push the target id to the
-			// front of the bucket.
-			evictLastPeer := func() {
-				lastPeer.Disconnect()
-
-				bucket.Remove(last)
-				bucket.PushFront(target)
-			}
-
-			evictTargetPeer := func() {
-				targetPeer.Disconnect()
-
-				bucket.MoveToFront(last)
-			}
-
-			// Send an 'evict' message to the candidate peer to-be-evicted.
-			err := lastPeer.SendMessage(Evict{})
-
-			if err != nil {
-				evictLastPeer()
-				return nil
-			}
-
-			select {
-			case <-lastPeer.Receive(opcodeEvict):
-				evictTargetPeer()
-			case <-time.After(3 * time.Second):
-				evictLastPeer()
-			}
-		default:
-			return err
-		}
-	}
-
-	return nil
+	return size
 }

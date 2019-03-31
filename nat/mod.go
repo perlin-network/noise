@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Provider represents a barebones generic interface to a NAT traversal network protocol.
+// Provider represents a generic interface to a NAT traversal network protocol.
 type Provider interface {
 	ExternalIP() (net.IP, error)
 	AddMapping(protocol string, externalPort, internalPort uint16, expiry time.Duration) error

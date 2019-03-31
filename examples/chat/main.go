@@ -2,122 +2,146 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
+	"fmt"
 	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/cipher/aead"
-	"github.com/perlin-network/noise/handshake/ecdh"
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/payload"
-	"github.com/perlin-network/noise/protocol"
+	"github.com/perlin-network/noise/cipher"
+	"github.com/perlin-network/noise/handshake"
 	"github.com/perlin-network/noise/skademlia"
-	"github.com/pkg/errors"
+	"net"
 	"os"
 	"strconv"
 	"strings"
 )
 
-/** DEFINE MESSAGES **/
-var (
-	opcodeChat noise.Opcode
-	_          noise.Message = (*chatMessage)(nil)
-)
+func protocol(network *skademlia.Protocol) func() noise.Protocol {
+	return func() noise.Protocol {
+		var ephemeralSharedKey []byte
+		var err error
 
-type chatMessage struct {
-	text string
-}
+		var id *skademlia.ID
 
-func (chatMessage) Read(reader payload.Reader) (noise.Message, error) {
-	text, err := reader.ReadString()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to read chat msg")
-	}
+		var ecdh, aead, skademlia, chat noise.Protocol
 
-	return chatMessage{text: text}, nil
-}
-
-func (m chatMessage) Write() []byte {
-	return payload.NewWriter(nil).WriteString(m.text).Bytes()
-}
-
-/** ENTRY POINT **/
-func setup(node *noise.Node) {
-	opcodeChat = noise.RegisterMessage(noise.NextAvailableOpcode(), (*chatMessage)(nil))
-
-	node.OnPeerInit(func(node *noise.Node, peer *noise.Peer) error {
-		peer.OnConnError(func(node *noise.Node, peer *noise.Peer, err error) error {
-			log.Info().Msgf("Got an error: %v", err)
-
-			return nil
-		})
-
-		peer.OnDisconnect(func(node *noise.Node, peer *noise.Peer) error {
-			log.Info().Msgf("Peer %v has disconnected.", peer.RemoteIP().String()+":"+strconv.Itoa(int(peer.RemotePort())))
-
-			return nil
-		})
-
-		go func() {
-			for {
-				msg := <-peer.Receive(opcodeChat)
-				log.Info().Msgf("[%s]: %s", protocol.PeerID(peer), msg.(chatMessage).text)
+		ecdh = func(ctx noise.Context) (noise.Protocol, error) {
+			if ephemeralSharedKey, err = handshake.NewECDH().Handshake(ctx); err != nil {
+				return nil, err
 			}
-		}()
 
-		return nil
-	})
+			return aead, nil
+		}
+
+		aead = func(ctx noise.Context) (noise.Protocol, error) {
+			if err := cipher.NewAEAD(ephemeralSharedKey).Setup(ctx); err != nil {
+				return nil, err
+			}
+
+			return skademlia, nil
+		}
+
+		skademlia = func(ctx noise.Context) (noise.Protocol, error) {
+			if id, err = network.Handshake(ctx); err != nil {
+				return nil, err
+			}
+
+			return chat, nil
+		}
+
+		chat = func(ctx noise.Context) (noise.Protocol, error) {
+			var msg []byte
+
+			for {
+				select {
+				case <-ctx.Done():
+					return nil, nil
+				case ctx := <-ctx.Peer().Recv(0x16):
+					msg = ctx.Bytes()
+				}
+
+				fmt.Printf("%s> %s\n", id.Address(), msg)
+			}
+		}
+
+		return ecdh
+	}
 }
 
 func main() {
-	hostFlag := flag.String("h", "127.0.0.1", "host to listen for peers on")
-	portFlag := flag.Uint("p", 3000, "port to listen for peers on")
 	flag.Parse()
 
-	params := noise.DefaultParams()
-	//params.NAT = nat.NewPMP()
-	params.Keys = skademlia.RandomKeys()
-	params.Host = *hostFlag
-	params.Port = uint16(*portFlag)
-
-	node, err := noise.NewNode(params)
+	keys, err := skademlia.NewKeys(8, 8)
 	if err != nil {
 		panic(err)
 	}
-	defer node.Kill()
 
-	p := protocol.New()
-	p.Register(ecdh.New())
-	p.Register(aead.New())
-	p.Register(skademlia.New())
-	p.Enforce(node)
+	// Hooking Noise onto a net.Listener.
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		panic(err)
+	}
 
-	setup(node)
-	go node.Listen()
+	network := skademlia.New(keys, net.JoinHostPort("127.0.0.1", strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)))
+	network.WithC1(8)
+	network.WithC2(8)
 
-	log.Info().Msgf("Listening for peers on port %d.", node.ExternalPort())
+	node := noise.NewNode(listener)
+	node.FollowProtocol(protocol(network))
+	defer node.Shutdown()
 
-	if len(flag.Args()) > 0 {
-		for _, address := range flag.Args() {
+	go func() {
+		fmt.Println("Listening for connections on port:", listener.Addr().(*net.TCPAddr).Port)
+
+		for {
+			conn, err := listener.Accept()
+
+			if err != nil {
+				break
+			}
+
+			peer := node.Wrap(conn)
+			go peer.Start()
+		}
+	}()
+
+	if addresses := flag.Args(); len(addresses) > 0 {
+		for _, address := range addresses {
 			peer, err := node.Dial(address)
+
 			if err != nil {
 				panic(err)
 			}
 
-			skademlia.WaitUntilAuthenticated(peer)
+			peer.WaitFor(skademlia.SignalHandshakeComplete)
 		}
-
-		peers := skademlia.FindNode(node, protocol.NodeID(node).(skademlia.ID), skademlia.BucketSize(), 8)
-		log.Info().Msgf("Bootstrapped with peers: %+v", peers)
 	}
 
+	if peers := network.Bootstrap(node); len(peers) > 0 {
+		var ids []string
+
+		for _, id := range peers {
+			ids = append(ids, id.String())
+		}
+
+		fmt.Println("Bootstrapped to:", strings.Join(ids, ", "))
+	}
+
+	// Read input and broadcast out to peers.
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
-		txt, err := reader.ReadString('\n')
+		line, err := reader.ReadBytes('\n')
 
 		if err != nil {
 			panic(err)
 		}
 
-		skademlia.BroadcastAsync(node, chatMessage{text: strings.TrimSpace(txt)})
+		for _, peer := range network.Peers(node) {
+			err = peer.Send(0x16, bytes.TrimSpace(line))
+
+			if err != nil {
+				panic(err)
+			}
+		}
 	}
 }

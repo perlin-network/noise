@@ -1,8 +1,0 @@
-[book]
-authors = ["Kenta Iwasaki"]
-multilingual = false
-src = "src"
-title = "The Noise Book"
-
-[output.html]
-mathjax-support = true

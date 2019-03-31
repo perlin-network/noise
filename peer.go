@@ -1,640 +1,443 @@
 package noise
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/binary"
-	"github.com/perlin-network/noise/callbacks"
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/payload"
+	"github.com/heptio/workgroup"
+	"github.com/perlin-network/noise/wire"
 	"github.com/pkg/errors"
 	"io"
+	"log"
+	"math/rand"
 	"net"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-type receiveHandle struct {
-	hub  chan Message
-	lock chan struct{}
-}
-
-func (r *receiveHandle) Unlock() {
-	<-r.lock
-}
-
-type sendHandle struct {
-	payload []byte
-	result  chan error
-}
-
 type Peer struct {
-	node *Node
-	conn net.Conn
+	m Mux
 
-	onConnErrorCallbacks  *callbacks.SequentialCallbackManager
-	onDisconnectCallbacks *callbacks.SequentialCallbackManager
+	n *Node
 
-	onEncodeHeaderCallbacks *callbacks.ReduceCallbackManager
-	onEncodeFooterCallbacks *callbacks.ReduceCallbackManager
+	addr net.Addr
 
-	onDecodeHeaderCallbacks *callbacks.SequentialCallbackManager
-	onDecodeFooterCallbacks *callbacks.SequentialCallbackManager
+	w io.Writer
+	r io.Reader
 
-	beforeMessageSentCallbacks     *callbacks.ReduceCallbackManager
-	beforeMessageReceivedCallbacks *callbacks.ReduceCallbackManager
+	c Conn
 
-	afterMessageSentCallbacks     *callbacks.SequentialCallbackManager
-	afterMessageReceivedCallbacks *callbacks.SequentialCallbackManager
+	send chan evtSend
 
-	sendQueue     chan sendHandle
-	receiveQueues sync.Map // map[Opcode]chan receiveHandle
+	recv     map[uint64]map[byte]evtRecv
+	recvLock sync.RWMutex
 
-	kill     chan *sync.WaitGroup
-	killOnce uint32
+	newMuxLock sync.Mutex
 
-	metadata sync.Map
+	afterSend, afterRecv         []func()
+	afterSendLock, afterRecvLock sync.RWMutex
+
+	signals     map[string]chan struct{}
+	signalsLock sync.Mutex
+
+	errs     []ErrorInterceptor
+	errsLock sync.RWMutex
+
+	killed chan struct{}
+
+	stop     chan error
+	stopOnce sync.Once
+
+	codec atomic.Value // *wire.Codec
 }
 
-func newPeer(node *Node, conn net.Conn) *Peer {
-	return &Peer{
-		node: node,
-		conn: conn,
+func (p *Peer) Start() {
+	var g workgroup.Group
 
-		onConnErrorCallbacks:  callbacks.NewSequentialCallbackManager(),
-		onDisconnectCallbacks: callbacks.NewSequentialCallbackManager(),
+	g.Add(continuously(p.sendMessages()))
+	g.Add(continuously(p.receiveMessages()))
 
-		onEncodeHeaderCallbacks: callbacks.NewReduceCallbackManager(),
-		onEncodeFooterCallbacks: callbacks.NewReduceCallbackManager(),
-
-		onDecodeHeaderCallbacks: callbacks.NewSequentialCallbackManager(),
-		onDecodeFooterCallbacks: callbacks.NewSequentialCallbackManager(),
-
-		beforeMessageReceivedCallbacks: callbacks.NewReduceCallbackManager().UnsafelySetReverse(),
-		beforeMessageSentCallbacks:     callbacks.NewReduceCallbackManager(),
-
-		afterMessageReceivedCallbacks: callbacks.NewSequentialCallbackManager(),
-		afterMessageSentCallbacks:     callbacks.NewSequentialCallbackManager(),
-
-		kill: make(chan *sync.WaitGroup, 2),
-
-		sendQueue: make(chan sendHandle, 128),
+	if p.n != nil && p.n.p != nil {
+		g.Add(p.followProtocol)
 	}
-}
 
-func (p *Peer) init() {
-	go p.spawnSendWorker()
-	go p.spawnReceiveWorker()
-}
+	g.Add(p.cleanup)
 
-func (p *Peer) spawnSendWorker() {
-	for {
-		var cmd sendHandle
+	if err := g.Run(); err != nil {
+		p.reportError(err)
 
-		select {
-		case wg := <-p.kill:
-			wg.Done()
-			return
-		case cmd = <-p.sendQueue:
-		}
-
-		payload := cmd.payload
-
-		pp, errs := p.beforeMessageSentCallbacks.RunCallbacks(payload, p.node)
-		if len(errs) > 0 {
-			if cmd.result != nil {
-				var err = errs[0]
-
-				if len(errs) > 1 {
-					for _, e := range errs[1:] {
-						err = errors.Wrap(err, e.Error())
-					}
-				}
-
-				cmd.result <- errors.Wrap(err, "got errors running BeforeMessageSent callbacks")
-				close(cmd.result)
-			}
-		}
-		payload = pp.([]byte)
-
-		size := len(payload)
-
-		// Prepend message length to packet.
-		buf := make([]byte, binary.MaxVarintLen64)
-		prepended := binary.PutUvarint(buf[:], uint64(size))
-
-		buf = append(buf[:prepended], payload[:]...)
-
-		copied, err := io.Copy(p.conn, bytes.NewReader(buf))
-
-		if copied != int64(size+prepended) {
-			if cmd.result != nil {
-				cmd.result <- errors.Errorf("only written %d bytes when expected to write %d bytes to peer", copied, size+prepended)
-				close(cmd.result)
-			}
-			continue
-		}
-
-		if err != nil {
-			if cmd.result != nil {
-				cmd.result <- errors.Wrap(err, "failed to send message to peer")
-				close(cmd.result)
-			}
-			continue
-		}
-
-		if errs := p.afterMessageSentCallbacks.RunCallbacks(p.node); len(errs) > 0 {
-			if cmd.result != nil {
-				var err = errs[0]
-
-				if len(errs) > 1 {
-					for _, e := range errs[1:] {
-						err = errors.Wrap(err, e.Error())
-					}
-				}
-
-				cmd.result <- errors.Wrap(err, "got errors running AfterMessageSent callbacks")
-				close(cmd.result)
-			}
-			continue
-		}
-
-		if cmd.result != nil {
-			cmd.result <- nil
-			close(cmd.result)
-		}
-	}
-}
-
-func (p *Peer) spawnReceiveWorker() {
-	reader := bufio.NewReader(p.conn)
-
-	for {
-		select {
-		case wg := <-p.kill:
-			wg.Done()
-			return
+		switch errors.Cause(err) {
+		case ErrDisconnect:
+		case io.ErrClosedPipe:
+		case io.EOF:
 		default:
-		}
-
-		size, err := binary.ReadUvarint(reader)
-		if err != nil {
-			if errors.Cause(err) != io.EOF && !strings.Contains(errors.Cause(err).Error(), "use of closed network connection") && !strings.Contains(errors.Cause(err).Error(), "read: connection reset by peer") {
-				p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrap(err, "failed to read message size"))
-			}
-
-			p.Disconnect()
-			continue
-		}
-
-		if size > p.node.maxMessageSize {
-			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Errorf("exceeded max message size; got size %d", size))
-
-			p.Disconnect()
-			continue
-		}
-
-		buf := make([]byte, int(size))
-
-		seen, err := io.ReadFull(reader, buf)
-		if err != nil {
-			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrap(err, "failed to read remaining message contents"))
-
-			p.Disconnect()
-			continue
-		}
-
-		if seen < int(size) {
-			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Errorf("only read %d bytes when expected to read %d from peer", seen, size))
-
-			p.Disconnect()
-			continue
-		}
-
-		b, errs := p.beforeMessageReceivedCallbacks.RunCallbacks(buf, p.node)
-		if len(errs) > 0 {
-			log.Warn().Errs("errors", errs).Msg("Got errors running BeforeMessageReceived callbacks.")
-
-			p.Disconnect()
-			continue
-		}
-		buf = b.([]byte)
-
-		opcode, msg, err := p.DecodeMessage(buf)
-
-		if opcode == OpcodeNil || err != nil {
-			p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrap(err, "failed to decode message"))
-
-			p.Disconnect()
-			continue
-		}
-
-		c, _ := p.receiveQueues.LoadOrStore(opcode, receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
-		recv := c.(receiveHandle)
-
-		select {
-		case recv.hub <- msg:
-			recv.lock <- struct{}{}
-			<-recv.lock
-		case <-time.After(p.node.receiveMessageTimeout):
-			p.Disconnect()
-			continue
-		}
-
-		if errs := p.afterMessageReceivedCallbacks.RunCallbacks(p.node); len(errs) > 0 {
-			log.Warn().Errs("errors", errs).Msg("Got errors running AfterMessageReceived callbacks.")
-
-			p.Disconnect()
-			continue
+			log.Printf("%+v\n", err)
 		}
 	}
+
+	p.deregisterFromNode()
+	p.killed <- struct{}{}
 }
 
-// SendMessage sends a message whose type is registered with Noise to a specified peer. Calling
-// this function will block the current goroutine until the message is successfully sent. In
-// order to not block, refer to `SendMessageAsync(message Message) <-chan error`.
-//
-// It is guaranteed that all messages are sent in a linearized order.
-//
-// It returns an error should it take too long to send a message, the message is not registered
-// with Noise, or there are message that are blocking the peers send worker.
-func (p *Peer) SendMessage(message Message) error {
-	payload, err := p.EncodeMessage(message)
-	if err != nil {
-		return errors.Wrap(err, "failed to serialize message contents to be sent to a peer")
-	}
+func (p *Peer) Disconnect(err error) {
+	p.stopOnce.Do(func() {
+		p.reportError(err)
 
-	cmd := sendHandle{payload: payload, result: make(chan error, 1)}
+		p.deregisterFromNode()
+		p.stop <- err
 
-	select {
-	case <-time.After(p.node.sendWorkerBusyTimeout):
-		close(cmd.result)
-		return errors.New("send message queue is full and not being processed")
-	case p.sendQueue <- cmd:
-	}
-
-	select {
-	case <-time.After(p.node.sendMessageTimeout):
-		return errors.New("timed out attempting to send a message")
-	case err = <-cmd.result:
-		return err
-	}
-}
-
-// SendMessageAsync sends a message whose type is registered with Noise to a specified peer. Calling
-// this function will not block the current goroutine until the message is successfully sent. In
-// order to block, refer to `SendMessage(message Message) error`.
-//
-// It is guaranteed that all messages are sent in a linearized order.
-//
-// It returns an error should the message not be registered with Noise, or there are message that are
-// blocking the peers send worker.
-func (p *Peer) SendMessageAsync(message Message) <-chan error {
-	result := make(chan error, 1)
-
-	payload, err := p.EncodeMessage(message)
-	if err != nil {
-		result <- errors.Wrap(err, "failed to serialize message contents to be sent to a peer")
-		return result
-	}
-
-	cmd := sendHandle{payload: payload, result: result}
-
-	select {
-	case <-time.After(p.node.sendWorkerBusyTimeout):
-		result <- errors.New("send message queue is full and not being processed")
-		return result
-	case p.sendQueue <- cmd:
-	}
-
-	return result
-}
-
-// BeforeMessageSent registers a callback to be called before a message
-// is sent to a specified peer.
-func (p *Peer) BeforeMessageSent(c BeforeMessageSentCallback) {
-	p.beforeMessageSentCallbacks.RegisterCallback(func(in interface{}, params ...interface{}) (i interface{}, e error) {
-		if len(params) != 1 {
-			panic(errors.Errorf("noise: BeforeMessageSent received unexpected args %v", params))
+		if len(p.killed) == 1 {
+			<-p.killed
 		}
-
-		node, ok := params[0].(*Node)
-		if !ok {
-			return in.([]byte), nil
-		}
-
-		return c(node, p, in.([]byte))
 	})
 }
 
-// BeforeMessageReceived registers a callback to be called before a message
-// is to be received from a specified peer.
-func (p *Peer) BeforeMessageReceived(c BeforeMessageReceivedCallback) {
-	p.beforeMessageReceivedCallbacks.RegisterCallback(func(in interface{}, params ...interface{}) (i interface{}, e error) {
-		if len(params) != 1 {
-			panic(errors.Errorf("noise: BeforeMessageReceived received unexpected args %v", params))
-		}
-
-		node, ok := params[0].(*Node)
-		if !ok {
-			return in.([]byte), nil
-		}
-
-		return c(node, p, in.([]byte))
-	})
+// UpdateWireCodec atomically updates the message codec a peer utilizes in
+// amidst sending/receiving messages.
+func (p *Peer) UpdateWireCodec(codec *wire.Codec) {
+	p.codec.Store(codec)
 }
 
-// AfterMessageSent registers a callback to be called after a message
-// is sent to a specified peer.
-func (p *Peer) AfterMessageSent(c AfterMessageSentCallback) {
-	p.afterMessageSentCallbacks.RegisterCallback(func(params ...interface{}) error {
-		if len(params) != 1 {
-			panic(errors.Errorf("noise: AfterMessageSent received unexpected args %v", params))
-		}
-
-		node, ok := params[0].(*Node)
-		if !ok {
-			return nil
-		}
-
-		return c(node, p)
-	})
+func (p *Peer) WireCodec() *wire.Codec {
+	return p.codec.Load().(*wire.Codec)
 }
 
-// AfterMessageReceived registers a callback to be called after a message
-// is to be received from a specified peer.
-func (p *Peer) AfterMessageReceived(c AfterMessageReceivedCallback) {
-	p.afterMessageReceivedCallbacks.RegisterCallback(func(params ...interface{}) error {
-		if len(params) != 1 {
-			panic(errors.Errorf("noise: AfterMessageReceived received unexpected args %v", params))
-		}
-
-		node, ok := params[0].(*Node)
-		if !ok {
-			return nil
-		}
-
-		return c(node, p)
-	})
+func (p *Peer) SetWriteDeadline(t time.Time) error {
+	return p.c.SetWriteDeadline(t)
 }
 
-// OnDecodeHeader registers a callback that is fed in the contents of the
-// header portion of an incoming message from a specified peer.
-func (p *Peer) OnDecodeHeader(c OnPeerDecodeHeaderCallback) {
-	p.onDecodeHeaderCallbacks.RegisterCallback(func(params ...interface{}) error {
-		if len(params) != 2 {
-			panic(errors.Errorf("noise: OnDecodeHeader received unexpected args %v", params))
-		}
-
-		node, ok := params[0].(*Node)
-		if !ok {
-			return nil
-		}
-
-		reader, ok := params[1].(payload.Reader)
-
-		if !ok {
-			return nil
-		}
-
-		return c(node, p, reader)
-	})
-}
-
-// OnDecodeFooter registers a callback that is fed in the contents of the
-// footer portion of an incoming message from a specified peer.
-func (p *Peer) OnDecodeFooter(c OnPeerDecodeFooterCallback) {
-	p.onDecodeFooterCallbacks.RegisterCallback(func(params ...interface{}) error {
-		if len(params) != 3 {
-			panic(errors.Errorf("noise: OnDecodeFooter received unexpected args %v", params))
-		}
-
-		node, ok := params[0].(*Node)
-		if !ok {
-			return nil
-		}
-
-		msg, ok := params[1].([]byte)
-
-		if !ok {
-			return nil
-		}
-
-		reader, ok := params[2].(payload.Reader)
-
-		if !ok {
-			return nil
-		}
-
-		return c(node, p, msg, reader)
-	})
-}
-
-// OnEncodeHeader registers a callback that is fed in the raw contents of
-// a message to be sent, which then outputs bytes that are to be appended
-// to the header of an outgoing message.
-func (p *Peer) OnEncodeHeader(c AfterMessageEncodedCallback) {
-	p.onEncodeHeaderCallbacks.RegisterCallback(func(header interface{}, params ...interface{}) (i interface{}, e error) {
-		if len(params) != 2 {
-			panic(errors.Errorf("noise: OnEncodeHeader received unexpected args %v", params))
-		}
-
-		node, ok := params[0].(*Node)
-		if !ok {
-			return header.([]byte), errors.New("noise: OnEncodeHeader did not receive 1st param (node *noise.Node)")
-		}
-
-		msg, ok := params[1].([]byte)
-
-		if !ok {
-			return header.([]byte), errors.New("noise: OnEncodeHeader did not receive 2nd param (msg []byte)")
-		}
-
-		return c(node, p, header.([]byte), msg)
-	})
-}
-
-// OnEncodeFooter registers a callback that is fed in the raw contents of
-// a message to be sent, which then outputs bytes that are to be appended
-// to the footer of an outgoing message.
-func (p *Peer) OnEncodeFooter(c AfterMessageEncodedCallback) {
-	p.onEncodeFooterCallbacks.RegisterCallback(func(footer interface{}, params ...interface{}) (i interface{}, e error) {
-		if len(params) != 2 {
-			panic(errors.Errorf("noise: OnEncodeFooter received unexpected args %v", params))
-		}
-
-		node, ok := params[0].(*Node)
-		if !ok {
-			return footer.([]byte), errors.New("noise: OnEncodeHeader did not receive 1st param (node *noise.Node)")
-		}
-
-		msg, ok := params[1].([]byte)
-
-		if !ok {
-			return footer.([]byte), errors.New("noise: OnEncodeHeader did not receive (msg []byte)")
-		}
-
-		return c(node, p, footer.([]byte), msg)
-	})
-}
-
-// OnConnError registers a callback for whenever something goes wrong with the
-// connection to our peer.
-func (p *Peer) OnConnError(c OnPeerErrorCallback) {
-	p.onConnErrorCallbacks.RegisterCallback(func(params ...interface{}) error {
-		if len(params) != 2 {
-			panic(errors.Errorf("noise: OnConnError received unexpected args %v", params))
-		}
-
-		node, ok := params[0].(*Node)
-		if !ok {
-			return nil
-		}
-
-		err, ok := params[1].(error)
-
-		if !ok {
-			return nil
-		}
-
-		return c(node, p, errors.Wrap(err, "peer conn reported error"))
-	})
-}
-
-// OnDisconnect registers a callback for whenever the peer disconnects.
-func (p *Peer) OnDisconnect(srcCallbacks ...OnPeerDisconnectCallback) {
-	targetCallbacks := make([]callbacks.Callback, 0, len(srcCallbacks))
-
-	for _, c := range srcCallbacks {
-		c := c
-		targetCallbacks = append(targetCallbacks, func(params ...interface{}) error {
-			node, ok := params[0].(*Node)
-			if !ok {
-				panic("params[0] is not a Node")
-			}
-
-			return c(node, p)
-		})
-	}
-
-	p.onDisconnectCallbacks.RegisterCallback(targetCallbacks...)
-}
-
-func (p *Peer) Receive(o Opcode) <-chan Message {
-	c, _ := p.receiveQueues.LoadOrStore(o, receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
-	return c.(receiveHandle).hub
-}
-
-func (p *Peer) Disconnect() {
-	if !atomic.CompareAndSwapUint32(&p.killOnce, 0, 1) {
-		return
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	for i := 0; i < 2; i++ {
-		p.kill <- &wg
-	}
-
-	if err := p.conn.Close(); err != nil {
-		p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrapf(err, "got errors closing peer connection"))
-	}
-
-	wg.Wait()
-	close(p.kill)
-
-	p.onDisconnectCallbacks.RunCallbacks(p.node)
-}
-
-func (p *Peer) DisconnectAsync() <-chan struct{} {
-	signal := make(chan struct{})
-
-	if !atomic.CompareAndSwapUint32(&p.killOnce, 0, 1) {
-		close(signal)
-		return signal
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	for i := 0; i < 2; i++ {
-		p.kill <- &wg
-	}
-
-	if err := p.conn.Close(); err != nil {
-		p.onConnErrorCallbacks.RunCallbacks(p.node, errors.Wrapf(err, "got errors closing peer connection"))
-	}
-
-	go func() {
-		wg.Wait()
-		close(p.kill)
-
-		p.onDisconnectCallbacks.RunCallbacks(p.node)
-
-		close(signal)
-	}()
-
-	return signal
-}
-
-func (p *Peer) LocalIP() net.IP {
-	return p.node.transport.IP(p.conn.LocalAddr())
-}
-
-func (p *Peer) LocalPort() uint16 {
-	return p.node.transport.Port(p.conn.LocalAddr())
-}
-
-func (p *Peer) RemoteIP() net.IP {
-	return p.node.transport.IP(p.conn.RemoteAddr())
-}
-
-func (p *Peer) RemotePort() uint16 {
-	return p.node.transport.Port(p.conn.RemoteAddr())
-}
-
-// Set sets a metadata entry given a key-value pair on our node.
-func (p *Peer) Set(key string, val interface{}) {
-	p.metadata.Store(key, val)
-}
-
-// Get returns the value to a metadata key from our node, or otherwise returns nil should
-// there be no corresponding value to a provided key.
-func (p *Peer) Get(key string) interface{} {
-	val, _ := p.metadata.Load(key)
-	return val
-}
-
-func (p *Peer) LoadOrStore(key string, val interface{}) interface{} {
-	val, _ = p.metadata.LoadOrStore(key, val)
-	return val
-}
-
-func (p *Peer) Has(key string) bool {
-	_, exists := p.metadata.Load(key)
-	return exists
-}
-
-func (p *Peer) Delete(key string) {
-	p.metadata.Delete(key)
+func (p *Peer) SetReadDeadline(t time.Time) error {
+	return p.c.SetReadDeadline(t)
 }
 
 func (p *Peer) Node() *Node {
-	return p.node
+	return p.n
 }
 
-func (p *Peer) LockOnReceive(opcode Opcode) receiveHandle {
-	c, _ := p.receiveQueues.LoadOrStore(opcode, receiveHandle{hub: make(chan Message), lock: make(chan struct{}, 1)})
-	recv := c.(receiveHandle)
-
-	recv.lock <- struct{}{}
-
-	return recv
+func (p *Peer) Addr() net.Addr {
+	return p.addr
 }
 
-func (p *Peer) SetNode(node *Node) {
-	p.node = node
+// Mux establishes a new multiplexed session with a peer for the
+// purpose of sending/receiving messages concurrently.
+func (p *Peer) Mux() Mux {
+	rand.Seed(time.Now().UnixNano())
+
+	var id uint64
+
+	for {
+		id = rand.Uint64()
+
+		if id == 0 {
+			continue
+		}
+
+		p.recvLock.RLock()
+		_, exists := p.recv[id]
+		p.recvLock.RUnlock()
+
+		if !exists {
+			break
+		}
+	}
+
+	p.initMuxQueue(id)
+
+	return Mux{id: id, peer: p}
+}
+
+// Send invokes Mux.Send on a peers default mux session.
+func (p *Peer) Send(opcode byte, msg []byte) error {
+	return p.m.Send(opcode, msg)
+}
+
+// SendWithTimeout invokes Mux.SendWithTimeout on a peers default mux session.
+func (p *Peer) SendWithTimeout(opcode byte, msg []byte, timeout time.Duration) error {
+	return p.m.SendWithTimeout(opcode, msg, timeout)
+}
+
+// Recv invokes Mux.Recv on a peers default mux session.
+func (p *Peer) Recv(opcode byte) <-chan Wire {
+	return p.m.Recv(opcode)
+}
+
+// LockOnRecv invokes Mux.LockOnRecv on a peers default mux session.
+func (p *Peer) LockOnRecv(opcode byte) Locker {
+	return p.m.LockOnRecv(opcode)
+}
+
+func (p *Peer) AfterSend(f func()) {
+	p.afterSendLock.Lock()
+	p.afterSend = append(p.afterSend, f)
+	p.afterSendLock.Unlock()
+}
+
+func (p *Peer) AfterRecv(f func()) {
+	p.afterRecvLock.Lock()
+	p.afterRecv = append(p.afterRecv, f)
+	p.afterRecvLock.Unlock()
+}
+
+func (p *Peer) RegisterSignal(name string) func() {
+	p.signalsLock.Lock()
+	signal, exists := p.signals[name]
+	if !exists {
+		signal = make(chan struct{})
+		p.signals[name] = signal
+	}
+	p.signalsLock.Unlock()
+
+	return func() {
+		var closed bool
+
+		select {
+		case _, ok := <-signal:
+			if !ok {
+				closed = true
+			}
+		default:
+		}
+
+		if !closed {
+			close(signal)
+		}
+	}
+}
+
+func (p *Peer) WaitFor(name string) {
+	p.signalsLock.Lock()
+	signal, exists := p.signals[name]
+	if !exists {
+		signal = make(chan struct{})
+		p.signals[name] = signal
+	}
+	p.signalsLock.Unlock()
+
+	<-signal
+}
+
+func (p *Peer) InterceptErrors(i ErrorInterceptor) {
+	p.errsLock.Lock()
+	p.errs = append(p.errs, i)
+	p.errsLock.Unlock()
+}
+
+func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
+	p := &Peer{
+		n:       n,
+		addr:    addr,
+		w:       w,
+		r:       r,
+		c:       c,
+		send:    make(chan evtSend, 1024),
+		recv:    make(map[uint64]map[byte]evtRecv),
+		signals: make(map[string]chan struct{}),
+		stop:    make(chan error, 1),
+		killed:  make(chan struct{}, 1),
+	}
+
+	p.m = Mux{peer: p}
+
+	codec := DefaultProtocol.Clone()
+	p.UpdateWireCodec(&codec)
+
+	return p
+}
+
+// getMuxQueue returns a map of message queues pertaining to a specified mux ID, if the
+// mux ID is registered beforehand.
+//
+// If the mux was not registered beforehand, by default, it returns a map of message queues
+// pertaining to the zero mux (mux ID zero).
+//
+// If the zero mux was not yet initialized, it additionally atomically registers a map of
+// message queues to mux ID zero.
+//
+// It additionally registers a new buffered channel for an opcode under a specified
+// mux ID if there does not exist one beforehand.
+func (p *Peer) getMuxQueue(mux uint64, opcode byte) evtRecv {
+	p.newMuxLock.Lock()
+	p.recvLock.Lock()
+
+	queues, registered := p.recv[mux]
+
+	if !registered {
+		if _, init := p.recv[0]; !init {
+			p.recv[0] = make(map[byte]evtRecv)
+		}
+
+		queues = p.recv[0]
+	}
+
+	queue, exists := queues[opcode]
+
+	if !exists {
+		queue = evtRecv{ch: make(chan Wire, 128), lock: make(chan struct{}, 1)}
+		queues[opcode] = queue
+	}
+
+	p.recvLock.Unlock()
+	p.newMuxLock.Unlock()
+
+	return queue
+}
+
+func (p *Peer) initMuxQueue(mux uint64) {
+	p.newMuxLock.Lock()
+	p.recvLock.Lock()
+
+	if _, exists := p.recv[mux]; !exists {
+		p.recv[mux] = make(map[byte]evtRecv)
+
+		// Move all messages from our zero mux, originally intended for our
+		// mux channel, to our newly generated mux.
+
+		for opcode, queue := range p.recv[0] {
+			if _, exists := p.recv[mux][opcode]; !exists {
+				p.recv[mux][opcode] = evtRecv{ch: make(chan Wire, 128), lock: make(chan struct{}, 1)}
+			}
+
+			for n := len(queue.ch); n > 0; n-- {
+				e := <-queue.ch
+
+				if e.m.id == mux {
+					p.recv[mux][opcode].ch <- e
+				} else {
+					queue.ch <- e
+				}
+			}
+		}
+	}
+
+	p.recvLock.Unlock()
+	p.newMuxLock.Unlock()
+}
+
+func (p *Peer) reportError(err error) {
+	if err == nil {
+		return
+	}
+
+	p.errsLock.RLock()
+	for _, i := range p.errs {
+		i(err)
+	}
+	p.errsLock.RUnlock()
+}
+
+func (p *Peer) deregisterFromNode() {
+	if p.n != nil && p.addr != nil {
+		p.n.peersLock.Lock()
+		delete(p.n.peers, p.addr.String())
+		p.n.peersLock.Unlock()
+	}
+}
+
+func (p *Peer) cleanup(stop <-chan struct{}) error {
+	err := ErrDisconnect
+
+	select {
+	case err = <-p.stop:
+	case <-stop:
+	}
+
+	if p.c != nil {
+		if err := p.c.Close(); err != nil {
+			return err
+		}
+	}
+
+	return err
+}
+
+func (p *Peer) followProtocol(stop <-chan struct{}) (err error) {
+	initial := p.n.p()
+
+	for state := initial; state != nil; state, err = state(newContext(p, stop)) {
+		if err != nil {
+			return err
+		}
+	}
+
+	<-stop
+	return
+}
+
+func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
+	return func(stop <-chan struct{}) error {
+		var evt evtSend
+
+		select {
+		case <-stop:
+			return nil
+		case evt = <-p.send:
+		}
+
+		state := wire.AcquireState()
+		defer wire.ReleaseState(state)
+
+		state.SetByte(WireKeyOpcode, evt.opcode)
+		state.SetUint64(WireKeyMuxID, evt.mux)
+		state.SetMessage(evt.msg)
+
+		err := p.WireCodec().DoWrite(p.w, state)
+		evt.done <- err
+
+		if err != nil {
+			return nil
+		}
+
+		p.afterSendLock.RLock()
+		for _, f := range p.afterSend {
+			f()
+		}
+		p.afterSendLock.RUnlock()
+
+		return nil
+	}
+}
+
+func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
+	return func(stop <-chan struct{}) error {
+		select {
+		case <-stop:
+			return nil
+		default:
+		}
+
+		state := wire.AcquireState()
+		defer wire.ReleaseState(state)
+
+		if err := p.WireCodec().DoRead(p.r, state); err != nil {
+			return err
+		}
+
+		opcode := state.Byte(WireKeyOpcode)
+		mux := state.Uint64(WireKeyMuxID)
+
+		if opcode == 0x00 {
+			return nil
+		}
+
+		hub := p.getMuxQueue(mux, opcode)
+
+		if len(hub.ch) == cap(hub.ch) {
+			<-hub.ch // If the queue is full, pop from the front and push the new message to the back.
+		}
+
+		hub.ch <- Wire{m: Mux{id: mux, peer: p}, o: opcode, b: state.Message()}
+
+		hub.lock <- struct{}{}
+		<-hub.lock
+
+		p.afterRecvLock.RLock()
+		for _, f := range p.afterRecv {
+			f()
+		}
+		p.afterRecvLock.RUnlock()
+
+		return nil
+	}
+}
+
+func (p *Peer) Ctx() Context {
+	return Context{n: p.n, p: p, d: p.killed}
 }

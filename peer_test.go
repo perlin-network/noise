@@ -1,263 +1,219 @@
 package noise
 
 import (
-	"bufio"
+	"bytes"
+	"crypto/rand"
 	"encoding/binary"
-	"fmt"
-	"github.com/perlin-network/noise/identity/ed25519"
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/payload"
-	"github.com/perlin-network/noise/transport"
+	"github.com/fortytw2/leaktest"
+	"github.com/perlin-network/noise/internal/iotest"
+	"github.com/perlin-network/noise/wire"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"net"
-	"sync"
-	"sync/atomic"
 	"testing"
+	"time"
 )
 
-type testMsg struct {
-	Text string
+func TestPeerDisconnectsProperly(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	conn, _ := net.Pipe()
+
+	p := newPeer(nil, nil, conn, conn, conn)
+
+	go p.Disconnect(nil)
+	p.Start()
+
+	conn, _ = net.Pipe()
+
+	p = newPeer(nil, nil, conn, conn, conn)
+
+	go p.Start()
+	go p.Disconnect(nil)
 }
 
-func (testMsg) Read(reader payload.Reader) (Message, error) {
-	text, err := reader.ReadString()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to read test message")
+var testProtocol = &wire.Codec{
+	PrefixSize: true,
+	Read: func(wire *wire.Reader, state *wire.State) {
+		state.SetByte(WireKeyOpcode, wire.ReadByte())
+		state.SetMessage(wire.ReadBytes(wire.BytesLeft()))
+	},
+	Write: func(wire *wire.Writer, state *wire.State) {
+		wire.WriteByte(state.Byte(WireKeyOpcode))
+		wire.WriteBytes(state.Message())
+	},
+}
+
+func TestPeerSendsCorrectly(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	w := bytes.NewBuffer(nil)
+
+	c, _ := net.Pipe()
+
+	p := newPeer(nil, nil, w, new(iotest.NopReader), c)
+	defer p.Disconnect(nil)
+
+	p.UpdateWireCodec(testProtocol)
+
+	go p.Start()
+
+	opcode := byte(0x01)
+	msg := []byte("lorem ipsum")
+
+	assert.NoError(t, p.Send(opcode, msg))
+
+	r := bytes.NewReader(w.Bytes())
+
+	var receivedLength uint64
+	assert.NoError(t, binary.Read(r, binary.BigEndian, &receivedLength))
+	assert.Equal(t, uint64(len(msg)+1), receivedLength)
+
+	var receivedOpcode byte
+	assert.NoError(t, binary.Read(r, binary.BigEndian, &receivedOpcode))
+	assert.Equal(t, opcode, receivedOpcode)
+
+	receivedBuf := make([]byte, len(msg))
+
+	n, err := r.Read(receivedBuf)
+	assert.NoError(t, err)
+	assert.Equal(t, len(msg), n)
+
+	assert.Equal(t, msg, receivedBuf)
+}
+
+func TestPeerSendAndReceivesCorrectly(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	a, b := net.Pipe()
+
+	alice := newPeer(nil, a.RemoteAddr(), a, a, a)
+	bob := newPeer(nil, b.RemoteAddr(), b, b, b)
+
+	go alice.Start()
+	go bob.Start()
+
+	defer bob.Disconnect(nil)
+	defer alice.Disconnect(nil)
+
+	msg := []byte("lorem ipsum")
+	go assert.NoError(t, alice.Send(0x16, msg))
+
+	select {
+	case ctx := <-bob.Recv(0x16):
+		assert.Equal(t, msg, ctx.Bytes())
+	case <-time.After(1 * time.Second):
+		t.Fail()
+	}
+}
+
+func TestPeerSetWriteDeadline(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	rw := iotest.NewBlockingReadWriter()
+
+	p := newPeer(nil, nil, rw, new(iotest.NopReader), rw)
+	defer p.Disconnect(nil)
+
+	go p.Start()
+
+	err := p.SendWithTimeout(0x01, []byte("lorem ipsum"), 1*time.Millisecond)
+	assert.Equal(t, io.EOF, errors.Cause(err))
+}
+
+func TestPeerSetReadDeadline(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	rw := iotest.NewBlockingReadWriter()
+
+	p := newPeer(nil, nil, new(iotest.NopWriter), rw, rw)
+	defer p.Disconnect(nil)
+
+	go p.Start()
+
+	assert.NoError(t, p.SetReadDeadline(time.Now()))
+	<-rw.Unblock
+}
+
+func TestPeerEnsureFollowsProtocol(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	n := NewNode(nil)
+	p := n.NewPeer(nil, new(iotest.NopWriter), new(iotest.NopReader), nil)
+
+	// Have the peer follow a protocol where the peer should immediately
+	// disconnect such that Start() synchronously returns.
+
+	n.FollowProtocol(func() Protocol {
+		return func(Context) (Protocol, error) {
+			p.Disconnect(nil)
+			return nil, nil
+		}
+	})
+
+	p.Start()
+}
+
+func TestPeerDropMessageWhenReceiveQueueFull(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	a, b := net.Pipe()
+
+	p := newPeer(nil, nil, b, b, b)
+	defer p.Disconnect(nil)
+
+	go p.Start()
+
+	for i := 0; i < 256; i++ {
+		func() {
+			msg := make([]byte, 128)
+			_, err := rand.Read(msg)
+			assert.NoError(t, err)
+
+			buf := bytes.NewBuffer(nil)
+
+			state := wire.AcquireState()
+			defer wire.ReleaseState(state)
+
+			state.SetByte(WireKeyOpcode, 0)
+			state.SetUint64(WireKeyMuxID, 0)
+			state.SetMessage(msg)
+
+			assert.NoError(t, p.WireCodec().DoWrite(buf, state))
+
+			_, err = a.Write(buf.Bytes())
+			assert.NoError(t, err)
+		}()
+	}
+}
+
+func TestPeerErrorWhenSendQueueFull(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	rw := iotest.NewBlockingReadWriter()
+
+	p := newPeer(nil, nil, rw, new(iotest.NopReader), rw)
+	defer p.Disconnect(nil)
+
+	for i := 0; i < cap(p.send); i++ {
+		p.send <- evtSend{done: make(chan error, 1)}
 	}
 
-	return testMsg{Text: text}, nil
+	assert.Error(t, p.SendWithTimeout(0, nil, 1*time.Millisecond))
 }
 
-func (m testMsg) Write() []byte {
-	return payload.NewWriter(nil).WriteString(m.Text).Bytes()
+func TestPeerSetAddr(t *testing.T) {
+	p := newPeer(nil, new(net.TCPAddr), nil, nil, nil)
+	assert.NotNil(t, p.Addr())
 }
 
-// What this test does:
-// 1. Check send message
-// 2. Check receive message
-// 3. Check the callbacks must be called in sequence
-// 4. Check the callbacks must be called exactly once
-func TestPeerFlow(t *testing.T) {
-	log.Disable()
-	defer log.Enable()
+func TestPeerReportAndInterceptErrors(t *testing.T) {
+	p := newPeer(nil, nil, new(iotest.NopWriter), new(iotest.NopReader), nil)
 
-	resetOpcodes()
-	opcodeTest := RegisterMessage(NextAvailableOpcode(), (*testMsg)(nil))
-
-	var text = "hello"
-	var port uint16 = 8888
-	var err error
-
-	var wgListen sync.WaitGroup
-	wgListen.Add(1)
-
-	var wgAccept sync.WaitGroup
-	wgAccept.Add(1)
-
-	layer := transport.NewBuffered()
-
-	go func() {
-		listener, err := layer.Listen("127.0.0.1", port)
-		assert.Nil(t, err)
-
-		wgListen.Done()
-
-		conn, err := listener.Accept()
-		assert.NoError(t, err)
-
-		wgAccept.Done()
-
-		peer := newPeer(nil, nil)
-
-		var buf []byte
-		reader := bufio.NewReader(conn)
-
-		// Read message size.
-		size, err := binary.ReadUvarint(reader)
-		assert.NoError(t, err)
-
-		// Read message.
-		buf = make([]byte, size)
-
-		_, err = io.ReadFull(reader, buf)
-		assert.NoError(t, err)
-
-		_, msg, err := peer.DecodeMessage(buf)
-		assert.Equal(t, text, msg.(testMsg).Text)
-
-		// Create a new message.
-		payload, err := peer.EncodeMessage(testMsg{Text: text})
-		assert.NoError(t, err)
-
-		buf = make([]byte, binary.MaxVarintLen64)
-		prepended := binary.PutUvarint(buf[:], uint64(len(payload)))
-		buf = append(buf[:prepended], payload[:]...)
-
-		// Send the message.
-		_, err = conn.Write(buf)
-		assert.NoError(t, err)
-	}()
-
-	wgListen.Wait()
-
-	conn, err := layer.Dial(fmt.Sprintf("%s:%d", "127.0.0.1", port))
-	assert.NoError(t, err)
-
-	wgAccept.Wait()
-
-	var state int32 = 0
-
-	p := peer(t, layer, conn, port)
-
-	p.OnEncodeHeader(func(node *Node, peer *Peer, header, msg []byte) (bytes []byte, e error) {
-		check(t, &state, 0)
-		return nil, nil
+	p.InterceptErrors(func(err error) {
+		assert.Equal(t, "test error", err.Error())
 	})
 
-	p.OnEncodeFooter(func(node *Node, peer *Peer, header, msg []byte) (bytes []byte, e error) {
-		check(t, &state, 1)
-		return nil, nil
-	})
-
-	p.BeforeMessageSent(func(node *Node, peer *Peer, msg []byte) (bytes []byte, e error) {
-		check(t, &state, 2)
-		return msg, nil
-	})
-
-	p.AfterMessageSent(func(node *Node, peer *Peer) error {
-		check(t, &state, 3)
-		return nil
-	})
-
-	p.BeforeMessageReceived(func(node *Node, peer *Peer, msg []byte) (bytes []byte, e error) {
-		check(t, &state, 4)
-		return msg, nil
-	})
-
-	p.OnDecodeHeader(func(node *Node, peer *Peer, reader payload.Reader) error {
-		check(t, &state, 5)
-		return nil
-	})
-
-	p.OnDecodeFooter(func(node *Node, peer *Peer, msg []byte, reader payload.Reader) error {
-		check(t, &state, 6)
-		return nil
-	})
-
-	afterMessageReceivedSignal := make(chan struct{})
-
-	p.AfterMessageReceived(func(node *Node, peer *Peer) error {
-		check(t, &state, 7)
-		close(afterMessageReceivedSignal)
-		return nil
-	})
-
-	p.OnConnError(func(node *Node, peer *Peer, err error) error {
-		check(t, &state, 9)
-		return nil
-	})
-
-	var wgDisconnect sync.WaitGroup
-	wgDisconnect.Add(1)
-
-	p.OnDisconnect(func(node *Node, peer *Peer) error {
-		defer wgDisconnect.Done()
-		check(t, &state, 10)
-		return nil
-	})
-
-	p.init()
-
-	// Send a message.
-	err = p.SendMessage(testMsg{Text: text})
-	assert.NoError(t, err)
-
-	// Read a message.
-	msg := <-p.Receive(opcodeTest)
-	assert.Equal(t, text, msg.(testMsg).Text)
-
-	<-afterMessageReceivedSignal
-
-	check(t, &state, 8)
-
-	p.Disconnect()
-
-	wgDisconnect.Wait()
-
-	check(t, &state, 11)
-}
-
-func TestPeer(t *testing.T) {
-	log.Disable()
-	defer log.Enable()
-
-	var port uint16 = 8888
-	var err error
-
-	var wgListen sync.WaitGroup
-	wgListen.Add(1)
-
-	layer := transport.NewBuffered()
-
-	go func() {
-		listener, err := layer.Listen("127.0.0.1", port)
-		assert.Nil(t, err)
-
-		wgListen.Done()
-
-		_, err = listener.Accept()
-		assert.NoError(t, err)
-	}()
-
-	wgListen.Wait()
-
-	conn, err := layer.Dial(fmt.Sprintf("%s:%d", "127.0.0.1", port))
-	assert.NoError(t, err)
-
-	p := peer(t, layer, conn, port)
-	p.init()
-
-	// check net
-	assert.Equal(t, net.IPv4(127, 0, 0, 1), p.LocalIP(), "found invalid local IP")
-	assert.Equal(t, port, p.LocalPort(), "found invalid local port")
-	assert.Equal(t, net.IPv4(127, 0, 0, 1), p.RemoteIP(), "found invalid remote IP")
-	assert.Equal(t, port, p.RemotePort(), "found invalid remote port")
-
-	// check store
-
-	assert.Nil(t, p.Get("key"))
-	assert.False(t, p.Has("key"))
-
-	assert.Equal(t, "value", p.LoadOrStore("key", "value"))
-	p.Delete("key")
-	assert.Nil(t, p.Get("key"))
-	assert.False(t, p.Has("key"))
-
-	p.Set("key", "value")
-	assert.Equal(t, "value", p.Get("key"))
-	assert.True(t, p.Has("key"))
-
-	p.Disconnect()
-}
-
-// check the state equal to the expected state, and then increment it by 1
-func check(t *testing.T, currentState *int32, expectedState int32) {
-	assert.Equal(t, expectedState, atomic.LoadInt32(currentState))
-	atomic.AddInt32(currentState, 1)
-}
-
-func peer(t *testing.T, layer transport.Layer, conn net.Conn, port uint16) *Peer {
-	params := DefaultParams()
-	params.Keys = ed25519.RandomKeys()
-	params.Port = port
-	params.Transport = layer
-
-	node, err := NewNode(params)
-	assert.Nil(t, err, "failed to create node")
-
-	p := newPeer(node, conn)
-
-	return p
+	p.reportError(errors.New("test error"))
 }
