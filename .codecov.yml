@@ -5,12 +5,6 @@ codecov:
 
 ignore:
   - "./examples"
-  - "./crypto/suite.go"
-  - "./params.go"
-  - "./init.go"
-  - "./empty.go"
-  - "./callbacks.go"
-  - "./identity/manager.go"
 
 comment: false
 
