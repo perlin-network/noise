@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/perlin-network/noise"
+	"github.com/perlin-network/noise/edwards25519"
 	"github.com/phf/go-queue/queue"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/blake2b"
+	"io"
 	"net"
 	"sort"
 	"sync"
@@ -131,7 +133,7 @@ func (b *Protocol) Ping(ctx noise.Context) (*ID, error) {
 		return nil, errors.Wrap(err, "failed to send ping")
 	}
 
-	var buf []byte
+	r := bytes.NewReader(nil)
 
 	select {
 	case <-ctx.Done():
@@ -139,13 +141,29 @@ func (b *Protocol) Ping(ctx noise.Context) (*ID, error) {
 	case <-time.After(b.handshakeTimeout):
 		return nil, errors.Wrap(noise.ErrTimeout, "timed out receiving pong")
 	case ctx := <-mux.Recv(0x03):
-		buf = ctx.Bytes()
+		r.Reset(ctx.Bytes())
 	}
 
-	id, err := UnmarshalID(bytes.NewReader(buf))
+	id, err := UnmarshalID(r)
 
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal pong")
+	}
+
+	var signature edwards25519.Signature
+
+	n, err := io.ReadFull(r, signature[:])
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to read signature")
+	}
+
+	if n != edwards25519.SizeSignature {
+		return nil, errors.New("did not read enough bytes for signature")
+	}
+
+	if !edwards25519.Verify(id.publicKey, id.Marshal(), signature) {
+		return nil, errors.New("got invalid signature for pong")
 	}
 
 	if err := verifyPuzzle(id.checksum, id.nonce, b.c1, b.c2); err != nil {
@@ -191,7 +209,10 @@ func (b *Protocol) Handshake(ctx noise.Context) (*ID, error) {
 			case <-ctx.Done():
 				return
 			case wire := <-ctx.Peer().Recv(0x03): // PING
-				if err := wire.Send(0x03, b.table.self.Marshal()); err != nil {
+				id := b.table.self.Marshal()
+				signature := edwards25519.Sign(b.keys.privateKey, id)
+
+				if err := wire.Send(0x03, append(id, signature[:]...)); err != nil {
 					ctx.Peer().Disconnect(errors.Wrap(err, "failed to send ping"))
 				}
 			case wire := <-ctx.Peer().Recv(0x04): // LOOKUP REQUEST

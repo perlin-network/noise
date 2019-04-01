@@ -90,8 +90,7 @@ func GenerateKey(rand io.Reader) (publicKey PublicKey, privateKey PrivateKey, er
 	return publicKey, privateKey, nil
 }
 
-// Sign signs the message with privateKey and returns a signature. It will
-// panic if len(privateKey) is not SizePrivateKey.
+// Sign signs the message with privateKey and returns a signature.
 func Sign(privateKey PrivateKey, message []byte) Signature {
 	h := sha512.New()
 	h.Write(privateKey[:32])
