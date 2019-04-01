@@ -12,22 +12,22 @@ type Handshake struct {
 }
 
 func (m Handshake) Marshal() []byte {
-	b := bytes.NewBuffer(make([]byte, 0, edwards25519.SizePublicKey+edwards25519.SizeSignature))
+	w := bytes.NewBuffer(make([]byte, 0, edwards25519.SizePublicKey+edwards25519.SizeSignature))
 
-	_, _ = b.Write(m.publicKey[:])
-	_, _ = b.Write(m.signature[:])
+	_, _ = w.Write(m.publicKey[:])
+	_, _ = w.Write(m.signature[:])
 
-	return b.Bytes()
+	return w.Bytes()
 }
 
-func UnmarshalHandshake(buf []byte) (m Handshake, err error) {
+func UnmarshalHandshake(buf []byte) (msg Handshake, err error) {
 	b := bytes.NewReader(buf)
 
-	if err = binary.Read(b, binary.BigEndian, &m.publicKey); err != nil {
+	if err = binary.Read(b, binary.BigEndian, &msg.publicKey); err != nil {
 		return
 	}
 
-	if err = binary.Read(b, binary.BigEndian, &m.signature); err != nil {
+	if err = binary.Read(b, binary.BigEndian, &msg.signature); err != nil {
 		return
 	}
 

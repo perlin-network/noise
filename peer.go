@@ -186,17 +186,14 @@ func (p *Peer) RegisterSignal(name string) func() {
 	p.signalsLock.Unlock()
 
 	return func() {
-		var closed bool
+		opened := true
 
 		select {
-		case _, ok := <-signal:
-			if !ok {
-				closed = true
-			}
+		case _, opened = <-signal:
 		default:
 		}
 
-		if !closed {
+		if opened {
 			close(signal)
 		}
 	}

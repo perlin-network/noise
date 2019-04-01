@@ -29,18 +29,19 @@ func TestUnmarshalMarshal(t *testing.T) {
 	pub, _, _ := GenerateKey(rand.Reader)
 
 	var A ExtendedGroupElement
-	var pubBytes [32]byte
-	copy(pubBytes[:], pub[:])
 
-	if !A.FromBytes(&pubBytes) {
+	var publicKey1 PublicKey
+	copy(publicKey1[:], pub[:])
+
+	if !A.FromBytes((*[SizePublicKey]byte)(&publicKey1)) {
 		t.Fatalf("ExtendedGroupElement.FromBytes failed")
 	}
 
-	var pub2 [32]byte
-	A.ToBytes(&pub2)
+	var publicKey2 PublicKey
+	A.ToBytes((*[SizePublicKey]byte)(&publicKey2))
 
-	if pubBytes != pub2 {
-		t.Errorf("FromBytes(%v)->ToBytes does not round-trip, got %x\n", pubBytes, pub2)
+	if publicKey1 != publicKey2 {
+		t.Errorf("FromBytes(%v)->ToBytes does not round-trip, got %x\n", publicKey1, publicKey2)
 	}
 }
 
@@ -93,13 +94,19 @@ func TestGolden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer testDataZ.Close()
+
+	defer func() {
+		_ = testDataZ.Close()
+	}()
 
 	testData, err := gzip.NewReader(testDataZ)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer testData.Close()
+
+	defer func() {
+		_ = testData.Close()
+	}()
 
 	scanner := bufio.NewScanner(testData)
 	lineNo := 0
