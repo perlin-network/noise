@@ -6,7 +6,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/valyala/bytebufferpool"
 	"io"
-	"io/ioutil"
 	"sync"
 )
 
@@ -48,7 +47,8 @@ func (c *Codec) DoRead(r io.Reader, state *State) error {
 	var wire *Reader
 	var err error
 
-	var buf []byte
+	buf := bytebufferpool.Get()
+	defer bytebufferpool.Put(buf)
 
 	if c.PrefixSize {
 		var length uint64
@@ -61,9 +61,9 @@ func (c *Codec) DoRead(r io.Reader, state *State) error {
 			return nil
 		}
 
-		buf = make([]byte, length)
+		buf.Set(make([]byte, length))
 
-		n, err := io.ReadFull(r, buf)
+		n, err := io.ReadFull(r, buf.B)
 
 		if err != nil {
 			return errors.Wrap(err, "could not read expected amount of bytes from network")
@@ -73,7 +73,7 @@ func (c *Codec) DoRead(r io.Reader, state *State) error {
 			return errors.Errorf("only read %d bytes when expected to read %d bytes", n, length)
 		}
 	} else {
-		if buf, err = ioutil.ReadAll(r); err != nil {
+		if _, err := buf.ReadFrom(r); err != nil {
 			return errors.Wrap(err, "could not read from network all contents")
 		}
 	}
@@ -82,12 +82,12 @@ func (c *Codec) DoRead(r io.Reader, state *State) error {
 	defer c.recvLock.RUnlock()
 
 	for _, i := range c.recv {
-		if buf, err = i(buf); err != nil {
+		if buf.B, err = i(buf.B); err != nil {
 			return errors.Wrap(err, "failed to apply read interceptor")
 		}
 	}
 
-	wire = AcquireReader(buf)
+	wire = AcquireReader(buf.B)
 	defer ReleaseReader(wire)
 
 	c.Read(wire, state)
@@ -115,16 +115,14 @@ func (c *Codec) DoWrite(w io.Writer, state *State) error {
 		}
 	}
 
-	buf := bytebufferpool.Get()
-	defer bytebufferpool.Put(buf)
-
 	if c.PrefixSize {
-		if err = binary.Write(buf, binary.BigEndian, uint64(wire.buf.Len())); err != nil {
-			return errors.Wrap(err, "could not write length of msg to buf")
-		}
+		var length [8]byte
+		binary.BigEndian.PutUint64(length[:], uint64(wire.buf.Len()))
+
+		wire.buf.B = append(length[:], wire.buf.B...)
 	}
 
-	n, err := wire.buf.WriteTo(buf)
+	n, err := wire.buf.WriteTo(w)
 
 	if err != nil {
 		return errors.Wrap(err, "could not write wire contents to buf")
@@ -132,16 +130,6 @@ func (c *Codec) DoWrite(w io.Writer, state *State) error {
 
 	if int(n) != wire.buf.Len() {
 		return errors.Wrap(io.ErrUnexpectedEOF, "did not write enough of wire contents to buf")
-	}
-
-	n, err = buf.WriteTo(w)
-
-	if err != nil {
-		return errors.Wrap(err, "could not write to network")
-	}
-
-	if int(n) != buf.Len() {
-		return errors.Wrap(io.ErrUnexpectedEOF, "did not write enough to network")
 	}
 
 	return nil
