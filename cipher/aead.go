@@ -42,19 +42,17 @@ func (b *BuilderAEAD) Setup(ctx noise.Context) error {
 	codec := ctx.Peer().WireCodec()
 
 	var ourNonce, theirNonce uint64
+	ourNonceBuf := make([]byte, suite.NonceSize())
+	theirNonceBuf := make([]byte, suite.NonceSize())
 
 	codec.InterceptSend(func(buf []byte) ([]byte, error) {
-		ourNonceBuf := make([]byte, suite.NonceSize())
 		binary.LittleEndian.PutUint64(ourNonceBuf, atomic.AddUint64(&ourNonce, 1))
-
-		return suite.Seal(nil, ourNonceBuf, buf, nil), nil
+		return suite.Seal(buf[:0], ourNonceBuf, buf, nil), nil
 	})
 
 	codec.InterceptRecv(func(buf []byte) ([]byte, error) {
-		theirNonceBuf := make([]byte, suite.NonceSize())
 		binary.LittleEndian.PutUint64(theirNonceBuf, atomic.AddUint64(&theirNonce, 1))
-
-		return suite.Open(nil, theirNonceBuf, buf, nil)
+		return suite.Open(buf[:0], theirNonceBuf, buf, nil)
 	})
 
 	fmt.Printf("Performed AEAD: %x\n", sharedKey)
