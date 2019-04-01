@@ -7,7 +7,7 @@ import (
 )
 
 type Node struct {
-	c io.Closer
+	l net.Listener
 	d Dialer
 
 	p func() Protocol
@@ -16,9 +16,9 @@ type Node struct {
 	peersLock sync.RWMutex
 }
 
-func NewNode(c io.Closer) *Node {
+func NewNode(l net.Listener) *Node {
 	return &Node{
-		c: c,
+		l: l,
 		d: defaultDialer,
 
 		peers: make(map[string]*Peer),
@@ -122,13 +122,20 @@ func (n *Node) PeerByAddr(address string) *Peer {
 	return peer
 }
 
+// Addr returns the underlying address of the nodes listener.
+//
+// It is safe to call Addr concurrently.
+func (n Node) Addr() net.Addr {
+	return n.l.Addr()
+}
+
 // Shutdown closes the underlying nodes peer acceptor socket, and gracefully
 // kills all peer instances connected to the node.
 //
 // It is safe to call Shutdown concurrently.
 func (n *Node) Shutdown() {
-	if n.c != nil {
-		_ = n.c.Close()
+	if n.l != nil {
+		_ = n.l.Close()
 	}
 
 	for _, peer := range n.Peers() {
