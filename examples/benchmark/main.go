@@ -116,7 +116,7 @@ func main() {
 			select {
 			case <-bobToAlice.Ctx().Done():
 				return
-			case _ = <-bobToAlice.Recv(0x16):
+			case <-bobToAlice.Recv(0x16):
 				atomic.AddUint64(&recvCount, 1)
 			}
 		}

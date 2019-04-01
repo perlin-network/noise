@@ -165,7 +165,7 @@ func TestPeerDropMessageWhenReceiveQueueFull(t *testing.T) {
 
 	go p.Start()
 
-	for i := 0; i < 256; i++ {
+	for i := 0; i < 1025; i++ {
 		func() {
 			msg := make([]byte, 128)
 			_, err := rand.Read(msg)
