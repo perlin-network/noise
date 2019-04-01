@@ -1,6 +1,7 @@
 package noise
 
 import (
+	"bufio"
 	"io"
 	"net"
 	"sync"
@@ -58,7 +59,7 @@ func (n *Node) NewPeer(addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 //
 // It is safe to call Wrap concurrently.
 func (n *Node) Wrap(conn net.Conn) *Peer {
-	return n.NewPeer(conn.RemoteAddr(), conn, conn, conn)
+	return n.NewPeer(conn.RemoteAddr(), conn, bufio.NewReader(conn), conn)
 }
 
 // SetDialer sets the dialer used to establish connections to new peers.
