@@ -376,7 +376,9 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		state.SetMessage(evt.msg)
 
 		err := p.WireCodec().DoWrite(p.w, state)
+
 		evt.done <- err
+		close(evt.done)
 
 		if err != nil {
 			return nil
