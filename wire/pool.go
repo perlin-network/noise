@@ -33,13 +33,33 @@ func AcquireState() *State {
 }
 
 func ReleaseState(state *State) {
-	state.strings = make(map[byte]string)
-	state.slices = make(map[byte][]byte)
-	state.bytes = make(map[byte]byte)
-	state.bools = make(map[byte]bool)
-	state.uint16s = make(map[byte]uint16)
-	state.uint32s = make(map[byte]uint32)
-	state.uint64s = make(map[byte]uint64)
+	for key := range state.strings {
+		delete(state.strings, key)
+	}
+
+	for key := range state.slices {
+		delete(state.slices, key)
+	}
+
+	for key := range state.bytes {
+		delete(state.bytes, key)
+	}
+
+	for key := range state.bools {
+		delete(state.bools, key)
+	}
+
+	for key := range state.uint16s {
+		delete(state.uint16s, key)
+	}
+
+	for key := range state.uint32s {
+		delete(state.uint32s, key)
+	}
+
+	for key := range state.uint64s {
+		delete(state.uint64s, key)
+	}
 
 	statePool.Put(state)
 }
