@@ -419,23 +419,18 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 
 		hub := p.getMuxQueue(mux, opcode)
 
-		if len(hub.ch) == cap(hub.ch) { // If the queue is full, pop from the front and push the new message to the back.
-			select {
-			case <-hub.ch:
-			default:
+		select {
+		case hub.ch <- Wire{m: Mux{id: mux, peer: p}, o: opcode, b: state.Message()}:
+			hub.lock <- struct{}{}
+			<-hub.lock
+
+			p.afterRecvLock.RLock()
+			for _, f := range p.afterRecv {
+				f()
 			}
+			p.afterRecvLock.RUnlock()
+		case <-time.After(3 * time.Second):
 		}
-
-		hub.ch <- Wire{m: Mux{id: mux, peer: p}, o: opcode, b: state.Message()}
-
-		hub.lock <- struct{}{}
-		<-hub.lock
-
-		p.afterRecvLock.RLock()
-		for _, f := range p.afterRecv {
-			f()
-		}
-		p.afterRecvLock.RUnlock()
 
 		return nil
 	}
