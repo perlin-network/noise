@@ -18,9 +18,7 @@ func protocol(network *skademlia.Protocol) func() noise.Protocol {
 		var ephemeralSharedKey []byte
 		var err error
 
-		var id *skademlia.ID
-
-		var ecdh, aead, skademlia noise.Protocol
+		var ecdh, aead, skad noise.Protocol
 
 		ecdh = func(ctx noise.Context) (noise.Protocol, error) {
 			if ephemeralSharedKey, err = handshake.NewECDH().Handshake(ctx); err != nil {
@@ -35,11 +33,11 @@ func protocol(network *skademlia.Protocol) func() noise.Protocol {
 				return nil, err
 			}
 
-			return skademlia, nil
+			return skad, nil
 		}
 
-		skademlia = func(ctx noise.Context) (noise.Protocol, error) {
-			if id, err = network.Handshake(ctx); err != nil {
+		skad = func(ctx noise.Context) (noise.Protocol, error) {
+			if _, err = network.Handshake(ctx); err != nil {
 				return nil, err
 			}
 
