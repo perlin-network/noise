@@ -1,6 +1,11 @@
 package main
 
 import (
+	"net/http"
+	_ "net/http/pprof"
+)
+
+import (
 	"fmt"
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/cipher"
@@ -85,6 +90,10 @@ func launch() *noise.Node {
 }
 
 func main() {
+	go func() {
+		panic(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	alice := launch()
 	defer alice.Shutdown()
 
@@ -124,7 +133,7 @@ func main() {
 
 	// Sender.
 	for {
-		var buf [16]byte
+		var buf [600]byte
 		if _, err := rand.Read(buf[:]); err != nil {
 			panic(err)
 		}
