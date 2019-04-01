@@ -393,8 +393,6 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 }
 
 func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
-	timer := time.NewTimer(3 * time.Second)
-
 	return func(stop <-chan struct{}) error {
 		select {
 		case <-stop:
@@ -428,10 +426,9 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 				f()
 			}
 			p.afterRecvLock.RUnlock()
-		case <-timer.C:
+		default:
 		}
 
-		timer.Reset(3 * time.Second)
 		return nil
 	}
 }
