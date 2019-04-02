@@ -8,9 +8,9 @@
 
 // func FeMul(outp *uint64, xp *uint64, yp *uint64)
 TEXT ·FeMul(SB),NOSPLIT,$0
-	MOVQ outp+0(FP), DI
-	MOVQ xp+8(FP), BX
-	MOVQ yp+16(FP), CX
+	MOVQ out+0(FP), DI
+	MOVQ a+8(FP), BX
+	MOVQ b+16(FP), CX
 
 	// Calculate r0
 	MOVQ 0(BX), AX     // rax <-- x0

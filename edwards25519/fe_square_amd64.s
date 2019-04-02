@@ -8,8 +8,8 @@
 
 // func FeSquare(outp *uint64, xp *uint64)
 TEXT ·FeSquare(SB),NOSPLIT,$0
-    MOVQ outp+0(FP), DI
-    MOVQ xp+8(FP), SI
+    MOVQ out+0(FP), DI
+    MOVQ a+8(FP), SI
 
     // r0 = x0*x0 + x1*38*x4 + x2*38*x3
     MOVQ 0(SI), AX

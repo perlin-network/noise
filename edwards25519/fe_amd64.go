@@ -29,8 +29,7 @@ func FeAdd(out, a, b *FieldElement) {
 
 // FeSub sets out = a - b
 func FeSub(out, a, b *FieldElement) {
-	var t FieldElement
-	t = *b
+	t := *b
 
 	// Reduce each limb below 2^51, propagating carries. Ensures that results
 	// fit within the limbs. This would not be required for reduced input.

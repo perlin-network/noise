@@ -95,7 +95,7 @@ func GenerateKey(rand io.Reader) (publicKey PublicKey, privateKey PrivateKey, er
 // Sign signs the message with privateKey and returns a signature.
 func Sign(privateKey PrivateKey, message []byte) Signature {
 	h := sha512.New()
-	h.Write(privateKey[:SizePrivateKey/2])
+	_, _ = h.Write(privateKey[:SizePrivateKey/2])
 
 	var digest, messageDigest, hramDigest [sha512.Size]byte
 	var expandedSecretKey [SizePrivateKey / 2]byte
@@ -108,9 +108,9 @@ func Sign(privateKey PrivateKey, message []byte) Signature {
 	expandedSecretKey[SizePrivateKey/2-1] |= 64
 
 	h.Reset()
-	h.Write(digest[sha512.Size/2:])
-	h.Write(message)
-	h.Sum(messageDigest[:0])
+	_, _ = h.Write(digest[sha512.Size/2:])
+	_, _ = h.Write(message)
+	_ = h.Sum(messageDigest[:0])
 
 	var messageDigestReduced [32]byte
 	ScReduce(&messageDigestReduced, &messageDigest)
@@ -122,10 +122,10 @@ func Sign(privateKey PrivateKey, message []byte) Signature {
 	R.ToBytes(&encodedR)
 
 	h.Reset()
-	h.Write(encodedR[:])
-	h.Write(privateKey[SizePrivateKey/2:])
-	h.Write(message)
-	h.Sum(hramDigest[:0])
+	_, _ = h.Write(encodedR[:])
+	_, _ = h.Write(privateKey[SizePrivateKey/2:])
+	_, _ = h.Write(message)
+	_ = h.Sum(hramDigest[:0])
 
 	var hramDigestReduced [32]byte
 	ScReduce(&hramDigestReduced, &hramDigest)
@@ -155,12 +155,12 @@ func Verify(publicKey PublicKey, message []byte, signature Signature) bool {
 	FeNeg(&A.T, &A.T)
 
 	h := sha512.New()
-	h.Write(signature[:SizeSignature/2])
-	h.Write(publicKey[:])
-	h.Write(message)
+	_, _ = h.Write(signature[:SizeSignature/2])
+	_, _ = h.Write(publicKey[:])
+	_, _ = h.Write(message)
 
 	var digest [sha512.Size]byte
-	h.Sum(digest[:0])
+	_ = h.Sum(digest[:0])
 
 	var hReduced [32]byte
 	ScReduce(&hReduced, &digest)
