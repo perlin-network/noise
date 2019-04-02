@@ -10,24 +10,36 @@ import (
 	"time"
 )
 
-type BuilderAEAD struct {
-	ephemeralSharedKey []byte
+const (
+	SignalAuthenticated = "cipher.aead.authenticated"
+	OpcodeAckAEAD       = "cipher.aead.ack"
+)
+
+type AEAD struct{}
+
+func NewAEAD() *AEAD {
+	return new(AEAD)
 }
 
-func NewAEAD(ephemeralSharedKey []byte) *BuilderAEAD {
-	return &BuilderAEAD{ephemeralSharedKey: ephemeralSharedKey}
+func (b *AEAD) RegisterOpcodes(n *noise.Node) {
+	n.RegisterOpcode(OpcodeAckAEAD, n.NextAvailableOpcode())
 }
 
-func (b *BuilderAEAD) Setup(ctx noise.Context) error {
-	suite, sharedKey, err := deriveCipherSuite(Aes256Gcm, sha256.New, b.ephemeralSharedKey, nil)
+func (b *AEAD) Setup(ephemeralSharedKey []byte, ctx noise.Context) error {
+	node, peer := ctx.Node(), ctx.Peer()
+
+	suite, sharedKey, err := deriveCipherSuite(Aes256Gcm, sha256.New, ephemeralSharedKey, nil)
 	if err != nil {
 		return errors.Wrap(err, "failed to derive AEAD cipher suite given ephemeral shared key")
 	}
 
-	locker := ctx.Peer().LockOnRecv(0x02)
+	signal := peer.RegisterSignal(SignalAuthenticated)
+	defer signal()
+
+	locker := peer.LockOnRecv(node.Opcode(OpcodeAckAEAD))
 	defer locker.Unlock()
 
-	if err = ctx.Peer().Send(0x02, nil); err != nil {
+	if err = peer.Send(node.Opcode(OpcodeAckAEAD), nil); err != nil {
 		return errors.Wrap(err, "failed to send AEAD ACK")
 	}
 
@@ -36,10 +48,10 @@ func (b *BuilderAEAD) Setup(ctx noise.Context) error {
 		return noise.ErrDisconnect
 	case <-time.After(3 * time.Second):
 		return errors.Wrap(noise.ErrTimeout, "timed out waiting for AEAD ACK")
-	case <-ctx.Peer().Recv(0x02):
+	case <-peer.Recv(node.Opcode(OpcodeAckAEAD)):
 	}
 
-	codec := ctx.Peer().WireCodec()
+	codec := peer.WireCodec()
 
 	var ourNonce, theirNonce uint64
 	ourNonceBuf := make([]byte, suite.NonceSize())

@@ -23,6 +23,9 @@ const (
 	DefaultC2 = 16
 
 	SignalHandshakeComplete = "skademlia.handshake"
+
+	OpcodePing   = "skademlia.ping"
+	OpcodeLookup = "skademlia.lookup"
 )
 
 type Protocol struct {
@@ -125,11 +128,18 @@ func wrap(f func() error) {
 	_ = f()
 }
 
+func (b *Protocol) RegisterOpcodes(n *noise.Node) {
+	n.RegisterOpcode(OpcodePing, n.NextAvailableOpcode())
+	n.RegisterOpcode(OpcodeLookup, n.NextAvailableOpcode())
+}
+
 func (b *Protocol) Ping(ctx noise.Context) (*ID, error) {
-	mux := ctx.Peer().Mux()
+	node, peer := ctx.Node(), ctx.Peer()
+
+	mux := peer.Mux()
 	defer wrap(mux.Close)
 
-	if err := mux.Send(0x03, nil); err != nil {
+	if err := mux.Send(node.Opcode(OpcodePing), nil); err != nil {
 		return nil, errors.Wrap(err, "failed to send ping")
 	}
 
@@ -140,7 +150,7 @@ func (b *Protocol) Ping(ctx noise.Context) (*ID, error) {
 		return nil, noise.ErrDisconnect
 	case <-time.After(b.handshakeTimeout):
 		return nil, errors.Wrap(noise.ErrTimeout, "timed out receiving pong")
-	case ctx := <-mux.Recv(0x03):
+	case ctx := <-mux.Recv(node.Opcode(OpcodePing)):
 		r.Reset(ctx.Bytes())
 	}
 
@@ -178,10 +188,12 @@ func (b *Protocol) Ping(ctx noise.Context) (*ID, error) {
 }
 
 func (b *Protocol) Lookup(ctx noise.Context, target *ID) (IDs, error) {
-	mux := ctx.Peer().Mux()
+	node, peer := ctx.Node(), ctx.Peer()
+
+	mux := peer.Mux()
 	defer wrap(mux.Close)
 
-	if err := mux.Send(0x04, target.Marshal()); err != nil {
+	if err := mux.Send(node.Opcode(OpcodeLookup), target.Marshal()); err != nil {
 		return nil, errors.Wrap(err, "failed to send find node request")
 	}
 
@@ -192,7 +204,7 @@ func (b *Protocol) Lookup(ctx noise.Context, target *ID) (IDs, error) {
 		return nil, noise.ErrDisconnect
 	case <-time.After(b.handshakeTimeout):
 		return nil, errors.Wrap(noise.ErrTimeout, "timed out receiving finde node response")
-	case ctx := <-mux.Recv(0x04):
+	case ctx := <-mux.Recv(node.Opcode(OpcodeLookup)):
 		buf = ctx.Bytes()
 	}
 
@@ -204,26 +216,28 @@ func (b *Protocol) Handshake(ctx noise.Context) (*ID, error) {
 	defer signal()
 
 	go func() {
+		node, peer := ctx.Node(), ctx.Peer()
+
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case wire := <-ctx.Peer().Recv(0x03): // PING
+			case wire := <-peer.Recv(node.Opcode(OpcodePing)):
 				id := b.table.self.Marshal()
 				signature := edwards25519.Sign(b.keys.privateKey, id)
 
-				if err := wire.Send(0x03, append(id, signature[:]...)); err != nil {
+				if err := wire.Send(node.Opcode(OpcodePing), append(id, signature[:]...)); err != nil {
 					ctx.Peer().Disconnect(errors.Wrap(err, "failed to send ping"))
 				}
-			case wire := <-ctx.Peer().Recv(0x04): // LOOKUP REQUEST
+			case wire := <-peer.Recv(node.Opcode(OpcodeLookup)):
 				target, err := UnmarshalID(bytes.NewReader(wire.Bytes()))
 
 				if err != nil {
-					ctx.Peer().Disconnect(errors.Wrap(err, "sent invalid lookup request"))
+					ctx.Peer().Disconnect(errors.Wrap(err, "received invalid lookup request"))
 				}
 
-				if err := wire.Send(0x04, b.table.FindClosest(&target, b.table.bucketSize).Marshal()); err != nil {
-					ctx.Peer().Disconnect(errors.Wrap(err, "failed tpo send lookup response"))
+				if err := wire.Send(node.Opcode(OpcodeLookup), b.table.FindClosest(&target, b.table.bucketSize).Marshal()); err != nil {
+					ctx.Peer().Disconnect(errors.Wrap(err, "failed to send lookup response"))
 				}
 			}
 		}

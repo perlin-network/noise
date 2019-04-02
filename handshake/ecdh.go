@@ -9,24 +9,38 @@ import (
 	"time"
 )
 
-type BuilderECDH struct {
+const (
+	SignalHandshakeComplete = "handshake.ecdh"
+	OpcodeHandshakeECDH     = "handshake.ecdh"
+)
+
+type ECDH struct {
 	header  []byte
 	timeout time.Duration
 }
 
-func NewECDH() *BuilderECDH {
-	return &BuilderECDH{
+func NewECDH() *ECDH {
+	return &ECDH{
 		header:  []byte(".noise_handshake_"),
 		timeout: 3 * time.Second,
 	}
 }
 
-func (b *BuilderECDH) TimeoutAfter(timeout time.Duration) *BuilderECDH {
+func (b *ECDH) TimeoutAfter(timeout time.Duration) *ECDH {
 	b.timeout = timeout
 	return b
 }
 
-func (b *BuilderECDH) Handshake(ctx noise.Context) (ephemeralSharedKey []byte, err error) {
+func (b *ECDH) RegisterOpcodes(n *noise.Node) {
+	n.RegisterOpcode(OpcodeHandshakeECDH, n.NextAvailableOpcode())
+}
+
+func (b *ECDH) Handshake(ctx noise.Context) (ephemeralSharedKey []byte, err error) {
+	node, peer := ctx.Node(), ctx.Peer()
+
+	signal := peer.RegisterSignal(SignalHandshakeComplete)
+	defer signal()
+
 	ephemeralPublicKey, ephemeralPrivateKey, err := edwards25519.GenerateKey(nil)
 
 	if err != nil {
@@ -39,7 +53,7 @@ func (b *BuilderECDH) Handshake(ctx noise.Context) (ephemeralSharedKey []byte, e
 		return nil, errors.Wrap(err, "failed to sign handshake message")
 	}
 
-	if err = ctx.Peer().SendWithTimeout(0x01, req.Marshal(), b.timeout); err != nil {
+	if err = peer.SendWithTimeout(node.Opcode(OpcodeHandshakeECDH), req.Marshal(), b.timeout); err != nil {
 		return nil, errors.Wrap(err, "failed to send our ephemeral public key to our peer")
 	}
 
@@ -50,7 +64,7 @@ func (b *BuilderECDH) Handshake(ctx noise.Context) (ephemeralSharedKey []byte, e
 		return nil, noise.ErrDisconnect
 	case <-time.After(b.timeout):
 		return nil, errors.Wrap(noise.ErrTimeout, "timed out receiving handshake response")
-	case ctx := <-ctx.Peer().Recv(0x01):
+	case ctx := <-peer.Recv(node.Opcode(OpcodeHandshakeECDH)):
 		buf = ctx.Bytes()
 	}
 

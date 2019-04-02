@@ -3,6 +3,7 @@ package noise
 import (
 	"bufio"
 	"io"
+	"math"
 	"net"
 	"sync"
 )
@@ -15,6 +16,10 @@ type Node struct {
 
 	peers     map[string]*Peer
 	peersLock sync.RWMutex
+
+	opcodes      map[string]byte
+	opcodesIndex map[byte]string
+	opcodesLock  sync.RWMutex
 }
 
 func NewNode(l net.Listener) *Node {
@@ -23,6 +28,9 @@ func NewNode(l net.Listener) *Node {
 		d: defaultDialer,
 
 		peers: make(map[string]*Peer),
+
+		opcodes:      make(map[string]byte),
+		opcodesIndex: make(map[byte]string),
 	}
 }
 
@@ -121,6 +129,57 @@ func (n *Node) PeerByAddr(address string) *Peer {
 	n.peersLock.RUnlock()
 
 	return peer
+}
+
+// RegisterOpcode reserves an opcode under a human-readable name.
+// Note that opcodes are one-indexed, and that the zero opcode is
+// reserved.
+//
+// If an opcode is already registered under a designated name or
+// byte, then RegisterOpcode no-ops.
+//
+// It is safe to call RegisterOpcode concurrently.
+func (n *Node) RegisterOpcode(name string, opcode byte) {
+	n.opcodesLock.Lock()
+	_, registered1 := n.opcodes[name]
+	_, registered2 := n.opcodesIndex[opcode]
+
+	if !registered1 && !registered2 {
+		n.opcodes[name] = opcode
+		n.opcodesIndex[opcode] = name
+	}
+	n.opcodesLock.Unlock()
+}
+
+// NextAvailableOpcode returns the next unreserved opcode that
+// may be registered by a node.
+//
+// In total, 255 opcodes may be registered per node. Opcodes
+// are one-indexed, and the zero opcode is reserved.
+func (n *Node) NextAvailableOpcode() (next byte) {
+	n.opcodesLock.RLock()
+	for i := byte(0x01); i < math.MaxUint8; i++ {
+		if _, exists := n.opcodesIndex[i]; !exists {
+			next = i
+			break
+		}
+	}
+	n.opcodesLock.RUnlock()
+
+	return
+}
+
+// Opcode returns the opcode assigned to a given human-readable
+// name. In total, 255 opcodes may be assigned to a single node.
+//
+// Opcodes are one-indexed, and if it returns the zero opcode,
+// then the opcode has not been assigned as of yet.
+func (n *Node) Opcode(name string) byte {
+	n.opcodesLock.RLock()
+	opcode := n.opcodes[name]
+	n.opcodesLock.RUnlock()
+
+	return opcode
 }
 
 // Addr returns the underlying address of the nodes listener.

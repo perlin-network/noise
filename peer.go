@@ -217,6 +217,10 @@ func (p *Peer) InterceptErrors(i ErrorInterceptor) {
 	p.errsLock.Unlock()
 }
 
+func (p *Peer) Ctx() Context {
+	return Context{n: p.n, p: p, d: p.killed}
+}
+
 func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 	p := &Peer{
 		n:       n,
@@ -412,8 +416,12 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 		opcode := state.Byte(WireKeyOpcode)
 		mux := state.Uint64(WireKeyMuxID)
 
-		if opcode == 0x00 {
-			return nil
+		p.n.opcodesLock.RLock()
+		_, registered := p.n.opcodesIndex[opcode]
+		p.n.opcodesLock.RUnlock()
+
+		if opcode == 0 || !registered {
+			return errors.Errorf("received unregistered opcode %d", opcode)
 		}
 
 		hub := p.getMuxQueue(mux, opcode)
@@ -433,8 +441,4 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 
 		return nil
 	}
-}
-
-func (p *Peer) Ctx() Context {
-	return Context{n: p.n, p: p, d: p.killed}
 }

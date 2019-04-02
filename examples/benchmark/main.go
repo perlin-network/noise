@@ -18,38 +18,44 @@ import (
 	"time"
 )
 
-func protocol(network *skademlia.Protocol) func() noise.Protocol {
+const (
+	OpcodeBenchmark = "examples.chat"
+)
+
+func protocol(ecdh *handshake.ECDH, aead *cipher.AEAD, skad *skademlia.Protocol) func() noise.Protocol {
 	return func() noise.Protocol {
 		var ephemeralSharedKey []byte
 		var err error
 
-		var ecdh, aead, skad noise.Protocol
+		var id *skademlia.ID
 
-		ecdh = func(ctx noise.Context) (noise.Protocol, error) {
-			if ephemeralSharedKey, err = handshake.NewECDH().Handshake(ctx); err != nil {
+		var p1, p2, p3 noise.Protocol
+
+		p1 = func(ctx noise.Context) (noise.Protocol, error) {
+			if ephemeralSharedKey, err = ecdh.Handshake(ctx); err != nil {
 				return nil, err
 			}
 
-			return aead, nil
+			return p2, nil
 		}
 
-		aead = func(ctx noise.Context) (noise.Protocol, error) {
-			if err := cipher.NewAEAD(ephemeralSharedKey).Setup(ctx); err != nil {
+		p2 = func(ctx noise.Context) (noise.Protocol, error) {
+			if err := aead.Setup(ephemeralSharedKey, ctx); err != nil {
 				return nil, err
 			}
 
-			return skad, nil
+			return p3, nil
 		}
 
-		skad = func(ctx noise.Context) (noise.Protocol, error) {
-			if _, err = network.Handshake(ctx); err != nil {
+		p3 = func(ctx noise.Context) (noise.Protocol, error) {
+			if id, err = skad.Handshake(ctx); err != nil {
 				return nil, err
 			}
 
 			return nil, nil
 		}
 
-		return ecdh
+		return p1
 	}
 }
 
@@ -64,12 +70,21 @@ func launch() *noise.Node {
 		panic(err)
 	}
 
+	node := noise.NewNode(listener)
+	node.RegisterOpcode(OpcodeBenchmark, node.NextAvailableOpcode())
+
+	ecdh := handshake.NewECDH()
+	ecdh.RegisterOpcodes(node)
+
+	aead := cipher.NewAEAD()
+	aead.RegisterOpcodes(node)
+
 	network := skademlia.New(keys, net.JoinHostPort("127.0.0.1", strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)))
+	network.RegisterOpcodes(node)
 	network.WithC1(8)
 	network.WithC2(8)
 
-	node := noise.NewNode(listener)
-	node.FollowProtocol(protocol(network))
+	node.FollowProtocol(protocol(ecdh, aead, network))
 
 	go func() {
 		fmt.Println("Listening for connections on port:", listener.Addr().(*net.TCPAddr).Port)
@@ -113,7 +128,7 @@ func main() {
 
 	go func() {
 		for range time.Tick(1 * time.Second) {
-			fmt.Printf("SENT: %d - RECEIVED: %d\n", atomic.SwapUint64(&sendCount, 0), atomic.SwapUint64(&recvCount, 0))
+			fmt.Printf("Sent %d messages, and received %d messages.\n", atomic.SwapUint64(&sendCount, 0), atomic.SwapUint64(&recvCount, 0))
 		}
 	}()
 
@@ -125,7 +140,7 @@ func main() {
 			select {
 			case <-bobToAlice.Ctx().Done():
 				return
-			case <-bobToAlice.Recv(0x16):
+			case <-bobToAlice.Recv(bob.Opcode(OpcodeBenchmark)):
 				atomic.AddUint64(&recvCount, 1)
 			}
 		}
@@ -138,7 +153,7 @@ func main() {
 			panic(err)
 		}
 
-		if err := aliceToBob.Send(0x16, buf[:]); err != nil {
+		if err := aliceToBob.Send(alice.Opcode(OpcodeBenchmark), buf[:]); err != nil {
 			panic(err)
 		}
 
