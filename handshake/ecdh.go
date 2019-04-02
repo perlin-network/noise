@@ -15,15 +15,20 @@ const (
 )
 
 type ECDH struct {
-	header  []byte
+	message []byte
 	timeout time.Duration
 }
 
 func NewECDH() *ECDH {
 	return &ECDH{
-		header:  []byte(".noise_handshake_"),
+		message: []byte(".noise_handshake_"),
 		timeout: 3 * time.Second,
 	}
+}
+
+func (b *ECDH) WithMessage(message []byte) *ECDH {
+	b.message = message
+	return b
 }
 
 func (b *ECDH) TimeoutAfter(timeout time.Duration) *ECDH {
@@ -63,7 +68,7 @@ func (b *ECDH) Handshake(ctx noise.Context) (ephemeral []byte, err error) {
 
 	req := Handshake{publicKey: ephemeralPublicKey}
 
-	if req.signature, err = ephemeralPrivateKey.Sign(b.header, crypto.Hash(0)); err != nil {
+	if req.signature, err = ephemeralPrivateKey.Sign(b.message, crypto.Hash(0)); err != nil {
 		return nil, errors.Wrap(err, "ecdh: failed to sign handshake message")
 	}
 
@@ -92,7 +97,7 @@ func (b *ECDH) Handshake(ctx noise.Context) (ephemeral []byte, err error) {
 		return nil, errors.New("ecdh: failed to unmarshal our peers ephemeral public key")
 	}
 
-	if !edwards25519.Verify(res.publicKey, []byte(b.header), res.signature) {
+	if !edwards25519.Verify(res.publicKey, []byte(b.message), res.signature) {
 		return nil, errors.New("ecdh: failed to verify signature in handshake request")
 	}
 
