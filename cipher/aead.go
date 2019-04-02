@@ -1,18 +1,20 @@
 package cipher
 
 import (
+	"crypto/cipher"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"github.com/perlin-network/noise"
+	"github.com/perlin-network/noise/handshake"
 	"github.com/pkg/errors"
 	"sync/atomic"
 	"time"
 )
 
 const (
-	SignalAuthenticated = "cipher.aead.authenticated"
-	OpcodeAckAEAD       = "cipher.aead.ack"
+	SignalReadyAEAD = "cipher.aead.authenticated"
+	OpcodeAckAEAD   = "cipher.aead.ack"
 )
 
 type AEAD struct{}
@@ -25,29 +27,53 @@ func (b *AEAD) RegisterOpcodes(n *noise.Node) {
 	n.RegisterOpcode(OpcodeAckAEAD, n.NextAvailableOpcode())
 }
 
-func (b *AEAD) Setup(ephemeralSharedKey []byte, ctx noise.Context) error {
+func (b *AEAD) Protocol() noise.ProtocolBlock {
+	return func(ctx noise.Context) error {
+		ephemeral := ctx.Get(handshake.KeyEphemeral)
+
+		if ephemeral == nil {
+			return errors.New("aead: expected peer to have ephemeral key set")
+		}
+
+		if _, ok := ephemeral.([]byte); !ok {
+			return errors.New("aead: ephemeral key must be a byte slice")
+		}
+
+		symmetric, err := b.Setup(ephemeral.([]byte), ctx)
+
+		if err != nil {
+			return err
+		}
+
+		ctx.Set(KeySuite, symmetric)
+
+		return nil
+	}
+}
+
+func (b *AEAD) Setup(ephemeralSharedKey []byte, ctx noise.Context) (cipher.AEAD, error) {
 	node, peer := ctx.Node(), ctx.Peer()
 
-	suite, sharedKey, err := deriveCipherSuite(Aes256Gcm, sha256.New, ephemeralSharedKey, nil)
+	suite, symmetric, err := deriveCipherSuite(Aes256Gcm, sha256.New, ephemeralSharedKey, nil)
 	if err != nil {
-		return errors.Wrap(err, "failed to derive AEAD cipher suite given ephemeral shared key")
+		return nil, errors.Wrap(err, "aead: failed to derive suite given ephemeral shared key")
 	}
 
-	signal := peer.RegisterSignal(SignalAuthenticated)
+	signal := peer.RegisterSignal(SignalReadyAEAD)
 	defer signal()
 
 	locker := peer.LockOnRecv(node.Opcode(OpcodeAckAEAD))
 	defer locker.Unlock()
 
 	if err = peer.Send(node.Opcode(OpcodeAckAEAD), nil); err != nil {
-		return errors.Wrap(err, "failed to send AEAD ACK")
+		return suite, errors.Wrap(err, "aead: failed to send ACK")
 	}
 
 	select {
 	case <-ctx.Done():
-		return noise.ErrDisconnect
+		return suite, noise.ErrDisconnect
 	case <-time.After(3 * time.Second):
-		return errors.Wrap(noise.ErrTimeout, "timed out waiting for AEAD ACK")
+		return suite, errors.Wrap(noise.ErrTimeout, "aead: timed out waiting for ACK")
 	case <-peer.Recv(node.Opcode(OpcodeAckAEAD)):
 	}
 
@@ -67,7 +93,7 @@ func (b *AEAD) Setup(ephemeralSharedKey []byte, ctx noise.Context) error {
 		return suite.Open(buf[:0], theirNonceBuf, buf, nil)
 	})
 
-	fmt.Printf("Performed AEAD: %x\n", sharedKey)
+	fmt.Printf("Performed AEAD: %x\n", symmetric)
 
-	return nil
+	return suite, nil
 }

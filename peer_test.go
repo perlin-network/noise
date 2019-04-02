@@ -67,9 +67,9 @@ func TestPeerSendsCorrectly(t *testing.T) {
 
 	r := bytes.NewReader(w.Bytes())
 
-	var receivedLength uint64
+	var receivedLength uint16
 	assert.NoError(t, binary.Read(r, binary.BigEndian, &receivedLength))
-	assert.Equal(t, uint64(len(msg)+1), receivedLength)
+	assert.Equal(t, uint16(len(msg)+1), receivedLength)
 
 	var receivedOpcode byte
 	assert.NoError(t, binary.Read(r, binary.BigEndian, &receivedOpcode))
@@ -146,11 +146,9 @@ func TestPeerEnsureFollowsProtocol(t *testing.T) {
 	// Have the peer follow a protocol where the peer should immediately
 	// disconnect such that Start() synchronously returns.
 
-	n.FollowProtocol(func() Protocol {
-		return func(Context) (Protocol, error) {
-			p.Disconnect(nil)
-			return nil, nil
-		}
+	n.FollowProtocol(func(Context) (Protocol, error) {
+		p.Disconnect(nil)
+		return nil, nil
 	})
 
 	p.Start()

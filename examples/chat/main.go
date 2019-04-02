@@ -18,58 +18,43 @@ import (
 
 const (
 	OpcodeChat = "examples.chat"
+	C1         = 8
+	C2         = 8
 )
 
-func protocol(node *noise.Node, ecdh *handshake.ECDH, aead *cipher.AEAD, skad *skademlia.Protocol) func() noise.Protocol {
-	return func() noise.Protocol {
-		var ephemeralSharedKey []byte
-		var err error
+func protocol(node *noise.Node) (*skademlia.Protocol, noise.Protocol) {
+	ecdh := handshake.NewECDH()
+	ecdh.RegisterOpcodes(node)
 
-		var id *skademlia.ID
+	aead := cipher.NewAEAD()
+	aead.RegisterOpcodes(node)
 
-		var p1, p2, p3, p4 noise.Protocol
-
-		p1 = func(ctx noise.Context) (noise.Protocol, error) {
-			if ephemeralSharedKey, err = ecdh.Handshake(ctx); err != nil {
-				return nil, err
-			}
-
-			return p2, nil
-		}
-
-		p2 = func(ctx noise.Context) (noise.Protocol, error) {
-			if err := aead.Setup(ephemeralSharedKey, ctx); err != nil {
-				return nil, err
-			}
-
-			return p3, nil
-		}
-
-		p3 = func(ctx noise.Context) (noise.Protocol, error) {
-			if id, err = skad.Handshake(ctx); err != nil {
-				return nil, err
-			}
-
-			return p4, nil
-		}
-
-		p4 = func(ctx noise.Context) (noise.Protocol, error) {
-			var msg []byte
-
-			for {
-				select {
-				case <-ctx.Done():
-					return nil, nil
-				case ctx := <-ctx.Peer().Recv(node.Opcode(OpcodeChat)):
-					msg = ctx.Bytes()
-				}
-
-				fmt.Printf("%s> %s\n", id.Address(), msg)
-			}
-		}
-
-		return p1
+	keys, err := skademlia.NewKeys(net.JoinHostPort("127.0.0.1", strconv.Itoa(node.Addr().(*net.TCPAddr).Port)), C1, C2)
+	if err != nil {
+		panic(err)
 	}
+
+	overlay := skademlia.New(keys, xnoise.DialTCP)
+	overlay.RegisterOpcodes(node)
+	overlay.WithC1(C1)
+	overlay.WithC2(C2)
+
+	node.RegisterOpcode(OpcodeChat, node.NextAvailableOpcode())
+
+	chatProtocol := func(ctx noise.Context) error {
+		id := ctx.Get(skademlia.KeyID).(*skademlia.ID)
+
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case ctx := <-ctx.Peer().Recv(node.Opcode(OpcodeChat)):
+				fmt.Printf("%s> %s\n", id.Address(), ctx.Bytes())
+			}
+		}
+	}
+
+	return overlay, noise.NewProtocol(ecdh.Protocol(), aead.Protocol(), overlay.Protocol(), chatProtocol)
 }
 
 func main() {
@@ -80,25 +65,8 @@ func main() {
 		panic(err)
 	}
 
-	node.RegisterOpcode(OpcodeChat, node.NextAvailableOpcode())
-
-	ecdh := handshake.NewECDH()
-	ecdh.RegisterOpcodes(node)
-
-	aead := cipher.NewAEAD()
-	aead.RegisterOpcodes(node)
-
-	keys, err := skademlia.NewKeys(net.JoinHostPort("127.0.0.1", strconv.Itoa(node.Addr().(*net.TCPAddr).Port)), 8, 8)
-	if err != nil {
-		panic(err)
-	}
-
-	network := skademlia.New(keys, xnoise.DialTCP)
-	network.RegisterOpcodes(node)
-	network.WithC1(8)
-	network.WithC2(8)
-
-	node.FollowProtocol(protocol(node, ecdh, aead, network))
+	network, protocol := protocol(node)
+	node.FollowProtocol(protocol)
 
 	fmt.Println("Listening for connections on port:", node.Addr().(*net.TCPAddr).Port)
 
@@ -112,7 +80,7 @@ func main() {
 				panic(err)
 			}
 
-			peer.WaitFor(skademlia.SignalHandshakeComplete)
+			peer.WaitFor(skademlia.SignalAuthenticated)
 		}
 	}
 

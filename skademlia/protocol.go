@@ -22,10 +22,12 @@ const (
 	DefaultC1 = 16
 	DefaultC2 = 16
 
-	SignalHandshakeComplete = "skademlia.handshake"
+	SignalAuthenticated = "skademlia.authenticated"
 
 	OpcodePing   = "skademlia.ping"
 	OpcodeLookup = "skademlia.lookup"
+
+	KeyID = "skademlia.id"
 )
 
 type Protocol struct {
@@ -137,86 +139,22 @@ func (b *Protocol) RegisterOpcodes(n *noise.Node) {
 	n.RegisterOpcode(OpcodeLookup, n.NextAvailableOpcode())
 }
 
-func (b *Protocol) Ping(ctx noise.Context) (*ID, error) {
-	node, peer := ctx.Node(), ctx.Peer()
+func (b *Protocol) Protocol() noise.ProtocolBlock {
+	return func(ctx noise.Context) error {
+		id, err := b.Handshake(ctx)
 
-	mux := peer.Mux()
-	defer wrap(mux.Close)
+		if err != nil {
+			return err
+		}
 
-	if err := mux.Send(node.Opcode(OpcodePing), nil); err != nil {
-		return nil, errors.Wrap(err, "failed to send ping")
+		ctx.Set(KeyID, id)
+
+		return nil
 	}
-
-	r := bytes.NewReader(nil)
-
-	select {
-	case <-ctx.Done():
-		return nil, noise.ErrDisconnect
-	case <-time.After(b.handshakeTimeout):
-		return nil, errors.Wrap(noise.ErrTimeout, "timed out receiving pong")
-	case ctx := <-mux.Recv(node.Opcode(OpcodePing)):
-		r.Reset(ctx.Bytes())
-	}
-
-	id, err := UnmarshalID(r)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to unmarshal pong")
-	}
-
-	var signature edwards25519.Signature
-
-	n, err := io.ReadFull(r, signature[:])
-
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to read signature")
-	}
-
-	if n != edwards25519.SizeSignature {
-		return nil, errors.New("did not read enough bytes for signature")
-	}
-
-	if !edwards25519.Verify(id.publicKey, id.Marshal(), signature) {
-		return nil, errors.New("got invalid signature for pong")
-	}
-
-	if err := verifyPuzzle(id.checksum, id.nonce, b.c1, b.c2); err != nil {
-		return nil, errors.Wrap(err, "peer connected with invalid id")
-	}
-
-	if prefixDiff(b.table.self.checksum[:], id.checksum[:], b.prefixDiffLen) < b.prefixDiffMin {
-		return nil, errors.New("peer id is too similar to ours")
-	}
-
-	return &id, err
-}
-
-func (b *Protocol) Lookup(ctx noise.Context, target *ID) (IDs, error) {
-	node, peer := ctx.Node(), ctx.Peer()
-
-	mux := peer.Mux()
-	defer wrap(mux.Close)
-
-	if err := mux.Send(node.Opcode(OpcodeLookup), target.Marshal()); err != nil {
-		return nil, errors.Wrap(err, "failed to send find node request")
-	}
-
-	var buf []byte
-
-	select {
-	case <-ctx.Done():
-		return nil, noise.ErrDisconnect
-	case <-time.After(b.handshakeTimeout):
-		return nil, errors.Wrap(noise.ErrTimeout, "timed out receiving finde node response")
-	case ctx := <-mux.Recv(node.Opcode(OpcodeLookup)):
-		buf = ctx.Bytes()
-	}
-
-	return UnmarshalIDs(bytes.NewReader(buf))
 }
 
 func (b *Protocol) Handshake(ctx noise.Context) (*ID, error) {
-	signal := ctx.Peer().RegisterSignal(SignalHandshakeComplete)
+	signal := ctx.Peer().RegisterSignal(SignalAuthenticated)
 	defer signal()
 
 	go func() {
@@ -231,17 +169,17 @@ func (b *Protocol) Handshake(ctx noise.Context) (*ID, error) {
 				signature := edwards25519.Sign(b.keys.privateKey, id)
 
 				if err := wire.Send(node.Opcode(OpcodePing), append(id, signature[:]...)); err != nil {
-					ctx.Peer().Disconnect(errors.Wrap(err, "failed to send ping"))
+					ctx.Peer().Disconnect(errors.Wrap(err, "skademlia: failed to send ping"))
 				}
 			case wire := <-peer.Recv(node.Opcode(OpcodeLookup)):
 				target, err := UnmarshalID(bytes.NewReader(wire.Bytes()))
 
 				if err != nil {
-					ctx.Peer().Disconnect(errors.Wrap(err, "received invalid lookup request"))
+					ctx.Peer().Disconnect(errors.Wrap(err, "skademlia: received invalid lookup request"))
 				}
 
 				if err := wire.Send(node.Opcode(OpcodeLookup), b.table.FindClosest(&target, b.table.bucketSize).Marshal()); err != nil {
-					ctx.Peer().Disconnect(errors.Wrap(err, "failed to send lookup response"))
+					ctx.Peer().Disconnect(errors.Wrap(err, "skademlia: failed to send lookup response"))
 				}
 			}
 		}
@@ -317,6 +255,84 @@ func (b *Protocol) Handshake(ctx noise.Context) (*ID, error) {
 	return id, nil
 }
 
+func (b *Protocol) Ping(ctx noise.Context) (*ID, error) {
+	node, peer := ctx.Node(), ctx.Peer()
+
+	mux := peer.Mux()
+	defer wrap(mux.Close)
+
+	if err := mux.Send(node.Opcode(OpcodePing), nil); err != nil {
+		return nil, errors.Wrap(err, "skademlia: failed to send ping")
+	}
+
+	r := bytes.NewReader(nil)
+
+	select {
+	case <-ctx.Done():
+		return nil, noise.ErrDisconnect
+	case <-time.After(b.handshakeTimeout):
+		return nil, errors.Wrap(noise.ErrTimeout, "skademlia: timed out receiving pong")
+	case ctx := <-mux.Recv(node.Opcode(OpcodePing)):
+		r.Reset(ctx.Bytes())
+	}
+
+	id, err := UnmarshalID(r)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "skademlia: failed to unmarshal pong")
+	}
+
+	var signature edwards25519.Signature
+
+	n, err := io.ReadFull(r, signature[:])
+
+	if err != nil {
+		return nil, errors.Wrap(err, "skademlia: failed to read signature")
+	}
+
+	if n != edwards25519.SizeSignature {
+		return nil, errors.New("skademlia: did not read enough bytes for signature")
+	}
+
+	if !edwards25519.Verify(id.publicKey, id.Marshal(), signature) {
+		return nil, errors.New("skademlia: got invalid signature for pong")
+	}
+
+	if err := verifyPuzzle(id.checksum, id.nonce, b.c1, b.c2); err != nil {
+		return nil, errors.Wrap(err, "skademlia: peer connected with invalid id")
+	}
+
+	if prefixDiff(b.table.self.checksum[:], id.checksum[:], b.prefixDiffLen) < b.prefixDiffMin {
+		return nil, errors.New("skademlia: peer id is too similar to ours")
+	}
+
+	return &id, err
+}
+
+func (b *Protocol) Lookup(ctx noise.Context, target *ID) (IDs, error) {
+	node, peer := ctx.Node(), ctx.Peer()
+
+	mux := peer.Mux()
+	defer wrap(mux.Close)
+
+	if err := mux.Send(node.Opcode(OpcodeLookup), target.Marshal()); err != nil {
+		return nil, errors.Wrap(err, "skademlia: failed to send find node request")
+	}
+
+	var buf []byte
+
+	select {
+	case <-ctx.Done():
+		return nil, noise.ErrDisconnect
+	case <-time.After(b.handshakeTimeout):
+		return nil, errors.Wrap(noise.ErrTimeout, "skademlia: timed out receiving finde node response")
+	case ctx := <-mux.Recv(node.Opcode(OpcodeLookup)):
+		buf = ctx.Bytes()
+	}
+
+	return UnmarshalIDs(bytes.NewReader(buf))
+}
+
 func (b *Protocol) Update(id *ID) error {
 	for b.table.Update(id) == ErrBucketFull {
 		bucket := b.table.buckets[getBucketID(b.table.self.checksum, id.checksum)]
@@ -339,18 +355,18 @@ func (b *Protocol) Update(id *ID) error {
 		pid, err := b.Ping(lastp.Ctx())
 
 		if err != nil { // Failed to ping peer at back of bucket.
-			lastp.Disconnect(errors.Wrap(noise.ErrTimeout, "failed to ping last peer in bucket"))
+			lastp.Disconnect(errors.Wrap(noise.ErrTimeout, "skademlia: failed to ping last peer in bucket"))
 			continue
 		}
 
 		if pid.checksum != lastid.checksum || pid.nonce != lastid.nonce || pid.address != lastid.address { // Failed to authenticate peer at back of bucket.
-			lastp.Disconnect(errors.Wrap(noise.ErrTimeout, "got invalid id pinging last peer in bucket"))
+			lastp.Disconnect(errors.Wrap(noise.ErrTimeout, "skademlia: got invalid id pinging last peer in bucket"))
 			continue
 		}
 
 		fmt.Printf("Routing table is full; evicting peer %s.\n", id)
 
-		return errors.Wrap(noise.ErrDisconnect, "must reject peer: cannot evict any peers to make room for new peer")
+		return errors.Wrap(noise.ErrDisconnect, "skademlia: cannot evict any peers to make room for new peer")
 	}
 
 	return nil

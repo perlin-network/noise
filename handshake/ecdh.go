@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	SignalHandshakeComplete = "handshake.ecdh"
-	OpcodeHandshakeECDH     = "handshake.ecdh"
+	SignalCompletedECDH = "handshake.ecdh.completed"
+	OpcodeHandshakeECDH = "handshake.ecdh"
 )
 
 type ECDH struct {
@@ -35,26 +35,40 @@ func (b *ECDH) RegisterOpcodes(n *noise.Node) {
 	n.RegisterOpcode(OpcodeHandshakeECDH, n.NextAvailableOpcode())
 }
 
-func (b *ECDH) Handshake(ctx noise.Context) (ephemeralSharedKey []byte, err error) {
+func (b *ECDH) Protocol() noise.ProtocolBlock {
+	return func(ctx noise.Context) error {
+		ephemeral, err := b.Handshake(ctx)
+
+		if err != nil {
+			return err
+		}
+
+		ctx.Set(KeyEphemeral, ephemeral)
+
+		return nil
+	}
+}
+
+func (b *ECDH) Handshake(ctx noise.Context) (ephemeral []byte, err error) {
 	node, peer := ctx.Node(), ctx.Peer()
 
-	signal := peer.RegisterSignal(SignalHandshakeComplete)
+	signal := peer.RegisterSignal(SignalCompletedECDH)
 	defer signal()
 
 	ephemeralPublicKey, ephemeralPrivateKey, err := edwards25519.GenerateKey(nil)
 
 	if err != nil {
-		return nil, errors.New("failed to generate ephemeral keypair")
+		return nil, errors.New("ecdh: failed to generate ephemeral keypair")
 	}
 
 	req := Handshake{publicKey: ephemeralPublicKey}
 
 	if req.signature, err = ephemeralPrivateKey.Sign(b.header, crypto.Hash(0)); err != nil {
-		return nil, errors.Wrap(err, "failed to sign handshake message")
+		return nil, errors.Wrap(err, "ecdh: failed to sign handshake message")
 	}
 
 	if err = peer.SendWithTimeout(node.Opcode(OpcodeHandshakeECDH), req.Marshal(), b.timeout); err != nil {
-		return nil, errors.Wrap(err, "failed to send our ephemeral public key to our peer")
+		return nil, errors.Wrap(err, "ecdh: failed to send our ephemeral public key to our peer")
 	}
 
 	var buf []byte
@@ -63,7 +77,7 @@ func (b *ECDH) Handshake(ctx noise.Context) (ephemeralSharedKey []byte, err erro
 	case <-ctx.Done():
 		return nil, noise.ErrDisconnect
 	case <-time.After(b.timeout):
-		return nil, errors.Wrap(noise.ErrTimeout, "timed out receiving handshake response")
+		return nil, errors.Wrap(noise.ErrTimeout, "ecdh: timed out receiving handshake response")
 	case ctx := <-peer.Recv(node.Opcode(OpcodeHandshakeECDH)):
 		buf = ctx.Bytes()
 	}
@@ -71,19 +85,19 @@ func (b *ECDH) Handshake(ctx noise.Context) (ephemeralSharedKey []byte, err erro
 	res, err := UnmarshalHandshake(buf)
 
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to unmarshal handshake response")
+		return nil, errors.Wrap(err, "ecdh: failed to unmarshal handshake response")
 	}
 
 	if !isEd25519GroupElement(res.publicKey) {
-		return nil, errors.New("failed to unmarshal our peers ephemeral public key")
+		return nil, errors.New("ecdh: failed to unmarshal our peers ephemeral public key")
 	}
 
 	if !edwards25519.Verify(res.publicKey, []byte(b.header), res.signature) {
-		return nil, errors.New("failed to verify signature in handshake request")
+		return nil, errors.New("ecdh: failed to verify signature in handshake request")
 	}
 
-	ephemeralSharedKey = computeSharedKey(ephemeralPrivateKey, res.publicKey)
-	fmt.Printf("Performed ECDH: %x\n", ephemeralSharedKey)
+	ephemeral = computeSharedKey(ephemeralPrivateKey, res.publicKey)
+	fmt.Printf("Performed ECDH: %x\n", ephemeral)
 
 	return
 }

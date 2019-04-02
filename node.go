@@ -10,7 +10,7 @@ import (
 
 type Node struct {
 	l net.Listener
-	p func() Protocol
+	p Protocol
 
 	peers     map[string]*Peer
 	peersLock sync.RWMutex
@@ -74,7 +74,7 @@ func (n *Node) Wrap(conn net.Conn) *Peer {
 // FollowProtocol will no-nop.
 //
 // It is NOT safe to call FollowProtocol concurrently.
-func (n *Node) FollowProtocol(p func() Protocol) {
+func (n *Node) FollowProtocol(p Protocol) {
 	n.p = p
 }
 
@@ -163,7 +163,7 @@ func (n *Node) Opcode(name string) byte {
 // Addr returns the underlying address of the nodes listener.
 //
 // It is safe to call Addr concurrently.
-func (n Node) Addr() net.Addr {
+func (n *Node) Addr() net.Addr {
 	return n.l.Addr()
 }
 

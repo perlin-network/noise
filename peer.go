@@ -23,7 +23,8 @@ type Peer struct {
 	w io.Writer
 	r io.Reader
 
-	c Conn
+	c   Conn
+	ctx Context
 
 	send chan evtSend
 
@@ -40,8 +41,6 @@ type Peer struct {
 
 	errs     []ErrorInterceptor
 	errsLock sync.RWMutex
-
-	killed chan struct{}
 
 	stop     chan error
 	stopOnce sync.Once
@@ -74,7 +73,7 @@ func (p *Peer) Start() {
 	}
 
 	p.deregisterFromNode()
-	p.killed <- struct{}{}
+	p.ctx.d <- struct{}{}
 }
 
 func (p *Peer) Disconnect(err error) {
@@ -84,8 +83,8 @@ func (p *Peer) Disconnect(err error) {
 		p.deregisterFromNode()
 		p.stop <- err
 
-		if len(p.killed) == 1 {
-			<-p.killed
+		if len(p.ctx.d) == 1 {
+			<-p.ctx.d
 		}
 	})
 }
@@ -218,7 +217,7 @@ func (p *Peer) InterceptErrors(i ErrorInterceptor) {
 }
 
 func (p *Peer) Ctx() Context {
-	return Context{n: p.n, p: p, d: p.killed}
+	return p.ctx
 }
 
 func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
@@ -232,9 +231,9 @@ func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 		recv:    make(map[uint64]map[byte]evtRecv),
 		signals: make(map[string]chan struct{}),
 		stop:    make(chan error, 1),
-		killed:  make(chan struct{}, 1),
 	}
 
+	p.ctx = Context{n: n, p: p, d: make(chan struct{}, 1), v: make(map[string]interface{}), vm: new(sync.RWMutex)}
 	p.m = Mux{peer: p}
 
 	codec := DefaultProtocol.Clone()
@@ -349,17 +348,17 @@ func (p *Peer) cleanup(stop <-chan struct{}) error {
 	return err
 }
 
-func (p *Peer) followProtocol(stop <-chan struct{}) (err error) {
-	initial := p.n.p()
+func (p *Peer) followProtocol(stop <-chan struct{}) error {
+	initial := p.n.p
 
-	for state := initial; state != nil; state, err = state(newContext(p, stop)) {
+	for state, err := initial(p.ctx); err != nil || state != nil; state, err = state(p.ctx) {
 		if err != nil {
 			return err
 		}
 	}
 
 	<-stop
-	return
+	return nil
 }
 
 func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
