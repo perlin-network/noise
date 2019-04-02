@@ -396,6 +396,13 @@ func (b *Protocol) Bootstrap(node *noise.Node) (results []*ID) {
 }
 
 func (b *Protocol) FindNode(node *noise.Node, target *ID, k int, a int, d int) (results []*ID) {
+	type request ID
+
+	type response struct {
+		requestee *request
+		ids       []*ID
+	}
+
 	var mu sync.Mutex
 
 	visited := map[[blake2b.Size256]byte]struct{}{
@@ -407,8 +414,6 @@ func (b *Protocol) FindNode(node *noise.Node, target *ID, k int, a int, d int) (
 
 	for i, id := range b.table.FindClosest(target, k) {
 		visited[id.checksum] = struct{}{}
-
-		results = append(results, id)
 		lookups[i%d].PushBack(id)
 	}
 
@@ -417,20 +422,21 @@ func (b *Protocol) FindNode(node *noise.Node, target *ID, k int, a int, d int) (
 
 	for _, lookup := range lookups { // Perform d parallel disjoint lookups.
 		go func(lookup queue.Queue) {
-			requests := make(chan *ID, a)
-			responses := make(chan []*ID, a)
+
+			requests := make(chan *request, a)
+			responses := make(chan *response, a)
 
 			for i := 0; i < a; i++ { // Perform α queries in parallel per disjoint lookup.
 				go func() {
 					for id := range requests {
-						peer := b.PeerByID(node, id)
+						peer := b.PeerByID(node, (*ID)(id))
 
 						if peer == nil {
 							responses <- nil
 							continue
 						}
 
-						ids, err := b.Lookup(peer.Ctx(), id)
+						ids, err := b.Lookup(peer.Ctx(), (*ID)(id))
 
 						if err != nil {
 							responses <- nil
@@ -438,7 +444,7 @@ func (b *Protocol) FindNode(node *noise.Node, target *ID, k int, a int, d int) (
 							continue
 						}
 
-						responses <- ids
+						responses <- &response{requestee: id, ids: ids}
 					}
 				}()
 			}
@@ -447,7 +453,7 @@ func (b *Protocol) FindNode(node *noise.Node, target *ID, k int, a int, d int) (
 
 			for lookup.Len() > 0 || pending > 0 {
 				for lookup.Len() > 0 && len(requests) < cap(requests) {
-					requests <- lookup.PopFront().(*ID)
+					requests <- (*request)(lookup.PopFront().(*ID))
 					pending++
 				}
 
@@ -455,16 +461,18 @@ func (b *Protocol) FindNode(node *noise.Node, target *ID, k int, a int, d int) (
 					res := <-responses
 
 					if res != nil {
-						for _, id := range res {
+						for _, id := range res.ids {
 							mu.Lock()
 							if _, seen := visited[id.checksum]; !seen {
 								visited[id.checksum] = struct{}{}
-
-								results = append(results, id)
 								lookup.PushBack(id)
 							}
 							mu.Unlock()
 						}
+
+						mu.Lock()
+						results = append(results, (*ID)(res.requestee))
+						mu.Unlock()
 					}
 
 					pending--
