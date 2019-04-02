@@ -140,6 +140,10 @@ func (n *Node) PeerByAddr(address string) *Peer {
 //
 // It is safe to call RegisterOpcode concurrently.
 func (n *Node) RegisterOpcode(name string, opcode byte) {
+	if opcode == 0 {
+		return
+	}
+
 	n.opcodesLock.Lock()
 	_, registered1 := n.opcodes[name]
 	_, registered2 := n.opcodesIndex[opcode]

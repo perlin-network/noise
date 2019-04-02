@@ -170,7 +170,7 @@ func (p *Reader) ReadByte() (res byte) {
 		return
 	}
 
-	p.Fail(binary.Read(p.buf, binary.LittleEndian, &res))
+	p.Fail(binary.Read(p.buf, binary.BigEndian, &res))
 	return
 }
 
@@ -215,7 +215,7 @@ func (w *Writer) WriteUint64(order binary.ByteOrder, val uint64) {
 }
 
 func (w *Writer) WriteByte(val byte) {
-	w.Fail(binary.Write(w.buf, binary.LittleEndian, val))
+	w.Fail(binary.Write(w.buf, binary.BigEndian, val))
 }
 
 func (w *Writer) WriteBytes(buf []byte) {

@@ -416,12 +416,18 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 		opcode := state.Byte(WireKeyOpcode)
 		mux := state.Uint64(WireKeyMuxID)
 
-		p.n.opcodesLock.RLock()
-		_, registered := p.n.opcodesIndex[opcode]
-		p.n.opcodesLock.RUnlock()
+		if opcode == 0 {
+			return nil
+		}
 
-		if opcode == 0 || !registered {
-			return errors.Errorf("received unregistered opcode %d", opcode)
+		if p.n != nil {
+			p.n.opcodesLock.RLock()
+			_, registered := p.n.opcodesIndex[opcode]
+			p.n.opcodesLock.RUnlock()
+
+			if !registered {
+				return nil
+			}
 		}
 
 		hub := p.getMuxQueue(mux, opcode)

@@ -52,17 +52,18 @@ func TestPeerSendsCorrectly(t *testing.T) {
 
 	c, _ := net.Pipe()
 
-	p := newPeer(nil, nil, w, new(iotest.NopReader), c)
+	node := NewNode(nil)
+	node.RegisterOpcode("lorem ipsum", node.NextAvailableOpcode())
+
+	p := newPeer(node, nil, w, new(iotest.NopReader), c)
 	defer p.Disconnect(nil)
 
 	p.UpdateWireCodec(testProtocol)
 
 	go p.Start()
 
-	opcode := byte(0x01)
 	msg := []byte("lorem ipsum")
-
-	assert.NoError(t, p.Send(opcode, msg))
+	assert.NoError(t, p.Send(node.Opcode("lorem ipsum"), msg))
 
 	r := bytes.NewReader(w.Bytes())
 
@@ -72,7 +73,7 @@ func TestPeerSendsCorrectly(t *testing.T) {
 
 	var receivedOpcode byte
 	assert.NoError(t, binary.Read(r, binary.BigEndian, &receivedOpcode))
-	assert.Equal(t, opcode, receivedOpcode)
+	assert.Equal(t, node.Opcode("lorem ipsum"), receivedOpcode)
 
 	receivedBuf := make([]byte, len(msg))
 
@@ -160,7 +161,9 @@ func TestPeerDropMessageWhenReceiveQueueFull(t *testing.T) {
 
 	a, b := net.Pipe()
 
-	p := newPeer(nil, nil, b, b, b)
+	n := NewNode(nil)
+	n.RegisterOpcode("lorem ipsum", 0x01)
+	p := newPeer(n, nil, b, b, b)
 	defer p.Disconnect(nil)
 
 	go p.Start()
@@ -176,7 +179,7 @@ func TestPeerDropMessageWhenReceiveQueueFull(t *testing.T) {
 			state := wire.AcquireState()
 			defer wire.ReleaseState(state)
 
-			state.SetByte(WireKeyOpcode, 0)
+			state.SetByte(WireKeyOpcode, n.Opcode("lorem ipsum"))
 			state.SetUint64(WireKeyMuxID, 0)
 			state.SetMessage(msg)
 
