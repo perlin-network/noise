@@ -4,6 +4,7 @@ import (
 	"github.com/perlin-network/noise"
 	"github.com/pkg/errors"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -28,4 +29,29 @@ func DialTCP(n *noise.Node, address string) (*noise.Peer, error) {
 	go peer.Start()
 
 	return peer, nil
+}
+
+func ListenTCP(port uint) (*noise.Node, error) {
+	listener, err := net.Listen("tcp", ":"+strconv.FormatUint(uint64(port), 10))
+
+	if err != nil {
+		return nil, err
+	}
+
+	node := noise.NewNode(listener)
+
+	go func() {
+		for {
+			conn, err := listener.Accept()
+
+			if err != nil {
+				break
+			}
+
+			peer := node.Wrap(conn)
+			go peer.Start()
+		}
+	}()
+
+	return node, nil
 }

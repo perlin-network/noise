@@ -75,18 +75,11 @@ func protocol(node *noise.Node, ecdh *handshake.ECDH, aead *cipher.AEAD, skad *s
 func main() {
 	flag.Parse()
 
-	// Hooking Noise onto a net.Listener.
-	listener, err := net.Listen("tcp", ":0")
+	node, err := xnoise.ListenTCP(0)
 	if err != nil {
 		panic(err)
 	}
 
-	keys, err := skademlia.NewKeys(net.JoinHostPort("127.0.0.1", strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)), 8, 8)
-	if err != nil {
-		panic(err)
-	}
-
-	node := noise.NewNode(listener)
 	node.RegisterOpcode(OpcodeChat, node.NextAvailableOpcode())
 
 	ecdh := handshake.NewECDH()
@@ -95,6 +88,11 @@ func main() {
 	aead := cipher.NewAEAD()
 	aead.RegisterOpcodes(node)
 
+	keys, err := skademlia.NewKeys(net.JoinHostPort("127.0.0.1", strconv.Itoa(node.Addr().(*net.TCPAddr).Port)), 8, 8)
+	if err != nil {
+		panic(err)
+	}
+
 	network := skademlia.New(keys, xnoise.DialTCP)
 	network.RegisterOpcodes(node)
 	network.WithC1(8)
@@ -102,22 +100,9 @@ func main() {
 
 	node.FollowProtocol(protocol(node, ecdh, aead, network))
 
+	fmt.Println("Listening for connections on port:", node.Addr().(*net.TCPAddr).Port)
+
 	defer node.Shutdown()
-
-	go func() {
-		fmt.Println("Listening for connections on port:", listener.Addr().(*net.TCPAddr).Port)
-
-		for {
-			conn, err := listener.Accept()
-
-			if err != nil {
-				break
-			}
-
-			peer := node.Wrap(conn)
-			go peer.Start()
-		}
-	}()
 
 	if addresses := flag.Args(); len(addresses) > 0 {
 		for _, address := range addresses {
