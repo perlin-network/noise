@@ -19,7 +19,7 @@ type ID struct {
 
 func NewID(address string, publicKey edwards25519.PublicKey, nonce [blake2b.Size256]byte) *ID {
 	id := blake2b.Sum256(publicKey[:])
-	checksum := blake2b.Sum256(id[:])
+	checksum := blake2b.Sum256(append(id[:], address...))
 
 	return &ID{
 		address:   address,
@@ -83,7 +83,7 @@ func UnmarshalID(b io.Reader) (m ID, err error) {
 	}
 
 	m.id = blake2b.Sum256(m.publicKey[:])
-	m.checksum = blake2b.Sum256(m.id[:])
+	m.checksum = blake2b.Sum256(append(m.id[:], address...))
 
 	if err = binary.Read(b, binary.BigEndian, &m.nonce); err != nil {
 		return
@@ -143,7 +143,7 @@ func (k *Keypair) ID() *ID {
 }
 
 func NewKeys(address string, c1, c2 int) (*Keypair, error) {
-	publicKey, privateKey, id, checksum, err := generateKeys(c1)
+	publicKey, privateKey, id, checksum, err := generateKeys(address, c1)
 
 	if err != nil {
 		return nil, err
@@ -176,7 +176,7 @@ func LoadKeys(address string, privateKey edwards25519.PrivateKey, nonce [blake2b
 	publicKey := privateKey.Public()
 
 	id := blake2b.Sum256(publicKey[:])
-	checksum := blake2b.Sum256(id[:])
+	checksum := blake2b.Sum256(append(id[:], address...))
 
 	if err := verifyPuzzle(checksum, nonce, c1, c2); err != nil {
 		return nil, errors.Wrap(err, "keys are invalid")

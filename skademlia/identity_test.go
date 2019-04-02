@@ -15,7 +15,7 @@ func TestPreventLoadingIllegalKeys(t *testing.T) {
 		publicKey := privateKey.Public()
 
 		id := blake2b.Sum256(publicKey[:])
-		checksum := blake2b.Sum256(id[:])
+		checksum := blake2b.Sum256(append(id[:], address...))
 
 		err := verifyPuzzle(checksum, nonce, int(c1), int(c2))
 		keys, err2 := LoadKeys(address, privateKey, nonce, int(c1), int(c2))
@@ -49,6 +49,10 @@ func TestCreateThenLoadKeys(t *testing.T) {
 			return false
 		}
 
+		if keys == nil || err != nil {
+			return false
+		}
+
 		if !assert.NotZero(t, keys.self) {
 			return false
 		}
@@ -76,6 +80,10 @@ func TestCreateThenLoadKeys(t *testing.T) {
 		reloaded, err := LoadKeys(address, keys.privateKey, keys.nonce, int(c1), int(c2))
 
 		if !assert.NotNil(t, reloaded) || !assert.NoError(t, err) {
+			return false
+		}
+
+		if reloaded == nil || err != nil {
 			return false
 		}
 
