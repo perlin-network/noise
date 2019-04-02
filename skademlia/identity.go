@@ -67,26 +67,26 @@ func UnmarshalID(b io.Reader) (m ID, err error) {
 	var length uint16
 
 	if err = binary.Read(b, binary.BigEndian, &length); err != nil {
-		return
+		return ID{}, err
 	}
 
 	address := make([]byte, length)
 
 	if err = binary.Read(b, binary.BigEndian, &address); err != nil {
-		return
+		return ID{}, err
 	}
 
 	m.address = string(address)
 
 	if err = binary.Read(b, binary.BigEndian, &m.publicKey); err != nil {
-		return
+		return ID{}, err
 	}
 
 	m.id = blake2b.Sum256(m.publicKey[:])
 	m.checksum = blake2b.Sum256(append(m.id[:], address...))
 
 	if err = binary.Read(b, binary.BigEndian, &m.nonce); err != nil {
-		return
+		return ID{}, err
 	}
 
 	return

@@ -124,7 +124,7 @@ func TestMarshalUnmarshalID(t *testing.T) {
 		m := NewID(address, pub, nonce)
 		m2, err := UnmarshalID(bytes.NewReader(m.Marshal()))
 
-		if m3, err := UnmarshalID(bytes.NewReader(buf)); m3 == zero && !assert.Error(t, err) || m3 != zero && !assert.NoError(t, err) {
+		if m3, err := UnmarshalID(bytes.NewReader(buf)); (m3 == zero && !assert.Error(t, err)) || (m3 != zero && !assert.NoError(t, err)) {
 			return false
 		}
 
