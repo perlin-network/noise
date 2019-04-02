@@ -63,21 +63,17 @@ func TestSignVerify(t *testing.T) {
 
 func TestCryptoSigner(t *testing.T) {
 	var zero zeroReader
-	public, private, _ := GenerateKey(zero)
 
-	publicInterface := private.Public()
-	public2, ok := publicInterface.(PublicKey)
-	if !ok {
-		t.Fatalf("expected PublicKey from Public() but got %T", publicInterface)
-	}
+	public, private, _ := GenerateKey(zero)
+	public2 := private.Public()
 
 	if public != public2 {
 		t.Errorf("public keys do not match: original:%x vs Public():%x", public, public2)
 	}
 
 	message := []byte("message")
-	var noHash crypto.Hash
-	signature, err := private.Sign(message, noHash)
+	signature, err := private.Sign(message, crypto.Hash(0))
+
 	if err != nil {
 		t.Fatalf("error from Sign(): %s", err)
 	}

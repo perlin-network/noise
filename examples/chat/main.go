@@ -9,6 +9,7 @@ import (
 	"github.com/perlin-network/noise/cipher"
 	"github.com/perlin-network/noise/handshake"
 	"github.com/perlin-network/noise/skademlia"
+	"github.com/perlin-network/noise/xnoise"
 	"net"
 	"os"
 	"strconv"
@@ -74,13 +75,13 @@ func protocol(node *noise.Node, ecdh *handshake.ECDH, aead *cipher.AEAD, skad *s
 func main() {
 	flag.Parse()
 
-	keys, err := skademlia.NewKeys(8, 8)
+	// Hooking Noise onto a net.Listener.
+	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
 		panic(err)
 	}
 
-	// Hooking Noise onto a net.Listener.
-	listener, err := net.Listen("tcp", ":0")
+	keys, err := skademlia.NewKeys(net.JoinHostPort("127.0.0.1", strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)), 8, 8)
 	if err != nil {
 		panic(err)
 	}
@@ -94,7 +95,7 @@ func main() {
 	aead := cipher.NewAEAD()
 	aead.RegisterOpcodes(node)
 
-	network := skademlia.New(keys, net.JoinHostPort("127.0.0.1", strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)))
+	network := skademlia.New(keys, xnoise.DialTCP)
 	network.RegisterOpcodes(node)
 	network.WithC1(8)
 	network.WithC2(8)
@@ -120,7 +121,7 @@ func main() {
 
 	if addresses := flag.Args(); len(addresses) > 0 {
 		for _, address := range addresses {
-			peer, err := node.Dial(address)
+			peer, err := xnoise.DialTCP(node, address)
 
 			if err != nil {
 				panic(err)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/perlin-network/noise/xnoise"
 	"net/http"
 	_ "net/http/pprof"
 )
@@ -27,8 +28,6 @@ func protocol(ecdh *handshake.ECDH, aead *cipher.AEAD, skad *skademlia.Protocol)
 		var ephemeralSharedKey []byte
 		var err error
 
-		var id *skademlia.ID
-
 		var p1, p2, p3 noise.Protocol
 
 		p1 = func(ctx noise.Context) (noise.Protocol, error) {
@@ -48,7 +47,7 @@ func protocol(ecdh *handshake.ECDH, aead *cipher.AEAD, skad *skademlia.Protocol)
 		}
 
 		p3 = func(ctx noise.Context) (noise.Protocol, error) {
-			if id, err = skad.Handshake(ctx); err != nil {
+			if _, err := skad.Handshake(ctx); err != nil {
 				return nil, err
 			}
 
@@ -65,7 +64,7 @@ func launch() *noise.Node {
 		panic(err)
 	}
 
-	keys, err := skademlia.NewKeys(8, 8)
+	keys, err := skademlia.NewKeys(net.JoinHostPort("127.0.0.1", strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)), 8, 8)
 	if err != nil {
 		panic(err)
 	}
@@ -79,7 +78,7 @@ func launch() *noise.Node {
 	aead := cipher.NewAEAD()
 	aead.RegisterOpcodes(node)
 
-	network := skademlia.New(keys, net.JoinHostPort("127.0.0.1", strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)))
+	network := skademlia.New(keys, xnoise.DialTCP)
 	network.RegisterOpcodes(node)
 	network.WithC1(8)
 	network.WithC2(8)
@@ -118,7 +117,7 @@ func main() {
 	var sendCount uint64
 	var recvCount uint64
 
-	aliceToBob, err := alice.Dial(bob.Addr().String())
+	aliceToBob, err := xnoise.DialTCP(alice, bob.Addr().String())
 
 	if err != nil {
 		panic(err)

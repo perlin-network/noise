@@ -10,8 +10,6 @@ import (
 
 type Node struct {
 	l net.Listener
-	d Dialer
-
 	p func() Protocol
 
 	peers     map[string]*Peer
@@ -25,7 +23,6 @@ type Node struct {
 func NewNode(l net.Listener) *Node {
 	return &Node{
 		l: l,
-		d: defaultDialer,
 
 		peers: make(map[string]*Peer),
 
@@ -68,29 +65,6 @@ func (n *Node) NewPeer(addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 // It is safe to call Wrap concurrently.
 func (n *Node) Wrap(conn net.Conn) *Peer {
 	return n.NewPeer(conn.RemoteAddr(), conn, bufio.NewReader(conn), conn)
-}
-
-// SetDialer sets the dialer used to establish connections to new peers.
-// By default, the nodes default dialer dials nodes through TCP.
-//
-// It is NOT safe to call SetDialer concurrently.
-func (n *Node) SetDialer(d Dialer) {
-	n.d = d
-}
-
-// Dial dials the address, and returns the peer instance representative
-// of the established underlying connection.
-//
-// In order to redefine how addresses are dialed, or how peer instances
-// are instantiated, refer to (*Node).SetDialer(noise.Dialer).
-//
-// It is safe to call Dial concurrently.
-func (n *Node) Dial(address string) (*Peer, error) {
-	if p := n.PeerByAddr(address); p != nil {
-		return p, nil
-	}
-
-	return n.d(n, address)
 }
 
 // FollowProtocol enforces all peers to follow a specified protocol, which is

@@ -11,14 +11,14 @@ import (
 )
 
 func TestPreventLoadingIllegalKeys(t *testing.T) {
-	f := func(privateKey edwards25519.PrivateKey, nonce [blake2b.Size256]byte, c1, c2 byte) bool {
-		publicKey := privateKey.Public().(edwards25519.PublicKey)
+	f := func(address string, privateKey edwards25519.PrivateKey, nonce [blake2b.Size256]byte, c1, c2 byte) bool {
+		publicKey := privateKey.Public()
 
 		id := blake2b.Sum256(publicKey[:])
 		checksum := blake2b.Sum256(id[:])
 
 		err := verifyPuzzle(checksum, nonce, int(c1), int(c2))
-		keys, err2 := LoadKeys(privateKey, nonce, int(c1), int(c2))
+		keys, err2 := LoadKeys(address, privateKey, nonce, int(c1), int(c2))
 
 		if keys == nil && !assert.Error(t, err2) {
 			return false
@@ -39,13 +39,17 @@ func TestPreventLoadingIllegalKeys(t *testing.T) {
 }
 
 func TestCreateThenLoadKeys(t *testing.T) {
-	f := func(c1, c2 byte) bool {
+	f := func(address string, c1, c2 byte) bool {
 		c1 = c1 / 32
 		c2 = c2 / 32
 
-		keys, err := NewKeys(int(c1), int(c2))
+		keys, err := NewKeys(address, int(c1), int(c2))
 
 		if !assert.NotNil(t, keys) || !assert.NoError(t, err) {
+			return false
+		}
+
+		if !assert.NotZero(t, keys.self) {
 			return false
 		}
 
@@ -69,9 +73,13 @@ func TestCreateThenLoadKeys(t *testing.T) {
 			return false
 		}
 
-		reloaded, err := LoadKeys(keys.privateKey, keys.nonce, int(c1), int(c2))
+		reloaded, err := LoadKeys(address, keys.privateKey, keys.nonce, int(c1), int(c2))
 
 		if !assert.NotNil(t, reloaded) || !assert.NoError(t, err) {
+			return false
+		}
+
+		if !assert.Equal(t, keys.self.address, reloaded.self.address) {
 			return false
 		}
 

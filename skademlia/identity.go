@@ -138,15 +138,11 @@ type Keypair struct {
 	c1, c2              int
 }
 
-func (k *Keypair) ID(address string) *ID {
-	if k.self == nil || k.self.address != address {
-		k.self = NewID(address, k.publicKey, k.nonce)
-	}
-
+func (k *Keypair) ID() *ID {
 	return k.self
 }
 
-func NewKeys(c1, c2 int) (*Keypair, error) {
+func NewKeys(address string, c1, c2 int) (*Keypair, error) {
 	publicKey, privateKey, id, checksum, err := generateKeys(c1)
 
 	if err != nil {
@@ -163,6 +159,8 @@ func NewKeys(c1, c2 int) (*Keypair, error) {
 		privateKey: privateKey,
 		publicKey:  publicKey,
 
+		self: NewID(address, publicKey, nonce),
+
 		id:       id,
 		checksum: checksum,
 		nonce:    nonce,
@@ -174,7 +172,7 @@ func NewKeys(c1, c2 int) (*Keypair, error) {
 	return keys, nil
 }
 
-func LoadKeys(privateKey edwards25519.PrivateKey, nonce [blake2b.Size256]byte, c1, c2 int) (*Keypair, error) {
+func LoadKeys(address string, privateKey edwards25519.PrivateKey, nonce [blake2b.Size256]byte, c1, c2 int) (*Keypair, error) {
 	publicKey := privateKey.Public()
 
 	id := blake2b.Sum256(publicKey[:])
@@ -187,6 +185,8 @@ func LoadKeys(privateKey edwards25519.PrivateKey, nonce [blake2b.Size256]byte, c
 	keys := &Keypair{
 		privateKey: privateKey,
 		publicKey:  publicKey,
+
+		self: NewID(address, publicKey, nonce),
 
 		id:       id,
 		checksum: checksum,

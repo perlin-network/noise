@@ -32,6 +32,8 @@ type Protocol struct {
 	table *Table
 	keys  *Keypair
 
+	dialer noise.Dialer
+
 	prefixDiffLen int
 	prefixDiffMin int
 
@@ -44,10 +46,12 @@ type Protocol struct {
 	peersLock sync.Mutex
 }
 
-func New(keys *Keypair, externalAddress string) *Protocol {
+func New(keys *Keypair, dialer noise.Dialer) *Protocol {
 	return &Protocol{
-		table: NewTable(keys.ID(externalAddress)),
+		table: NewTable(keys.ID()),
 		keys:  keys,
+
+		dialer: dialer,
 
 		prefixDiffLen: DefaultPrefixDiffLen,
 		prefixDiffMin: DefaultPrefixDiffMin,
@@ -114,7 +118,7 @@ func (b *Protocol) PeerByID(node *noise.Node, id *ID) *noise.Peer {
 		return peer
 	}
 
-	peer, err := node.Dial(id.address)
+	peer, err := b.dialer(node, id.address)
 
 	if err != nil {
 		b.evict(id)
