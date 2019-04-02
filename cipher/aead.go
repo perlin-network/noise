@@ -4,10 +4,11 @@ import (
 	"crypto/cipher"
 	"crypto/sha256"
 	"encoding/binary"
-	"fmt"
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/handshake"
 	"github.com/pkg/errors"
+	"io/ioutil"
+	"log"
 	"sync/atomic"
 	"time"
 )
@@ -18,11 +19,16 @@ const (
 )
 
 type AEAD struct {
+	logger  *log.Logger
 	timeout time.Duration
 }
 
 func NewAEAD() *AEAD {
-	return &AEAD{timeout: 3 * time.Second}
+	return &AEAD{logger: log.New(ioutil.Discard, "", 0), timeout: 3 * time.Second}
+}
+
+func (b *AEAD) Logger() *log.Logger {
+	return b.logger
 }
 
 func (b *AEAD) TimeoutAfter(timeout time.Duration) *AEAD {
@@ -100,7 +106,7 @@ func (b *AEAD) Setup(ephemeralSharedKey []byte, ctx noise.Context) (cipher.AEAD,
 		return suite.Open(buf[:0], theirNonceBuf, buf, nil)
 	})
 
-	fmt.Printf("Performed AEAD: %x\n", symmetric)
+	b.logger.Printf("Performed AEAD: %x\n", symmetric)
 
 	return suite, nil
 }

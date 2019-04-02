@@ -2,13 +2,14 @@ package skademlia
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/edwards25519"
 	"github.com/phf/go-queue/queue"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/blake2b"
 	"io"
+	"io/ioutil"
+	"log"
 	"net"
 	"sort"
 	"sync"
@@ -31,6 +32,8 @@ const (
 )
 
 type Protocol struct {
+	logger *log.Logger
+
 	table *Table
 	keys  *Keypair
 
@@ -50,6 +53,8 @@ type Protocol struct {
 
 func New(keys *Keypair, dialer noise.Dialer) *Protocol {
 	return &Protocol{
+		logger: log.New(ioutil.Discard, "", 0),
+
 		table: NewTable(keys.ID()),
 		keys:  keys,
 
@@ -66,6 +71,10 @@ func New(keys *Keypair, dialer noise.Dialer) *Protocol {
 
 		peers: make(map[[blake2b.Size256]byte]*noise.Peer),
 	}
+}
+
+func (b *Protocol) Logger() *log.Logger {
+	return b.logger
 }
 
 func (b *Protocol) WithC1(c1 int) *Protocol {
@@ -250,7 +259,7 @@ func (b *Protocol) Handshake(ctx noise.Context) (*ID, error) {
 		}
 	})
 
-	fmt.Printf("Registered to S/Kademlia: %s\n", id)
+	b.logger.Printf("Registered to S/Kademlia: %s\n", id)
 
 	return id, nil
 }
@@ -364,7 +373,7 @@ func (b *Protocol) Update(id *ID) error {
 			continue
 		}
 
-		fmt.Printf("Routing table is full; evicting peer %s.\n", id)
+		b.logger.Printf("Routing table is full; evicting peer %s.\n", id)
 
 		return errors.Wrap(noise.ErrDisconnect, "skademlia: cannot evict any peers to make room for new peer")
 	}
@@ -466,7 +475,7 @@ func (b *Protocol) FindNode(node *noise.Node, target *ID, k int, a int, d int) (
 }
 
 func (b *Protocol) evict(id *ID) {
-	fmt.Printf("Peer %s could not be reached, and has been evicted.\n", id)
+	b.logger.Printf("Peer %s could not be reached, and has been evicted.\n", id)
 
 	bucket := b.table.buckets[getBucketID(b.table.self.checksum, id.checksum)]
 	b.table.Delete(bucket, id)

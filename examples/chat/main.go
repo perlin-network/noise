@@ -24,9 +24,11 @@ const (
 
 func protocol(node *noise.Node) (*skademlia.Protocol, noise.Protocol) {
 	ecdh := handshake.NewECDH()
+	ecdh.Logger().SetOutput(os.Stdout)
 	ecdh.RegisterOpcodes(node)
 
 	aead := cipher.NewAEAD()
+	aead.Logger().SetOutput(os.Stdout)
 	aead.RegisterOpcodes(node)
 
 	keys, err := skademlia.NewKeys(net.JoinHostPort("127.0.0.1", strconv.Itoa(node.Addr().(*net.TCPAddr).Port)), C1, C2)
@@ -35,6 +37,7 @@ func protocol(node *noise.Node) (*skademlia.Protocol, noise.Protocol) {
 	}
 
 	overlay := skademlia.New(keys, xnoise.DialTCP)
+	overlay.Logger().SetOutput(os.Stdout)
 	overlay.RegisterOpcodes(node)
 	overlay.WithC1(C1)
 	overlay.WithC2(C2)

@@ -2,10 +2,11 @@ package handshake
 
 import (
 	"crypto"
-	"fmt"
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/edwards25519"
 	"github.com/pkg/errors"
+	"io/ioutil"
+	"log"
 	"time"
 )
 
@@ -15,15 +16,21 @@ const (
 )
 
 type ECDH struct {
+	logger  *log.Logger
 	message []byte
 	timeout time.Duration
 }
 
 func NewECDH() *ECDH {
 	return &ECDH{
+		logger:  log.New(ioutil.Discard, "", 0),
 		message: []byte(".noise_handshake_"),
 		timeout: 3 * time.Second,
 	}
+}
+
+func (b *ECDH) Logger() *log.Logger {
+	return b.logger
 }
 
 func (b *ECDH) WithMessage(message []byte) *ECDH {
@@ -102,7 +109,8 @@ func (b *ECDH) Handshake(ctx noise.Context) (ephemeral []byte, err error) {
 	}
 
 	ephemeral = computeSharedKey(ephemeralPrivateKey, res.publicKey)
-	fmt.Printf("Performed ECDH: %x\n", ephemeral)
+
+	b.logger.Printf("Performed ECDH: %x\n", ephemeral)
 
 	return
 }
