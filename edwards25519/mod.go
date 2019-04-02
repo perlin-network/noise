@@ -40,11 +40,11 @@ type PrivateKey [SizePrivateKey]byte
 type Signature [SizeSignature]byte
 
 // Public returns the PublicKey corresponding to priv.
-func (p PrivateKey) Public() crypto.PublicKey {
+func (p PrivateKey) Public() PublicKey {
 	var publicKey PublicKey
 	copy(publicKey[:], p[SizePrivateKey/2:])
 
-	return PublicKey(publicKey)
+	return publicKey
 }
 
 // Sign signs the given message with a private key..
