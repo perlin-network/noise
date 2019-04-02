@@ -17,10 +17,17 @@ const (
 	OpcodeAckAEAD   = "cipher.aead.ack"
 )
 
-type AEAD struct{}
+type AEAD struct {
+	timeout time.Duration
+}
 
 func NewAEAD() *AEAD {
-	return new(AEAD)
+	return &AEAD{timeout: 3 * time.Second}
+}
+
+func (b *AEAD) TimeoutAfter(timeout time.Duration) *AEAD {
+	b.timeout = timeout
+	return b
 }
 
 func (b *AEAD) RegisterOpcodes(n *noise.Node) {
@@ -72,7 +79,7 @@ func (b *AEAD) Setup(ephemeralSharedKey []byte, ctx noise.Context) (cipher.AEAD,
 	select {
 	case <-ctx.Done():
 		return suite, noise.ErrDisconnect
-	case <-time.After(3 * time.Second):
+	case <-time.After(b.timeout):
 		return suite, errors.Wrap(noise.ErrTimeout, "aead: timed out waiting for ACK")
 	case <-peer.Recv(node.Opcode(OpcodeAckAEAD)):
 	}

@@ -42,7 +42,7 @@ type Protocol struct {
 	c1, c2 int
 
 	handshakeTimeout time.Duration
-	findNodeTimeout  time.Duration
+	lookupTimeout    time.Duration
 
 	peers     map[[blake2b.Size256]byte]*noise.Peer
 	peersLock sync.Mutex
@@ -62,7 +62,7 @@ func New(keys *Keypair, dialer noise.Dialer) *Protocol {
 		c2: DefaultC2,
 
 		handshakeTimeout: 3 * time.Second,
-		findNodeTimeout:  3 * time.Second,
+		lookupTimeout:    3 * time.Second,
 
 		peers: make(map[[blake2b.Size256]byte]*noise.Peer),
 	}
@@ -324,7 +324,7 @@ func (b *Protocol) Lookup(ctx noise.Context, target *ID) (IDs, error) {
 	select {
 	case <-ctx.Done():
 		return nil, noise.ErrDisconnect
-	case <-time.After(b.handshakeTimeout):
+	case <-time.After(b.lookupTimeout):
 		return nil, errors.Wrap(noise.ErrTimeout, "skademlia: timed out receiving finde node response")
 	case ctx := <-mux.Recv(node.Opcode(OpcodeLookup)):
 		buf = ctx.Bytes()
