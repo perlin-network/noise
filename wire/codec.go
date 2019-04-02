@@ -137,11 +137,7 @@ func (c *Codec) DoWrite(w io.Writer, state *State) error {
 
 type Reader struct {
 	buf *bytes.Reader
-
-	len int
 	err error
-
-	interceptors []Interceptor
 }
 
 func (p Reader) Flush() error {
@@ -166,7 +162,6 @@ func (p *Reader) ReadUint64(order binary.ByteOrder) (res uint64) {
 	}
 
 	p.Fail(binary.Read(p.buf, order, &res))
-	p.len += 8
 	return
 }
 
@@ -176,7 +171,6 @@ func (p *Reader) ReadByte() (res byte) {
 	}
 
 	p.Fail(binary.Read(p.buf, binary.LittleEndian, &res))
-	p.len += 1
 	return
 }
 
@@ -197,8 +191,6 @@ func (p *Reader) ReadBytes(amount int) (buf []byte) {
 	if n != int(amount) {
 		p.Fail(io.ErrUnexpectedEOF)
 	}
-
-	p.len += amount
 
 	return buf
 }

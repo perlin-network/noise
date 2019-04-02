@@ -80,7 +80,6 @@ func AcquireReader(buf []byte) *Reader {
 func ReleaseReader(p *Reader) {
 	p.buf.Reset(nil)
 	p.err = nil
-	p.len = 0
 	parserPool.Put(p)
 }
 
