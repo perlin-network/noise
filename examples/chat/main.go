@@ -57,7 +57,7 @@ func protocol(node *noise.Node) (*skademlia.Protocol, noise.Protocol) {
 		}
 	}
 
-	return overlay, noise.NewProtocol(ecdh.Protocol(), aead.Protocol(), overlay.Protocol(), chatProtocol)
+	return overlay, noise.NewProtocol(xnoise.LogErrors, ecdh.Protocol(), aead.Protocol(), overlay.Protocol(), chatProtocol)
 }
 
 func main() {

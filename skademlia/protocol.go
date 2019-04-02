@@ -240,7 +240,9 @@ func (b *Protocol) Handshake(ctx noise.Context) (*ID, error) {
 	}
 
 	ctx.Peer().InterceptErrors(func(err error) {
+		b.peersLock.Lock()
 		delete(b.peers, id.checksum)
+		b.peersLock.Unlock()
 
 		if err, ok := err.(net.Error); ok && err.Timeout() {
 			b.evict(id)
@@ -416,12 +418,14 @@ func (b *Protocol) FindNode(node *noise.Node, target *ID, k int, a int, d int) (
 						peer := b.PeerByID(node, id)
 
 						if peer == nil {
+							responses <- nil
 							continue
 						}
 
 						ids, err := b.Lookup(peer.Ctx(), id)
 
 						if err != nil {
+							responses <- nil
 							peer.Disconnect(err)
 							continue
 						}
@@ -433,7 +437,7 @@ func (b *Protocol) FindNode(node *noise.Node, target *ID, k int, a int, d int) (
 
 			pending := 0
 
-			for lookup.Len() > 0 {
+			for lookup.Len() > 0 || pending > 0 {
 				for lookup.Len() > 0 && len(requests) < cap(requests) {
 					requests <- lookup.PopFront().(*ID)
 					pending++
@@ -442,16 +446,20 @@ func (b *Protocol) FindNode(node *noise.Node, target *ID, k int, a int, d int) (
 				if pending > 0 {
 					res := <-responses
 
-					for _, id := range res {
-						mu.Lock()
-						if _, seen := visited[id.checksum]; !seen {
-							visited[id.checksum] = struct{}{}
+					if res != nil {
+						for _, id := range res {
+							mu.Lock()
+							if _, seen := visited[id.checksum]; !seen {
+								visited[id.checksum] = struct{}{}
 
-							results = append(results, id)
-							lookup.PushBack(id)
+								results = append(results, id)
+								lookup.PushBack(id)
+							}
+							mu.Unlock()
 						}
-						mu.Unlock()
 					}
+
+					pending--
 				}
 			}
 

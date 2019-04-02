@@ -3,9 +3,7 @@ package noise
 import (
 	"github.com/heptio/workgroup"
 	"github.com/perlin-network/noise/wire"
-	"github.com/pkg/errors"
 	"io"
-	"log"
 	"math/rand"
 	"net"
 	"sync"
@@ -62,18 +60,9 @@ func (p *Peer) Start() {
 
 	if err := g.Run(); err != nil {
 		p.reportError(err)
-
-		switch errors.Cause(err) {
-		case ErrDisconnect:
-		case io.ErrClosedPipe:
-		case io.EOF:
-		default:
-			log.Printf("%+v\n", err)
-		}
 	}
 
 	p.deregisterFromNode()
-	p.ctx.d <- struct{}{}
 }
 
 func (p *Peer) Disconnect(err error) {
@@ -82,10 +71,6 @@ func (p *Peer) Disconnect(err error) {
 
 		p.deregisterFromNode()
 		p.stop <- err
-
-		if len(p.ctx.d) == 1 {
-			<-p.ctx.d
-		}
 	})
 }
 
@@ -233,7 +218,7 @@ func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 		stop:    make(chan error, 1),
 	}
 
-	p.ctx = Context{n: n, p: p, d: make(chan struct{}, 1), v: make(map[string]interface{}), vm: new(sync.RWMutex)}
+	p.ctx = Context{n: n, p: p, v: make(map[string]interface{}), vm: new(sync.RWMutex)}
 	p.m = Mux{peer: p}
 
 	codec := DefaultProtocol.Clone()
@@ -349,9 +334,9 @@ func (p *Peer) cleanup(stop <-chan struct{}) error {
 }
 
 func (p *Peer) followProtocol(stop <-chan struct{}) error {
-	initial := p.n.p
+	p.ctx.stop = stop
 
-	for state, err := initial(p.ctx); err != nil || state != nil; state, err = state(p.ctx) {
+	for state, err := p.n.p(p.ctx); err != nil || state != nil; state, err = state(p.ctx) {
 		if err != nil {
 			return err
 		}

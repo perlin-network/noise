@@ -61,7 +61,5 @@ func TestNodeCannotHaveDuplicatePeers(t *testing.T) {
 	p1 := node.Wrap(conn)
 	p2 := node.Wrap(conn)
 
-	p1.ctx.d <- struct{}{}
-
 	assert.Equal(t, p1, p2)
 }

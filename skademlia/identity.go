@@ -52,15 +52,15 @@ func (m ID) String() string {
 }
 
 func (m ID) Marshal() []byte {
-	b := bytes.NewBuffer(make([]byte, 0, 2+len(m.address)+edwards25519.SizePublicKey+blake2b.Size256))
+	w := bytes.NewBuffer(make([]byte, 0, 2+len(m.address)+edwards25519.SizePublicKey+blake2b.Size256))
 
-	_ = binary.Write(b, binary.BigEndian, uint16(len(m.address)))
-	_, _ = b.WriteString(m.address)
+	_ = binary.Write(w, binary.BigEndian, uint16(len(m.address)))
+	_, _ = w.WriteString(m.address)
 
-	_, _ = b.Write(m.publicKey[:])
-	_, _ = b.Write(m.nonce[:])
+	_, _ = w.Write(m.publicKey[:])
+	_, _ = w.Write(m.nonce[:])
 
-	return b.Bytes()
+	return w.Bytes()
 }
 
 func UnmarshalID(b io.Reader) (m ID, err error) {

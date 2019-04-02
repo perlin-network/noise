@@ -1,6 +1,8 @@
 package noise
 
-import "sync"
+import (
+	"sync"
+)
 
 type Protocol func(ctx Context) (Protocol, error)
 type ProtocolBlock func(ctx Context) error
@@ -30,16 +32,16 @@ func NewProtocol(blocks ...ProtocolBlock) Protocol {
 }
 
 type Context struct {
-	n *Node
-	p *Peer
-	d chan struct{}
+	n    *Node
+	p    *Peer
+	stop <-chan struct{}
 
 	v  map[string]interface{}
 	vm *sync.RWMutex
 }
 
 func (c Context) Done() <-chan struct{} {
-	return c.d
+	return c.stop
 }
 
 func (c Context) Node() *Node {
