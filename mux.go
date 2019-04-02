@@ -67,7 +67,13 @@ func (m Mux) SendWithTimeout(opcode byte, msg []byte, timeout time.Duration) err
 		return ErrSendQueueFull
 	}
 
-	err := <-evt.done
+	var err error
+
+	select {
+	case <-m.peer.ctx.stop:
+		return ErrDisconnect
+	case err = <-evt.done:
+	}
 
 	if timeout > 0 {
 		err := m.peer.SetWriteDeadline(time.Time{})

@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+type signal struct {
+	c chan struct{}
+	d uint32
+}
+
 type Peer struct {
 	m Mux
 
@@ -34,7 +39,7 @@ type Peer struct {
 	afterSend, afterRecv         []func()
 	afterSendLock, afterRecvLock sync.RWMutex
 
-	signals     map[string]chan struct{}
+	signals     map[string]signal
 	signalsLock sync.Mutex
 
 	errs     []ErrorInterceptor
@@ -61,7 +66,6 @@ func (p *Peer) Start() {
 	if err := g.Run(); err != nil {
 		p.reportError(err)
 	}
-
 	p.deregisterFromNode()
 }
 
@@ -162,37 +166,43 @@ func (p *Peer) AfterRecv(f func()) {
 
 func (p *Peer) RegisterSignal(name string) func() {
 	p.signalsLock.Lock()
-	signal, exists := p.signals[name]
+
+	s, exists := p.signals[name]
 	if !exists {
-		signal = make(chan struct{})
-		p.signals[name] = signal
+		s = signal{c: make(chan struct{}), d: 0}
+		p.signals[name] = s
 	}
+
 	p.signalsLock.Unlock()
 
 	return func() {
-		opened := true
+		if atomic.CompareAndSwapUint32(&s.d, 0, 1) {
+			opened := true
 
-		select {
-		case _, opened = <-signal:
-		default:
-		}
+			select {
+			case _, opened = <-s.c:
+			default:
+			}
 
-		if opened {
-			close(signal)
+			if opened {
+				close(s.c)
+			}
 		}
 	}
 }
 
 func (p *Peer) WaitFor(name string) {
 	p.signalsLock.Lock()
-	signal, exists := p.signals[name]
+
+	s, exists := p.signals[name]
 	if !exists {
-		signal = make(chan struct{})
-		p.signals[name] = signal
+		s = signal{c: make(chan struct{}), d: 0}
+		p.signals[name] = s
 	}
+
 	p.signalsLock.Unlock()
 
-	<-signal
+	<-s.c
 }
 
 func (p *Peer) InterceptErrors(i ErrorInterceptor) {
@@ -214,7 +224,7 @@ func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 		c:       c,
 		send:    make(chan evtSend, 1024),
 		recv:    make(map[uint64]map[byte]evtRecv),
-		signals: make(map[string]chan struct{}),
+		signals: make(map[string]signal),
 		stop:    make(chan error, 1),
 	}
 
@@ -365,7 +375,11 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 
 		err := p.WireCodec().DoWrite(p.w, state)
 
-		evt.done <- err
+		select {
+		case evt.done <- err:
+		default:
+		}
+
 		close(evt.done)
 
 		if err != nil {

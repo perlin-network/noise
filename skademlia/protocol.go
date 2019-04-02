@@ -114,16 +114,8 @@ func (b *Protocol) Peers(node *noise.Node) (peers []*noise.Peer) {
 	return
 }
 
-func (b *Protocol) PeerByID(node *noise.Node, id *ID) *noise.Peer {
-	b.peersLock.Lock()
-	peer, recorded := b.peers[id.checksum]
-	b.peersLock.Unlock()
-
-	if recorded {
-		return peer
-	}
-
-	peer = node.PeerByAddr(id.address)
+func (b Protocol) peerByID(node *noise.Node, id *ID) *noise.Peer {
+	peer := node.PeerByAddr(id.address)
 
 	if peer != nil {
 		return peer
@@ -137,6 +129,18 @@ func (b *Protocol) PeerByID(node *noise.Node, id *ID) *noise.Peer {
 	}
 
 	return peer
+}
+
+func (b *Protocol) PeerByID(node *noise.Node, id *ID) *noise.Peer {
+	b.peersLock.Lock()
+	peer, recorded := b.peers[id.checksum]
+	b.peersLock.Unlock()
+
+	if recorded {
+		return peer
+	}
+
+	return b.peerByID(node, id)
 }
 
 func wrap(f func() error) {
@@ -217,23 +221,27 @@ func (b *Protocol) Handshake(ctx noise.Context) (*ID, error) {
 		return nil, err
 	}
 
-	b.peersLock.Lock()
-	_, existed := b.peers[id.checksum]
-	b.peersLock.Unlock()
+	err = func() error {
+		b.peersLock.Lock()
+		defer b.peersLock.Unlock()
 
-	if !existed && ctx.Peer().Addr().String() != id.address {
-		reachable := b.PeerByID(ctx.Node(), id)
+		if _, existed := b.peers[id.checksum]; !existed && ctx.Peer().Addr().String() != id.address {
+			reachable := b.peerByID(ctx.Node(), id)
 
-		if reachable == nil {
-			return nil, noise.ErrTimeout
+			if reachable == nil {
+				return noise.ErrTimeout
+			}
+
+			reachable.Disconnect(nil)
 		}
 
-		reachable.Disconnect(nil)
-	}
+		b.peers[id.checksum] = ctx.Peer()
+		return nil
+	}()
 
-	b.peersLock.Lock()
-	b.peers[id.checksum] = ctx.Peer()
-	b.peersLock.Unlock()
+	if err != nil {
+		return nil, err
+	}
 
 	if err := b.Update(id); err != nil {
 		return nil, err
@@ -336,7 +344,7 @@ func (b *Protocol) Lookup(ctx noise.Context, target *ID) (IDs, error) {
 	case <-ctx.Done():
 		return nil, noise.ErrDisconnect
 	case <-time.After(b.lookupTimeout):
-		return nil, errors.Wrap(noise.ErrTimeout, "skademlia: timed out receiving finde node response")
+		return nil, errors.Wrap(noise.ErrTimeout, "skademlia: timed out receiving find node response")
 	case ctx := <-mux.Recv(node.Opcode(OpcodeLookup)):
 		buf = ctx.Bytes()
 	}
@@ -349,14 +357,14 @@ func (b *Protocol) Update(id *ID) error {
 		bucket := b.table.buckets[getBucketID(b.table.self.checksum, id.checksum)]
 
 		bucket.Lock()
-		last := bucket.Back()
-		bucket.Unlock()
-
-		lastid := last.Value.(*ID)
-
 		b.peersLock.Lock()
+
+		last := bucket.Back()
+		lastid := last.Value.(*ID)
 		lastp, exists := b.peers[lastid.checksum]
+
 		b.peersLock.Unlock()
+		bucket.Unlock()
 
 		if !exists {
 			b.table.Delete(bucket, lastid)

@@ -118,12 +118,19 @@ func TestCreateThenLoadKeys(t *testing.T) {
 }
 
 func TestMarshalUnmarshalID(t *testing.T) {
-	f := func(address string, pub edwards25519.PublicKey, nonce [blake2b.Size256]byte) bool {
+	var zero ID
+
+	f := func(address string, pub edwards25519.PublicKey, nonce [blake2b.Size256]byte, buf []byte) bool {
 		m := NewID(address, pub, nonce)
 		m2, err := UnmarshalID(bytes.NewReader(m.Marshal()))
+
+		if m3, err := UnmarshalID(bytes.NewReader(buf)); m3 == zero && !assert.Error(t, err) || m3 != zero && !assert.NoError(t, err) {
+			return false
+		}
 
 		return assert.NoError(t, err) && assert.EqualValues(t, *m, m2)
 	}
 
 	assert.NoError(t, quick.Check(f, &quick.Config{MaxCount: 1000}))
+
 }
