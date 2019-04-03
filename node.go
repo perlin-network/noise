@@ -6,11 +6,13 @@ import (
 	"math"
 	"net"
 	"sync"
+	"sync/atomic"
 )
 
 type Node struct {
 	l net.Listener
-	p Protocol
+
+	p atomic.Value // noise.Protocol
 
 	peers     map[string]*Peer
 	peersLock sync.RWMutex
@@ -75,7 +77,7 @@ func (n *Node) Wrap(conn net.Conn) *Peer {
 //
 // It is NOT safe to call FollowProtocol concurrently.
 func (n *Node) FollowProtocol(p Protocol) {
-	n.p = p
+	n.p.Store(p)
 }
 
 // Peers returns a slice of presently-connected peer instances to the node.

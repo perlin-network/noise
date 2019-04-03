@@ -11,11 +11,6 @@ import (
 	"time"
 )
 
-type signal struct {
-	c chan struct{}
-	d uint32
-}
-
 type Peer struct {
 	m Mux
 
@@ -39,7 +34,7 @@ type Peer struct {
 	afterSend, afterRecv         []func()
 	afterSendLock, afterRecvLock sync.RWMutex
 
-	signals     map[string]signal
+	signals     map[string]chan struct{}
 	signalsLock sync.Mutex
 
 	errs     []ErrorInterceptor
@@ -57,8 +52,10 @@ func (p *Peer) Start() {
 	g.Add(continuously(p.sendMessages()))
 	g.Add(continuously(p.receiveMessages()))
 
-	if p.n != nil && p.n.p != nil {
-		g.Add(p.followProtocol)
+	if p.n != nil {
+		if protocol := p.n.p.Load(); protocol != nil {
+			g.Add(p.followProtocol(protocol.(Protocol)))
+		}
 	}
 
 	g.Add(p.cleanup)
@@ -169,24 +166,22 @@ func (p *Peer) RegisterSignal(name string) func() {
 
 	s, exists := p.signals[name]
 	if !exists {
-		s = signal{c: make(chan struct{}), d: 0}
+		s = make(chan struct{})
 		p.signals[name] = s
 	}
 
 	p.signalsLock.Unlock()
 
 	return func() {
-		if atomic.CompareAndSwapUint32(&s.d, 0, 1) {
-			opened := true
+		opened := true
 
-			select {
-			case _, opened = <-s.c:
-			default:
-			}
+		select {
+		case _, opened = <-s:
+		default:
+		}
 
-			if opened {
-				close(s.c)
-			}
+		if opened {
+			close(s)
 		}
 	}
 }
@@ -196,13 +191,13 @@ func (p *Peer) WaitFor(name string) {
 
 	s, exists := p.signals[name]
 	if !exists {
-		s = signal{c: make(chan struct{}), d: 0}
+		s = make(chan struct{})
 		p.signals[name] = s
 	}
 
 	p.signalsLock.Unlock()
 
-	<-s.c
+	<-s
 }
 
 func (p *Peer) InterceptErrors(i ErrorInterceptor) {
@@ -224,7 +219,7 @@ func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 		c:       c,
 		send:    make(chan evtSend, 1024),
 		recv:    make(map[uint64]map[byte]evtRecv),
-		signals: make(map[string]signal),
+		signals: make(map[string]chan struct{}),
 		stop:    make(chan error, 1),
 	}
 
@@ -343,17 +338,19 @@ func (p *Peer) cleanup(stop <-chan struct{}) error {
 	return err
 }
 
-func (p *Peer) followProtocol(stop <-chan struct{}) error {
-	p.ctx.stop = stop
+func (p *Peer) followProtocol(init Protocol) func(stop <-chan struct{}) error {
+	return func(stop <-chan struct{}) error {
+		p.ctx.stop = stop
 
-	for state, err := p.n.p(p.ctx); err != nil || state != nil; state, err = state(p.ctx) {
-		if err != nil {
-			return err
+		for state, err := init(p.ctx); err != nil || state != nil; state, err = state(p.ctx) {
+			if err != nil {
+				return err
+			}
 		}
-	}
 
-	<-stop
-	return nil
+		<-stop
+		return nil
+	}
 }
 
 func (p *Peer) sendMessages() func(stop <-chan struct{}) error {

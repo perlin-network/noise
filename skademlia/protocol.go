@@ -114,7 +114,7 @@ func (b *Protocol) Peers(node *noise.Node) (peers []*noise.Peer) {
 	return
 }
 
-func (b Protocol) peerByID(node *noise.Node, id *ID) *noise.Peer {
+func (b *Protocol) peerByID(node *noise.Node, id *ID) *noise.Peer {
 	peer := node.PeerByAddr(id.address)
 
 	if peer != nil {

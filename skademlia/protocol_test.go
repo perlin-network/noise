@@ -130,17 +130,17 @@ func TestProtocol(t *testing.T) {
 		assert.Equal(t, peers[0].String(), alicenet.keys.self.String())
 	})
 
-	//t.Run("spam pings", func(t *testing.T) {
-	//	assert.Len(t, alicenet.Peers(alice), 1)
-	//
-	//	for i := 0; i < 100; i++ {
-	//		id, err := alicenet.Ping(aliceToBob.Ctx())
-	//
-	//		if !assert.NotZero(t, id) || !assert.NoError(t, err) {
-	//			break
-	//		}
-	//	}
-	//})
+	t.Run("spam pings", func(t *testing.T) {
+		assert.Len(t, alicenet.Peers(alice), 1)
+
+		for i := 0; i < 100; i++ {
+			id, err := alicenet.Ping(aliceToBob.Ctx())
+
+			if !assert.NotZero(t, id) || !assert.NoError(t, err) {
+				break
+			}
+		}
+	})
 
 	t.Run("correctly executes eviction policy when table is full", func(t *testing.T) {
 		fakeKeys, err := NewKeys("fake_address", C1, C2)
@@ -177,12 +177,14 @@ func TestProtocol(t *testing.T) {
 		// The update function will ping our peer one more time. Since we are using
 		// live TCP connections, it is possible the ping will fail and our fake ID
 		// will be placed within the routing table.
+		assert.Error(t, alicenet.Update(fakeKeys.ID()))
+		assert.Len(t, alicenet.Peers(alice), 1)
 
-		if err := alicenet.Update(fakeKeys.ID()); err != nil {
-			assert.Len(t, alicenet.Peers(alice), 1)
-		} else {
-			assert.Len(t, alicenet.Peers(alice), 0)
-		}
+		//if err := alicenet.Update(fakeKeys.ID()); err != nil {
+		//	assert.Len(t, alicenet.Peers(alice), 1)
+		//} else {
+		//	assert.Len(t, alicenet.Peers(alice), 0)
+		//}
 
 		alicenet.table.bucketSize = original
 	})
