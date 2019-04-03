@@ -7,6 +7,7 @@ import (
 	"golang.org/x/crypto/blake2b"
 	"sort"
 	"sync"
+	"sync/atomic"
 )
 
 var (
@@ -17,7 +18,7 @@ type Table struct {
 	self *ID
 
 	buckets    []*Bucket
-	bucketSize int
+	bucketSize uint32
 }
 
 func NewTable(self *ID) *Table {
@@ -38,7 +39,15 @@ func NewTable(self *ID) *Table {
 	return t
 }
 
-func (t Table) Find(b *Bucket, target *ID) *list.Element {
+func (t *Table) getBucketSize() int {
+	return int(atomic.LoadUint32(&t.bucketSize))
+}
+
+func (t *Table) setBucketSize(size int) {
+	atomic.StoreUint32(&t.bucketSize, uint32(size))
+}
+
+func (t *Table) Find(b *Bucket, target *ID) *list.Element {
 	if target == nil {
 		return nil
 	}
@@ -59,7 +68,7 @@ func (t Table) Find(b *Bucket, target *ID) *list.Element {
 	return element
 }
 
-func (t Table) Delete(b *Bucket, target *ID) bool {
+func (t *Table) Delete(b *Bucket, target *ID) bool {
 	e := t.Find(b, target)
 
 	if e == nil {
@@ -72,7 +81,7 @@ func (t Table) Delete(b *Bucket, target *ID) bool {
 	return b.Remove(e) != nil
 }
 
-func (t Table) Update(target *ID) error {
+func (t *Table) Update(target *ID) error {
 	if target == nil {
 		return nil
 	}
@@ -88,7 +97,7 @@ func (t Table) Update(target *ID) error {
 		return nil
 	}
 
-	if b.Len() < t.bucketSize {
+	if b.Len() < t.getBucketSize() {
 		b.Lock()
 		b.PushFront(target)
 		b.Unlock()
@@ -99,7 +108,7 @@ func (t Table) Update(target *ID) error {
 	return ErrBucketFull
 }
 
-func (t Table) FindClosest(target *ID, k int) IDs {
+func (t *Table) FindClosest(target *ID, k int) IDs {
 	var checksum [blake2b.Size256]byte
 
 	if target != nil {

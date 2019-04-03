@@ -32,9 +32,10 @@ func NewProtocol(blocks ...ProtocolBlock) Protocol {
 }
 
 type Context struct {
-	n    *Node
-	p    *Peer
-	stop chan struct{}
+	n      *Node
+	p      *Peer
+	result chan error
+	stop   chan struct{}
 
 	v  map[string]interface{}
 	vm *sync.RWMutex

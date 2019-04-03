@@ -103,7 +103,7 @@ func (b *Protocol) WithHandshakeTimeout(handshakeTimeout time.Duration) *Protoco
 }
 
 func (b *Protocol) Peers(node *noise.Node) (peers []*noise.Peer) {
-	ids := b.table.FindClosest(b.table.self, b.table.bucketSize)
+	ids := b.table.FindClosest(b.table.self, b.table.getBucketSize())
 
 	for _, id := range ids {
 		if peer := b.PeerByID(node, id); peer != nil {
@@ -191,7 +191,7 @@ func (b *Protocol) Handshake(ctx noise.Context) (*ID, error) {
 					ctx.Peer().Disconnect(errors.Wrap(err, "skademlia: received invalid lookup request"))
 				}
 
-				if err := wire.Send(node.Opcode(OpcodeLookup), b.table.FindClosest(&target, b.table.bucketSize).Marshal()); err != nil {
+				if err := wire.Send(node.Opcode(OpcodeLookup), b.table.FindClosest(&target, b.table.getBucketSize()).Marshal()); err != nil {
 					ctx.Peer().Disconnect(errors.Wrap(err, "skademlia: failed to send lookup response"))
 				}
 			}
@@ -392,7 +392,7 @@ func (b *Protocol) Update(id *ID) error {
 }
 
 func (b *Protocol) Bootstrap(node *noise.Node) (results []*ID) {
-	return b.FindNode(node, b.table.self, b.table.bucketSize, 3, 8)
+	return b.FindNode(node, b.table.self, b.table.getBucketSize(), 3, 8)
 }
 
 func (b *Protocol) FindNode(node *noise.Node, target *ID, k int, a int, d int) (results []*ID) {

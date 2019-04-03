@@ -10,7 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"net"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -30,6 +32,7 @@ func overlay(t testing.TB, node *noise.Node, addr string) (*Protocol, *bufio.Rea
 	overlay.WithC2(C2)
 	overlay.WithPrefixDiffMin(DefaultPrefixDiffMin)
 	overlay.WithPrefixDiffLen(DefaultPrefixDiffLen)
+	overlay.WithHandshakeTimeout(100 * time.Millisecond)
 
 	writer := bytes.NewBuffer(nil)
 	reader := bufio.NewReader(writer)
@@ -44,6 +47,7 @@ func overlay(t testing.TB, node *noise.Node, addr string) (*Protocol, *bufio.Rea
 	assert.Equal(t, overlay.c2, C2)
 	assert.Equal(t, overlay.prefixDiffMin, DefaultPrefixDiffMin)
 	assert.Equal(t, overlay.prefixDiffLen, DefaultPrefixDiffLen)
+	assert.Equal(t, overlay.handshakeTimeout, 100*time.Millisecond)
 	assert.NotNil(t, overlay.logger)
 	assert.NotNil(t, overlay.Logger())
 	assert.NotNil(t, overlay.table)
@@ -60,24 +64,35 @@ func TestProtocol(t *testing.T) {
 	bob, err := xnoise.ListenTCP(0)
 	assert.NoError(t, err)
 
+	charlie, err := xnoise.ListenTCP(0)
+	assert.NoError(t, err)
+
 	defer alice.Shutdown()
 	defer bob.Shutdown()
+	defer charlie.Shutdown()
 
 	alicenet, alicelog := overlay(t, alice, net.JoinHostPort("127.0.0.1", strconv.Itoa(alice.Addr().(*net.TCPAddr).Port)))
 	bobnet, boblog := overlay(t, bob, net.JoinHostPort("127.0.0.1", strconv.Itoa(bob.Addr().(*net.TCPAddr).Port)))
+	charlienet, charlielog := overlay(t, charlie, net.JoinHostPort("127.0.0.1", strconv.Itoa(charlie.Addr().(*net.TCPAddr).Port)))
 
 	aliceToBob, err := xnoise.DialTCP(alice, bobnet.keys.self.address)
+	assert.NotNil(t, aliceToBob)
 	assert.NoError(t, err)
 
-	var bobToAlice *noise.Peer
+	aliceToCharlie, err := xnoise.DialTCP(alice, charlienet.keys.self.address)
+	assert.NotNil(t, aliceToCharlie)
+	assert.NoError(t, err)
 
 	aliceToBob.WaitFor(SignalAuthenticated)
+	aliceToCharlie.WaitFor(SignalAuthenticated)
 
 	alicenet.peersLock.Lock()
 	numPeers := len(alicenet.peers)
 	alicenet.peersLock.Unlock()
 
-	assert.Equal(t, 1, numPeers)
+	assert.Equal(t, 2, numPeers)
+
+	var bobToAlice *noise.Peer
 
 	for bobToAlice == nil || bobToAlice.Addr().String() == alicenet.keys.self.address {
 		bobToAlice = bob.Peers()[0]
@@ -91,16 +106,59 @@ func TestProtocol(t *testing.T) {
 
 	assert.Equal(t, 1, numPeers)
 
+	var charlieToAlice *noise.Peer
+
+	for charlieToAlice == nil || charlieToAlice.Addr().String() == alicenet.keys.self.address {
+		charlieToAlice = charlie.Peers()[0]
+	}
+
+	charlieToAlice.WaitFor(SignalAuthenticated)
+
+	charlienet.peersLock.Lock()
+	numPeers = len(charlienet.peers)
+	charlienet.peersLock.Unlock()
+
+	assert.Equal(t, 1, numPeers)
+
 	t.Run("can properly handshake", func(t *testing.T) {
 		// Check that log messages get print correctly.
+
+		bobPrinted := true
+
 		line, _, err := alicelog.ReadLine()
 		if err == nil {
-			assert.Contains(t, fmt.Sprintf("Registered to S/Kademlia: %s", bobnet.table.self), string(line))
+			line := string(line)
+
+			assert.Contains(t, line, "Registered to S/Kademlia")
+
+			if bobPrinted = strings.Contains(line, bobnet.table.self.String()); !bobPrinted {
+				assert.Contains(t, line, charlienet.table.self.String())
+			} else {
+				assert.Contains(t, line, bobnet.table.self.String())
+			}
+		}
+
+		line, _, err = alicelog.ReadLine()
+		if err == nil {
+			line := string(line)
+
+			assert.Contains(t, line, "Registered to S/Kademlia")
+
+			if bobPrinted {
+				assert.Contains(t, line, charlienet.table.self.String())
+			} else {
+				assert.Contains(t, line, bobnet.table.self.String())
+			}
 		}
 
 		line, _, err = boblog.ReadLine()
 		if err == nil {
-			assert.Contains(t, fmt.Sprintf("Registered to S/Kademlia: %s", alicenet.table.self), string(line))
+			assert.Contains(t, string(line), fmt.Sprintf("Registered to S/Kademlia: %s", alicenet.table.self))
+		}
+
+		line, _, err = charlielog.ReadLine()
+		if err == nil {
+			assert.Contains(t, string(line), fmt.Sprintf("Registered to S/Kademlia: %s", alicenet.table.self))
 		}
 	})
 
@@ -109,31 +167,46 @@ func TestProtocol(t *testing.T) {
 		assert.NoError(t, err)
 
 		assert.NoError(t, alicenet.Update(fakeKeys.ID()))
-		assert.Equal(t, 1, len(alicenet.Peers(alice)))
+		assert.Equal(t, 2, len(alicenet.Peers(alice)))
 
 		line, _, err := alicelog.ReadLine()
 		assert.NoError(t, err)
 
 		// We might have some of the logs appear multiple times. Buffer them away.
-		for bytes.Contains(line, []byte(fmt.Sprintf("Registered to S/Kademlia: %s", bobnet.table.self))) {
+		for bytes.Contains(line, []byte("Registered to S/Kademlia")) {
 			line, _, err = alicelog.ReadLine()
 			assert.NoError(t, err)
 		}
 
-		assert.Contains(t, fmt.Sprintf("Peer %s could not be reached, and has been evicted.", fakeKeys.ID()), string(line))
+		assert.Contains(t, string(line), fmt.Sprintf("Peer %s could not be reached, and has been evicted.", fakeKeys.ID()))
 	})
 
 	t.Run("able to bootstrap", func(t *testing.T) {
-		peers := bobnet.Bootstrap(bob)
+		ids := bobnet.Bootstrap(bob)
 
-		assert.Equal(t, 1, len(peers))
-		assert.Equal(t, peers[0].String(), alicenet.keys.self.String())
+		assert.Equal(t, 2, len(ids))
+
+		for _, id := range ids {
+			if id.checksum != charlienet.keys.self.checksum {
+				assert.Equal(t, id.checksum, alicenet.keys.self.checksum)
+			}
+
+			if id.checksum != alicenet.keys.self.checksum {
+				assert.Equal(t, id.checksum, charlienet.keys.self.checksum)
+			}
+		}
+
+		time.Sleep(10 * time.Millisecond)
+
+		assert.Len(t, alicenet.Peers(alice), 2)
+		assert.Len(t, bobnet.Peers(alice), 2)
+		assert.Len(t, charlienet.Peers(alice), 2)
 	})
 
 	t.Run("spam pings", func(t *testing.T) {
-		assert.Len(t, alicenet.Peers(alice), 1)
+		assert.Len(t, alicenet.Peers(alice), 2)
 
-		for i := 0; i < 100; i++ {
+		for i := 0; i < 10; i++ {
 			id, err := alicenet.Ping(aliceToBob.Ctx())
 
 			if !assert.NoError(t, err) || !assert.NotZero(t, id) {
@@ -141,7 +214,7 @@ func TestProtocol(t *testing.T) {
 			}
 		}
 
-		assert.Len(t, alicenet.Peers(alice), 1)
+		assert.Len(t, alicenet.Peers(alice), 2)
 	})
 
 	t.Run("correctly executes eviction policy when table is full", func(t *testing.T) {
@@ -161,15 +234,17 @@ func TestProtocol(t *testing.T) {
 			assert.NoError(t, err)
 		}
 
-		original := alicenet.table.bucketSize
-		alicenet.table.bucketSize = 1
+		assert.Len(t, alicenet.Peers(alice), 2)
 
-		// The update function will ping our peer one more time. Since we are using
-		// live TCP connections, it is possible the ping will fail and our fake ID
-		// will be placed within the routing table.
+		bucket := alicenet.table.buckets[getBucketID(alicenet.table.self.checksum, bobnet.table.self.checksum)]
+		numPeers := bucket.Len()
+
+		original := alicenet.table.getBucketSize()
+		alicenet.table.setBucketSize(numPeers)
+
 		assert.Error(t, alicenet.Update(fakeKeys.ID()))
-		assert.Len(t, alicenet.Peers(alice), 1)
 
-		alicenet.table.bucketSize = original
+		alicenet.table.setBucketSize(original)
+		assert.Len(t, alicenet.Peers(alice), 2)
 	})
 }

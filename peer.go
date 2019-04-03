@@ -2,6 +2,7 @@ package noise
 
 import (
 	"github.com/perlin-network/noise/wire"
+	"github.com/pkg/errors"
 	"io"
 	"math/rand"
 	"net"
@@ -23,6 +24,8 @@ type Peer struct {
 	c   Conn
 	ctx Context
 
+	codec atomic.Value // *wire.Codec
+
 	send chan evtSend
 
 	recv     map[uint64]map[byte]evtRecv
@@ -39,13 +42,15 @@ type Peer struct {
 	errs     []ErrorInterceptor
 	errsLock sync.RWMutex
 
-	stop     chan error
-	stopOnce sync.Once
-
-	codec atomic.Value // *wire.Codec
+	startOnce uint32
+	stopOnce  uint32
 }
 
 func (p *Peer) Start() {
+	if !atomic.CompareAndSwapUint32(&p.startOnce, 0, 1) {
+		return
+	}
+
 	var g []func(<-chan struct{}) error
 
 	g = append(g, continuously(p.sendMessages()))
@@ -57,23 +62,25 @@ func (p *Peer) Start() {
 		}
 	}
 
-	g = append(g, p.cleanup)
-
 	var wg sync.WaitGroup
 	wg.Add(len(g))
-
-	result := make(chan error, len(g))
-	p.ctx.stop = make(chan struct{})
 
 	for _, fn := range g {
 		go func(fn func(<-chan struct{}) error) {
 			defer wg.Done()
-			result <- fn(p.ctx.stop)
+			p.ctx.result <- fn(p.ctx.stop)
 		}(fn)
 	}
 
-	err := <-result
+	err := <-p.ctx.result
+
 	close(p.ctx.stop)
+
+	if p.c != nil {
+		if e := p.c.Close(); e != nil {
+			err = errors.Wrap(err, e.Error())
+		}
+	}
 
 	wg.Wait()
 
@@ -85,12 +92,12 @@ func (p *Peer) Start() {
 }
 
 func (p *Peer) Disconnect(err error) {
-	p.stopOnce.Do(func() {
-		p.reportError(err)
+	if !atomic.CompareAndSwapUint32(&p.stopOnce, 0, 1) {
+		return
+	}
 
-		p.deregisterFromNode()
-		p.stop <- err
-	})
+	p.deregisterFromNode()
+	p.ctx.result <- err
 }
 
 // UpdateWireCodec atomically updates the message codec a peer utilizes in
@@ -238,10 +245,20 @@ func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 		send:    make(chan evtSend, 1024),
 		recv:    make(map[uint64]map[byte]evtRecv),
 		signals: make(map[string]chan struct{}),
-		stop:    make(chan error, 1),
 	}
 
-	p.ctx = Context{n: n, p: p, v: make(map[string]interface{}), vm: new(sync.RWMutex)}
+	// The channel buffer size of '4' is selected on purpose. It is the number of
+	// goroutines expected to be spawned per-peer.
+
+	p.ctx = Context{
+		n:      n,
+		p:      p,
+		result: make(chan error, 4),
+		stop:   make(chan struct{}),
+		v:      make(map[string]interface{}),
+		vm:     new(sync.RWMutex),
+	}
+
 	p.m = Mux{peer: p}
 
 	codec := DefaultProtocol.Clone()
@@ -337,23 +354,6 @@ func (p *Peer) deregisterFromNode() {
 		delete(p.n.peers, p.addr.String())
 		p.n.peersLock.Unlock()
 	}
-}
-
-func (p *Peer) cleanup(stop <-chan struct{}) error {
-	err := ErrDisconnect
-
-	select {
-	case err = <-p.stop:
-	case <-stop:
-	}
-
-	if p.c != nil {
-		if err := p.c.Close(); err != nil {
-			return err
-		}
-	}
-
-	return err
 }
 
 func (p *Peer) followProtocol(init Protocol) func(stop <-chan struct{}) error {

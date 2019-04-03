@@ -19,17 +19,17 @@ func TestUpdateAndDeleteFromTable(t *testing.T) {
 
 			// Test updating table when selective buckets are full.
 
-			if bucket.Len() == table.bucketSize && !assert.Error(t, table.Update(target)) {
+			if bucket.Len() == table.getBucketSize() && !assert.Error(t, table.Update(target)) {
 				return false
 			}
 
-			if bucket.Len() == table.bucketSize && !assert.Nil(t, table.Find(bucket, target)) {
+			if bucket.Len() == table.getBucketSize() && !assert.Nil(t, table.Find(bucket, target)) {
 				return false
 			}
 
 			// Test deleting entries when selective buckets are full.
 
-			if bucket.Len() == table.bucketSize {
+			if bucket.Len() == table.getBucketSize() {
 				front := bucket.Front()
 
 				if !assert.False(t, table.Delete(bucket, nil)) {
@@ -47,11 +47,11 @@ func TestUpdateAndDeleteFromTable(t *testing.T) {
 
 			// Test updating table when selective buckets are not full.
 
-			if bucket.Len() < table.bucketSize && !assert.NoError(t, table.Update(target)) {
+			if bucket.Len() < table.getBucketSize() && !assert.NoError(t, table.Update(target)) {
 				return false
 			}
 
-			if bucket.Len() < table.bucketSize && !assert.NotNil(t, table.Find(bucket, target)) {
+			if bucket.Len() < table.getBucketSize() && !assert.NotNil(t, table.Find(bucket, target)) {
 				return false
 			}
 		}
