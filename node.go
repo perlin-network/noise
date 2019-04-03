@@ -131,11 +131,22 @@ func (n *Node) RegisterOpcode(name string, opcode byte) {
 	n.opcodesLock.Unlock()
 }
 
-// NextAvailableOpcode returns the next unreserved opcode that
-// may be registered by a node.
+// NextAvailableOpcode atomically returns the next unreserved opcode for
+// a node.
 //
-// In total, 255 opcodes may be registered per node. Opcodes
-// are one-indexed, and the zero opcode is reserved.
+// In total, 255 opcodes may be registered per node. Opcodes are one-
+// indexed, and thus the zero opcode is never returned
+//
+// It ideally should only be called before a node connects to or
+// listens for its first peer. Doing otherwise could cause race
+// conditions on different PCs running the same software, where the
+// opcodes registered for one PC differs from another PC.
+//
+// Ideally, opcodes should be specifically set by a user before a node
+// connects to or listens for its first peer using RegisterOpcode.
+//
+// It is safe to call NextAvailableOpcode concurrently, though heed
+// the warnings above.
 func (n *Node) NextAvailableOpcode() (next byte) {
 	n.opcodesLock.RLock()
 	for i := byte(0x01); i < math.MaxUint8; i++ {
