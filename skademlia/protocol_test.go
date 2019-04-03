@@ -11,6 +11,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -19,6 +20,23 @@ const (
 	C1 = 3
 	C2 = 1
 )
+
+type concurrentBuffer struct {
+	sync.Mutex
+	buf *bytes.Buffer
+}
+
+func (sb *concurrentBuffer) Read(p []byte) (n int, err error) {
+	sb.Lock()
+	defer sb.Unlock()
+	return sb.buf.Read(p)
+}
+
+func (sb *concurrentBuffer) Write(p []byte) (n int, err error) {
+	sb.Lock()
+	defer sb.Unlock()
+	return sb.buf.Write(p)
+}
 
 func overlay(t testing.TB, node *noise.Node, addr string) (*Protocol, *bufio.Reader) {
 	t.Helper()
@@ -34,7 +52,9 @@ func overlay(t testing.TB, node *noise.Node, addr string) (*Protocol, *bufio.Rea
 	overlay.WithPrefixDiffLen(DefaultPrefixDiffLen)
 	overlay.WithHandshakeTimeout(100 * time.Millisecond)
 
-	writer := bytes.NewBuffer(nil)
+	writer := &concurrentBuffer{
+		buf: bytes.NewBuffer(nil),
+	}
 	reader := bufio.NewReader(writer)
 	overlay.Logger().SetOutput(writer)
 
