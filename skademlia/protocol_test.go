@@ -8,6 +8,7 @@ import (
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/xnoise"
 	"github.com/stretchr/testify/assert"
+	"io"
 	"net"
 	"strconv"
 	"strings"
@@ -280,5 +281,26 @@ func TestProtocol(t *testing.T) {
 
 		alicenet.table.setBucketSize(original)
 		assert.Len(t, alicenet.Peers(alice), 2)
+	})
+
+	t.Run("disconnecting gracefully and disconnecting via timeout removes peer entry differently", func(t *testing.T) {
+		charlieToAlice.Disconnect(io.EOF)
+		charlienet.peersLock.Lock()
+		_, exists := charlienet.peers[alicenet.keys.self.checksum]
+		charlienet.peersLock.Unlock()
+		assert.False(t, exists)
+
+		bucket := bobnet.table.buckets[getBucketID(bobnet.table.self.checksum, alicenet.keys.self.checksum)]
+		before := bucket.Len()
+
+		bobToAlice.Disconnect(noise.ErrTimeout)
+		bobnet.peersLock.Lock()
+		_, exists = bobnet.peers[alicenet.keys.self.checksum]
+		bobnet.peersLock.Unlock()
+		assert.False(t, exists)
+
+		if before > 0 {
+			assert.Equal(t, before-1, bucket.Len())
+		}
 	})
 }

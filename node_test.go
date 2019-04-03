@@ -61,5 +61,6 @@ func TestNodeCannotHaveDuplicatePeers(t *testing.T) {
 	p1 := node.Wrap(conn)
 	p2 := node.Wrap(conn)
 
+	close(p1.ctx.stop)
 	assert.Equal(t, p1, p2)
 }
