@@ -196,11 +196,25 @@ func TestProtocol(t *testing.T) {
 			}
 		}
 
-		time.Sleep(10 * time.Millisecond)
+		for _, p := range bob.Peers() {
+			p.WaitFor(SignalAuthenticated)
+		}
+
+		for _, p := range charlie.Peers() {
+			p.WaitFor(SignalAuthenticated)
+		}
+
+		for _, p := range alice.Peers() {
+			p.WaitFor(SignalAuthenticated)
+		}
 
 		assert.Len(t, alicenet.Peers(alice), 2)
 		assert.Len(t, bobnet.Peers(alice), 2)
 		assert.Len(t, charlienet.Peers(alice), 2)
+	})
+
+	t.Run("find just 1 node", func(t *testing.T) {
+		assert.Equal(t, 1, len(bobnet.FindNode(bob, bobnet.table.self, 1, 3, 8)))
 	})
 
 	t.Run("spam pings", func(t *testing.T) {

@@ -422,7 +422,6 @@ func (b *Protocol) FindNode(node *noise.Node, target *ID, k int, a int, d int) (
 
 	for _, lookup := range lookups { // Perform d parallel disjoint lookups.
 		go func(lookup queue.Queue) {
-
 			requests := make(chan *request, a)
 			responses := make(chan *response, a)
 
