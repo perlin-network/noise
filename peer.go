@@ -1,7 +1,6 @@
 package noise
 
 import (
-	"github.com/heptio/workgroup"
 	"github.com/perlin-network/noise/wire"
 	"io"
 	"math/rand"
@@ -47,22 +46,41 @@ type Peer struct {
 }
 
 func (p *Peer) Start() {
-	var g workgroup.Group
+	var g []func(<-chan struct{}) error
 
-	g.Add(continuously(p.sendMessages()))
-	g.Add(continuously(p.receiveMessages()))
+	g = append(g, continuously(p.sendMessages()))
+	g = append(g, continuously(p.receiveMessages()))
 
 	if p.n != nil {
 		if protocol := p.n.p.Load(); protocol != nil {
-			g.Add(p.followProtocol(protocol.(Protocol)))
+			g = append(g, p.followProtocol(protocol.(Protocol)))
 		}
 	}
 
-	g.Add(p.cleanup)
+	g = append(g, p.cleanup)
 
-	if err := g.Run(); err != nil {
+	var wg sync.WaitGroup
+	wg.Add(len(g))
+
+	result := make(chan error, len(g))
+	p.ctx.stop = make(chan struct{})
+
+	for _, fn := range g {
+		go func(fn func(<-chan struct{}) error) {
+			defer wg.Done()
+			result <- fn(p.ctx.stop)
+		}(fn)
+	}
+
+	err := <-result
+	close(p.ctx.stop)
+
+	wg.Wait()
+
+	if err != nil {
 		p.reportError(err)
 	}
+
 	p.deregisterFromNode()
 }
 
@@ -340,8 +358,6 @@ func (p *Peer) cleanup(stop <-chan struct{}) error {
 
 func (p *Peer) followProtocol(init Protocol) func(stop <-chan struct{}) error {
 	return func(stop <-chan struct{}) error {
-		p.ctx.stop = stop
-
 		for state, err := init(p.ctx); err != nil || state != nil; state, err = state(p.ctx) {
 			if err != nil {
 				return err

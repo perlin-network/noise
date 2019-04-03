@@ -71,27 +71,27 @@ func TestProtocol(t *testing.T) {
 
 	var bobToAlice *noise.Peer
 
+	aliceToBob.WaitFor(SignalAuthenticated)
+
+	alicenet.peersLock.Lock()
+	numPeers := len(alicenet.peers)
+	alicenet.peersLock.Unlock()
+
+	assert.Equal(t, 1, numPeers)
+
+	for bobToAlice == nil || bobToAlice.Addr().String() == alicenet.keys.self.address {
+		bobToAlice = bob.Peers()[0]
+	}
+
+	bobToAlice.WaitFor(SignalAuthenticated)
+
+	bobnet.peersLock.Lock()
+	numPeers = len(bobnet.peers)
+	bobnet.peersLock.Unlock()
+
+	assert.Equal(t, 1, numPeers)
+
 	t.Run("can properly handshake", func(t *testing.T) {
-		aliceToBob.WaitFor(SignalAuthenticated)
-
-		alicenet.peersLock.Lock()
-		numPeers := len(alicenet.peers)
-		alicenet.peersLock.Unlock()
-
-		assert.Equal(t, 1, numPeers)
-
-		for bobToAlice == nil || bobToAlice.Addr().String() == alicenet.keys.self.address {
-			bobToAlice = bobnet.PeerByID(bob, alicenet.keys.self)
-		}
-
-		bobToAlice.WaitFor(SignalAuthenticated)
-
-		bobnet.peersLock.Lock()
-		numPeers = len(bobnet.peers)
-		bobnet.peersLock.Unlock()
-
-		assert.Equal(t, 1, numPeers)
-
 		// Check that log messages get print correctly.
 		line, _, err := alicelog.ReadLine()
 		if err == nil {
@@ -136,10 +136,12 @@ func TestProtocol(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			id, err := alicenet.Ping(aliceToBob.Ctx())
 
-			if !assert.NotZero(t, id) || !assert.NoError(t, err) {
+			if !assert.NoError(t, err) || !assert.NotZero(t, id) {
 				break
 			}
 		}
+
+		assert.Len(t, alicenet.Peers(alice), 1)
 	})
 
 	t.Run("correctly executes eviction policy when table is full", func(t *testing.T) {
@@ -162,29 +164,11 @@ func TestProtocol(t *testing.T) {
 		original := alicenet.table.bucketSize
 		alicenet.table.bucketSize = 1
 
-		assert.Len(t, alicenet.Peers(alice), 1)
-
-		// Lets ping our peer just to be sure that he is actually alive.
-		id, err := alicenet.Ping(aliceToBob.Ctx())
-
-		if err != nil {
-			assert.Zero(t, id)
-			assert.Len(t, alicenet.Peers(alice), 1)
-		} else {
-			assert.EqualValues(t, id, bobnet.table.self)
-		}
-
 		// The update function will ping our peer one more time. Since we are using
 		// live TCP connections, it is possible the ping will fail and our fake ID
 		// will be placed within the routing table.
 		assert.Error(t, alicenet.Update(fakeKeys.ID()))
 		assert.Len(t, alicenet.Peers(alice), 1)
-
-		//if err := alicenet.Update(fakeKeys.ID()); err != nil {
-		//	assert.Len(t, alicenet.Peers(alice), 1)
-		//} else {
-		//	assert.Len(t, alicenet.Peers(alice), 0)
-		//}
 
 		alicenet.table.bucketSize = original
 	})
