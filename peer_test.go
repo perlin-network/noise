@@ -196,6 +196,7 @@ func TestPeerErrorWhenSendQueueFull(t *testing.T) {
 
 	p := newPeer(nil, nil, rw, new(iotest.NopReader), rw)
 	defer p.Disconnect(nil)
+	defer close(p.ctx.stop)
 
 	for i := 0; i < cap(p.send); i++ {
 		p.send <- evtSend{done: make(chan error, 1)}

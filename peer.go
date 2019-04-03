@@ -74,19 +74,19 @@ func (p *Peer) Start() {
 
 	err := <-p.ctx.result
 
-	close(p.ctx.stop)
-
 	if p.c != nil {
 		if e := p.c.Close(); e != nil {
 			err = errors.Wrap(err, e.Error())
 		}
 	}
 
-	wg.Wait()
-
 	if err != nil {
 		p.reportError(err)
 	}
+
+	close(p.ctx.stop)
+
+	wg.Wait()
 
 	p.deregisterFromNode()
 }
@@ -97,7 +97,9 @@ func (p *Peer) Disconnect(err error) {
 	}
 
 	p.deregisterFromNode()
+
 	p.ctx.result <- err
+	<-p.ctx.stop
 }
 
 // UpdateWireCodec atomically updates the message codec a peer utilizes in
