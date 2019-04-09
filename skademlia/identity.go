@@ -142,6 +142,14 @@ func (k *Keypair) ID() *ID {
 	return k.self
 }
 
+func (k *Keypair) PrivateKey() edwards25519.PrivateKey {
+	return k.privateKey
+}
+
+func (k *Keypair) PublicKey() edwards25519.PublicKey {
+	return k.publicKey
+}
+
 func NewKeys(address string, c1, c2 int) (*Keypair, error) {
 	publicKey, privateKey, id, checksum, err := generateKeys(address, c1)
 
