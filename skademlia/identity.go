@@ -1,7 +1,6 @@
 package skademlia
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"github.com/perlin-network/noise/edwards25519"
@@ -52,40 +51,41 @@ func (m ID) String() string {
 }
 
 func (m ID) Marshal() []byte {
-	w := bytes.NewBuffer(make([]byte, 0, 2+len(m.address)+edwards25519.SizePublicKey+blake2b.Size256))
+	buf := make([]byte, 2+len(m.address)+edwards25519.SizePublicKey+blake2b.Size256)
 
-	_ = binary.Write(w, binary.BigEndian, uint16(len(m.address)))
-	_, _ = w.WriteString(m.address)
+	binary.BigEndian.PutUint16(buf[0:2], uint16(len(m.address)))
+	copy(buf[2:2+len(m.address)], m.address)
+	copy(buf[2+len(m.address):2+len(m.address)+edwards25519.SizePublicKey], m.publicKey[:])
+	copy(buf[2+len(m.address)+edwards25519.SizePublicKey:2+len(m.address)+edwards25519.SizePublicKey+blake2b.Size256], m.nonce[:])
 
-	_, _ = w.Write(m.publicKey[:])
-	_, _ = w.Write(m.nonce[:])
-
-	return w.Bytes()
+	return buf
 }
 
 func UnmarshalID(b io.Reader) (m ID, err error) {
-	var length uint16
+	var buf [2]byte
 
-	if err = binary.Read(b, binary.BigEndian, &length); err != nil {
+	if _, err = io.ReadFull(b, buf[:]); err != nil {
 		return ID{}, err
 	}
 
+	length := binary.BigEndian.Uint16(buf[:])
+
 	address := make([]byte, length)
 
-	if err = binary.Read(b, binary.BigEndian, &address); err != nil {
+	if _, err = io.ReadFull(b, address); err != nil {
 		return ID{}, err
 	}
 
 	m.address = string(address)
 
-	if err = binary.Read(b, binary.BigEndian, &m.publicKey); err != nil {
+	if _, err = io.ReadFull(b, m.publicKey[:]); err != nil {
 		return ID{}, err
 	}
 
 	m.id = blake2b.Sum256(m.publicKey[:])
 	m.checksum = blake2b.Sum256(m.id[:])
 
-	if err = binary.Read(b, binary.BigEndian, &m.nonce); err != nil {
+	if _, err = io.ReadFull(b, m.nonce[:]); err != nil {
 		return ID{}, err
 	}
 
@@ -95,25 +95,23 @@ func UnmarshalID(b io.Reader) (m ID, err error) {
 type IDs []*ID
 
 func (ids IDs) Marshal() []byte {
-	b := bytes.NewBuffer(make([]byte, 0, edwards25519.SizePublicKey+edwards25519.SizeSignature))
-
-	_ = binary.Write(b, binary.BigEndian, uint8(len(ids)))
+	buf := []byte{byte(len(ids))}
 
 	for _, id := range ids {
-		_, _ = b.Write(id.Marshal())
+		buf = append(buf, id.Marshal()...)
 	}
 
-	return b.Bytes()
+	return buf
 }
 
 func UnmarshalIDs(b io.Reader) (ids IDs, err error) {
-	var size uint8
+	var buf [1]byte
 
-	if err := binary.Read(b, binary.BigEndian, &size); err != nil {
+	if _, err := io.ReadFull(b, buf[:]); err != nil {
 		return nil, errors.Wrap(err, "failed to read id array size")
 	}
 
-	ids = make(IDs, size)
+	ids = make(IDs, buf[0])
 
 	for i := range ids {
 		id, err := UnmarshalID(b)

@@ -51,11 +51,13 @@ func (c *Codec) DoRead(r io.Reader, state *State) error {
 	defer bytebufferpool.Put(buf)
 
 	if c.PrefixSize {
-		var length uint32
+		buf.B = append(buf.B, 0, 0, 0, 0)
 
-		if err = binary.Read(r, binary.BigEndian, &length); err != nil {
+		if _, err = io.ReadFull(r, buf.B[:4]); err != nil {
 			return err
 		}
+
+		length := binary.BigEndian.Uint32(buf.B[:4])
 
 		if length == 0 {
 			return nil
@@ -161,8 +163,14 @@ func (p *Reader) ReadUint64(order binary.ByteOrder) (res uint64) {
 		return
 	}
 
-	p.Fail(binary.Read(p.buf, order, &res))
-	return
+	var buf [8]byte
+
+	if _, err := io.ReadFull(p.buf, buf[:]); err != nil {
+		p.Fail(err)
+		return
+	}
+
+	return order.Uint64(buf[:])
 }
 
 func (p *Reader) ReadByte() (res byte) {
@@ -170,8 +178,14 @@ func (p *Reader) ReadByte() (res byte) {
 		return
 	}
 
-	p.Fail(binary.Read(p.buf, binary.BigEndian, &res))
-	return
+	var buf [1]byte
+
+	if _, err := io.ReadFull(p.buf, buf[:]); err != nil {
+		p.Fail(err)
+		return
+	}
+
+	return buf[0]
 }
 
 func (p *Reader) ReadBytes(amount int) (buf []byte) {
@@ -211,11 +225,14 @@ func (w *Writer) Fail(err error) {
 }
 
 func (w *Writer) WriteUint64(order binary.ByteOrder, val uint64) {
-	w.Fail(binary.Write(w.buf, order, val))
+	var buf [8]byte
+	order.PutUint64(buf[:], val)
+
+	w.WriteBytes(buf[:])
 }
 
 func (w *Writer) WriteByte(val byte) {
-	w.Fail(binary.Write(w.buf, binary.BigEndian, val))
+	w.Fail(w.buf.WriteByte(val))
 }
 
 func (w *Writer) WriteBytes(buf []byte) {
