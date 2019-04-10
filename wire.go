@@ -31,6 +31,10 @@ type Wire struct {
 	b []byte
 }
 
+func (c Wire) Peer() *Peer {
+	return c.m.peer
+}
+
 func (c Wire) Mux() Mux {
 	c.m.peer.initMuxQueue(c.m.id)
 
