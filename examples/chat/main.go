@@ -31,12 +31,12 @@ func protocol(node *noise.Node) (*skademlia.Protocol, noise.Protocol) {
 	aead.Logger().SetOutput(os.Stdout)
 	aead.RegisterOpcodes(node)
 
-	keys, err := skademlia.NewKeys(net.JoinHostPort("127.0.0.1", strconv.Itoa(node.Addr().(*net.TCPAddr).Port)), C1, C2)
+	keys, err := skademlia.NewKeys(C1, C2)
 	if err != nil {
 		panic(err)
 	}
 
-	overlay := skademlia.New(keys, xnoise.DialTCP)
+	overlay := skademlia.New(net.JoinHostPort("127.0.0.1", strconv.Itoa(node.Addr().(*net.TCPAddr).Port)), keys, xnoise.DialTCP)
 	overlay.Logger().SetOutput(os.Stdout)
 	overlay.RegisterOpcodes(node)
 	overlay.WithC1(C1)

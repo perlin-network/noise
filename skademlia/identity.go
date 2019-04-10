@@ -19,7 +19,7 @@ type ID struct {
 
 func NewID(address string, publicKey edwards25519.PublicKey, nonce [blake2b.Size256]byte) *ID {
 	id := blake2b.Sum256(publicKey[:])
-	checksum := blake2b.Sum256(append(id[:], address...))
+	checksum := blake2b.Sum256(id[:])
 
 	return &ID{
 		address:   address,
@@ -83,7 +83,7 @@ func UnmarshalID(b io.Reader) (m ID, err error) {
 	}
 
 	m.id = blake2b.Sum256(m.publicKey[:])
-	m.checksum = blake2b.Sum256(append(m.id[:], address...))
+	m.checksum = blake2b.Sum256(m.id[:])
 
 	if err = binary.Read(b, binary.BigEndian, &m.nonce); err != nil {
 		return ID{}, err
@@ -129,8 +129,6 @@ func UnmarshalIDs(b io.Reader) (ids IDs, err error) {
 }
 
 type Keypair struct {
-	self *ID
-
 	privateKey edwards25519.PrivateKey
 	publicKey  edwards25519.PublicKey
 
@@ -138,8 +136,8 @@ type Keypair struct {
 	c1, c2              int
 }
 
-func (k *Keypair) ID() *ID {
-	return k.self
+func (k *Keypair) ID(address string) *ID {
+	return NewID(address, k.publicKey, k.nonce)
 }
 
 func (k *Keypair) PrivateKey() edwards25519.PrivateKey {
@@ -150,8 +148,8 @@ func (k *Keypair) PublicKey() edwards25519.PublicKey {
 	return k.publicKey
 }
 
-func NewKeys(address string, c1, c2 int) (*Keypair, error) {
-	publicKey, privateKey, id, checksum, err := generateKeys(address, c1)
+func NewKeys(c1, c2 int) (*Keypair, error) {
+	publicKey, privateKey, id, checksum, err := generateKeys(c1)
 
 	if err != nil {
 		return nil, err
@@ -167,8 +165,6 @@ func NewKeys(address string, c1, c2 int) (*Keypair, error) {
 		privateKey: privateKey,
 		publicKey:  publicKey,
 
-		self: NewID(address, publicKey, nonce),
-
 		id:       id,
 		checksum: checksum,
 		nonce:    nonce,
@@ -180,11 +176,16 @@ func NewKeys(address string, c1, c2 int) (*Keypair, error) {
 	return keys, nil
 }
 
-func LoadKeys(address string, privateKey edwards25519.PrivateKey, nonce [blake2b.Size256]byte, c1, c2 int) (*Keypair, error) {
+func LoadKeys(privateKey edwards25519.PrivateKey, c1, c2 int) (*Keypair, error) {
 	publicKey := privateKey.Public()
 
 	id := blake2b.Sum256(publicKey[:])
-	checksum := blake2b.Sum256(append(id[:], address...))
+	checksum := blake2b.Sum256(id[:])
+
+	nonce, err := generateNonce(checksum, c2)
+	if err != nil {
+		return nil, errors.Wrap(err, "faiuled to generate valid puzzle nonce")
+	}
 
 	if err := verifyPuzzle(checksum, nonce, c1, c2); err != nil {
 		return nil, errors.Wrap(err, "keys are invalid")
@@ -193,8 +194,6 @@ func LoadKeys(address string, privateKey edwards25519.PrivateKey, nonce [blake2b
 	keys := &Keypair{
 		privateKey: privateKey,
 		publicKey:  publicKey,
-
-		self: NewID(address, publicKey, nonce),
 
 		id:       id,
 		checksum: checksum,

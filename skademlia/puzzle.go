@@ -9,7 +9,7 @@ import (
 
 // generateKeys attempts to randomly generate a suitable Ed25519 keypair which satisfies the
 // condition that blake2b(blake2b(publicKey)) has at least c1 prefixed zero bits.
-func generateKeys(address string, c1 int) (publicKey edwards25519.PublicKey, privateKey edwards25519.PrivateKey, id [blake2b.Size256]byte, checksum [blake2b.Size256]byte, err error) {
+func generateKeys(c1 int) (publicKey edwards25519.PublicKey, privateKey edwards25519.PrivateKey, id [blake2b.Size256]byte, checksum [blake2b.Size256]byte, err error) {
 	for {
 		publicKey, privateKey, err = edwards25519.GenerateKey(nil)
 
@@ -19,7 +19,7 @@ func generateKeys(address string, c1 int) (publicKey edwards25519.PublicKey, pri
 		}
 
 		id = blake2b.Sum256(publicKey[:])
-		checksum = blake2b.Sum256(append(id[:], address...))
+		checksum = blake2b.Sum256(id[:])
 
 		if staticPuzzle := prefixLen(checksum[:]); staticPuzzle >= c1 {
 			return

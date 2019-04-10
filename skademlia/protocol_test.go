@@ -42,10 +42,10 @@ func (sb *concurrentBuffer) Write(p []byte) (n int, err error) {
 func overlay(t testing.TB, node *noise.Node, addr string) (*Protocol, *bufio.Reader) {
 	t.Helper()
 
-	keys, err := NewKeys(addr, C1, C2)
+	keys, err := NewKeys(C1, C2)
 	assert.NoError(t, err)
 
-	overlay := New(keys, xnoise.DialTCP)
+	overlay := New(addr, keys, xnoise.DialTCP)
 	overlay.RegisterOpcodes(node)
 	overlay.WithC1(C1)
 	overlay.WithC2(C2)
@@ -96,11 +96,11 @@ func TestProtocol(t *testing.T) {
 	bobnet, boblog := overlay(t, bob, net.JoinHostPort("127.0.0.1", strconv.Itoa(bob.Addr().(*net.TCPAddr).Port)))
 	charlienet, charlielog := overlay(t, charlie, net.JoinHostPort("127.0.0.1", strconv.Itoa(charlie.Addr().(*net.TCPAddr).Port)))
 
-	aliceToBob, err := xnoise.DialTCP(alice, bobnet.keys.self.address)
+	aliceToBob, err := xnoise.DialTCP(alice, bobnet.table.self.address)
 	assert.NotNil(t, aliceToBob)
 	assert.NoError(t, err)
 
-	aliceToCharlie, err := xnoise.DialTCP(alice, charlienet.keys.self.address)
+	aliceToCharlie, err := xnoise.DialTCP(alice, charlienet.table.self.address)
 	assert.NotNil(t, aliceToCharlie)
 	assert.NoError(t, err)
 
@@ -115,7 +115,7 @@ func TestProtocol(t *testing.T) {
 
 	var bobToAlice *noise.Peer
 
-	for bobToAlice == nil || bobToAlice.Addr().String() == alicenet.keys.self.address {
+	for bobToAlice == nil || bobToAlice.Addr().String() == alicenet.table.self.address {
 		bobToAlice = bob.Peers()[0]
 	}
 
@@ -129,7 +129,7 @@ func TestProtocol(t *testing.T) {
 
 	var charlieToAlice *noise.Peer
 
-	for charlieToAlice == nil || charlieToAlice.Addr().String() == alicenet.keys.self.address {
+	for charlieToAlice == nil || charlieToAlice.Addr().String() == alicenet.table.self.address {
 		charlieToAlice = charlie.Peers()[0]
 	}
 
@@ -184,10 +184,10 @@ func TestProtocol(t *testing.T) {
 	})
 
 	t.Run("evicts invalid peers", func(t *testing.T) {
-		fakeKeys, err := NewKeys("fake_address", C1, C2)
+		fakeKeys, err := NewKeys(C1, C2)
 		assert.NoError(t, err)
 
-		assert.NoError(t, alicenet.Update(fakeKeys.ID()))
+		assert.NoError(t, alicenet.Update(fakeKeys.ID("fake_address")))
 		assert.Equal(t, 2, len(alicenet.Peers(alice)))
 
 		line, _, err := alicelog.ReadLine()
@@ -199,7 +199,7 @@ func TestProtocol(t *testing.T) {
 			assert.NoError(t, err)
 		}
 
-		assert.Contains(t, string(line), fmt.Sprintf("Peer %s could not be reached, and has been evicted.", fakeKeys.ID()))
+		assert.Contains(t, string(line), fmt.Sprintf("Peer %s could not be reached, and has been evicted.", fakeKeys.ID("fake_address")))
 	})
 
 	t.Run("able to bootstrap", func(t *testing.T) {
@@ -208,12 +208,12 @@ func TestProtocol(t *testing.T) {
 		assert.Equal(t, 2, len(ids))
 
 		for _, id := range ids {
-			if id.checksum != charlienet.keys.self.checksum {
-				assert.Equal(t, id.checksum, alicenet.keys.self.checksum)
+			if id.checksum != charlienet.table.self.checksum {
+				assert.Equal(t, id.checksum, alicenet.table.self.checksum)
 			}
 
-			if id.checksum != alicenet.keys.self.checksum {
-				assert.Equal(t, id.checksum, charlienet.keys.self.checksum)
+			if id.checksum != alicenet.table.self.checksum {
+				assert.Equal(t, id.checksum, charlienet.table.self.checksum)
 			}
 		}
 
@@ -253,7 +253,7 @@ func TestProtocol(t *testing.T) {
 	})
 
 	t.Run("correctly executes eviction policy when table is full", func(t *testing.T) {
-		fakeKeys, err := NewKeys("fake_address", C1, C2)
+		fakeKeys, err := NewKeys(C1, C2)
 		assert.NoError(t, err)
 
 		// Generate an ID in the same bucket.
@@ -265,7 +265,7 @@ func TestProtocol(t *testing.T) {
 				break
 			}
 
-			fakeKeys, err = NewKeys("fake_address", C1, C2)
+			fakeKeys, err = NewKeys(C1, C2)
 			assert.NoError(t, err)
 		}
 
@@ -277,7 +277,7 @@ func TestProtocol(t *testing.T) {
 		original := alicenet.table.getBucketSize()
 		alicenet.table.setBucketSize(numPeers)
 
-		assert.Error(t, alicenet.Update(fakeKeys.ID()))
+		assert.Error(t, alicenet.Update(fakeKeys.ID("fake_address")))
 
 		alicenet.table.setBucketSize(original)
 		assert.Len(t, alicenet.Peers(alice), 2)
@@ -286,16 +286,16 @@ func TestProtocol(t *testing.T) {
 	t.Run("disconnecting gracefully and disconnecting via timeout removes peer entry differently", func(t *testing.T) {
 		charlieToAlice.Disconnect(io.EOF)
 		charlienet.peersLock.Lock()
-		_, exists := charlienet.peers[alicenet.keys.self.checksum]
+		_, exists := charlienet.peers[alicenet.table.self.checksum]
 		charlienet.peersLock.Unlock()
 		assert.False(t, exists)
 
-		bucket := bobnet.table.buckets[getBucketID(bobnet.table.self.checksum, alicenet.keys.self.checksum)]
+		bucket := bobnet.table.buckets[getBucketID(bobnet.table.self.checksum, alicenet.table.self.checksum)]
 		before := bucket.Len()
 
 		bobToAlice.Disconnect(noise.ErrTimeout)
 		bobnet.peersLock.Lock()
-		_, exists = bobnet.peers[alicenet.keys.self.checksum]
+		_, exists = bobnet.peers[alicenet.table.self.checksum]
 		bobnet.peersLock.Unlock()
 		assert.False(t, exists)
 

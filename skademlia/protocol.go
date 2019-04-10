@@ -51,11 +51,11 @@ type Protocol struct {
 	peersLock sync.Mutex
 }
 
-func New(keys *Keypair, dialer noise.Dialer) *Protocol {
+func New(address string, keys *Keypair, dialer noise.Dialer) *Protocol {
 	return &Protocol{
 		logger: log.New(ioutil.Discard, "", 0),
 
-		table: NewTable(keys.ID()),
+		table: NewTable(keys.ID(address)),
 		keys:  keys,
 
 		dialer: dialer,
