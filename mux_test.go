@@ -18,3 +18,13 @@ func TestCloseMux(t *testing.T) {
 		assert.Nil(t, p.recv[m.id])
 	})
 }
+
+func BenchmarkNewMux(b *testing.B) {
+	p := newPeer(nil, nil, nil, nil, nil)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		p.Mux()
+	}
+}

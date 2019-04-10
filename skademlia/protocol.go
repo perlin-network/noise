@@ -224,7 +224,7 @@ func (b *Protocol) Handshake(ctx noise.Context) (*ID, error) {
 	err = func() error {
 		b.peersLock.Lock()
 		_, existed := b.peers[id.checksum]
-		 b.peersLock.Unlock()
+		b.peersLock.Unlock()
 
 		if !existed && ctx.Peer().Addr().String() != id.address {
 			reachable := b.PeerByID(ctx.Node(), id)

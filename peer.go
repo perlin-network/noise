@@ -3,8 +3,8 @@ package noise
 import (
 	"github.com/perlin-network/noise/wire"
 	"github.com/pkg/errors"
+	"github.com/valyala/fastrand"
 	"io"
-	"math/rand"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -131,12 +131,10 @@ func (p *Peer) Addr() net.Addr {
 // Mux establishes a new multiplexed session with a peer for the
 // purpose of sending/receiving messages concurrently.
 func (p *Peer) Mux() Mux {
-	rand.Seed(time.Now().UnixNano())
-
 	var id uint64
 
 	for {
-		id = rand.Uint64()
+		id = uint64(fastrand.Uint32())<<32 + uint64(fastrand.Uint32())
 
 		if id == 0 {
 			continue
