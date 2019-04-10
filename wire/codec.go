@@ -51,7 +51,7 @@ func (c *Codec) DoRead(r io.Reader, state *State) error {
 	defer bytebufferpool.Put(buf)
 
 	if c.PrefixSize {
-		var length uint16
+		var length uint32
 
 		if err = binary.Read(r, binary.BigEndian, &length); err != nil {
 			return err
@@ -69,7 +69,7 @@ func (c *Codec) DoRead(r io.Reader, state *State) error {
 			return errors.Wrap(err, "could not read expected amount of bytes from network")
 		}
 
-		if uint16(n) != length {
+		if uint32(n) != length {
 			return errors.Errorf("only read %d bytes when expected to read %d bytes", n, length)
 		}
 	} else {
@@ -116,8 +116,8 @@ func (c *Codec) DoWrite(w io.Writer, state *State) error {
 	}
 
 	if c.PrefixSize {
-		var length [2]byte
-		binary.BigEndian.PutUint16(length[:], uint16(wire.buf.Len()))
+		var length [4]byte
+		binary.BigEndian.PutUint32(length[:], uint32(wire.buf.Len()))
 
 		wire.buf.B = append(length[:], wire.buf.B...)
 	}

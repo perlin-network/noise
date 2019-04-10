@@ -67,9 +67,9 @@ func TestPeerSendsCorrectly(t *testing.T) {
 
 	r := bytes.NewReader(w.Bytes())
 
-	var receivedLength uint16
+	var receivedLength uint32
 	assert.NoError(t, binary.Read(r, binary.BigEndian, &receivedLength))
-	assert.Equal(t, uint16(len(msg)+1), receivedLength)
+	assert.Equal(t, uint32(len(msg)+1), receivedLength)
 
 	var receivedOpcode byte
 	assert.NoError(t, binary.Read(r, binary.BigEndian, &receivedOpcode))
