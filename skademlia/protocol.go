@@ -114,8 +114,20 @@ func (b *Protocol) Peers(node *noise.Node) (peers []*noise.Peer) {
 	return
 }
 
-func (b *Protocol) peerByID(node *noise.Node, id *ID) *noise.Peer {
-	peer := node.PeerByAddr(id.address)
+func (b *Protocol) PeerByID(node *noise.Node, id *ID) *noise.Peer {
+	if id.address == b.table.self.address {
+		return nil
+	}
+
+	b.peersLock.Lock()
+	peer, recorded := b.peers[id.checksum]
+	b.peersLock.Unlock()
+
+	if recorded {
+		return peer
+	}
+
+	peer = node.PeerByAddr(id.address)
 
 	if peer != nil {
 		return peer
@@ -129,18 +141,6 @@ func (b *Protocol) peerByID(node *noise.Node, id *ID) *noise.Peer {
 	}
 
 	return peer
-}
-
-func (b *Protocol) PeerByID(node *noise.Node, id *ID) *noise.Peer {
-	b.peersLock.Lock()
-	peer, recorded := b.peers[id.checksum]
-	b.peersLock.Unlock()
-
-	if recorded {
-		return peer
-	}
-
-	return b.peerByID(node, id)
 }
 
 func wrap(f func() error) {
@@ -223,10 +223,11 @@ func (b *Protocol) Handshake(ctx noise.Context) (*ID, error) {
 
 	err = func() error {
 		b.peersLock.Lock()
-		defer b.peersLock.Unlock()
+		_, existed := b.peers[id.checksum]
+		 b.peersLock.Unlock()
 
-		if _, existed := b.peers[id.checksum]; !existed && ctx.Peer().Addr().String() != id.address {
-			reachable := b.peerByID(ctx.Node(), id)
+		if !existed && ctx.Peer().Addr().String() != id.address {
+			reachable := b.PeerByID(ctx.Node(), id)
 
 			if reachable == nil {
 				return noise.ErrTimeout
