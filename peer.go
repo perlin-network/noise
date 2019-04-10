@@ -295,7 +295,7 @@ func (p *Peer) getMuxQueue(mux uint64, opcode byte) evtRecv {
 	queue, exists := queues[opcode]
 
 	if !exists {
-		queue = evtRecv{ch: make(chan Wire, 1024), lock: make(chan struct{}, 1)}
+		queue = evtRecv{ch: make(chan Wire, 64), lock: make(chan struct{}, 1)}
 		queues[opcode] = queue
 	}
 
@@ -317,7 +317,7 @@ func (p *Peer) initMuxQueue(mux uint64) {
 
 		for opcode, queue := range p.recv[0] {
 			if _, exists := p.recv[mux][opcode]; !exists {
-				p.recv[mux][opcode] = evtRecv{ch: make(chan Wire, 1024), lock: make(chan struct{}, 1)}
+				p.recv[mux][opcode] = evtRecv{ch: make(chan Wire, 64), lock: make(chan struct{}, 1)}
 			}
 
 			for n := len(queue.ch); n > 0; n-- {

@@ -236,7 +236,9 @@ func (b *Protocol) Handshake(ctx noise.Context) (*ID, error) {
 			reachable.Disconnect(nil)
 		}
 
+		b.peersLock.Lock()
 		b.peers[id.checksum] = ctx.Peer()
+		b.peersLock.Unlock()
 		return nil
 	}()
 
