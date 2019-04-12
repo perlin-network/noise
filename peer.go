@@ -281,6 +281,7 @@ func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 // It additionally registers a new buffered channel for an opcode under a specified
 // mux ID if there does not exist one beforehand.
 func (p *Peer) getMuxQueue(mux uint64, opcode byte) evtRecv {
+	p.newMuxLock.Lock()
 	p.recvLock.Lock()
 
 	queues, registered := p.recv[mux]
@@ -301,6 +302,7 @@ func (p *Peer) getMuxQueue(mux uint64, opcode byte) evtRecv {
 	}
 
 	p.recvLock.Unlock()
+	p.newMuxLock.Unlock()
 
 	return queue
 }
@@ -449,8 +451,6 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 			}
 		}
 
-		p.newMuxLock.Lock()
-
 		hub := p.getMuxQueue(mux, opcode)
 
 		select {
@@ -465,8 +465,6 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 			p.afterRecvLock.RUnlock()
 		default:
 		}
-
-		p.newMuxLock.Unlock()
 
 		return nil
 	}
