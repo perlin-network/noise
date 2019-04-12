@@ -133,6 +133,9 @@ func (p *Peer) Addr() net.Addr {
 func (p *Peer) Mux() Mux {
 	var id uint64
 
+	p.newMuxLock.Lock()
+	p.recvLock.Lock()
+
 	for {
 		id = uint64(fastrand.Uint32())<<32 + uint64(fastrand.Uint32())
 
@@ -140,16 +143,15 @@ func (p *Peer) Mux() Mux {
 			continue
 		}
 
-		p.recvLock.RLock()
-		_, exists := p.recv[id]
-		p.recvLock.RUnlock()
-
-		if !exists {
+		if _, exists := p.recv[id]; !exists {
 			break
 		}
 	}
 
-	p.initMuxQueue(id)
+	p.initMuxQueue(id, false)
+
+	p.recvLock.Unlock()
+	p.newMuxLock.Unlock()
 
 	return Mux{id: id, peer: p}
 }
@@ -305,9 +307,11 @@ func (p *Peer) getMuxQueue(mux uint64, opcode byte) evtRecv {
 	return queue
 }
 
-func (p *Peer) initMuxQueue(mux uint64) {
-	p.newMuxLock.Lock()
-	p.recvLock.Lock()
+func (p *Peer) initMuxQueue(mux uint64, lock bool) {
+	if lock {
+		p.newMuxLock.Lock()
+		p.recvLock.Lock()
+	}
 
 	if _, exists := p.recv[mux]; !exists {
 		p.recv[mux] = make(map[byte]evtRecv)
@@ -332,8 +336,10 @@ func (p *Peer) initMuxQueue(mux uint64) {
 		}
 	}
 
-	p.recvLock.Unlock()
-	p.newMuxLock.Unlock()
+	if lock {
+		p.recvLock.Unlock()
+		p.newMuxLock.Unlock()
+	}
 }
 
 func (p *Peer) reportError(err error) {

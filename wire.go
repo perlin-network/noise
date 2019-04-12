@@ -36,7 +36,7 @@ func (c Wire) Peer() *Peer {
 }
 
 func (c Wire) Mux() Mux {
-	c.m.peer.initMuxQueue(c.m.id)
+	c.m.peer.initMuxQueue(c.m.id, true)
 
 	return c.m
 }

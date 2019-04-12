@@ -105,7 +105,7 @@ func TestCreateThenLoadKeys(t *testing.T) {
 		return true
 	}
 
-	assert.NoError(t, quick.Check(f, &quick.Config{MaxCount: 1000}))
+	assert.NoError(t, quick.Check(f, &quick.Config{MaxCount: 100}))
 }
 
 func TestMarshalUnmarshalID(t *testing.T) {

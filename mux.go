@@ -51,7 +51,7 @@ func (m Mux) Send(opcode byte, msg []byte) error {
 // socket, if the send queue is full, or if an error occurred sending a message to
 // a peer.
 func (m Mux) SendWithTimeout(opcode byte, msg []byte, timeout time.Duration) error {
-	evt := evtSend{opcode: opcode, mux: m.id, msg: msg, done: make(chan error)}
+	evt := evtSend{opcode: opcode, mux: m.id, msg: msg, done: make(chan error, 1)}
 
 	if timeout > 0 {
 		err := m.peer.SetWriteDeadline(time.Now().Add(timeout))
