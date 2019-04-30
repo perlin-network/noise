@@ -359,30 +359,49 @@ func (b *Protocol) Update(id *ID) error {
 	for b.table.Update(id) == ErrBucketFull {
 		bucket := b.table.buckets[getBucketID(b.table.self.checksum, id.checksum)]
 
-		bucket.Lock()
-		b.peersLock.Lock()
+		f := func() (err error) {
+			var pid *ID
 
-		last := bucket.Back()
-		lastid := last.Value.(*ID)
-		lastp, exists := b.peers[lastid.checksum]
+			bucket.Lock()
+			defer bucket.Unlock()
 
-		b.peersLock.Unlock()
-		bucket.Unlock()
+			b.peersLock.Lock()
+			defer b.peersLock.Unlock()
 
-		if !exists {
-			b.table.Delete(bucket, lastid)
-			continue
+			last := bucket.Back()
+			lastid := last.Value.(*ID)
+			lastp, exists := b.peers[lastid.checksum]
+
+			defer func() {
+				if err != nil {
+					b.table.Delete(bucket, lastid)
+				}
+			}()
+
+			if !exists {
+				return errors.New("failed to dial peer")
+			}
+
+			pid, err = b.Ping(lastp.Ctx())
+
+			if err != nil { // Failed to ping peer at back of bucket.
+				err = errors.Wrap(noise.ErrTimeout, "skademlia: failed to ping last peer in bucket")
+
+				lastp.Disconnect(err)
+				return err
+			}
+
+			if pid.checksum != lastid.checksum || pid.nonce != lastid.nonce || pid.address != lastid.address { // Failed to authenticate peer at back of bucket.
+				err = errors.Wrap(noise.ErrTimeout, "skademlia: got invalid id pinging last peer in bucket")
+
+				lastp.Disconnect(err)
+				return err
+			}
+
+			return nil
 		}
 
-		pid, err := b.Ping(lastp.Ctx())
-
-		if err != nil { // Failed to ping peer at back of bucket.
-			lastp.Disconnect(errors.Wrap(noise.ErrTimeout, "skademlia: failed to ping last peer in bucket"))
-			continue
-		}
-
-		if pid.checksum != lastid.checksum || pid.nonce != lastid.nonce || pid.address != lastid.address { // Failed to authenticate peer at back of bucket.
-			lastp.Disconnect(errors.Wrap(noise.ErrTimeout, "skademlia: got invalid id pinging last peer in bucket"))
+		if err := f(); err != nil {
 			continue
 		}
 
