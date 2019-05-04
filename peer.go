@@ -439,7 +439,12 @@ func (p *Peer) flush() func(stop <-chan struct{}) error {
 		default:
 		}
 
-		if _, ok := <-p.flushQueue; !ok {
+		select {
+		case _, ok := <-p.flushQueue:
+			if !ok {
+				return nil
+			}
+		default:
 			return nil
 		}
 
