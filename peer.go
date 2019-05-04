@@ -1,6 +1,7 @@
 package noise
 
 import (
+	"bufio"
 	"github.com/perlin-network/noise/wire"
 	"github.com/pkg/errors"
 	"github.com/valyala/fastrand"
@@ -20,6 +21,9 @@ type Peer struct {
 
 	w io.Writer
 	r io.Reader
+
+	flushTimer *time.Ticker
+	flushLock  *sync.Mutex
 
 	c   Conn
 	ctx Context
@@ -56,6 +60,10 @@ func (p *Peer) Start() {
 	g = append(g, continuously(p.sendMessages()))
 	g = append(g, continuously(p.receiveMessages()))
 
+	if _, ok := p.w.(*bufio.Writer); ok {
+		g = append(g, continuously(p.flushMessages()))
+	}
+
 	if p.n != nil {
 		if protocol := p.n.p.Load(); protocol != nil {
 			g = append(g, p.followProtocol(protocol.(Protocol)))
@@ -88,7 +96,7 @@ func (p *Peer) Start() {
 
 	wg.Wait()
 
-	p.deregisterFromNode()
+	p.deregister()
 }
 
 func (p *Peer) Disconnect(err error) {
@@ -96,7 +104,7 @@ func (p *Peer) Disconnect(err error) {
 		return
 	}
 
-	p.deregisterFromNode()
+	p.deregister()
 
 	p.ctx.result <- err
 	<-p.ctx.stop
@@ -239,14 +247,16 @@ func (p *Peer) Ctx() Context {
 
 func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 	p := &Peer{
-		n:       n,
-		addr:    addr,
-		w:       w,
-		r:       r,
-		c:       c,
-		send:    make(chan evtSend, 1024),
-		recv:    make(map[uint64]map[byte]evtRecv),
-		signals: make(map[string]chan struct{}),
+		n:          n,
+		addr:       addr,
+		w:          w,
+		r:          r,
+		flushTimer: time.NewTicker(20 * time.Millisecond),
+		flushLock:  new(sync.Mutex),
+		c:          c,
+		send:       make(chan evtSend, 1024),
+		recv:       make(map[uint64]map[byte]evtRecv),
+		signals:    make(map[string]chan struct{}),
 	}
 
 	// The channel buffer size of '4' is selected on purpose. It is the number of
@@ -358,12 +368,14 @@ func (p *Peer) reportError(err error) {
 	p.errsLock.RUnlock()
 }
 
-func (p *Peer) deregisterFromNode() {
+func (p *Peer) deregister() {
 	if p.n != nil && p.addr != nil {
 		p.n.peersLock.Lock()
 		delete(p.n.peers, p.addr.String())
 		p.n.peersLock.Unlock()
 	}
+
+	p.flushTimer.Stop()
 }
 
 func (p *Peer) followProtocol(init Protocol) func(stop <-chan struct{}) error {
@@ -390,23 +402,24 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		}
 
 		state := wire.AcquireState()
-		defer wire.ReleaseState(state)
 
 		state.SetByte(WireKeyOpcode, evt.opcode)
 		state.SetUint64(WireKeyMuxID, evt.mux)
 		state.SetMessage(evt.msg)
 
-		err := p.WireCodec().DoWrite(p.w, state)
+		err := p.WireCodec().DoWrite(p.w, p.flushLock, state)
 
 		select {
 		case evt.done <- err:
 		default:
 		}
 
+		wire.ReleaseState(state)
+
 		close(evt.done)
 
 		if err != nil {
-			return nil
+			return err
 		}
 
 		p.afterSendLock.RLock()
@@ -416,6 +429,21 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		p.afterSendLock.RUnlock()
 
 		return nil
+	}
+}
+
+func (p *Peer) flushMessages() func(stop <-chan struct{}) error {
+	return func(stop <-chan struct{}) error {
+		select {
+		case <-stop:
+			return nil
+		case <-p.flushTimer.C:
+		}
+
+		p.flushLock.Lock()
+		defer p.flushLock.Unlock()
+
+		return p.w.(*bufio.Writer).Flush()
 	}
 }
 

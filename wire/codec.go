@@ -63,7 +63,7 @@ func (c *Codec) DoRead(r io.Reader, state *State) error {
 			return nil
 		}
 
-		buf.Set(make([]byte, length))
+		buf.B = append(buf.B, make([]byte, length-4)...)
 
 		n, err := io.ReadFull(r, buf.B)
 
@@ -81,12 +81,16 @@ func (c *Codec) DoRead(r io.Reader, state *State) error {
 	}
 
 	c.recvLock.RLock()
-	defer c.recvLock.RUnlock()
-
 	for _, i := range c.recv {
 		if buf.B, err = i(buf.B); err != nil {
-			return errors.Wrap(err, "failed to apply read interceptor")
+			err = errors.Wrap(err, "failed to apply read interceptor")
+			break
 		}
+	}
+	c.recvLock.RUnlock()
+
+	if err != nil {
+		return err
 	}
 
 	wire = AcquireReader(buf.B)
@@ -96,7 +100,7 @@ func (c *Codec) DoRead(r io.Reader, state *State) error {
 	return wire.Flush()
 }
 
-func (c *Codec) DoWrite(w io.Writer, state *State) error {
+func (c *Codec) DoWrite(w io.Writer, wlock *sync.Mutex, state *State) error {
 	var err error
 
 	wire := AcquireWriter()
@@ -109,12 +113,16 @@ func (c *Codec) DoWrite(w io.Writer, state *State) error {
 	}
 
 	c.sendLock.RLock()
-	defer c.sendLock.RUnlock()
-
 	for _, i := range c.send {
 		if wire.buf.B, err = i(wire.buf.B); err != nil {
-			return errors.Wrap(err, "failed to apply write interceptor")
+			err = errors.Wrap(err, "failed to apply write interceptor")
+			break
 		}
+	}
+	c.sendLock.RUnlock()
+
+	if err != nil {
+		return err
 	}
 
 	if c.PrefixSize {
@@ -124,7 +132,9 @@ func (c *Codec) DoWrite(w io.Writer, state *State) error {
 		wire.buf.B = append(length[:], wire.buf.B...)
 	}
 
+	wlock.Lock()
 	n, err := wire.buf.WriteTo(w)
+	wlock.Unlock()
 
 	if err != nil {
 		return errors.Wrap(err, "could not write wire contents to buf")

@@ -66,7 +66,7 @@ func (n *Node) NewPeer(addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 //
 // It is safe to call Wrap concurrently.
 func (n *Node) Wrap(conn net.Conn) *Peer {
-	return n.NewPeer(conn.RemoteAddr(), conn, bufio.NewReader(conn), conn)
+	return n.NewPeer(conn.RemoteAddr(), bufio.NewWriter(conn), bufio.NewReader(conn), conn)
 }
 
 // FollowProtocol enforces all peers to follow a specified protocol, which is

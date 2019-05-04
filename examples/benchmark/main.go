@@ -83,6 +83,9 @@ func main() {
 
 	aliceToBob.WaitFor(skademlia.SignalAuthenticated)
 
+	bobOpcode := bob.Opcode(OpcodeBenchmark)
+	aliceOpcode := alice.Opcode(OpcodeBenchmark)
+
 	// Notifier.
 	go func() {
 		for range time.Tick(1 * time.Second) {
@@ -98,20 +101,21 @@ func main() {
 			select {
 			case <-bobToAlice.Ctx().Done():
 				return
-			case <-bobToAlice.Recv(bob.Opcode(OpcodeBenchmark)):
+			case <-bobToAlice.Recv(bobOpcode):
 				atomic.AddUint64(&recvCount, 1)
 			}
 		}
 	}()
 
+	var buf [600]byte
+
 	// Sender.
 	for {
-		var buf [600]byte
 		if _, err := rand.Read(buf[:]); err != nil {
 			panic(err)
 		}
 
-		if err := aliceToBob.Send(alice.Opcode(OpcodeBenchmark), buf[:]); err != nil {
+		if err := aliceToBob.Send(aliceOpcode, buf[:]); err != nil {
 			panic(err)
 		}
 
