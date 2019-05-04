@@ -19,9 +19,11 @@ type Peer struct {
 
 	addr net.Addr
 
-	w     io.Writer
-	wlock sync.Mutex
-	r     io.Reader
+	w io.Writer
+	r io.Reader
+
+	flushTimer *time.Ticker
+	flushLock  *sync.Mutex
 
 	c   Conn
 	ctx Context
@@ -94,7 +96,7 @@ func (p *Peer) Start() {
 
 	wg.Wait()
 
-	p.deregisterFromNode()
+	p.deregister()
 }
 
 func (p *Peer) Disconnect(err error) {
@@ -102,7 +104,7 @@ func (p *Peer) Disconnect(err error) {
 		return
 	}
 
-	p.deregisterFromNode()
+	p.deregister()
 
 	p.ctx.result <- err
 	<-p.ctx.stop
@@ -245,14 +247,16 @@ func (p *Peer) Ctx() Context {
 
 func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 	p := &Peer{
-		n:       n,
-		addr:    addr,
-		w:       w,
-		r:       r,
-		c:       c,
-		send:    make(chan evtSend, 1024),
-		recv:    make(map[uint64]map[byte]evtRecv),
-		signals: make(map[string]chan struct{}),
+		n:          n,
+		addr:       addr,
+		w:          w,
+		r:          r,
+		flushTimer: time.NewTicker(20 * time.Millisecond),
+		flushLock:  new(sync.Mutex),
+		c:          c,
+		send:       make(chan evtSend, 1024),
+		recv:       make(map[uint64]map[byte]evtRecv),
+		signals:    make(map[string]chan struct{}),
 	}
 
 	// The channel buffer size of '4' is selected on purpose. It is the number of
@@ -364,12 +368,14 @@ func (p *Peer) reportError(err error) {
 	p.errsLock.RUnlock()
 }
 
-func (p *Peer) deregisterFromNode() {
+func (p *Peer) deregister() {
 	if p.n != nil && p.addr != nil {
 		p.n.peersLock.Lock()
 		delete(p.n.peers, p.addr.String())
 		p.n.peersLock.Unlock()
 	}
+
+	p.flushTimer.Stop()
 }
 
 func (p *Peer) followProtocol(init Protocol) func(stop <-chan struct{}) error {
@@ -401,7 +407,7 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		state.SetUint64(WireKeyMuxID, evt.mux)
 		state.SetMessage(evt.msg)
 
-		err := p.WireCodec().DoWrite(p.w, &p.wlock, state)
+		err := p.WireCodec().DoWrite(p.w, p.flushLock, state)
 
 		select {
 		case evt.done <- err:
@@ -427,17 +433,15 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 }
 
 func (p *Peer) flushMessages() func(stop <-chan struct{}) error {
-	timer := time.NewTicker(20 * time.Millisecond)
-
 	return func(stop <-chan struct{}) error {
 		select {
 		case <-stop:
 			return nil
-		case <-timer.C:
+		case <-p.flushTimer.C:
 		}
 
-		p.wlock.Lock()
-		defer p.wlock.Unlock()
+		p.flushLock.Lock()
+		defer p.flushLock.Unlock()
 
 		return p.w.(*bufio.Writer).Flush()
 	}
