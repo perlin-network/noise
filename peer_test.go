@@ -182,7 +182,7 @@ func TestPeerDropMessageWhenReceiveQueueFull(t *testing.T) {
 			state.SetUint64(WireKeyMuxID, 0)
 			state.SetMessage(msg)
 
-			assert.NoError(t, p.WireCodec().DoWrite(buf, &p.wLock, state))
+			assert.NoError(t, p.WireCodec().DoWrite(buf, &p.wlock, state))
 
 			_, err = a.Write(buf.Bytes())
 			assert.NoError(t, err)

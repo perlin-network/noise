@@ -20,7 +20,7 @@ type Peer struct {
 	addr net.Addr
 
 	w     *bufio.Writer
-	wLock sync.Mutex
+	wlock sync.Mutex
 	r     io.Reader
 
 	c   Conn
@@ -28,8 +28,7 @@ type Peer struct {
 
 	codec atomic.Value // *wire.Codec
 
-	send       chan evtSend
-	flushQueue chan struct{}
+	send chan evtSend
 
 	recv     map[uint64]map[byte]evtRecv
 	recvLock sync.RWMutex
@@ -58,7 +57,7 @@ func (p *Peer) Start() {
 
 	g = append(g, continuously(p.sendMessages()))
 	g = append(g, continuously(p.receiveMessages()))
-	g = append(g, continuously(p.flush()))
+	g = append(g, continuously(p.flushMessages()))
 
 	if p.n != nil {
 		if protocol := p.n.p.Load(); protocol != nil {
@@ -243,15 +242,14 @@ func (p *Peer) Ctx() Context {
 
 func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 	p := &Peer{
-		n:          n,
-		addr:       addr,
-		w:          bufio.NewWriter(w),
-		r:          r,
-		c:          c,
-		send:       make(chan evtSend, 1024),
-		flushQueue: make(chan struct{}, 1024),
-		recv:       make(map[uint64]map[byte]evtRecv),
-		signals:    make(map[string]chan struct{}),
+		n:       n,
+		addr:    addr,
+		w:       bufio.NewWriter(w),
+		r:       r,
+		c:       c,
+		send:    make(chan evtSend, 1024),
+		recv:    make(map[uint64]map[byte]evtRecv),
+		signals: make(map[string]chan struct{}),
 	}
 
 	// The channel buffer size of '4' is selected on purpose. It is the number of
@@ -395,30 +393,24 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		}
 
 		state := wire.AcquireState()
-		defer wire.ReleaseState(state)
 
 		state.SetByte(WireKeyOpcode, evt.opcode)
 		state.SetUint64(WireKeyMuxID, evt.mux)
 		state.SetMessage(evt.msg)
 
-		err := p.WireCodec().DoWrite(p.w, &p.wLock, state)
+		err := p.WireCodec().DoWrite(p.w, &p.wlock, state)
 
 		select {
 		case evt.done <- err:
 		default:
 		}
 
+		wire.ReleaseState(state)
+
 		close(evt.done)
 
 		if err != nil {
 			return err
-		}
-
-		if len(p.flushQueue) == 0 {
-			select {
-			case p.flushQueue <- struct{}{}:
-			default:
-			}
 		}
 
 		p.afterSendLock.RLock()
@@ -431,31 +423,20 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 	}
 }
 
-func (p *Peer) flush() func(stop <-chan struct{}) error {
+func (p *Peer) flushMessages() func(stop <-chan struct{}) error {
+	timer := time.NewTicker(20 * time.Millisecond)
+
 	return func(stop <-chan struct{}) error {
 		select {
 		case <-stop:
 			return nil
-		default:
+		case <-timer.C:
 		}
 
-		select {
-		case _, ok := <-p.flushQueue:
-			if !ok {
-				return nil
-			}
-		default:
-			return nil
-		}
+		p.wlock.Lock()
+		defer p.wlock.Unlock()
 
-		p.wLock.Lock()
-		defer p.wLock.Unlock()
-
-		if p.w.Buffered() > 0 {
-			return p.w.Flush()
-		}
-
-		return nil
+		return p.w.Flush()
 	}
 }
 
