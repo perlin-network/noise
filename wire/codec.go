@@ -96,7 +96,7 @@ func (c *Codec) DoRead(r io.Reader, state *State) error {
 	return wire.Flush()
 }
 
-func (c *Codec) DoWrite(w io.Writer, state *State) error {
+func (c *Codec) DoWrite(w io.Writer, writeLock *sync.Mutex, state *State) error {
 	var err error
 
 	wire := AcquireWriter()
@@ -124,7 +124,9 @@ func (c *Codec) DoWrite(w io.Writer, state *State) error {
 		wire.buf.B = append(length[:], wire.buf.B...)
 	}
 
+	writeLock.Lock()
 	n, err := wire.buf.WriteTo(w)
+	writeLock.Unlock()
 
 	if err != nil {
 		return errors.Wrap(err, "could not write wire contents to buf")
