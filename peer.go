@@ -19,7 +19,7 @@ type Peer struct {
 
 	addr net.Addr
 
-	w     *bufio.Writer
+	w     io.Writer
 	wlock sync.Mutex
 	r     io.Reader
 
@@ -57,7 +57,10 @@ func (p *Peer) Start() {
 
 	g = append(g, continuously(p.sendMessages()))
 	g = append(g, continuously(p.receiveMessages()))
-	g = append(g, continuously(p.flushMessages()))
+
+	if _, ok := p.w.(*bufio.Writer); ok {
+		g = append(g, continuously(p.flushMessages()))
+	}
 
 	if p.n != nil {
 		if protocol := p.n.p.Load(); protocol != nil {
@@ -244,7 +247,7 @@ func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 	p := &Peer{
 		n:       n,
 		addr:    addr,
-		w:       bufio.NewWriter(w),
+		w:       w,
 		r:       r,
 		c:       c,
 		send:    make(chan evtSend, 1024),
@@ -436,7 +439,7 @@ func (p *Peer) flushMessages() func(stop <-chan struct{}) error {
 		p.wlock.Lock()
 		defer p.wlock.Unlock()
 
-		return p.w.Flush()
+		return p.w.(*bufio.Writer).Flush()
 	}
 }
 
