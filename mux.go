@@ -17,8 +17,7 @@ type evtSend struct {
 	opcode byte
 	mux    uint64
 
-	msg  []byte
-	done chan error
+	msg []byte
 }
 
 type evtRecv struct {
@@ -51,7 +50,7 @@ func (m Mux) Send(opcode byte, msg []byte) error {
 // socket, if the send queue is full, or if an error occurred sending a message to
 // a peer.
 func (m Mux) SendWithTimeout(opcode byte, msg []byte, timeout time.Duration) error {
-	evt := evtSend{opcode: opcode, mux: m.id, msg: msg, done: make(chan error, 1)}
+	evt := evtSend{opcode: opcode, mux: m.id, msg: msg}
 
 	if timeout > 0 {
 		err := m.peer.SetWriteDeadline(time.Now().Add(timeout))
@@ -62,17 +61,11 @@ func (m Mux) SendWithTimeout(opcode byte, msg []byte, timeout time.Duration) err
 	}
 
 	select {
+	case <-m.peer.ctx.stop:
+		return ErrDisconnect
 	case m.peer.send <- evt:
 	default:
 		return ErrSendQueueFull
-	}
-
-	var err error
-
-	select {
-	case <-m.peer.ctx.stop:
-		return ErrDisconnect
-	case err = <-evt.done:
 	}
 
 	if timeout > 0 {
@@ -83,7 +76,7 @@ func (m Mux) SendWithTimeout(opcode byte, msg []byte, timeout time.Duration) err
 		}
 	}
 
-	return err
+	return nil
 }
 
 // Recv returns a receive-only channel that transmits messages under a specified

@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/perlin-network/noise/xnoise"
+	"github.com/pkg/errors"
 	"net/http"
 	_ "net/http/pprof"
 )
@@ -115,7 +116,7 @@ func main() {
 			panic(err)
 		}
 
-		if err := aliceToBob.Send(aliceOpcode, buf[:]); err != nil {
+		if err := aliceToBob.Send(aliceOpcode, buf[:]); err != nil && errors.Cause(err) != noise.ErrSendQueueFull {
 			panic(err)
 		}
 

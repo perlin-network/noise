@@ -2,6 +2,7 @@ package noise
 
 import (
 	"bufio"
+	"fmt"
 	"github.com/perlin-network/noise/wire"
 	"github.com/pkg/errors"
 	"github.com/valyala/fastrand"
@@ -21,9 +22,6 @@ type Peer struct {
 
 	w io.Writer
 	r io.Reader
-
-	flushTimer *time.Ticker
-	flushLock  *sync.Mutex
 
 	c   Conn
 	ctx Context
@@ -59,10 +57,6 @@ func (p *Peer) Start() {
 
 	g = append(g, continuously(p.sendMessages()))
 	g = append(g, continuously(p.receiveMessages()))
-
-	if _, ok := p.w.(*bufio.Writer); ok {
-		g = append(g, continuously(p.flushMessages()))
-	}
 
 	if p.n != nil {
 		if protocol := p.n.p.Load(); protocol != nil {
@@ -247,16 +241,14 @@ func (p *Peer) Ctx() Context {
 
 func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 	p := &Peer{
-		n:          n,
-		addr:       addr,
-		w:          w,
-		r:          r,
-		flushTimer: time.NewTicker(20 * time.Millisecond),
-		flushLock:  new(sync.Mutex),
-		c:          c,
-		send:       make(chan evtSend, 1024),
-		recv:       make(map[uint64]map[byte]evtRecv),
-		signals:    make(map[string]chan struct{}),
+		n:       n,
+		addr:    addr,
+		w:       w,
+		r:       r,
+		c:       c,
+		send:    make(chan evtSend, 1024),
+		recv:    make(map[uint64]map[byte]evtRecv),
+		signals: make(map[string]chan struct{}),
 	}
 
 	// The channel buffer size of '4' is selected on purpose. It is the number of
@@ -374,8 +366,6 @@ func (p *Peer) deregister() {
 		delete(p.n.peers, p.addr.String())
 		p.n.peersLock.Unlock()
 	}
-
-	p.flushTimer.Stop()
 }
 
 func (p *Peer) followProtocol(init Protocol) func(stop <-chan struct{}) error {
@@ -392,6 +382,8 @@ func (p *Peer) followProtocol(init Protocol) func(stop <-chan struct{}) error {
 }
 
 func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
+	bbw := bufio.NewWriter(p.w)
+
 	return func(stop <-chan struct{}) error {
 		var evt evtSend
 
@@ -401,25 +393,37 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		case evt = <-p.send:
 		}
 
-		state := wire.AcquireState()
+	L:
+		for {
+			state := wire.AcquireState()
 
-		state.SetByte(WireKeyOpcode, evt.opcode)
-		state.SetUint64(WireKeyMuxID, evt.mux)
-		state.SetMessage(evt.msg)
+			state.SetByte(WireKeyOpcode, evt.opcode)
+			state.SetUint64(WireKeyMuxID, evt.mux)
+			state.SetMessage(evt.msg)
 
-		err := p.WireCodec().DoWrite(p.w, p.flushLock, state)
+			err := p.WireCodec().DoWrite(bbw, state)
 
-		select {
-		case evt.done <- err:
-		default:
+			wire.ReleaseState(state)
+
+			if err != nil {
+				fmt.Println(errors.Wrap(err, "codec failed"))
+				return err
+			}
+
+			select {
+			case <-stop:
+				return nil
+			case evt = <-p.send:
+			default:
+				break L
+			}
 		}
 
-		wire.ReleaseState(state)
-
-		close(evt.done)
-
-		if err != nil {
-			return err
+		if bbw.Buffered() > 0 {
+			if err := bbw.Flush(); err != nil {
+				fmt.Println(errors.Wrapf(err, "failed to write: buf size %d", bbw.Buffered()))
+				return err
+			}
 		}
 
 		p.afterSendLock.RLock()
@@ -429,21 +433,6 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		p.afterSendLock.RUnlock()
 
 		return nil
-	}
-}
-
-func (p *Peer) flushMessages() func(stop <-chan struct{}) error {
-	return func(stop <-chan struct{}) error {
-		select {
-		case <-stop:
-			return nil
-		case <-p.flushTimer.C:
-		}
-
-		p.flushLock.Lock()
-		defer p.flushLock.Unlock()
-
-		return p.w.(*bufio.Writer).Flush()
 	}
 }
 

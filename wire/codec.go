@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"github.com/pkg/errors"
@@ -100,7 +101,7 @@ func (c *Codec) DoRead(r io.Reader, state *State) error {
 	return wire.Flush()
 }
 
-func (c *Codec) DoWrite(w io.Writer, wlock *sync.Mutex, state *State) error {
+func (c *Codec) DoWrite(w io.Writer, state *State) error {
 	var err error
 
 	wire := AcquireWriter()
@@ -132,9 +133,15 @@ func (c *Codec) DoWrite(w io.Writer, wlock *sync.Mutex, state *State) error {
 		wire.buf.B = append(length[:], wire.buf.B...)
 	}
 
-	wlock.Lock()
+	if bw, ok := w.(*bufio.Writer); ok {
+		if bw.Available() < wire.buf.Len() {
+			if err := bw.Flush(); err != nil {
+				return errors.Wrap(err, "failed to flush buffered writer")
+			}
+		}
+	}
+
 	n, err := wire.buf.WriteTo(w)
-	wlock.Unlock()
 
 	if err != nil {
 		return errors.Wrap(err, "could not write wire contents to buf")
