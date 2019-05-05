@@ -182,7 +182,7 @@ func TestPeerDropMessageWhenReceiveQueueFull(t *testing.T) {
 			state.SetUint64(WireKeyMuxID, 0)
 			state.SetMessage(msg)
 
-			assert.NoError(t, p.WireCodec().DoWrite(buf, p.flushLock, state))
+			assert.NoError(t, p.WireCodec().DoWrite(buf, state))
 
 			_, err = a.Write(buf.Bytes())
 			assert.NoError(t, err)
@@ -200,7 +200,7 @@ func TestPeerErrorWhenSendQueueFull(t *testing.T) {
 	defer close(p.ctx.stop)
 
 	for i := 0; i < cap(p.send); i++ {
-		p.send <- evtSend{done: make(chan error, 1)}
+		p.send <- evtSend{}
 	}
 
 	assert.Error(t, p.SendWithTimeout(0, nil, 1*time.Millisecond))

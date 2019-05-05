@@ -116,7 +116,11 @@ func main() {
 			panic(err)
 		}
 
-		if err := aliceToBob.Send(aliceOpcode, buf[:]); err != nil && errors.Cause(err) != noise.ErrSendQueueFull {
+		if err := aliceToBob.Send(aliceOpcode, buf[:]); err != nil {
+			if errors.Cause(err) == noise.ErrSendQueueFull {
+				continue
+			}
+
 			panic(err)
 		}
 

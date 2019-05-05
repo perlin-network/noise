@@ -382,8 +382,6 @@ func (p *Peer) followProtocol(init Protocol) func(stop <-chan struct{}) error {
 }
 
 func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
-	bbw := bufio.NewWriter(p.w)
-
 	return func(stop <-chan struct{}) error {
 		var evt evtSend
 
@@ -401,7 +399,7 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 			state.SetUint64(WireKeyMuxID, evt.mux)
 			state.SetMessage(evt.msg)
 
-			err := p.WireCodec().DoWrite(bbw, state)
+			err := p.WireCodec().DoWrite(p.w, state)
 
 			wire.ReleaseState(state)
 
@@ -419,16 +417,19 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 			}
 		}
 
-		if bbw.Buffered() > 0 {
-			if err := bbw.Flush(); err != nil {
-				fmt.Println(errors.Wrapf(err, "failed to write: buf size %d", bbw.Buffered()))
-				return err
+		if bw, ok := p.w.(*bufio.Writer); ok {
+			if bw.Buffered() > 0 {
+				if err := bw.Flush(); err != nil {
+					fmt.Println(errors.Wrapf(err, "failed to write: buf size %d", bw.Buffered()))
+					return err
+				}
 			}
 		}
 
 		p.afterSendLock.RLock()
 		for _, f := range p.afterSend {
 			f()
+
 		}
 		p.afterSendLock.RUnlock()
 
