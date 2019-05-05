@@ -1,8 +1,6 @@
 package noise
 
 import (
-	"bufio"
-	"fmt"
 	"github.com/perlin-network/noise/wire"
 	"github.com/pkg/errors"
 	"github.com/valyala/fastrand"
@@ -28,7 +26,9 @@ type Peer struct {
 
 	codec atomic.Value // *wire.Codec
 
-	send chan evtSend
+	flush          *sync.Mutex
+	flushTimer     *time.Timer
+	flushTimerLock sync.Mutex
 
 	recv     map[uint64]map[byte]evtRecv
 	recvLock sync.RWMutex
@@ -55,7 +55,6 @@ func (p *Peer) Start() {
 
 	var g []func(<-chan struct{}) error
 
-	g = append(g, continuously(p.sendMessages()))
 	g = append(g, continuously(p.receiveMessages()))
 
 	if p.n != nil {
@@ -246,7 +245,7 @@ func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 		w:       w,
 		r:       r,
 		c:       c,
-		send:    make(chan evtSend, 1024),
+		flush:   new(sync.Mutex),
 		recv:    make(map[uint64]map[byte]evtRecv),
 		signals: make(map[string]chan struct{}),
 	}
@@ -381,70 +380,8 @@ func (p *Peer) followProtocol(init Protocol) func(stop <-chan struct{}) error {
 	}
 }
 
-func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
-	return func(stop <-chan struct{}) error {
-		var evt evtSend
-
-		select {
-		case <-stop:
-			return nil
-		case evt = <-p.send:
-		}
-
-	L:
-		for {
-			state := wire.AcquireState()
-
-			state.SetByte(WireKeyOpcode, evt.opcode)
-			state.SetUint64(WireKeyMuxID, evt.mux)
-			state.SetMessage(evt.msg)
-
-			err := p.WireCodec().DoWrite(p.w, state)
-
-			wire.ReleaseState(state)
-
-			if err != nil {
-				fmt.Println(errors.Wrap(err, "codec failed"))
-				return err
-			}
-
-			select {
-			case <-stop:
-				return nil
-			case evt = <-p.send:
-			default:
-				break L
-			}
-		}
-
-		if bw, ok := p.w.(*bufio.Writer); ok {
-			if bw.Buffered() > 0 {
-				if err := bw.Flush(); err != nil {
-					fmt.Println(errors.Wrapf(err, "failed to write: buf size %d", bw.Buffered()))
-					return err
-				}
-			}
-		}
-
-		p.afterSendLock.RLock()
-		for _, f := range p.afterSend {
-			f()
-
-		}
-		p.afterSendLock.RUnlock()
-
-		return nil
-	}
-}
-
 func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 	return func(stop <-chan struct{}) error {
-		select {
-		case <-stop:
-			return nil
-		default:
-		}
-
 		state := wire.AcquireState()
 		defer wire.ReleaseState(state)
 

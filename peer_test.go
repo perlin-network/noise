@@ -189,23 +189,6 @@ func TestPeerDropMessageWhenReceiveQueueFull(t *testing.T) {
 		}()
 	}
 }
-
-func TestPeerErrorWhenSendQueueFull(t *testing.T) {
-	defer leaktest.Check(t)()
-
-	rw := iotest.NewBlockingReadWriter()
-
-	p := newPeer(nil, nil, rw, new(iotest.NopReader), rw)
-	defer p.Disconnect(nil)
-	defer close(p.ctx.stop)
-
-	for i := 0; i < cap(p.send); i++ {
-		p.send <- evtSend{}
-	}
-
-	assert.Error(t, p.SendWithTimeout(0, nil, 1*time.Millisecond))
-}
-
 func TestPeerSetAddr(t *testing.T) {
 	p := newPeer(nil, new(net.TCPAddr), nil, nil, nil)
 	assert.NotNil(t, p.Addr())

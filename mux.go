@@ -1,6 +1,8 @@
 package noise
 
 import (
+	"bufio"
+	"github.com/perlin-network/noise/wire"
 	"github.com/pkg/errors"
 	"time"
 )
@@ -11,13 +13,6 @@ func (m Locker) Unlock() {
 	if len(m) > 0 {
 		<-m
 	}
-}
-
-type evtSend struct {
-	opcode byte
-	mux    uint64
-
-	msg []byte
 }
 
 type evtRecv struct {
@@ -50,8 +45,6 @@ func (m Mux) Send(opcode byte, msg []byte) error {
 // socket, if the send queue is full, or if an error occurred sending a message to
 // a peer.
 func (m Mux) SendWithTimeout(opcode byte, msg []byte, timeout time.Duration) error {
-	evt := evtSend{opcode: opcode, mux: m.id, msg: msg}
-
 	if timeout > 0 {
 		err := m.peer.SetWriteDeadline(time.Now().Add(timeout))
 
@@ -60,12 +53,20 @@ func (m Mux) SendWithTimeout(opcode byte, msg []byte, timeout time.Duration) err
 		}
 	}
 
-	select {
-	case <-m.peer.ctx.stop:
-		return ErrDisconnect
-	case m.peer.send <- evt:
-	default:
-		return ErrSendQueueFull
+	state := wire.AcquireState()
+
+	state.SetByte(WireKeyOpcode, opcode)
+	state.SetUint64(WireKeyMuxID, m.id)
+	state.SetMessage(msg)
+
+	m.peer.flush.Lock()
+	err := m.peer.WireCodec().DoWrite(m.peer.w, state)
+	m.peer.flush.Unlock()
+
+	wire.ReleaseState(state)
+
+	if err != nil {
+		return errors.Wrap(err, "failed to send message")
 	}
 
 	if timeout > 0 {
@@ -76,7 +77,31 @@ func (m Mux) SendWithTimeout(opcode byte, msg []byte, timeout time.Duration) err
 		}
 	}
 
-	return nil
+	if bw, ok := m.peer.w.(*bufio.Writer); ok {
+		m.peer.flushTimerLock.Lock()
+
+		if m.peer.flushTimer != nil {
+			m.peer.flushTimer.Stop()
+		}
+
+		m.peer.flushTimer = time.AfterFunc(16*time.Millisecond, func() {
+			m.peer.flush.Lock()
+			if bw.Buffered() > 0 {
+				bw.Flush()
+			}
+			m.peer.flush.Unlock()
+		})
+
+		m.peer.flushTimerLock.Unlock()
+	}
+
+	m.peer.afterSendLock.RLock()
+	for _, f := range m.peer.afterSend {
+		f()
+	}
+	m.peer.afterSendLock.RUnlock()
+
+	return err
 }
 
 // Recv returns a receive-only channel that transmits messages under a specified

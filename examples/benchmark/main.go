@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/perlin-network/noise/xnoise"
-	"github.com/pkg/errors"
 	"net/http"
 	_ "net/http/pprof"
 )
@@ -45,7 +44,7 @@ func protocol(node *noise.Node) noise.Protocol {
 
 	node.RegisterOpcode(OpcodeBenchmark, node.NextAvailableOpcode())
 
-	return noise.NewProtocol(ecdh.Protocol(), aead.Protocol(), overlay.Protocol())
+	return noise.NewProtocol(xnoise.LogErrors, ecdh.Protocol(), aead.Protocol(), overlay.Protocol())
 }
 
 func launch() *noise.Node {
@@ -117,10 +116,6 @@ func main() {
 		}
 
 		if err := aliceToBob.Send(aliceOpcode, buf[:]); err != nil {
-			if errors.Cause(err) == noise.ErrSendQueueFull {
-				continue
-			}
-
 			panic(err)
 		}
 

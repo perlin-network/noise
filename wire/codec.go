@@ -135,9 +135,11 @@ func (c *Codec) DoWrite(w io.Writer, state *State) error {
 
 	if bw, ok := w.(*bufio.Writer); ok {
 		if bw.Available() < wire.buf.Len() {
-			if err := bw.Flush(); err != nil {
-				return errors.Wrap(err, "failed to flush buffered writer")
-			}
+			err = bw.Flush()
+		}
+
+		if err != nil {
+			return errors.Wrap(err, "failed to flush buffered writer")
 		}
 	}
 
