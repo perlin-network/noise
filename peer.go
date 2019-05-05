@@ -26,9 +26,7 @@ type Peer struct {
 
 	codec atomic.Value // *wire.Codec
 
-	flush          *sync.Mutex
-	flushTimer     *time.Timer
-	flushTimerLock sync.Mutex
+	flush sync.Mutex
 
 	recv     map[uint64]map[byte]evtRecv
 	recvLock sync.RWMutex
@@ -245,7 +243,6 @@ func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 		w:       w,
 		r:       r,
 		c:       c,
-		flush:   new(sync.Mutex),
 		recv:    make(map[uint64]map[byte]evtRecv),
 		signals: make(map[string]chan struct{}),
 	}

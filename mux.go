@@ -78,21 +78,11 @@ func (m Mux) SendWithTimeout(opcode byte, msg []byte, timeout time.Duration) err
 	}
 
 	if bw, ok := m.peer.w.(*bufio.Writer); ok {
-		m.peer.flushTimerLock.Lock()
-
-		if m.peer.flushTimer != nil {
-			m.peer.flushTimer.Stop()
+		m.peer.flush.Lock()
+		if bw.Buffered() > 0 {
+			bw.Flush()
 		}
-
-		m.peer.flushTimer = time.AfterFunc(16*time.Millisecond, func() {
-			m.peer.flush.Lock()
-			if bw.Buffered() > 0 {
-				bw.Flush()
-			}
-			m.peer.flush.Unlock()
-		})
-
-		m.peer.flushTimerLock.Unlock()
+		m.peer.flush.Unlock()
 	}
 
 	m.peer.afterSendLock.RLock()
