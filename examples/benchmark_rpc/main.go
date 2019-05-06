@@ -108,8 +108,7 @@ func main() {
 		}
 
 		if _, err := aliceToBob.Request(opcodeBenchmark, buf[:]); err != nil {
-			fmt.Println(err)
-			continue
+			panic(err)
 		}
 
 		atomic.AddUint64(&sendCount, 1)
