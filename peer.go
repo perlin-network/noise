@@ -292,8 +292,8 @@ func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 		w: w,
 		r: r,
 
-		bw: bufio.NewWriter(w),
-		br: bufio.NewReader(r),
+		bw: bufio.NewWriterSize(w, 4096),
+		br: bufio.NewReaderSize(r, 4096),
 
 		c: c,
 
