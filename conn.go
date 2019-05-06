@@ -29,18 +29,23 @@ var evtPool sync.Pool
 func acquireEvt() *evt {
 	v := evtPool.Get()
 	if v == nil {
-		v = &evt{done: make(chan error, 1)}
+		v = new(evt)
 	}
-	evt := v.(*evt)
-	if len(evt.done) != 0 {
+	e := v.(*evt)
+	if len(e.done) != 0 {
 		panic("BUG: evt.done must be empty")
 	}
-	return evt
+	return e
 }
 
 func releaseEvt(e *evt) {
 	if len(e.done) != 0 {
 		panic("BUG: evt.done must be empty")
+	}
+
+	if e.done != nil {
+		close(e.done)
+		e.done = nil
 	}
 	evtPool.Put(e)
 }

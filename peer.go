@@ -151,6 +151,7 @@ func (p *Peer) Send(opcode byte, msg []byte) error {
 
 func (p *Peer) SendAwait(opcode byte, msg []byte) error {
 	e := acquireEvt()
+	e.done = make(chan error, 1)
 	e.oneway = true
 	e.nonce = 0
 	e.opcode = opcode
@@ -181,6 +182,7 @@ func (p *Peer) SendAwait(opcode byte, msg []byte) error {
 
 func (p *Peer) Request(opcode byte, msg []byte) ([]byte, error) {
 	e := acquireEvt()
+	e.done = make(chan error, 1)
 	e.oneway = false
 	e.opcode = opcode
 	e.msg = msg
@@ -387,7 +389,7 @@ func continuously(fn func(stop <-chan struct{}) error) func(stop <-chan struct{}
 
 func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 	var (
-		evt *evt
+		e   *evt
 		err error
 
 		flush       <-chan time.Time
@@ -403,7 +405,7 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 
 	return func(stop <-chan struct{}) error {
 		select {
-		case evt = <-p.pendingSend:
+		case e = <-p.pendingSend:
 		default:
 			select {
 			case <-stop:
@@ -415,28 +417,28 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 
 				flush = nil
 				return nil
-			case evt = <-p.pendingSend:
+			case e = <-p.pendingSend:
 			}
 		}
 
 		buf := bytebufferpool.Get()
 		defer bytebufferpool.Put(buf)
 
-		if !evt.oneway {
-			evt.nonce = fastrand.Uint32()
+		if !e.oneway {
+			e.nonce = fastrand.Uint32()
 
 			p.pendingRPCLock.Lock()
-			for _, exists := p.pendingRPC[evt.nonce]; evt.nonce == 0 || exists; {
-				evt.nonce = fastrand.Uint32()
+			for _, exists := p.pendingRPC[e.nonce]; e.nonce == 0 || exists; {
+				e.nonce = fastrand.Uint32()
 			}
-			p.pendingRPC[evt.nonce] = evt
+			p.pendingRPC[e.nonce] = e
 			p.pendingRPCLock.Unlock()
 		}
 
-		binary.BigEndian.PutUint32(uint32Buf[:], evt.nonce)
+		binary.BigEndian.PutUint32(uint32Buf[:], e.nonce)
 		buf.B = append(buf.B, uint32Buf[:]...)
-		buf.B = append(buf.B, evt.opcode)
-		buf.B = append(buf.B, evt.msg...)
+		buf.B = append(buf.B, e.opcode)
+		buf.B = append(buf.B, e.msg...)
 
 		p.interceptSendLock.RLock()
 		for _, f := range p.interceptSend {
@@ -445,9 +447,10 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 
 				err = errors.Wrap(err, "failed to apply send interceptor")
 
-				if evt.done != nil {
-					evt.done <- err
-					releaseEvt(evt)
+				if e.done != nil {
+					e.done <- err
+				} else {
+					releaseEvt(e)
 				}
 
 				return err
@@ -458,13 +461,27 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		binary.BigEndian.PutUint32(uint32Buf[:], uint32(buf.Len()))
 
 		if _, err := p.bw.Write(uint32Buf[:]); err != nil {
-			releaseEvt(evt)
-			return errors.Wrap(err, "failed to write size")
+			err = errors.Wrap(err, "failed to write size")
+
+			if e.done != nil {
+				e.done <- err
+			} else {
+				releaseEvt(e)
+			}
+
+			return err
 		}
 
 		if _, err := p.bw.Write(buf.B); err != nil {
-			releaseEvt(evt)
-			return errors.Wrap(err, "failed to write message")
+			err = errors.Wrap(err, "failed to write message")
+
+			if e.done != nil {
+				e.done <- err
+			} else {
+				releaseEvt(e)
+			}
+
+			return err
 		}
 
 		p.afterSendLock.RLock()
@@ -473,11 +490,11 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		}
 		p.afterSendLock.RUnlock()
 
-		if evt.oneway {
-			if evt.done != nil {
-				evt.done <- nil
+		if e.oneway {
+			if e.done != nil {
+				e.done <- nil
 			} else {
-				releaseEvt(evt)
+				releaseEvt(e)
 			}
 		}
 
