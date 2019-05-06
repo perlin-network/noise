@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 )
 
+type Handler func(Context, []byte) ([]byte, error)
+
 type Node struct {
 	l net.Listener
 
@@ -17,19 +19,16 @@ type Node struct {
 	peers     map[string]*Peer
 	peersLock sync.RWMutex
 
-	opcodes      map[string]byte
-	opcodesIndex map[byte]string
-	opcodesLock  sync.RWMutex
+	opcodes     map[byte]Handler
+	opcodesLock sync.RWMutex
 }
 
 func NewNode(l net.Listener) *Node {
 	return &Node{
 		l: l,
 
-		peers: make(map[string]*Peer),
-
-		opcodes:      make(map[string]byte),
-		opcodesIndex: make(map[byte]string),
+		peers:   make(map[string]*Peer),
+		opcodes: make(map[byte]Handler),
 	}
 }
 
@@ -107,28 +106,22 @@ func (n *Node) PeerByAddr(address string) *Peer {
 	return peer
 }
 
-// RegisterOpcode reserves an opcode under a human-readable name.
+// Handle reserves an opcode under a human-readable name.
 // Note that opcodes are one-indexed, and that the zero opcode is
 // reserved.
 //
 // If an opcode is already registered under a designated name or
-// byte, then RegisterOpcode no-ops.
+// byte, then Handle no-ops.
 //
-// It is safe to call RegisterOpcode concurrently.
-func (n *Node) RegisterOpcode(name string, opcode byte) {
-	if opcode == 0 {
-		return
-	}
-
+// It is safe to call Handle concurrently.
+func (n *Node) Handle(opcode byte, fn Handler) byte {
 	n.opcodesLock.Lock()
-	_, registered1 := n.opcodes[name]
-	_, registered2 := n.opcodesIndex[opcode]
-
-	if !registered1 && !registered2 {
-		n.opcodes[name] = opcode
-		n.opcodesIndex[opcode] = name
+	if _, registered := n.opcodes[opcode]; !registered {
+		n.opcodes[opcode] = fn
 	}
 	n.opcodesLock.Unlock()
+
+	return opcode
 }
 
 // NextAvailableOpcode atomically returns the next unreserved opcode for
@@ -143,34 +136,21 @@ func (n *Node) RegisterOpcode(name string, opcode byte) {
 // opcodes registered for one PC differs from another PC.
 //
 // Ideally, opcodes should be specifically set by a user before a node
-// connects to or listens for its first peer using RegisterOpcode.
+// connects to or listens for its first peer using Handle.
 //
 // It is safe to call NextAvailableOpcode concurrently, though heed
 // the warnings above.
-func (n *Node) NextAvailableOpcode() (next byte) {
+func (n *Node) NextAvailableOpcode() byte {
 	n.opcodesLock.RLock()
-	for i := byte(0x01); i < math.MaxUint8; i++ {
-		if _, exists := n.opcodesIndex[i]; !exists {
-			next = i
-			break
+	defer n.opcodesLock.RUnlock()
+
+	for next := byte(0); next < math.MaxUint8; next++ {
+		if _, exists := n.opcodes[next]; !exists {
+			return next
 		}
 	}
-	n.opcodesLock.RUnlock()
 
-	return
-}
-
-// Opcode returns the opcode assigned to a given human-readable
-// name. In total, 255 opcodes may be assigned to a single node.
-//
-// Opcodes are one-indexed, and if it returns the zero opcode,
-// then the opcode has not been assigned as of yet.
-func (n *Node) Opcode(name string) byte {
-	n.opcodesLock.RLock()
-	opcode := n.opcodes[name]
-	n.opcodesLock.RUnlock()
-
-	return opcode
+	panic("no opcodes available")
 }
 
 // Addr returns the underlying address of the nodes listener.

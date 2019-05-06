@@ -52,7 +52,7 @@ func TestPeerSendsCorrectly(t *testing.T) {
 	c, _ := net.Pipe()
 
 	node := NewNode(nil)
-	node.RegisterOpcode("lorem ipsum", node.NextAvailableOpcode())
+	node.Handle("lorem ipsum", node.NextAvailableOpcode())
 
 	p := newPeer(node, nil, w, new(iotest.NopReader), c)
 	defer p.Disconnect(nil)
@@ -161,7 +161,7 @@ func TestPeerDropMessageWhenReceiveQueueFull(t *testing.T) {
 	a, b := net.Pipe()
 
 	n := NewNode(nil)
-	n.RegisterOpcode("lorem ipsum", 0x01)
+	n.Handle("lorem ipsum", 0x01)
 	p := newPeer(n, nil, b, b, b)
 	defer p.Disconnect(nil)
 

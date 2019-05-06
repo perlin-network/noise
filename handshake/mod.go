@@ -1,5 +1,5 @@
 package handshake
 
 const (
-	KeyEphemeral = "handshake.ephemeral_key"
+	KeyEphemeralSharedKey = "handshake.ephemeral_shared_key"
 )

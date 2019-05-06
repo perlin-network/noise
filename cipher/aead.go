@@ -15,10 +15,11 @@ import (
 
 const (
 	SignalReadyAEAD = "cipher.aead.authenticated"
-	OpcodeAckAEAD   = "cipher.aead.ack"
 )
 
 type AEAD struct {
+	opcodeACK byte
+
 	logger  *log.Logger
 	timeout time.Duration
 }
@@ -37,12 +38,12 @@ func (b *AEAD) TimeoutAfter(timeout time.Duration) *AEAD {
 }
 
 func (b *AEAD) RegisterOpcodes(n *noise.Node) {
-	n.RegisterOpcode(OpcodeAckAEAD, n.NextAvailableOpcode())
+	b.opcodeACK = n.Handle(n.NextAvailableOpcode(), nil)
 }
 
 func (b *AEAD) Protocol() noise.ProtocolBlock {
 	return func(ctx noise.Context) error {
-		ephemeral := ctx.Get(handshake.KeyEphemeral)
+		ephemeral := ctx.Get(handshake.KeyEphemeralSharedKey)
 
 		if ephemeral == nil {
 			return errors.New("aead: expected peer to have ephemeral key set")
@@ -52,20 +53,20 @@ func (b *AEAD) Protocol() noise.ProtocolBlock {
 			return errors.New("aead: ephemeral key must be a byte slice")
 		}
 
-		symmetric, err := b.Setup(ephemeral.([]byte), ctx)
+		suite, err := b.Setup(ephemeral.([]byte), ctx)
 
 		if err != nil {
 			return err
 		}
 
-		ctx.Set(KeySuite, symmetric)
+		ctx.Set(KeySuite, suite)
 
 		return nil
 	}
 }
 
 func (b *AEAD) Setup(ephemeralSharedKey []byte, ctx noise.Context) (cipher.AEAD, error) {
-	node, peer := ctx.Node(), ctx.Peer()
+	peer := ctx.Peer()
 
 	suite, symmetric, err := deriveCipherSuite(Aes256Gcm, sha256.New, ephemeralSharedKey, nil)
 	if err != nil {
@@ -75,33 +76,30 @@ func (b *AEAD) Setup(ephemeralSharedKey []byte, ctx noise.Context) (cipher.AEAD,
 	signal := peer.RegisterSignal(SignalReadyAEAD)
 	defer signal()
 
-	locker := peer.LockOnRecv(node.Opcode(OpcodeAckAEAD))
-	defer locker.Unlock()
+	unlock := peer.LockOnRecv(b.opcodeACK)
+	defer unlock()
 
-	if err = peer.Send(node.Opcode(OpcodeAckAEAD), nil); err != nil {
-		return suite, errors.Wrap(err, "aead: failed to send ACK")
+	if err = peer.SendAwait(b.opcodeACK, nil); err != nil {
+		return nil, errors.Wrap(err, "aead: failed to send ACK")
 	}
 
 	select {
 	case <-ctx.Done():
-		return suite, noise.ErrDisconnect
-	case <-time.After(b.timeout):
-		return suite, errors.Wrap(noise.ErrTimeout, "aead: timed out waiting for ACK")
-	case <-peer.Recv(node.Opcode(OpcodeAckAEAD)):
+		return nil, noise.ErrDisconnect
+	case <-peer.Recv(b.opcodeACK):
 	}
 
-	codec := peer.WireCodec()
-
 	var ourNonce, theirNonce uint64
+
 	ourNonceBuf := make([]byte, suite.NonceSize())
 	theirNonceBuf := make([]byte, suite.NonceSize())
 
-	codec.InterceptSend(func(buf []byte) ([]byte, error) {
+	peer.InterceptSend(func(buf []byte) ([]byte, error) {
 		binary.LittleEndian.PutUint64(ourNonceBuf, atomic.AddUint64(&ourNonce, 1))
 		return suite.Seal(buf[:0], ourNonceBuf, buf, nil), nil
 	})
 
-	codec.InterceptRecv(func(buf []byte) ([]byte, error) {
+	peer.InterceptRecv(func(buf []byte) ([]byte, error) {
 		binary.LittleEndian.PutUint64(theirNonceBuf, atomic.AddUint64(&theirNonce, 1))
 		return suite.Open(buf[:0], theirNonceBuf, buf, nil)
 	})

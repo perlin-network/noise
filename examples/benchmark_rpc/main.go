@@ -83,30 +83,19 @@ func main() {
 
 	aliceToBob.WaitFor(skademlia.SignalAuthenticated)
 
-	opcodeBenchmark := bob.Handle(bob.NextAvailableOpcode(), nil)
+	var opcodeBenchmark byte = 0x32
+
+	bob.Handle(opcodeBenchmark, func(ctx noise.Context, buf []byte) ([]byte, error) {
+		atomic.AddUint64(&recvCount, 1)
+		return nil, nil
+	})
+
+	alice.Handle(opcodeBenchmark, nil)
 
 	// Notifier.
 	go func() {
 		for range time.Tick(1 * time.Second) {
 			fmt.Printf("Sent %d messages, and received %d messages.\n", atomic.SwapUint64(&sendCount, 0), atomic.SwapUint64(&recvCount, 0))
-		}
-	}()
-
-	// Receiver.
-	go func() {
-		for len(bob.Peers()) != 1 {
-			continue
-		}
-
-		bobToAlice := bob.Peers()[0]
-
-		for {
-			select {
-			case <-bobToAlice.Ctx().Done():
-				return
-			case <-bobToAlice.Recv(opcodeBenchmark):
-				atomic.AddUint64(&recvCount, 1)
-			}
 		}
 	}()
 
@@ -118,7 +107,8 @@ func main() {
 			panic(err)
 		}
 
-		if err := aliceToBob.Send(opcodeBenchmark, buf[:]); err != nil {
+		if _, err := aliceToBob.Request(opcodeBenchmark, buf[:]); err != nil {
+			fmt.Println(err)
 			continue
 		}
 
