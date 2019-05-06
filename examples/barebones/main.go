@@ -2,9 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/xnoise"
-	"time"
 )
 
 func check(err error) {
@@ -24,10 +22,7 @@ func main() {
 	// Have Alice and Bob accept messages under opcodeTest.
 	const opcodeTest byte = 0x01
 
-	bob.Handle(opcodeTest, func(ctx noise.Context, buf []byte) ([]byte, error) {
-		fmt.Println("Alice said:", string(buf))
-		return nil, nil
-	})
+	bob.Handle(opcodeTest, nil)
 
 	// Have Alice dial Bob.
 	aliceToBob, err := xnoise.DialTCP(alice, bob.Addr().String())
@@ -40,11 +35,11 @@ func main() {
 	}
 
 	// The only peer which Bob is connected to must be Alice.
-	//bobToAlice := bobsPeers[0]
+	bobToAlice := bobsPeers[0]
 
 	// Have Alice send a 'hello world!' to Bob under opcodeTest.
 	check(aliceToBob.Send(opcodeTest, []byte("hello world!")))
 
 	// Have Bob print out a single message from Alice that is under opcodeTest.
-	time.Sleep(10 * time.Millisecond)
+	fmt.Println("Alice said:", string((<-bobToAlice.Recv(opcodeTest))))
 }
