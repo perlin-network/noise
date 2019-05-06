@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+var timerPool sync.Pool
+
 func acquireTimer() *time.Timer {
 	v := timerPool.Get()
 	if v == nil {
@@ -33,5 +35,3 @@ func stopTimer(t *time.Timer) {
 		}
 	}
 }
-
-var timerPool sync.Pool

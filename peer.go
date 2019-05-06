@@ -14,15 +14,6 @@ import (
 	"time"
 )
 
-type evt struct {
-	opcode byte
-	nonce  uint32
-	msg    []byte
-
-	oneway bool
-	done   chan error
-}
-
 type Peer struct {
 	n *Node
 
@@ -98,7 +89,11 @@ func (p *Peer) Start() {
 	}
 
 	if err != nil {
-		p.reportError(err)
+		p.interceptErrorsLock.RLock()
+		for _, i := range p.interceptErrors {
+			i(err)
+		}
+		p.interceptErrorsLock.RUnlock()
 	}
 
 	close(p.ctx.stop)
@@ -136,39 +131,36 @@ func (p *Peer) Addr() net.Addr {
 }
 
 func (p *Peer) Send(opcode byte, msg []byte) error {
-	evt := &evt{opcode: opcode, msg: msg, oneway: true}
+	e := acquireEvt()
+	e.oneway = true
+	e.nonce = 0
+	e.opcode = opcode
+	e.msg = append(e.msg, msg...)
 
-	select {
-	case p.pendingSend <- evt:
-	default:
-		select {
-		case p.pendingSend <- evt:
-		case <-p.ctx.stop:
-			return ErrDisconnect
-		case <-time.After(3 * time.Second):
-			return ErrSendQueueFull
-		}
+	if err := p.queueSend(e); err != nil {
+		releaseEvt(e)
+		return errors.Wrap(err, "failed to queue message to send")
 	}
 
 	return nil
 }
 
 func (p *Peer) SendAwait(opcode byte, msg []byte) error {
-	evt := &evt{opcode: opcode, msg: msg, oneway: true, done: make(chan error, 1)}
+	e := acquireEvt()
+	e.oneway = true
+	e.nonce = 0
+	e.opcode = opcode
+	e.msg = append(e.msg, msg...)
 
-	select {
-	case p.pendingSend <- evt:
-	default:
-		select {
-		case p.pendingSend <- evt:
-		case <-p.ctx.stop:
-			return ErrDisconnect
-		case <-time.After(3 * time.Second):
-			return ErrSendQueueFull
-		}
+	if err := p.queueSend(e); err != nil {
+		releaseEvt(e)
+		return errors.Wrap(err, "failed to queue message to send")
 	}
 
-	return <-evt.done
+	err := <-e.done
+	releaseEvt(e)
+
+	return err
 }
 
 func (p *Peer) Recv(opcode byte) <-chan []byte {
@@ -183,23 +175,25 @@ func (p *Peer) Recv(opcode byte) <-chan []byte {
 }
 
 func (p *Peer) Request(opcode byte, msg []byte) ([]byte, error) {
-	evt := &evt{opcode: opcode, msg: msg, done: make(chan error, 1)}
+	e := acquireEvt()
+	e.oneway = false
+	e.opcode = opcode
+	e.msg = append(e.msg, msg...)
 
-	select {
-	case p.pendingSend <- evt:
-	default:
-		select {
-		case p.pendingSend <- evt:
-		case <-time.After(3 * time.Second):
-			return nil, ErrSendQueueFull
-		}
+	if err := p.queueSend(e); err != nil {
+		releaseEvt(e)
+		return nil, errors.Wrap(err, "failed to queue request")
 	}
 
-	if err := <-evt.done; err != nil {
-		return nil, err
+	if err := <-e.done; err != nil {
+		releaseEvt(e)
+		return nil, errors.Wrap(err, "got an error sending request")
 	}
 
-	return evt.msg, nil
+	res := e.msg
+	releaseEvt(e)
+
+	return res, nil
 }
 
 func (p *Peer) LockOnRecv(opcode byte) func() {
@@ -321,16 +315,36 @@ func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 	return p
 }
 
-func (p *Peer) reportError(err error) {
-	if err == nil {
-		return
+func (p *Peer) queueSend(e *evt) error {
+	select {
+	case p.pendingSend <- e:
+		return nil
+	default:
+		select {
+		case p.pendingSend <- e:
+			return nil
+		case <-p.ctx.stop:
+			return ErrDisconnect
+		case <-time.After(3 * time.Second):
+			return ErrSendQueueFull
+		}
 	}
+}
 
-	p.interceptErrorsLock.RLock()
-	for _, i := range p.interceptErrors {
-		i(err)
+func (p *Peer) queueRecv(ch chan []byte, buf []byte) error {
+	select {
+	case ch <- buf:
+		return nil
+	default:
+		select {
+		case ch <- buf:
+			return nil
+		case <-p.ctx.stop:
+			return ErrDisconnect
+		case <-time.After(3 * time.Second):
+			return ErrRecvQueueFull
+		}
 	}
-	p.interceptErrorsLock.RUnlock()
 }
 
 func (p *Peer) deregister() {
@@ -416,7 +430,7 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 
 				if evt.done != nil {
 					evt.done <- err
-					close(evt.done)
+					releaseEvt(evt)
 				}
 
 				return err
@@ -427,10 +441,12 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		binary.BigEndian.PutUint32(uint32Buf[:], uint32(buf.Len()))
 
 		if _, err := p.bw.Write(uint32Buf[:]); err != nil {
+			releaseEvt(evt)
 			return errors.Wrap(err, "failed to write size")
 		}
 
 		if _, err := p.bw.Write(buf.B); err != nil {
+			releaseEvt(evt)
 			return errors.Wrap(err, "failed to write message")
 		}
 
@@ -440,8 +456,12 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		}
 		p.afterSendLock.RUnlock()
 
-		if evt.oneway && evt.done != nil {
-			close(evt.done)
+		if evt.oneway {
+			if evt.done != nil {
+				evt.done <- nil
+			} else {
+				releaseEvt(evt)
+			}
 		}
 
 		if flush == nil && len(p.pendingSend) == 0 {
@@ -517,7 +537,7 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 			req.msg = make([]byte, len(buf.B))
 			copy(req.msg, buf.B)
 
-			close(req.done)
+			req.done <- nil
 		} else if nonce > 0 {
 			var res []byte
 
@@ -529,16 +549,15 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 				}
 			}
 
-			evt := &evt{opcode: opcode, msg: res, nonce: nonce, oneway: true}
+			e := acquireEvt()
+			e.oneway = true
+			e.nonce = nonce
+			e.opcode = opcode
+			e.msg = append(e.msg, res...)
 
-			select {
-			case p.pendingSend <- evt:
-			default:
-				select {
-				case p.pendingSend <- evt:
-				case <-time.After(3 * time.Second):
-					return ErrRecvQueueFull
-				}
+			if err := p.queueSend(e); err != nil {
+				releaseEvt(e)
+				return err
 			}
 		} else if nonce == 0 {
 			p.pendingRecvLock.Lock()
@@ -551,14 +570,8 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 			msg := make([]byte, len(buf.B))
 			copy(msg, buf.B)
 
-			select {
-			case ch <- msg:
-			default:
-				select {
-				case ch <- msg:
-				case <-time.After(3 * time.Second):
-					return ErrRecvQueueFull
-				}
+			if err := p.queueRecv(ch, msg); err != nil {
+				return err
 			}
 		}
 
