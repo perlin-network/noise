@@ -157,21 +157,22 @@ func (p *Peer) SendAwait(opcode byte, msg []byte) error {
 		return errors.Wrap(err, "failed to queue message to send")
 	}
 
-	err := <-e.done
+	var err error
+
+	select {
+	case err = <-e.done:
+	case <-p.ctx.stop:
+		releaseEvt(e)
+		return ErrDisconnect
+	}
+
 	releaseEvt(e)
 
-	return err
-}
-
-func (p *Peer) Recv(opcode byte) <-chan []byte {
-	p.pendingRecvLock.Lock()
-	if _, exists := p.pendingRecv[opcode]; !exists {
-		p.pendingRecv[opcode] = make(chan []byte, 128)
+	if err != nil {
+		return errors.Wrap(err, "got an error sending message")
 	}
-	ch := p.pendingRecv[opcode]
-	p.pendingRecvLock.Unlock()
 
-	return ch
+	return nil
 }
 
 func (p *Peer) Request(opcode byte, msg []byte) ([]byte, error) {
@@ -185,15 +186,34 @@ func (p *Peer) Request(opcode byte, msg []byte) ([]byte, error) {
 		return nil, errors.Wrap(err, "failed to queue request")
 	}
 
-	if err := <-e.done; err != nil {
+	var err error
+
+	select {
+	case err = <-e.done:
+	case <-p.ctx.stop:
 		releaseEvt(e)
-		return nil, errors.Wrap(err, "got an error sending request")
+		return nil, ErrDisconnect
 	}
 
 	res := e.msg
 	releaseEvt(e)
 
+	if err != nil {
+		return nil, errors.Wrap(err, "got an error sending request")
+	}
+
 	return res, nil
+}
+
+func (p *Peer) Recv(opcode byte) <-chan []byte {
+	p.pendingRecvLock.Lock()
+	if _, exists := p.pendingRecv[opcode]; !exists {
+		p.pendingRecv[opcode] = make(chan []byte, 128)
+	}
+	ch := p.pendingRecv[opcode]
+	p.pendingRecvLock.Unlock()
+
+	return ch
 }
 
 func (p *Peer) LockOnRecv(opcode byte) func() {

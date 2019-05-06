@@ -61,9 +61,6 @@ func overlay(t testing.TB, node *noise.Node, addr string) (*Protocol, *bufio.Rea
 
 	node.FollowProtocol(noise.NewProtocol(overlay.Protocol()))
 
-	assert.NotZero(t, node.Opcode(OpcodePing))
-	assert.NotZero(t, node.Opcode(OpcodeLookup))
-
 	assert.Equal(t, overlay.c1, C1)
 	assert.Equal(t, overlay.c2, C2)
 	assert.Equal(t, overlay.prefixDiffMin, DefaultPrefixDiffMin)

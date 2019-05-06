@@ -170,7 +170,6 @@ func (b *Protocol) Protocol() noise.ProtocolBlock {
 		id, err := b.Handshake(ctx)
 
 		if err != nil {
-			panic(err)
 			return err
 		}
 
