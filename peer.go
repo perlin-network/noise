@@ -359,13 +359,16 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		evt *evt
 		err error
 
-		flush       <-chan struct{}
-		flushAlways = make(chan struct{})
+		flush       <-chan time.Time
+		flushTimer  = acquireTimer()
+		flushAlways = make(chan time.Time)
 
 		uint32Buf [4]byte
 	)
 
 	close(flushAlways)
+
+	flushDelay := 100 * time.Nanosecond
 
 	return func(stop <-chan struct{}) error {
 		select {
@@ -442,7 +445,12 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		}
 
 		if flush == nil && len(p.pendingSend) == 0 {
-			flush = flushAlways
+			if flushDelay > 0 {
+				resetTimer(flushTimer, flushDelay)
+				flush = flushTimer.C
+			} else {
+				flush = flushAlways
+			}
 		}
 
 		return nil
