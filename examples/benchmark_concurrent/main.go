@@ -5,6 +5,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"sync"
 )
 
 import (
@@ -118,10 +119,21 @@ func main() {
 			panic(err)
 		}
 
-		if err := aliceToBob.Send(opcodeBenchmark, buf[:]); err != nil {
-			panic(err)
+		var wg sync.WaitGroup
+		wg.Add(64)
+
+		for i := 0; i < 64; i++ {
+			go func() {
+				if err := aliceToBob.Send(opcodeBenchmark, buf[:]); err != nil {
+					panic(err)
+				}
+
+				wg.Done()
+			}()
 		}
 
-		atomic.AddUint64(&sendCount, 1)
+		wg.Wait()
+
+		atomic.AddUint64(&sendCount, 64)
 	}
 }

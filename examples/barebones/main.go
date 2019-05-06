@@ -22,8 +22,7 @@ func main() {
 	// Have Alice and Bob accept messages under opcodeTest.
 	const opcodeTest byte = 0x01
 
-	alice.RegisterOpcode("test", opcodeTest)
-	bob.RegisterOpcode("test", opcodeTest)
+	bob.Handle(opcodeTest, nil)
 
 	// Have Alice dial Bob.
 	aliceToBob, err := xnoise.DialTCP(alice, bob.Addr().String())
@@ -42,5 +41,5 @@ func main() {
 	check(aliceToBob.Send(opcodeTest, []byte("hello world!")))
 
 	// Have Bob print out a single message from Alice that is under opcodeTest.
-	fmt.Println("Alice said:", string((<-bobToAlice.Recv(opcodeTest)).Bytes()))
+	fmt.Println("Alice said:", string((<-bobToAlice.Recv(opcodeTest))))
 }

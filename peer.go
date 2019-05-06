@@ -2,10 +2,12 @@ package noise
 
 import (
 	"bufio"
-	"github.com/perlin-network/noise/wire"
+	"encoding/binary"
 	"github.com/pkg/errors"
+	"github.com/valyala/bytebufferpool"
 	"github.com/valyala/fastrand"
 	"io"
+	"math"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -13,8 +15,6 @@ import (
 )
 
 type Peer struct {
-	m Mux
-
 	n *Node
 
 	addr net.Addr
@@ -22,20 +22,21 @@ type Peer struct {
 	w io.Writer
 	r io.Reader
 
-	flushTimer *time.Ticker
-	flushLock  *sync.Mutex
+	bw *bufio.Writer
+	br *bufio.Reader
 
 	c   Conn
 	ctx Context
 
-	codec atomic.Value // *wire.Codec
+	pendingSend     chan *evt
+	pendingRecv     map[byte]chan []byte
+	pendingRecvLock sync.Mutex
 
-	send chan evtSend
+	pendingRPC     map[uint32]*evt
+	pendingRPCLock sync.Mutex
 
-	recv     map[uint64]map[byte]evtRecv
-	recvLock sync.RWMutex
-
-	newMuxLock sync.Mutex
+	interceptSend, interceptRecv         []func([]byte) ([]byte, error)
+	interceptSendLock, interceptRecvLock sync.RWMutex
 
 	afterSend, afterRecv         []func()
 	afterSendLock, afterRecvLock sync.RWMutex
@@ -43,11 +44,14 @@ type Peer struct {
 	signals     map[string]chan struct{}
 	signalsLock sync.Mutex
 
-	errs     []ErrorInterceptor
-	errsLock sync.RWMutex
+	interceptErrors     []ErrorInterceptor
+	interceptErrorsLock sync.RWMutex
 
 	startOnce uint32
 	stopOnce  uint32
+
+	recvLockOpcode uint32
+	recvLock       sync.Mutex
 }
 
 func (p *Peer) Start() {
@@ -59,10 +63,6 @@ func (p *Peer) Start() {
 
 	g = append(g, continuously(p.sendMessages()))
 	g = append(g, continuously(p.receiveMessages()))
-
-	if _, ok := p.w.(*bufio.Writer); ok {
-		g = append(g, continuously(p.flushMessages()))
-	}
 
 	if p.n != nil {
 		if protocol := p.n.p.Load(); protocol != nil {
@@ -89,7 +89,11 @@ func (p *Peer) Start() {
 	}
 
 	if err != nil {
-		p.reportError(err)
+		p.interceptErrorsLock.RLock()
+		for _, i := range p.interceptErrors {
+			i(err)
+		}
+		p.interceptErrorsLock.RUnlock()
 	}
 
 	close(p.ctx.stop)
@@ -110,16 +114,6 @@ func (p *Peer) Disconnect(err error) {
 	<-p.ctx.stop
 }
 
-// UpdateWireCodec atomically updates the message codec a peer utilizes in
-// amidst sending/receiving messages.
-func (p *Peer) UpdateWireCodec(codec *wire.Codec) {
-	p.codec.Store(codec)
-}
-
-func (p *Peer) WireCodec() *wire.Codec {
-	return p.codec.Load().(*wire.Codec)
-}
-
 func (p *Peer) SetWriteDeadline(t time.Time) error {
 	return p.c.SetWriteDeadline(t)
 }
@@ -132,56 +126,127 @@ func (p *Peer) Node() *Node {
 	return p.n
 }
 
+func (p *Peer) Ctx() Context {
+	return p.ctx
+}
+
 func (p *Peer) Addr() net.Addr {
 	return p.addr
 }
 
-// Mux establishes a new multiplexed session with a peer for the
-// purpose of sending/receiving messages concurrently.
-func (p *Peer) Mux() Mux {
-	var id uint64
+func (p *Peer) Send(opcode byte, msg []byte) error {
+	e := acquireEvt()
+	e.oneway = true
+	e.nonce = 0
+	e.opcode = opcode
+	e.msg = msg
 
-	p.newMuxLock.Lock()
-	p.recvLock.Lock()
-
-	for {
-		id = uint64(fastrand.Uint32())<<32 + uint64(fastrand.Uint32())
-
-		if id == 0 {
-			continue
-		}
-
-		if _, exists := p.recv[id]; !exists {
-			break
-		}
+	if err := p.queueSend(e); err != nil {
+		releaseEvt(e)
+		return errors.Wrap(err, "failed to queue message to send")
 	}
 
-	p.initMuxQueue(id, false)
-
-	p.recvLock.Unlock()
-	p.newMuxLock.Unlock()
-
-	return Mux{id: id, peer: p}
+	return nil
 }
 
-// Send invokes Mux.Send on a peers default mux session.
-func (p *Peer) Send(opcode byte, msg []byte) error {
-	return p.m.Send(opcode, msg)
+func (p *Peer) SendAwait(opcode byte, msg []byte) error {
+	e := acquireEvt()
+	e.done = make(chan error, 1)
+	e.oneway = true
+	e.nonce = 0
+	e.opcode = opcode
+	e.msg = msg
+
+	if err := p.queueSend(e); err != nil {
+		releaseEvt(e)
+		return errors.Wrap(err, "failed to queue message to send")
+	}
+
+	var err error
+
+	select {
+	case err = <-e.done:
+	case <-p.ctx.stop:
+		releaseEvt(e)
+		return ErrDisconnect
+	}
+
+	releaseEvt(e)
+
+	if err != nil {
+		return errors.Wrap(err, "got an error sending message")
+	}
+
+	return nil
 }
 
-// SendWithTimeout invokes Mux.SendWithTimeout on a peers default mux session.
-func (p *Peer) SendWithTimeout(opcode byte, msg []byte, timeout time.Duration) error {
-	return p.m.SendWithTimeout(opcode, msg, timeout)
+func (p *Peer) Request(opcode byte, msg []byte) ([]byte, error) {
+	e := acquireEvt()
+	e.done = make(chan error, 1)
+	e.oneway = false
+	e.opcode = opcode
+	e.msg = msg
+
+	if err := p.queueSend(e); err != nil {
+		releaseEvt(e)
+		return nil, errors.Wrap(err, "failed to queue request")
+	}
+
+	var err error
+
+	select {
+	case err = <-e.done:
+	case <-p.ctx.stop:
+		releaseEvt(e)
+		return nil, ErrDisconnect
+	}
+
+	res := e.msg
+	releaseEvt(e)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "got an error sending request")
+	}
+
+	return res, nil
 }
 
-// Recv invokes Mux.Recv on a peers default mux session.
-func (p *Peer) Recv(opcode byte) <-chan Wire {
-	return p.m.Recv(opcode)
+func (p *Peer) Recv(opcode byte) <-chan []byte {
+	p.pendingRecvLock.Lock()
+	if _, exists := p.pendingRecv[opcode]; !exists {
+		p.pendingRecv[opcode] = make(chan []byte, 128)
+	}
+	ch := p.pendingRecv[opcode]
+	p.pendingRecvLock.Unlock()
+
+	return ch
 }
 
-// LockOnRecv invokes Mux.LockOnRecv on a peers default mux session.
-func (p *Peer) LockOnRecv(opcode byte) Locker {
-	return p.m.LockOnRecv(opcode)
+func (p *Peer) LockOnRecv(opcode byte) func() {
+	p.recvLock.Lock()
+	atomic.StoreUint32(&p.recvLockOpcode, uint32(opcode))
+
+	return func() {
+		p.recvLock.Unlock()
+	}
+}
+
+func (p *Peer) InterceptSend(f func(buf []byte) ([]byte, error)) {
+	p.interceptSendLock.Lock()
+	p.interceptSend = append(p.interceptSend, f)
+	p.interceptSendLock.Unlock()
+}
+
+func (p *Peer) InterceptRecv(f func(buf []byte) ([]byte, error)) {
+	p.interceptRecvLock.Lock()
+	p.interceptRecv = append(p.interceptRecv, f)
+	p.interceptRecvLock.Unlock()
+}
+
+func (p *Peer) InterceptErrors(i ErrorInterceptor) {
+	p.interceptErrorsLock.Lock()
+	p.interceptErrors = append(p.interceptErrors, i)
+	p.interceptErrorsLock.Unlock()
 }
 
 func (p *Peer) AfterSend(f func()) {
@@ -235,137 +300,73 @@ func (p *Peer) WaitFor(name string) {
 	<-s
 }
 
-func (p *Peer) InterceptErrors(i ErrorInterceptor) {
-	p.errsLock.Lock()
-	p.errs = append(p.errs, i)
-	p.errsLock.Unlock()
-}
-
-func (p *Peer) Ctx() Context {
-	return p.ctx
-}
-
 func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 	p := &Peer{
-		n:          n,
-		addr:       addr,
-		w:          w,
-		r:          r,
-		flushTimer: time.NewTicker(20 * time.Millisecond),
-		flushLock:  new(sync.Mutex),
-		c:          c,
-		send:       make(chan evtSend, 1024),
-		recv:       make(map[uint64]map[byte]evtRecv),
-		signals:    make(map[string]chan struct{}),
+		n:    n,
+		addr: addr,
+
+		w: w,
+		r: r,
+
+		bw: bufio.NewWriterSize(w, 4096),
+		br: bufio.NewReaderSize(r, 4096),
+
+		c: c,
+
+		pendingSend: make(chan *evt, 1024),
+		pendingRecv: make(map[byte]chan []byte),
+		pendingRPC:  make(map[uint32]*evt),
+
+		signals: make(map[string]chan struct{}),
+
+		recvLockOpcode: math.MaxUint32,
 	}
 
-	// The channel buffer size of '4' is selected on purpose. It is the number of
+	// The channel buffer size of '3' is selected on purpose. It is the number of
 	// goroutines expected to be spawned per-peer.
 
 	p.ctx = Context{
 		n:      n,
 		p:      p,
-		result: make(chan error, 4),
+		result: make(chan error, 3),
 		stop:   make(chan struct{}),
 		v:      make(map[string]interface{}),
 		vm:     new(sync.RWMutex),
 	}
 
-	p.m = Mux{peer: p}
-
-	codec := DefaultProtocol.Clone()
-	p.UpdateWireCodec(&codec)
-
 	return p
 }
 
-// getMuxQueue returns a map of message queues pertaining to a specified mux ID, if the
-// mux ID is registered beforehand.
-//
-// If the mux was not registered beforehand, by default, it returns a map of message queues
-// pertaining to the zero mux (mux ID zero).
-//
-// If the zero mux was not yet initialized, it additionally atomically registers a map of
-// message queues to mux ID zero.
-//
-// It additionally registers a new buffered channel for an opcode under a specified
-// mux ID if there does not exist one beforehand.
-func (p *Peer) getMuxQueue(mux uint64, opcode byte) evtRecv {
-	p.newMuxLock.Lock()
-	p.recvLock.Lock()
-
-	queues, registered := p.recv[mux]
-
-	if !registered {
-		if _, init := p.recv[0]; !init {
-			p.recv[0] = make(map[byte]evtRecv)
+func (p *Peer) queueSend(e *evt) error {
+	select {
+	case p.pendingSend <- e:
+		return nil
+	default:
+		select {
+		case p.pendingSend <- e:
+			return nil
+		case <-p.ctx.stop:
+			return ErrDisconnect
+		case <-time.After(3 * time.Second):
+			return ErrSendQueueFull
 		}
-
-		queues = p.recv[0]
-	}
-
-	queue, exists := queues[opcode]
-
-	if !exists {
-		queue = evtRecv{ch: make(chan Wire, 64), lock: make(chan struct{}, 1)}
-		queues[opcode] = queue
-	}
-
-	p.recvLock.Unlock()
-	p.newMuxLock.Unlock()
-
-	return queue
-}
-
-func (p *Peer) initMuxQueue(mux uint64, lock bool) {
-	if lock {
-		p.newMuxLock.Lock()
-		p.recvLock.Lock()
-	}
-
-	if _, exists := p.recv[mux]; !exists {
-		p.recv[mux] = make(map[byte]evtRecv)
-
-		// Move all messages from our zero mux, originally intended for our
-		// mux channel, to our newly generated mux.
-
-		for opcode, queue := range p.recv[0] {
-			if _, exists := p.recv[mux][opcode]; !exists {
-				p.recv[mux][opcode] = evtRecv{ch: make(chan Wire, 64), lock: make(chan struct{}, 1)}
-			}
-
-		L:
-			for n := len(queue.ch); n > 0; n-- {
-				select {
-				case e := <-queue.ch:
-					if e.m.id == mux {
-						p.recv[mux][opcode].ch <- e
-					} else {
-						queue.ch <- e
-					}
-				default:
-					break L
-				}
-			}
-		}
-	}
-
-	if lock {
-		p.recvLock.Unlock()
-		p.newMuxLock.Unlock()
 	}
 }
 
-func (p *Peer) reportError(err error) {
-	if err == nil {
-		return
+func (p *Peer) queueRecv(ch chan []byte, buf []byte) error {
+	select {
+	case ch <- buf:
+		return nil
+	default:
+		select {
+		case ch <- buf:
+			return nil
+		case <-p.ctx.stop:
+			return ErrDisconnect
+		case <-time.After(3 * time.Second):
+			return ErrRecvQueueFull
+		}
 	}
-
-	p.errsLock.RLock()
-	for _, i := range p.errs {
-		i(err)
-	}
-	p.errsLock.RUnlock()
 }
 
 func (p *Peer) deregister() {
@@ -374,8 +375,258 @@ func (p *Peer) deregister() {
 		delete(p.n.peers, p.addr.String())
 		p.n.peersLock.Unlock()
 	}
+}
 
-	p.flushTimer.Stop()
+func continuously(fn func(stop <-chan struct{}) error) func(stop <-chan struct{}) error {
+	return func(stop <-chan struct{}) error {
+		for {
+			if err := fn(stop); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
+	var (
+		e   *evt
+		err error
+
+		flush       <-chan time.Time
+		flushTimer  = acquireTimer()
+		flushAlways = make(chan time.Time)
+
+		uint32Buf [4]byte
+	)
+
+	close(flushAlways)
+
+	flushDelay := 100 * time.Nanosecond
+
+	return func(stop <-chan struct{}) error {
+		select {
+		case e = <-p.pendingSend:
+		default:
+			select {
+			case <-stop:
+				return ErrDisconnect
+			case <-flush:
+				if err := p.bw.Flush(); err != nil {
+					return errors.Wrap(err, "could not flush messages")
+				}
+
+				flush = nil
+				return nil
+			case e = <-p.pendingSend:
+			}
+		}
+
+		buf := bytebufferpool.Get()
+		defer bytebufferpool.Put(buf)
+
+		if !e.oneway {
+			e.nonce = fastrand.Uint32()
+
+			p.pendingRPCLock.Lock()
+			for _, exists := p.pendingRPC[e.nonce]; e.nonce == 0 || exists; {
+				e.nonce = fastrand.Uint32()
+			}
+			p.pendingRPC[e.nonce] = e
+			p.pendingRPCLock.Unlock()
+		}
+
+		binary.BigEndian.PutUint32(uint32Buf[:], e.nonce)
+		buf.B = append(buf.B, uint32Buf[:]...)
+		buf.B = append(buf.B, e.opcode)
+		buf.B = append(buf.B, e.msg...)
+
+		p.interceptSendLock.RLock()
+		for _, f := range p.interceptSend {
+			if buf.B, err = f(buf.B); err != nil {
+				p.interceptSendLock.RUnlock()
+
+				err = errors.Wrap(err, "failed to apply send interceptor")
+
+				if e.done != nil {
+					e.done <- err
+				} else {
+					releaseEvt(e)
+				}
+
+				return err
+			}
+		}
+		p.interceptSendLock.RUnlock()
+
+		binary.BigEndian.PutUint32(uint32Buf[:], uint32(buf.Len()))
+
+		if _, err := p.bw.Write(uint32Buf[:]); err != nil {
+			err = errors.Wrap(err, "failed to write size")
+
+			if e.done != nil {
+				e.done <- err
+			} else {
+				releaseEvt(e)
+			}
+
+			return err
+		}
+
+		if _, err := p.bw.Write(buf.B); err != nil {
+			err = errors.Wrap(err, "failed to write message")
+
+			if e.done != nil {
+				e.done <- err
+			} else {
+				releaseEvt(e)
+			}
+
+			return err
+		}
+
+		p.afterSendLock.RLock()
+		for _, f := range p.afterSend {
+			f()
+		}
+		p.afterSendLock.RUnlock()
+
+		if e.oneway {
+			if e.done != nil {
+				e.done <- nil
+			} else {
+				releaseEvt(e)
+			}
+		}
+
+		if flush == nil && len(p.pendingSend) == 0 {
+			if flushDelay > 0 {
+				resetTimer(flushTimer, flushDelay)
+				flush = flushTimer.C
+			} else {
+				flush = flushAlways
+			}
+		}
+
+		return nil
+	}
+}
+
+func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
+	var (
+		uint32Buf [4]byte
+		err       error
+	)
+
+	return func(stop <-chan struct{}) error {
+		if _, err := io.ReadFull(p.br, uint32Buf[:]); err != nil {
+			return errors.Wrap(err, "couldn't read size")
+		}
+
+		size := binary.BigEndian.Uint32(uint32Buf[:])
+
+		buf := bytebufferpool.Get()
+		defer bytebufferpool.Put(buf)
+
+		buf.B = append(buf.B, make([]byte, size)...)
+
+		if _, err := io.ReadFull(p.br, buf.B); err != nil {
+			return errors.Wrap(err, "couldn't read message")
+		}
+
+		p.interceptRecvLock.RLock()
+		for _, f := range p.interceptRecv {
+			if buf.B, err = f(buf.B); err != nil {
+				p.interceptRecvLock.RUnlock()
+				return errors.Wrap(err, "failed to apply recv interceptor")
+			}
+		}
+		p.interceptRecvLock.RUnlock()
+
+		nonce := binary.BigEndian.Uint32(buf.B[:4])
+		buf.B = buf.B[4:]
+
+		opcode := buf.B[0]
+		buf.B = buf.B[1:]
+
+		p.pendingRPCLock.Lock()
+		req := p.pendingRPC[nonce]
+		delete(p.pendingRPC, nonce)
+		p.pendingRPCLock.Unlock()
+
+		var handler Handler
+
+		if p.n != nil {
+			var registered bool
+
+			p.n.opcodesLock.RLock()
+			handler, registered = p.n.opcodes[opcode]
+			p.n.opcodesLock.RUnlock()
+
+			if !registered {
+				return nil
+			}
+		}
+
+		if req != nil {
+			req.msg = make([]byte, len(buf.B))
+			copy(req.msg, buf.B)
+
+			req.done <- nil
+		} else if nonce > 0 {
+			var res []byte
+
+			if handler != nil {
+				res, err = handler(p.ctx, buf.B)
+
+				if err != nil {
+					return errors.Wrap(err, "failed to handle request")
+				}
+			}
+
+			e := acquireEvt()
+			e.oneway = true
+			e.nonce = nonce
+			e.opcode = opcode
+			e.msg = res
+
+			if err := p.queueSend(e); err != nil {
+				releaseEvt(e)
+				return err
+			}
+		} else if nonce == 0 {
+			p.pendingRecvLock.Lock()
+			if _, exists := p.pendingRecv[opcode]; !exists {
+				p.pendingRecv[opcode] = make(chan []byte, 128)
+			}
+			ch := p.pendingRecv[opcode]
+			p.pendingRecvLock.Unlock()
+
+			msg := make([]byte, len(buf.B))
+			copy(msg, buf.B)
+
+			if err := p.queueRecv(ch, msg); err != nil {
+				return err
+			}
+		}
+
+		if lockOpcode := atomic.LoadUint32(&p.recvLockOpcode); lockOpcode != math.MaxUint32 {
+			if opcode == byte(lockOpcode) {
+				p.recvLock.Lock()
+				p.recvLock.Unlock()
+
+				atomic.StoreUint32(&p.recvLockOpcode, math.MaxUint32)
+				return nil
+			}
+		}
+
+		p.afterRecvLock.RLock()
+		for _, f := range p.afterRecv {
+			f()
+		}
+		p.afterRecvLock.RUnlock()
+
+		return nil
+	}
 }
 
 func (p *Peer) followProtocol(init Protocol) func(stop <-chan struct{}) error {
@@ -387,113 +638,6 @@ func (p *Peer) followProtocol(init Protocol) func(stop <-chan struct{}) error {
 		}
 
 		<-stop
-		return nil
-	}
-}
-
-func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
-	return func(stop <-chan struct{}) error {
-		var evt evtSend
-
-		select {
-		case <-stop:
-			return nil
-		case evt = <-p.send:
-		}
-
-		state := wire.AcquireState()
-
-		state.SetByte(WireKeyOpcode, evt.opcode)
-		state.SetUint64(WireKeyMuxID, evt.mux)
-		state.SetMessage(evt.msg)
-
-		err := p.WireCodec().DoWrite(p.w, p.flushLock, state)
-
-		select {
-		case evt.done <- err:
-		default:
-		}
-
-		wire.ReleaseState(state)
-
-		close(evt.done)
-
-		if err != nil {
-			return err
-		}
-
-		p.afterSendLock.RLock()
-		for _, f := range p.afterSend {
-			f()
-		}
-		p.afterSendLock.RUnlock()
-
-		return nil
-	}
-}
-
-func (p *Peer) flushMessages() func(stop <-chan struct{}) error {
-	return func(stop <-chan struct{}) error {
-		select {
-		case <-stop:
-			return nil
-		case <-p.flushTimer.C:
-		}
-
-		p.flushLock.Lock()
-		defer p.flushLock.Unlock()
-
-		return p.w.(*bufio.Writer).Flush()
-	}
-}
-
-func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
-	return func(stop <-chan struct{}) error {
-		select {
-		case <-stop:
-			return nil
-		default:
-		}
-
-		state := wire.AcquireState()
-		defer wire.ReleaseState(state)
-
-		if err := p.WireCodec().DoRead(p.r, state); err != nil {
-			return err
-		}
-
-		opcode := state.Byte(WireKeyOpcode)
-		mux := state.Uint64(WireKeyMuxID)
-
-		if opcode == 0 {
-			return nil
-		}
-
-		if p.n != nil {
-			p.n.opcodesLock.RLock()
-			_, registered := p.n.opcodesIndex[opcode]
-			p.n.opcodesLock.RUnlock()
-
-			if !registered {
-				return nil
-			}
-		}
-
-		hub := p.getMuxQueue(mux, opcode)
-
-		select {
-		case hub.ch <- Wire{m: Mux{id: mux, peer: p}, o: opcode, b: state.Message()}:
-			hub.lock <- struct{}{}
-			<-hub.lock
-
-			p.afterRecvLock.RLock()
-			for _, f := range p.afterRecv {
-				f()
-			}
-			p.afterRecvLock.RUnlock()
-		default:
-		}
-
 		return nil
 	}
 }

@@ -12,10 +12,11 @@ import (
 
 const (
 	SignalCompletedECDH = "handshake.ecdh.completed"
-	OpcodeHandshakeECDH = "handshake.ecdh"
 )
 
 type ECDH struct {
+	opcodeHandshake byte
+
 	logger  *log.Logger
 	message []byte
 	timeout time.Duration
@@ -44,7 +45,7 @@ func (b *ECDH) TimeoutAfter(timeout time.Duration) *ECDH {
 }
 
 func (b *ECDH) RegisterOpcodes(n *noise.Node) {
-	n.RegisterOpcode(OpcodeHandshakeECDH, n.NextAvailableOpcode())
+	b.opcodeHandshake = n.Handle(n.NextAvailableOpcode(), nil)
 }
 
 func (b *ECDH) Protocol() noise.ProtocolBlock {
@@ -55,20 +56,19 @@ func (b *ECDH) Protocol() noise.ProtocolBlock {
 			return err
 		}
 
-		ctx.Set(KeyEphemeral, ephemeral)
+		ctx.Set(KeyEphemeralSharedKey, ephemeral)
 
 		return nil
 	}
 }
 
 func (b *ECDH) Handshake(ctx noise.Context) (ephemeral []byte, err error) {
-	node, peer := ctx.Node(), ctx.Peer()
+	peer := ctx.Peer()
 
 	signal := peer.RegisterSignal(SignalCompletedECDH)
 	defer signal()
 
 	ephemeralPublicKey, ephemeralPrivateKey, err := edwards25519.GenerateKey(nil)
-
 	if err != nil {
 		return nil, errors.New("ecdh: failed to generate ephemeral keypair")
 	}
@@ -79,8 +79,8 @@ func (b *ECDH) Handshake(ctx noise.Context) (ephemeral []byte, err error) {
 		return nil, errors.Wrap(err, "ecdh: failed to sign handshake message")
 	}
 
-	if err = peer.SendWithTimeout(node.Opcode(OpcodeHandshakeECDH), req.Marshal(), b.timeout); err != nil {
-		return nil, errors.Wrap(err, "ecdh: failed to send our ephemeral public key to our peer")
+	if err := peer.Send(b.opcodeHandshake, req.Marshal()); err != nil {
+		return nil, errors.Wrap(err, "ecdh: failed to request ephemeral public key to our peer")
 	}
 
 	var buf []byte
@@ -88,14 +88,10 @@ func (b *ECDH) Handshake(ctx noise.Context) (ephemeral []byte, err error) {
 	select {
 	case <-ctx.Done():
 		return nil, noise.ErrDisconnect
-	case <-time.After(b.timeout):
-		return nil, errors.Wrap(noise.ErrTimeout, "ecdh: timed out receiving handshake response")
-	case ctx := <-peer.Recv(node.Opcode(OpcodeHandshakeECDH)):
-		buf = ctx.Bytes()
+	case buf = <-peer.Recv(b.opcodeHandshake):
 	}
 
 	res, err := UnmarshalHandshake(buf)
-
 	if err != nil {
 		return nil, errors.Wrap(err, "ecdh: failed to unmarshal handshake response")
 	}

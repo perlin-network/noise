@@ -52,7 +52,7 @@ func TestPeerSendsCorrectly(t *testing.T) {
 	c, _ := net.Pipe()
 
 	node := NewNode(nil)
-	node.RegisterOpcode("lorem ipsum", node.NextAvailableOpcode())
+	node.Handle("lorem ipsum", node.NextAvailableOpcode())
 
 	p := newPeer(node, nil, w, new(iotest.NopReader), c)
 	defer p.Disconnect(nil)
@@ -161,7 +161,7 @@ func TestPeerDropMessageWhenReceiveQueueFull(t *testing.T) {
 	a, b := net.Pipe()
 
 	n := NewNode(nil)
-	n.RegisterOpcode("lorem ipsum", 0x01)
+	n.Handle("lorem ipsum", 0x01)
 	p := newPeer(n, nil, b, b, b)
 	defer p.Disconnect(nil)
 
@@ -182,30 +182,13 @@ func TestPeerDropMessageWhenReceiveQueueFull(t *testing.T) {
 			state.SetUint64(WireKeyMuxID, 0)
 			state.SetMessage(msg)
 
-			assert.NoError(t, p.WireCodec().DoWrite(buf, p.flushLock, state))
+			assert.NoError(t, p.WireCodec().DoWrite(buf, state))
 
 			_, err = a.Write(buf.Bytes())
 			assert.NoError(t, err)
 		}()
 	}
 }
-
-func TestPeerErrorWhenSendQueueFull(t *testing.T) {
-	defer leaktest.Check(t)()
-
-	rw := iotest.NewBlockingReadWriter()
-
-	p := newPeer(nil, nil, rw, new(iotest.NopReader), rw)
-	defer p.Disconnect(nil)
-	defer close(p.ctx.stop)
-
-	for i := 0; i < cap(p.send); i++ {
-		p.send <- evtSend{done: make(chan error, 1)}
-	}
-
-	assert.Error(t, p.SendWithTimeout(0, nil, 1*time.Millisecond))
-}
-
 func TestPeerSetAddr(t *testing.T) {
 	p := newPeer(nil, new(net.TCPAddr), nil, nil, nil)
 	assert.NotNil(t, p.Addr())

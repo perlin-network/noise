@@ -17,10 +17,11 @@ import (
 )
 
 const (
-	OpcodeChat = "examples.chat"
-	C1         = 8
-	C2         = 8
+	C1 = 8
+	C2 = 8
 )
+
+var opcodeChat byte
 
 func protocol(node *noise.Node) (*skademlia.Protocol, noise.Protocol) {
 	ecdh := handshake.NewECDH()
@@ -42,7 +43,7 @@ func protocol(node *noise.Node) (*skademlia.Protocol, noise.Protocol) {
 	overlay.WithC1(C1)
 	overlay.WithC2(C2)
 
-	node.RegisterOpcode(OpcodeChat, node.NextAvailableOpcode())
+	opcodeChat = node.Handle(node.NextAvailableOpcode(), nil)
 
 	chatProtocol := func(ctx noise.Context) error {
 		id := ctx.Get(skademlia.KeyID).(*skademlia.ID)
@@ -51,8 +52,8 @@ func protocol(node *noise.Node) (*skademlia.Protocol, noise.Protocol) {
 			select {
 			case <-ctx.Done():
 				return nil
-			case ctx := <-ctx.Peer().Recv(node.Opcode(OpcodeChat)):
-				fmt.Printf("%s> %s\n", id.Address(), ctx.Bytes())
+			case buf := <-ctx.Peer().Recv(opcodeChat):
+				fmt.Printf("%s> %s\n", id.Address(), buf)
 			}
 		}
 	}
@@ -108,7 +109,7 @@ func main() {
 		}
 
 		for _, peer := range network.Peers(node) {
-			err = peer.Send(node.Opcode(OpcodeChat), bytes.TrimSpace(line))
+			err = peer.Send(opcodeChat, bytes.TrimSpace(line))
 
 			if err != nil {
 				panic(err)
