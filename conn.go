@@ -42,6 +42,5 @@ func releaseEvt(e *evt) {
 	if len(e.done) != 0 {
 		panic("BUG: evt.done must be empty")
 	}
-	e.msg = e.msg[:0]
 	evtPool.Put(e)
 }

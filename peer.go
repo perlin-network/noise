@@ -135,7 +135,7 @@ func (p *Peer) Send(opcode byte, msg []byte) error {
 	e.oneway = true
 	e.nonce = 0
 	e.opcode = opcode
-	e.msg = append(e.msg, msg...)
+	e.msg = msg
 
 	if err := p.queueSend(e); err != nil {
 		releaseEvt(e)
@@ -150,7 +150,7 @@ func (p *Peer) SendAwait(opcode byte, msg []byte) error {
 	e.oneway = true
 	e.nonce = 0
 	e.opcode = opcode
-	e.msg = append(e.msg, msg...)
+	e.msg = msg
 
 	if err := p.queueSend(e); err != nil {
 		releaseEvt(e)
@@ -178,7 +178,7 @@ func (p *Peer) Request(opcode byte, msg []byte) ([]byte, error) {
 	e := acquireEvt()
 	e.oneway = false
 	e.opcode = opcode
-	e.msg = append(e.msg, msg...)
+	e.msg = msg
 
 	if err := p.queueSend(e); err != nil {
 		releaseEvt(e)
@@ -553,7 +553,7 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 			e.oneway = true
 			e.nonce = nonce
 			e.opcode = opcode
-			e.msg = append(e.msg, res...)
+			e.msg = res
 
 			if err := p.queueSend(e); err != nil {
 				releaseEvt(e)
