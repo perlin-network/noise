@@ -126,6 +126,10 @@ func (p *Peer) Node() *Node {
 	return p.n
 }
 
+func (p *Peer) Ctx() Context {
+	return p.ctx
+}
+
 func (p *Peer) Addr() net.Addr {
 	return p.addr
 }
@@ -237,6 +241,12 @@ func (p *Peer) InterceptRecv(f func(buf []byte) ([]byte, error)) {
 	p.interceptRecvLock.Unlock()
 }
 
+func (p *Peer) InterceptErrors(i ErrorInterceptor) {
+	p.interceptErrorsLock.Lock()
+	p.interceptErrors = append(p.interceptErrors, i)
+	p.interceptErrorsLock.Unlock()
+}
+
 func (p *Peer) AfterSend(f func()) {
 	p.afterSendLock.Lock()
 	p.afterSend = append(p.afterSend, f)
@@ -286,16 +296,6 @@ func (p *Peer) WaitFor(name string) {
 	p.signalsLock.Unlock()
 
 	<-s
-}
-
-func (p *Peer) InterceptErrors(i ErrorInterceptor) {
-	p.interceptErrorsLock.Lock()
-	p.interceptErrors = append(p.interceptErrors, i)
-	p.interceptErrorsLock.Unlock()
-}
-
-func (p *Peer) Ctx() Context {
-	return p.ctx
 }
 
 func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
@@ -375,16 +375,13 @@ func (p *Peer) deregister() {
 	}
 }
 
-func (p *Peer) followProtocol(init Protocol) func(stop <-chan struct{}) error {
+func continuously(fn func(stop <-chan struct{}) error) func(stop <-chan struct{}) error {
 	return func(stop <-chan struct{}) error {
-		for state, err := init(p.ctx); err != nil || state != nil; state, err = state(p.ctx) {
-			if err != nil {
+		for {
+			if err := fn(stop); err != nil {
 				return err
 			}
 		}
-
-		<-stop
-		return nil
 	}
 }
 
@@ -611,6 +608,19 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 		}
 		p.afterRecvLock.RUnlock()
 
+		return nil
+	}
+}
+
+func (p *Peer) followProtocol(init Protocol) func(stop <-chan struct{}) error {
+	return func(stop <-chan struct{}) error {
+		for state, err := init(p.ctx); err != nil || state != nil; state, err = state(p.ctx) {
+			if err != nil {
+				return err
+			}
+		}
+
+		<-stop
 		return nil
 	}
 }
