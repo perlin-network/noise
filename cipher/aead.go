@@ -20,12 +20,15 @@ const (
 type AEAD struct {
 	opcodeACK byte
 
-	logger  *log.Logger
+	logger *log.Logger
+
 	timeout time.Duration
+	suite   suiteFn
+	hash    hashFn
 }
 
 func NewAEAD() *AEAD {
-	return &AEAD{logger: log.New(ioutil.Discard, "", 0), timeout: 3 * time.Second}
+	return &AEAD{logger: log.New(ioutil.Discard, "", 0), timeout: 3 * time.Second, suite: Aes256GCM(), hash: sha256.New}
 }
 
 func (b *AEAD) Logger() *log.Logger {
@@ -34,6 +37,16 @@ func (b *AEAD) Logger() *log.Logger {
 
 func (b *AEAD) TimeoutAfter(timeout time.Duration) *AEAD {
 	b.timeout = timeout
+	return b
+}
+
+func (b *AEAD) WithSuite(suite suiteFn) *AEAD {
+	b.suite = suite
+	return b
+}
+
+func (b *AEAD) WithHash(hash hashFn) *AEAD {
+	b.hash = hash
 	return b
 }
 
@@ -68,7 +81,7 @@ func (b *AEAD) Protocol() noise.ProtocolBlock {
 func (b *AEAD) Setup(ephemeralSharedKey []byte, ctx noise.Context) (cipher.AEAD, error) {
 	peer := ctx.Peer()
 
-	suite, symmetric, err := deriveCipherSuite(Aes256Gcm, sha256.New, ephemeralSharedKey, nil)
+	suite, symmetric, err := deriveCipherSuite(b.suite, b.hash, ephemeralSharedKey, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "aead: failed to derive suite given ephemeral shared key")
 	}

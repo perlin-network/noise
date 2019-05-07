@@ -9,7 +9,7 @@ import (
 
 func TestDeriveSharedKey(t *testing.T) {
 	check := func(ephemeralSharedKey []byte, context []byte) bool {
-		_, _, err := deriveCipherSuite(Aes256Gcm, sha256.New, ephemeralSharedKey, context)
+		_, _, err := deriveCipherSuite(Aes256GCM(), sha256.New, ephemeralSharedKey, context)
 		return assert.NoError(t, err)
 	}
 

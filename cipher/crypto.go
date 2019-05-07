@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/hkdf"
+	"golang.org/x/sys/cpu"
 	"hash"
 )
 
@@ -33,19 +34,29 @@ func deriveCipherSuite(suiteFn suiteFn, hashFn hashFn, ephemeralSharedKey []byte
 }
 
 // AEAD via. AES-256 GCM (Galois Counter Mode).
-func Aes256Gcm(sharedKey []byte) (cipher.AEAD, error) {
-	block, _ := aes.NewCipher(sharedKey)
-	suite, _ := cipher.NewGCM(block)
+func Aes256GCM() func(sharedKey []byte) (cipher.AEAD, error) {
+	if !cpu.Initialized || (cpu.Initialized && !cpu.ARM64.HasAES && !cpu.X86.HasAES && !cpu.S390X.HasAESGCM) {
+		panic("UNSUPPORTED: CPU does not support AES-NI instructions.")
+	}
 
-	return suite, nil
+	return func(sharedKey []byte) (cipher.AEAD, error) {
+		block, _ := aes.NewCipher(sharedKey)
+		suite, _ := cipher.NewGCM(block)
+
+		return suite, nil
+	}
 }
 
 // AEAD via. ChaCha20 Poly1305. Expects a 256-bit shared key.
-func Chacha20Poly1305(sharedKey []byte) (cipher.AEAD, error) {
-	return chacha20poly1305.New(sharedKey)
+func Chacha20Poly1305() func(sharedKey []byte) (cipher.AEAD, error) {
+	return func(sharedKey []byte) (cipher.AEAD, error) {
+		return chacha20poly1305.New(sharedKey)
+	}
 }
 
 // AEAD via. XChaCha20 Poly1305. Expected a 256-bit shared key.
-func Xchacha20Poly1305(sharedKey []byte) (cipher.AEAD, error) {
-	return chacha20poly1305.NewX(sharedKey)
+func Xchacha20Poly1305() func(sharedKey []byte) (cipher.AEAD, error) {
+	return func(sharedKey []byte) (cipher.AEAD, error) {
+		return chacha20poly1305.NewX(sharedKey)
+	}
 }
