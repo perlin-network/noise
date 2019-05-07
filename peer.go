@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,6 +35,8 @@ type Peer struct {
 
 	pendingRPC     map[uint32]*evt
 	pendingRPCLock sync.Mutex
+
+	queueRPC chan evtRPC
 
 	interceptSend, interceptRecv         []func([]byte) ([]byte, error)
 	interceptSendLock, interceptRecvLock sync.RWMutex
@@ -63,6 +66,10 @@ func (p *Peer) Start() {
 
 	g = append(g, continuously(p.sendMessages()))
 	g = append(g, continuously(p.receiveMessages()))
+
+	for i := 0; i < runtime.NumCPU(); i++ {
+		g = append(g, continuously(p.processRPC()))
+	}
 
 	if p.n != nil {
 		if protocol := p.n.p.Load(); protocol != nil {
@@ -317,18 +324,20 @@ func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 		pendingRecv: make(map[byte]chan []byte),
 		pendingRPC:  make(map[uint32]*evt),
 
+		queueRPC: make(chan evtRPC, 1024),
+
 		signals: make(map[string]chan struct{}),
 
 		recvLockOpcode: math.MaxUint32,
 	}
 
-	// The channel buffer size of '3' is selected on purpose. It is the number of
+	// The channel buffer size of '3 + runtime.NumCPU()' is selected on purpose. It is the number of
 	// goroutines expected to be spawned per-peer.
 
 	p.ctx = Context{
 		n:      n,
 		p:      p,
-		result: make(chan error, 3),
+		result: make(chan error, 3+runtime.NumCPU()),
 		stop:   make(chan struct{}),
 		v:      make(map[string]interface{}),
 		vm:     new(sync.RWMutex),
@@ -573,26 +582,10 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 
 			req.done <- nil
 		} else if nonce > 0 {
-			var res []byte
+			msg := make([]byte, len(buf.B))
+			copy(msg, buf.B)
 
-			if handler != nil {
-				res, err = handler(p.ctx, buf.B)
-
-				if err != nil {
-					return errors.Wrap(err, "failed to handle request")
-				}
-			}
-
-			e := acquireEvt()
-			e.oneway = true
-			e.nonce = nonce
-			e.opcode = opcode
-			e.msg = res
-
-			if err := p.queueSend(e); err != nil {
-				releaseEvt(e)
-				return err
-			}
+			p.queueRPC <- evtRPC{nonce: nonce, opcode: opcode, msg: msg, handler: handler}
 		} else if nonce == 0 {
 			p.pendingRecvLock.Lock()
 			if _, exists := p.pendingRecv[opcode]; !exists {
@@ -624,6 +617,45 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 			f()
 		}
 		p.afterRecvLock.RUnlock()
+
+		return nil
+	}
+}
+
+func (p *Peer) processRPC() func(stop <-chan struct{}) error {
+	return func(stop <-chan struct{}) error {
+		var erpc evtRPC
+
+		select {
+		case erpc = <-p.queueRPC:
+		default:
+			select {
+			case <-stop:
+				return ErrDisconnect
+			case erpc = <-p.queueRPC:
+			}
+		}
+
+		var res []byte
+		var err error
+
+		if erpc.handler != nil {
+			res, err = erpc.handler(p.ctx, erpc.msg)
+
+			if err != nil {
+				return nil
+			}
+		}
+
+		e := acquireEvt()
+		e.oneway = true
+		e.nonce = erpc.nonce
+		e.opcode = erpc.opcode
+		e.msg = res
+
+		if err := p.queueSend(e); err != nil {
+			releaseEvt(e)
+		}
 
 		return nil
 	}

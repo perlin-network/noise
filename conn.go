@@ -47,5 +47,14 @@ func releaseEvt(e *evt) {
 		close(e.done)
 		e.done = nil
 	}
+
 	evtPool.Put(e)
+}
+
+type evtRPC struct {
+	opcode byte
+	nonce  uint32
+	msg    []byte
+
+	handler Handler
 }
