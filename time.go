@@ -7,31 +7,29 @@ import (
 
 var timerPool sync.Pool
 
-func acquireTimer() *time.Timer {
+func acquireTimer(d time.Duration) *time.Timer {
 	v := timerPool.Get()
+
 	if v == nil {
-		return time.NewTimer(time.Hour * 24)
+		return time.NewTimer(d)
 	}
+
 	t := v.(*time.Timer)
-	resetTimer(t, time.Hour*24)
+
+	if t.Reset(d) {
+		return time.NewTimer(d)
+	}
+
 	return t
+
 }
 
 func releaseTimer(t *time.Timer) {
-	stopTimer(t)
-	timerPool.Put(t)
-}
-
-func resetTimer(t *time.Timer, d time.Duration) {
-	stopTimer(t)
-	t.Reset(d)
-}
-
-func stopTimer(t *time.Timer) {
 	if !t.Stop() {
 		select {
 		case <-t.C:
 		default:
 		}
 	}
+	timerPool.Put(t)
 }

@@ -351,12 +351,15 @@ func (p *Peer) queueSend(e *evt) error {
 	case p.pendingSend <- e:
 		return nil
 	default:
+		timeout := acquireTimer(3 * time.Second)
+		defer releaseTimer(timeout)
+
 		select {
 		case p.pendingSend <- e:
 			return nil
 		case <-p.ctx.stop:
 			return ErrDisconnect
-		case <-time.After(3 * time.Second):
+		case <-timeout.C:
 			return ErrSendQueueFull
 		}
 	}
@@ -367,12 +370,15 @@ func (p *Peer) queueRecv(ch chan []byte, buf []byte) error {
 	case ch <- buf:
 		return nil
 	default:
+		timeout := acquireTimer(3 * time.Second)
+		defer releaseTimer(timeout)
+
 		select {
 		case ch <- buf:
 			return nil
 		case <-p.ctx.stop:
 			return ErrDisconnect
-		case <-time.After(3 * time.Second):
+		case <-timeout.C:
 			return ErrRecvQueueFull
 		}
 	}
@@ -397,20 +403,20 @@ func continuously(fn func(stop <-chan struct{}) error) func(stop <-chan struct{}
 }
 
 func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
+	flushDelay := 100 * time.Nanosecond
+
 	var (
 		e   *evt
 		err error
 
 		flush       <-chan time.Time
-		flushTimer  = acquireTimer()
+		flushTimer  = acquireTimer(flushDelay)
 		flushAlways = make(chan time.Time)
 
 		uint32Buf [4]byte
 	)
 
 	close(flushAlways)
-
-	flushDelay := 100 * time.Nanosecond
 
 	return func(stop <-chan struct{}) error {
 		select {
@@ -509,7 +515,9 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 
 		if flush == nil && len(p.pendingSend) == 0 {
 			if flushDelay > 0 {
-				resetTimer(flushTimer, flushDelay)
+				releaseTimer(flushTimer)
+				flushTimer = acquireTimer(flushDelay)
+
 				flush = flushTimer.C
 			} else {
 				flush = flushAlways
