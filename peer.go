@@ -173,8 +173,14 @@ func (p *Peer) SendAwait(opcode byte, msg []byte) error {
 
 	var err error
 
+	timeout := acquireTimer(3 * time.Second)
+	defer releaseTimer(timeout)
+
 	select {
 	case err = <-e.done:
+	case <-timeout.C:
+		releaseEvt(e)
+		return ErrTimeout
 	case <-p.ctx.stop:
 		releaseEvt(e)
 		return ErrDisconnect
@@ -203,8 +209,14 @@ func (p *Peer) Request(opcode byte, msg []byte) ([]byte, error) {
 
 	var err error
 
+	timeout := acquireTimer(3 * time.Second)
+	defer releaseTimer(timeout)
+
 	select {
 	case err = <-e.done:
+	case <-timeout.C:
+		releaseEvt(e)
+		return nil, ErrTimeout
 	case <-p.ctx.stop:
 		releaseEvt(e)
 		return nil, ErrDisconnect
