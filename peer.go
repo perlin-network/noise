@@ -418,7 +418,7 @@ func continuously(fn func(stop <-chan struct{}) error) func(stop <-chan struct{}
 }
 
 func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
-	flushDelay := 100 * time.Nanosecond
+	flushDelay := 0 * time.Nanosecond
 
 	var (
 		e   *evt
@@ -490,19 +490,7 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 
 		binary.BigEndian.PutUint32(uint32Buf[:], uint32(buf.Len()))
 
-		if _, err := p.bw.Write(uint32Buf[:]); err != nil {
-			err = errors.Wrap(err, "failed to write size")
-
-			if e.done != nil {
-				e.done <- err
-			} else {
-				releaseEvt(e)
-			}
-
-			return err
-		}
-
-		if _, err := p.bw.Write(buf.B); err != nil {
+		if _, err := p.bw.Write(append(uint32Buf[:], buf.B...)); err != nil {
 			err = errors.Wrap(err, "failed to write message")
 
 			if e.done != nil {
