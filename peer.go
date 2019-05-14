@@ -3,6 +3,7 @@ package noise
 import (
 	"bufio"
 	"encoding/binary"
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/valyala/bytebufferpool"
 	"github.com/valyala/fastrand"
@@ -235,7 +236,7 @@ func (p *Peer) Request(opcode byte, msg []byte) ([]byte, error) {
 func (p *Peer) Recv(opcode byte) <-chan []byte {
 	p.pendingRecvLock.Lock()
 	if _, exists := p.pendingRecv[opcode]; !exists {
-		p.pendingRecv[opcode] = make(chan []byte, 128)
+		p.pendingRecv[opcode] = make(chan []byte, 1024)
 	}
 	ch := p.pendingRecv[opcode]
 	p.pendingRecvLock.Unlock()
@@ -268,6 +269,16 @@ func (p *Peer) InterceptErrors(i ErrorInterceptor) {
 	p.interceptErrorsLock.Lock()
 	p.interceptErrors = append(p.interceptErrors, i)
 	p.interceptErrorsLock.Unlock()
+}
+
+func (p *Peer) ReportError(err error) {
+	if err != nil {
+		p.interceptErrorsLock.RLock()
+		for _, interceptor := range p.interceptErrors {
+			interceptor(err)
+		}
+		p.interceptErrorsLock.RUnlock()
+	}
 }
 
 func (p *Peer) AfterSend(f func()) {
@@ -544,8 +555,12 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 
 		size := binary.BigEndian.Uint32(uint32Buf[:])
 
-		if p.n.opts.maxMessageSize != 0 && size > p.n.opts.maxMessageSize {
+		if p.n != nil && p.n.opts.maxMessageSize != 0 && size > p.n.opts.maxMessageSize {
 			return errors.Errorf("message of size %d exceeds max message size %d", size, p.n.opts.maxMessageSize)
+		}
+
+		if size < 5 {
+			return errors.New("message must comprise of a minimum of 5 bytes")
 		}
 
 		buf := bytebufferpool.Get()
@@ -653,13 +668,15 @@ func (p *Peer) processRecv() func(stop <-chan struct{}) error {
 		} else {
 			p.pendingRecvLock.Lock()
 			if _, exists := p.pendingRecv[erpc.opcode]; !exists {
-				p.pendingRecv[erpc.opcode] = make(chan []byte, 128)
+				p.pendingRecv[erpc.opcode] = make(chan []byte, 1024)
 			}
 			ch := p.pendingRecv[erpc.opcode]
 			p.pendingRecvLock.Unlock()
 
 			if err := p.queueRecv(ch, erpc.msg); err != nil {
-				return err
+				fmt.Println(err)
+				//return err
+				return nil
 			}
 		}
 
