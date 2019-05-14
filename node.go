@@ -1,6 +1,7 @@
 package noise
 
 import (
+	"github.com/pkg/errors"
 	"io"
 	"math"
 	"net"
@@ -12,8 +13,9 @@ type Handler func(Context, []byte) ([]byte, error)
 
 type Node struct {
 	l net.Listener
-
 	p atomic.Value // noise.Protocol
+
+	opts NodeOptions
 
 	peers     map[string]*Peer
 	peersLock sync.RWMutex
@@ -22,13 +24,22 @@ type Node struct {
 	opcodesLock sync.RWMutex
 }
 
-func NewNode(l net.Listener) *Node {
-	return &Node{
-		l: l,
+func NewNode(l net.Listener, opts ...NodeOption) *Node {
+	n := &Node{
+		l:    l,
+		opts: DefaultNodeOptions,
 
 		peers:   make(map[string]*Peer),
 		opcodes: make(map[byte]Handler),
 	}
+
+	for _, opt := range opts {
+		if err := opt(n); err != nil {
+			panic(errors.Wrap(err, "got an error initializing node"))
+		}
+	}
+
+	return n
 }
 
 // NewPeer instantiates a new peer instance, listening for incoming data through

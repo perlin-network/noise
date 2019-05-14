@@ -544,6 +544,10 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 
 		size := binary.BigEndian.Uint32(uint32Buf[:])
 
+		if p.n.opts.maxMessageSize != 0 && size > p.n.opts.maxMessageSize {
+			return errors.Errorf("message of size %d exceeds max message size %d", size, p.n.opts.maxMessageSize)
+		}
+
 		buf := bytebufferpool.Get()
 		defer bytebufferpool.Put(buf)
 
