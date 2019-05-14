@@ -378,6 +378,21 @@ func (b *Protocol) Bootstrap(node *noise.Node) (results []*ID) {
 	return b.FindNode(node, b.table.self, b.table.getBucketSize(), 3, 8)
 }
 
+// RefreshPeriodically periodically refreshes the list of peers for a node given a time period.
+func (b *Protocol) RefreshPeriodically(node *noise.Node, duration time.Duration) {
+	timer := time.NewTicker(duration)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-node.Done():
+			return
+		case <-timer.C:
+			b.Bootstrap(node)
+		}
+	}
+}
+
 func (b *Protocol) FindNode(node *noise.Node, target *ID, k int, a int, d int) (results []*ID) {
 	type request ID
 

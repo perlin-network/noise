@@ -22,6 +22,9 @@ type Node struct {
 
 	opcodes     map[byte]Handler
 	opcodesLock sync.RWMutex
+
+	stop     chan struct{}
+	stopOnce uint32
 }
 
 func NewNode(l net.Listener, opts ...NodeOption) *Node {
@@ -31,6 +34,8 @@ func NewNode(l net.Listener, opts ...NodeOption) *Node {
 
 		peers:   make(map[string]*Peer),
 		opcodes: make(map[byte]Handler),
+
+		stop: make(chan struct{}),
 	}
 
 	for _, opt := range opts {
@@ -175,11 +180,23 @@ func (n *Node) Addr() net.Addr {
 //
 // It is safe to call Shutdown concurrently.
 func (n *Node) Shutdown() {
+	if !atomic.CompareAndSwapUint32(&n.stopOnce, 0, 1) {
+		return
+	}
+
 	if n.l != nil {
 		_ = n.l.Close()
 	}
 
+	close(n.stop)
+
 	for _, peer := range n.Peers() {
 		peer.Disconnect(nil)
 	}
+}
+
+// Done returns a receive-only channel that signals whenever the node has
+// been fully terminated
+func (n *Node) Done() <-chan struct{} {
+	return n.stop
 }
