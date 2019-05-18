@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/valyala/bytebufferpool"
-	"github.com/valyala/fastrand"
 	"io"
 	"math"
 	"net"
@@ -440,6 +439,7 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		flushAlways = make(chan time.Time)
 
 		uint32Buf [4]byte
+		nonce     uint32
 	)
 
 	close(flushAlways)
@@ -466,11 +466,16 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		defer bytebufferpool.Put(buf)
 
 		if !e.oneway {
-			e.nonce = fastrand.Uint32()
+			nonce = (nonce + 1) &^ (1 << 31) // Clear the top bit. The top bit denotes whether or not the messages is a response.
+			if nonce == 0 {
+				nonce++
+			}
+
+			e.nonce = nonce
 
 			p.pendingRPCLock.Lock()
-			for _, exists := p.pendingRPC[e.nonce]; e.nonce == 0 || exists; {
-				e.nonce = fastrand.Uint32()
+			if _, exists := p.pendingRPC[e.nonce]; exists {
+				return errors.Errorf("nonce %d already exists", e.nonce)
 			}
 			p.pendingRPC[e.nonce] = e
 			p.pendingRPCLock.Unlock()
@@ -581,16 +586,13 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 		}
 		p.interceptRecvLock.RUnlock()
 
-		nonce := binary.BigEndian.Uint32(buf.B[:4])
+		header := binary.BigEndian.Uint32(buf.B[:4])
+		res := (header & (1 << 31)) > 0
+		nonce := header % (1 << 31)
 		buf.B = buf.B[4:]
 
 		opcode := buf.B[0]
 		buf.B = buf.B[1:]
-
-		p.pendingRPCLock.Lock()
-		req := p.pendingRPC[nonce]
-		delete(p.pendingRPC, nonce)
-		p.pendingRPCLock.Unlock()
 
 		var handler Handler
 
@@ -606,11 +608,18 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 			}
 		}
 
-		if req != nil {
-			req.msg = make([]byte, len(buf.B))
-			copy(req.msg, buf.B)
+		if res {
+			p.pendingRPCLock.Lock()
+			req := p.pendingRPC[nonce]
+			delete(p.pendingRPC, nonce)
+			p.pendingRPCLock.Unlock()
 
-			req.done <- nil
+			if req != nil {
+				req.msg = make([]byte, len(buf.B))
+				copy(req.msg, buf.B)
+
+				req.done <- nil
+			}
 		} else if nonce > 0 {
 			msg := make([]byte, len(buf.B))
 			copy(msg, buf.B)
@@ -674,7 +683,7 @@ func (p *Peer) processRecv() func(stop <-chan struct{}) error {
 			p.pendingRecvLock.Unlock()
 
 			if err := p.queueRecv(ch, erpc.msg); err != nil {
-				fmt.Println(err)
+				fmt.Println("recv err:", err)
 				//return err
 				return nil
 			}
@@ -705,6 +714,7 @@ func (p *Peer) processRPC() func(stop <-chan struct{}) error {
 			res, err = erpc.handler(p.ctx, erpc.msg)
 
 			if err != nil {
+				fmt.Println("rpc err:", err)
 				return nil
 			}
 		}
@@ -712,6 +722,7 @@ func (p *Peer) processRPC() func(stop <-chan struct{}) error {
 		e := acquireEvt()
 		e.oneway = true
 		e.nonce = erpc.nonce
+		e.nonce |= 1 << 31
 		e.opcode = erpc.opcode
 		e.msg = res
 

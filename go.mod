@@ -10,7 +10,6 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/stretchr/testify v1.3.0
 	github.com/valyala/bytebufferpool v1.0.0
-	github.com/valyala/fastrand v1.0.0
 	golang.org/x/crypto v0.0.0-20190325154230-a5d413f7728c
 	golang.org/x/sys v0.0.0-20190506115046-ca7f33d4116e
 )
