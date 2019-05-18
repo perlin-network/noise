@@ -16,11 +16,7 @@ func DialTCP(n *noise.Node, address string) (*noise.Peer, error) {
 	}
 
 	c := conn.(*net.TCPConn)
-
-	if err := c.SetNoDelay(false); err != nil {
-		return nil, err
-	}
-
+	
 	if err := c.SetWriteBuffer(10000); err != nil {
 		return nil, err
 	}
