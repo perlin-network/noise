@@ -475,6 +475,7 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 
 			p.pendingRPCLock.Lock()
 			if _, exists := p.pendingRPC[e.nonce]; exists {
+				p.pendingRPCLock.Unlock()
 				return errors.Errorf("nonce %d already exists", e.nonce)
 			}
 			p.pendingRPC[e.nonce] = e
