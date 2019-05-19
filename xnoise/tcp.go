@@ -27,14 +27,14 @@ func DialTCP(n *noise.Node, address string) (*noise.Peer, error) {
 	return peer, nil
 }
 
-func ListenTCP(port uint) (*noise.Node, error) {
+func ListenTCP(port uint, opts ...noise.NodeOption) (*noise.Node, error) {
 	listener, err := net.Listen("tcp", ":"+strconv.FormatUint(uint64(port), 10))
 
 	if err != nil {
 		return nil, err
 	}
 
-	node := noise.NewNode(listener)
+	node := noise.NewNode(listener, opts...)
 
 	go func() {
 		for {

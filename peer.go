@@ -3,6 +3,7 @@ package noise
 import (
 	"bufio"
 	"encoding/binary"
+	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	"github.com/valyala/bytebufferpool"
 	"io"
@@ -531,9 +532,17 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		}
 		p.interceptSendLock.RUnlock()
 
-		binary.BigEndian.PutUint32(uint32Buf[:], uint32(buf.Len()))
+		if p.n != nil && p.n.opts.compression != CompressionTypeNone {
+			switch p.n.opts.compression {
+			case CompressionTypeSnappy:
+				buf.B = snappy.Encode(nil, buf.B)
+			}
+		}
 
-		if _, err := p.bw.Write(append(uint32Buf[:], buf.B...)); err != nil {
+		binary.BigEndian.PutUint32(uint32Buf[:], uint32(buf.Len()))
+		data := append(uint32Buf[:], buf.B...)
+
+		if _, err := p.bw.Write(data); err != nil {
 			err = errors.Wrap(err, "failed to write message")
 
 			if e.done != nil {
@@ -603,6 +612,15 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 
 		if _, err := io.ReadFull(p.br, buf.B); err != nil {
 			return errors.Wrap(err, "couldn't read message")
+		}
+
+		if p.n != nil && p.n.opts.compression != CompressionTypeNone {
+			switch p.n.opts.compression {
+			case CompressionTypeSnappy:
+				if buf.B, err = snappy.Decode(nil, buf.B); err != nil {
+					return errors.Wrap(err, "failed to apply snappy compression")
+				}
+			}
 		}
 
 		p.interceptRecvLock.RLock()

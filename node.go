@@ -1,7 +1,6 @@
 package noise
 
 import (
-	"github.com/pkg/errors"
 	"io"
 	"math"
 	"net"
@@ -39,9 +38,7 @@ func NewNode(l net.Listener, opts ...NodeOption) *Node {
 	}
 
 	for _, opt := range opts {
-		if err := opt(n); err != nil {
-			panic(errors.Wrap(err, "got an error initializing node"))
-		}
+		opt(n)
 	}
 
 	return n

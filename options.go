@@ -1,17 +1,29 @@
 package noise
 
-type NodeOption func(n *Node) error
+type CompressionType uint8
+
+const (
+	CompressionTypeNone CompressionType = iota
+	CompressionTypeSnappy
+)
+
+type NodeOption func(n *Node)
 
 func MaxMessageSize(maxMessageSize uint32) NodeOption {
-	return func(n *Node) error {
+	return func(n *Node) {
 		n.opts.maxMessageSize = maxMessageSize
+	}
+}
 
-		return nil
+func Compression(compressType CompressionType) NodeOption {
+	return func(n *Node) {
+		n.opts.compression = compressType
 	}
 }
 
 type NodeOptions struct {
 	maxMessageSize uint32
+	compression    CompressionType
 }
 
 // Default, sane node options a node inherits upon instantiation.
