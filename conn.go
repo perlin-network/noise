@@ -32,17 +32,10 @@ func acquireEvt() *evt {
 		v = new(evt)
 	}
 	e := v.(*evt)
-	if len(e.done) != 0 {
-		panic("BUG: evt.done must be empty")
-	}
 	return e
 }
 
 func releaseEvt(e *evt) {
-	if len(e.done) != 0 {
-		panic("BUG: evt.done must be empty")
-	}
-
 	if e.done != nil {
 		close(e.done)
 		e.done = nil

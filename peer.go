@@ -28,15 +28,17 @@ type Peer struct {
 	c   Conn
 	ctx Context
 
-	pendingSend     chan *evt
+	pendingSend    chan *evt
+	pendingSendRPC chan *evt
+
 	pendingRecv     map[byte]chan []byte
 	pendingRecvLock sync.Mutex
 
 	pendingRPC     map[uint32]*evt
 	pendingRPCLock sync.Mutex
 
-	queue    chan evtRPC
-	queueRPC chan evtRPC
+	recvQueue    chan evtRPC
+	recvQueueRPC chan evtRPC
 
 	interceptSend, interceptRecv         []func([]byte) ([]byte, error)
 	interceptSendLock, interceptRecvLock sync.RWMutex
@@ -201,7 +203,7 @@ func (p *Peer) Request(opcode byte, msg []byte) ([]byte, error) {
 	e.opcode = opcode
 	e.msg = msg
 
-	if err := p.queueSend(e); err != nil {
+	if err := p.queueRPC(e); err != nil {
 		releaseEvt(e)
 		return nil, errors.Wrap(err, "failed to queue request")
 	}
@@ -343,12 +345,13 @@ func newPeer(n *Node, addr net.Addr, w io.Writer, r io.Reader, c Conn) *Peer {
 
 		c: c,
 
-		pendingSend: make(chan *evt, 1024),
-		pendingRecv: make(map[byte]chan []byte),
-		pendingRPC:  make(map[uint32]*evt),
+		pendingSend:    make(chan *evt, 1024),
+		pendingSendRPC: make(chan *evt, 1024),
+		pendingRecv:    make(map[byte]chan []byte),
+		pendingRPC:     make(map[uint32]*evt),
 
-		queue:    make(chan evtRPC, 1024),
-		queueRPC: make(chan evtRPC, 1024),
+		recvQueue:    make(chan evtRPC, 1024),
+		recvQueueRPC: make(chan evtRPC, 1024),
 
 		signals: make(map[string]chan struct{}),
 
@@ -380,6 +383,25 @@ func (p *Peer) queueSend(e *evt) error {
 
 		select {
 		case p.pendingSend <- e:
+			return nil
+		case <-p.ctx.stop:
+			return ErrDisconnect
+		case <-timeout.C:
+			return ErrSendQueueFull
+		}
+	}
+}
+
+func (p *Peer) queueRPC(e *evt) error {
+	select {
+	case p.pendingSendRPC <- e:
+		return nil
+	default:
+		timeout := acquireTimer(3 * time.Second)
+		defer releaseTimer(timeout)
+
+		select {
+		case p.pendingSendRPC <- e:
 			return nil
 		case <-p.ctx.stop:
 			return ErrDisconnect
@@ -445,22 +467,24 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 
 	return func(stop <-chan struct{}) error {
 		select {
-		case e = <-p.pendingSend:
+		case e = <-p.pendingSendRPC:
 		default:
 			select {
-			case <-stop:
-				return ErrDisconnect
-			case <-flush:
-				if err := p.bw.Flush(); err != nil {
-					err = errors.Wrap(err, "could not flush messages")
-
-					p.reportError(err)
-					return nil
-				}
-
-				flush = nil
-				return nil
 			case e = <-p.pendingSend:
+			default:
+				select {
+				case <-stop:
+					return ErrDisconnect
+				case <-flush:
+					if err := p.bw.Flush(); err != nil {
+						return errors.Wrap(err, "could not flush messages")
+					}
+
+					flush = nil
+					return nil
+				case e = <-p.pendingSendRPC:
+				case e = <-p.pendingSend:
+				}
 			}
 		}
 
@@ -468,7 +492,7 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 		defer bytebufferpool.Put(buf)
 
 		if !e.oneway {
-			nonce = (nonce + 1) &^ (1 << 31) // Clear the top bit. The top bit denotes whether or not the messages is a response.
+			nonce = (nonce + 1) &^ (1 << 31) // Clear the top bit. The top bit denotes whether or not the message is a response.
 			if nonce == 0 {
 				nonce++
 			}
@@ -628,12 +652,12 @@ func (p *Peer) receiveMessages() func(stop <-chan struct{}) error {
 			msg := make([]byte, len(buf.B))
 			copy(msg, buf.B)
 
-			p.queueRPC <- evtRPC{nonce: nonce, opcode: opcode, msg: msg, handler: handler}
+			p.recvQueueRPC <- evtRPC{nonce: nonce, opcode: opcode, msg: msg, handler: handler}
 		} else if nonce == 0 {
 			msg := make([]byte, len(buf.B))
 			copy(msg, buf.B)
 
-			p.queue <- evtRPC{nonce: nonce, opcode: opcode, msg: msg, handler: handler}
+			p.recvQueue <- evtRPC{nonce: nonce, opcode: opcode, msg: msg, handler: handler}
 		}
 
 		if lockOpcode := atomic.LoadUint32(&p.recvLockOpcode); lockOpcode != math.MaxUint32 {
@@ -661,12 +685,12 @@ func (p *Peer) processRecv() func(stop <-chan struct{}) error {
 		var erpc evtRPC
 
 		select {
-		case erpc = <-p.queue:
+		case erpc = <-p.recvQueue:
 		default:
 			select {
 			case <-stop:
 				return ErrDisconnect
-			case erpc = <-p.queue:
+			case erpc = <-p.recvQueue:
 			}
 		}
 
@@ -701,12 +725,12 @@ func (p *Peer) processRPC() func(stop <-chan struct{}) error {
 		var erpc evtRPC
 
 		select {
-		case erpc = <-p.queueRPC:
+		case erpc = <-p.recvQueueRPC:
 		default:
 			select {
 			case <-stop:
 				return ErrDisconnect
-			case erpc = <-p.queueRPC:
+			case erpc = <-p.recvQueueRPC:
 			}
 		}
 
@@ -729,7 +753,7 @@ func (p *Peer) processRPC() func(stop <-chan struct{}) error {
 		e.opcode = erpc.opcode
 		e.msg = res
 
-		if err := p.queueSend(e); err != nil {
+		if err := p.queueRPC(e); err != nil {
 			releaseEvt(e)
 		}
 
