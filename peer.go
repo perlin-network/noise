@@ -3,7 +3,6 @@ package noise
 import (
 	"bufio"
 	"encoding/binary"
-	"fmt"
 	"github.com/pkg/errors"
 	"github.com/valyala/bytebufferpool"
 	"io"
@@ -270,7 +269,7 @@ func (p *Peer) InterceptErrors(i ErrorInterceptor) {
 	p.interceptErrorsLock.Unlock()
 }
 
-func (p *Peer) ReportError(err error) {
+func (p *Peer) reportError(err error) {
 	if err != nil {
 		p.interceptErrorsLock.RLock()
 		for _, interceptor := range p.interceptErrors {
@@ -453,7 +452,10 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 				return ErrDisconnect
 			case <-flush:
 				if err := p.bw.Flush(); err != nil {
-					return errors.Wrap(err, "could not flush messages")
+					err = errors.Wrap(err, "could not flush messages")
+
+					p.reportError(err)
+					return nil
 				}
 
 				flush = nil
@@ -516,7 +518,8 @@ func (p *Peer) sendMessages() func(stop <-chan struct{}) error {
 				releaseEvt(e)
 			}
 
-			return err
+			p.reportError(err)
+			return nil
 		}
 
 		p.afterSendLock.RLock()
@@ -684,8 +687,7 @@ func (p *Peer) processRecv() func(stop <-chan struct{}) error {
 			p.pendingRecvLock.Unlock()
 
 			if err := p.queueRecv(ch, erpc.msg); err != nil {
-				fmt.Println("recv err:", err)
-				//return err
+				p.reportError(errors.Wrap(err, "failed to queue recv"))
 				return nil
 			}
 		}
@@ -715,7 +717,7 @@ func (p *Peer) processRPC() func(stop <-chan struct{}) error {
 			res, err = erpc.handler(p.ctx, erpc.msg)
 
 			if err != nil {
-				fmt.Println("rpc err:", err)
+				p.reportError(errors.Wrap(err, "rpc error"))
 				return nil
 			}
 		}

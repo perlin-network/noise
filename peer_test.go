@@ -189,5 +189,5 @@ func TestPeerReportAndInterceptErrors(t *testing.T) {
 		assert.Equal(t, "test error", err.Error())
 	})
 
-	p.ReportError(errors.New("test error"))
+	p.reportError(errors.New("test error"))
 }
