@@ -108,7 +108,7 @@ func (t *Table) Update(target *ID) error {
 	return ErrBucketFull
 }
 
-func (t *Table) FindClosest(target *ID, k int) IDs {
+func (t *Table) FindClosest(target *ID, k int) []*ID {
 	var checksum [blake2b.Size256]byte
 
 	if target != nil {

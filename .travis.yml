@@ -8,7 +8,7 @@ matrix:
     - name: "Run Unit Tests"
       language: go
       go:
-        - "1.12.1"
+        - "1.12.5"
       install: true
       script:
         - GO111MODULE=on go test -coverprofile=coverage.txt -covermode=atomic -bench -race ./...

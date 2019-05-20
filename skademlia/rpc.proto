@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package skademlia;
+
+message Ping {}
+
+message FindNodeRequest {
+    bytes id = 1;
+}
+
+message FindNodeResponse {
+    repeated bytes ids = 1;
+}
+
+service Overlay {
+    rpc DoPing (Ping) returns (Ping) {}
+    rpc FindNode (FindNodeRequest) returns (FindNodeResponse) {}
+
+}

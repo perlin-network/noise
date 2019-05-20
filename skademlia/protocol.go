@@ -2,502 +2,155 @@ package skademlia
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/edwards25519"
-	"github.com/phf/go-queue/queue"
 	"github.com/pkg/errors"
-	"golang.org/x/crypto/blake2b"
+	"golang.org/x/net/context"
 	"io"
-	"io/ioutil"
-	"log"
 	"net"
-	"sort"
-	"sync"
 	"time"
 )
 
 const (
-	DefaultPrefixDiffLen = 128
-	DefaultPrefixDiffMin = 32
-
-	DefaultC1 = 16
-	DefaultC2 = 16
-
-	SignalAuthenticated = "skademlia.authenticated"
-
-	OpcodePing   = "skademlia.ping"
-	OpcodeLookup = "skademlia.lookup"
-
 	KeyID = "skademlia.id"
 )
 
 type Protocol struct {
-	opcodePing   byte
-	opcodeLookup byte
-
-	logger *log.Logger
-
-	table *Table
-	keys  *Keypair
-
-	dialer noise.Dialer
-
-	prefixDiffLen int
-	prefixDiffMin int
-
-	c1, c2 int
-
-	handshakeTimeout time.Duration
-	lookupTimeout    time.Duration
-
-	peers     map[[blake2b.Size256]byte]*noise.Peer
-	peersLock sync.Mutex
+	client *Client
 }
 
-func New(address string, keys *Keypair, dialer noise.Dialer) *Protocol {
-	return &Protocol{
-		logger: log.New(ioutil.Discard, "", 0),
+func (p Protocol) handshake(info noise.Info, conn net.Conn) (*ID, error) {
+	buf := p.client.id.Marshal()
+	signature := edwards25519.Sign(p.client.keys.privateKey, buf)
 
-		table: NewTable(keys.ID(address)),
-		keys:  keys,
+	handshake := append(buf, signature[:]...)
 
-		dialer: dialer,
-
-		prefixDiffLen: DefaultPrefixDiffLen,
-		prefixDiffMin: DefaultPrefixDiffMin,
-
-		c1: DefaultC1,
-		c2: DefaultC2,
-
-		handshakeTimeout: 3 * time.Second,
-		lookupTimeout:    3 * time.Second,
-
-		peers: make(map[[blake2b.Size256]byte]*noise.Peer),
-	}
-}
-
-func (b *Protocol) Logger() *log.Logger {
-	return b.logger
-}
-
-func (b *Protocol) WithC1(c1 int) *Protocol {
-	b.c1 = c1
-	return b
-}
-
-func (b *Protocol) WithC2(c2 int) *Protocol {
-	b.c2 = c2
-	return b
-}
-
-func (b *Protocol) WithPrefixDiffLen(prefixDiffLen int) *Protocol {
-	b.prefixDiffLen = prefixDiffLen
-	return b
-}
-
-func (b *Protocol) WithPrefixDiffMin(prefixDiffMin int) *Protocol {
-	b.prefixDiffMin = prefixDiffMin
-	return b
-}
-
-func (b *Protocol) WithHandshakeTimeout(handshakeTimeout time.Duration) *Protocol {
-	b.handshakeTimeout = handshakeTimeout
-	return b
-}
-
-func (b *Protocol) Peers(node *noise.Node) (peers []*noise.Peer) {
-	ids := b.table.FindClosest(b.table.self, b.table.getBucketSize())
-
-	for _, id := range ids {
-		if peer := b.PeerByID(node, id); peer != nil {
-			peers = append(peers, peer)
-		}
-	}
-
-	return
-}
-
-func (b *Protocol) PeerByID(node *noise.Node, id *ID) *noise.Peer {
-	if id.address == b.table.self.address {
-		return nil
-	}
-
-	b.peersLock.Lock()
-	peer, recorded := b.peers[id.checksum]
-	b.peersLock.Unlock()
-
-	if recorded {
-		return peer
-	}
-
-	peer = node.PeerByAddr(id.address)
-
-	if peer != nil {
-		return peer
-	}
-
-	peer, err := b.dialer(node, id.address)
-
-	if err != nil {
-		b.evict(id)
-		return nil
-	}
-
-	return peer
-}
-
-func (b *Protocol) RegisterOpcodes(n *noise.Node) {
-	b.opcodePing = n.Handle(n.NextAvailableOpcode(), func(ctx noise.Context, buf []byte) ([]byte, error) {
-		id := b.table.self.Marshal()
-		signature := edwards25519.Sign(b.keys.privateKey, id)
-
-		return append(id, signature[:]...), nil
-	})
-
-	b.opcodeLookup = n.Handle(n.NextAvailableOpcode(), func(ctx noise.Context, buf []byte) ([]byte, error) {
-		target, err := UnmarshalID(bytes.NewReader(buf))
-
-		if err != nil {
-			ctx.Peer().Disconnect(errors.Wrap(err, "skademlia: received invalid lookup request"))
-		}
-
-		return b.table.FindClosest(&target, b.table.getBucketSize()).Marshal(), nil
-	})
-}
-
-func (b *Protocol) Protocol() noise.ProtocolBlock {
-	return func(ctx noise.Context) error {
-		id, err := b.Handshake(ctx)
-
-		if err != nil {
-			return err
-		}
-
-		ctx.Set(KeyID, id)
-
-		return nil
-	}
-}
-
-func (b *Protocol) Handshake(ctx noise.Context) (*ID, error) {
-	signal := ctx.Peer().RegisterSignal(SignalAuthenticated)
-	defer signal()
-
-	/*
-		From here on out:
-
-		1. Check if our current connection has the same address recorded in the ID.
-
-		3. If not, establish a connection to the address recorded in the ID and
-			see if its reachable (in other words, ping the address).
-		4. If not reachable, disconnect the peer.
-
-		5. Else, deregister the ping by disconnecting the connection created by the ping.
-
-		6. Attempt to register the ID into our routing table.
-
-		7. Should any errors occur on the connection lead to a disconnection,
-			dissociate this connection from the ID.
-	*/
-
-	id, err := b.Ping(ctx)
-
+	n, err := conn.Write(handshake[:])
 	if err != nil {
 		return nil, err
 	}
 
-	err = func() error {
-		b.peersLock.Lock()
-		_, existed := b.peers[id.checksum]
-		b.peersLock.Unlock()
+	if n != len(handshake) {
+		return nil, errors.New("short write")
+	}
 
-		if !existed && ctx.Peer().Addr().String() != id.address {
-			reachable := b.PeerByID(ctx.Node(), id)
-
-			if reachable == nil {
-				return noise.ErrTimeout
-			}
-
-			reachable.Disconnect(nil)
-		}
-
-		b.peersLock.Lock()
-		b.peers[id.checksum] = ctx.Peer()
-		b.peersLock.Unlock()
-		return nil
-	}()
-
+	id, err := UnmarshalID(conn)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := b.Update(id); err != nil {
-		return nil, err
-	}
-
-	ctx.Peer().InterceptErrors(func(err error) {
-		b.peersLock.Lock()
-		delete(b.peers, id.checksum)
-		b.peersLock.Unlock()
-
-		if err, ok := err.(net.Error); ok && err.Timeout() {
-			b.evict(id)
-			return
-		}
-
-		if errors.Cause(err) == noise.ErrTimeout {
-			b.evict(id)
-			return
-		}
-	})
-
-	ctx.Peer().AfterRecv(func() {
-		if err := b.Update(id); err != nil {
-			ctx.Peer().Disconnect(err)
-		}
-	})
-
-	b.logger.Printf("Registered to S/Kademlia: %s\n", id)
-
-	return id, nil
-}
-
-func (b *Protocol) Ping(ctx noise.Context) (*ID, error) {
-	peer := ctx.Peer()
-
-	buf, err := peer.Request(b.opcodePing, nil)
-	if err != nil {
-		return nil, errors.Wrap(err, "skademlia: failed to ping peer")
-	}
-
-	r := bytes.NewReader(buf)
-
-	id, err := UnmarshalID(r)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "skademlia: failed to unmarshal pong")
-	}
-
-	var signature edwards25519.Signature
-
-	n, err := io.ReadFull(r, signature[:])
-
-	if err != nil {
-		return nil, errors.Wrap(err, "skademlia: failed to read signature")
-	}
-
-	if n != edwards25519.SizeSignature {
-		return nil, errors.New("skademlia: did not read enough bytes for signature")
+	if _, err = io.ReadFull(conn, signature[:]); err != nil {
+		return nil, errors.Wrap(err, "failed to read signature")
 	}
 
 	if !edwards25519.Verify(id.publicKey, id.Marshal(), signature) {
-		return nil, errors.New("skademlia: got invalid signature for pong")
+		return nil, errors.New("failed to verify signature")
 	}
 
-	if err := verifyPuzzle(id.checksum, id.nonce, b.c1, b.c2); err != nil {
+	if err := verifyPuzzle(id.checksum, id.nonce, p.client.c1, p.client.c2); err != nil {
 		return nil, errors.Wrap(err, "skademlia: peer connected with invalid id")
 	}
 
-	if prefixDiff(b.table.self.checksum[:], id.checksum[:], b.prefixDiffLen) < b.prefixDiffMin {
+	if prefixDiff(p.client.id.checksum[:], id.checksum[:], p.client.prefixDiffLen) < p.client.prefixDiffMin {
 		return nil, errors.New("skademlia: peer id is too similar to ours")
 	}
 
-	return &id, err
-}
+	ptr := &id
 
-func (b *Protocol) Lookup(ctx noise.Context, target *ID) (IDs, error) {
-	peer := ctx.Peer()
+	info.Put(KeyID, ptr)
 
-	buf, err := peer.Request(b.opcodeLookup, target.Marshal())
-	if err != nil {
-		return nil, errors.Wrap(err, "skademlia: failed to request lookup")
-	}
+	for p.client.table.Update(ptr) == ErrBucketFull {
+		bucket := p.client.table.buckets[getBucketID(p.client.table.self.checksum, id.checksum)]
 
-	return UnmarshalIDs(bytes.NewReader(buf))
-}
+		bucket.Lock()
+		last := bucket.Back()
+		lastID := last.Value.(*ID)
+		bucket.Unlock()
 
-func (b *Protocol) Update(id *ID) error {
-	for b.table.Update(id) == ErrBucketFull {
-		bucket := b.table.buckets[getBucketID(b.table.self.checksum, id.checksum)]
+		p.client.peersLock.RLock()
+		lastConn, exists := p.client.peers[lastID.address]
+		p.client.peersLock.RUnlock()
 
-		f := func() (err error) {
-			var pid *ID
-
-			bucket.Lock()
-			defer bucket.Unlock()
-
-			b.peersLock.Lock()
-			defer b.peersLock.Unlock()
-
-			last := bucket.Back()
-			lastid := last.Value.(*ID)
-			lastp, exists := b.peers[lastid.checksum]
-
-			defer func() {
-				if err != nil {
-					b.table.Delete(bucket, lastid)
-				}
-			}()
-
-			if !exists {
-				return errors.New("failed to dial peer")
-			}
-
-			pid, err = b.Ping(lastp.Ctx())
-
-			if err != nil { // Failed to ping peer at back of bucket.
-				err = errors.Wrap(noise.ErrTimeout, "skademlia: failed to ping last peer in bucket")
-
-				lastp.Disconnect(err)
-				return err
-			}
-
-			if pid.checksum != lastid.checksum || pid.nonce != lastid.nonce || pid.address != lastid.address { // Failed to authenticate peer at back of bucket.
-				err = errors.Wrap(noise.ErrTimeout, "skademlia: got invalid id pinging last peer in bucket")
-
-				lastp.Disconnect(err)
-				return err
-			}
-
-			return nil
-		}
-
-		if err := f(); err != nil {
+		if !exists {
+			p.client.table.Delete(bucket, lastID)
 			continue
 		}
 
-		b.logger.Printf("Routing table is full; evicting peer %s.\n", id)
-
-		return errors.Wrap(noise.ErrDisconnect, "skademlia: cannot evict any peers to make room for new peer")
-	}
-
-	return nil
-}
-
-func (b *Protocol) Bootstrap(node *noise.Node) (results []*ID) {
-	return b.FindNode(node, b.table.self, b.table.getBucketSize(), 3, 8)
-}
-
-// RefreshPeriodically periodically refreshes the list of peers for a node given a time period.
-func (b *Protocol) RefreshPeriodically(node *noise.Node, duration time.Duration) {
-	timer := time.NewTicker(duration)
-	defer timer.Stop()
-
-	for {
-		select {
-		case <-node.Done():
-			return
-		case <-timer.C:
-			b.Bootstrap(node)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		if _, err = NewOverlayClient(lastConn).DoPing(ctx, &Ping{}); err != nil {
+			p.client.table.Delete(bucket, lastID)
+			lastConn.Close()
+			cancel()
+			continue
 		}
+		cancel()
+
+		fmt.Printf("Routing table is full; evicting peer %s.\n", id)
+
+		// Ping was successful; disallow the current peer from connecting.
+
+		conn.Close()
+
+		p.client.peersLock.Lock()
+		if conn, exists := p.client.peers[id.address]; exists {
+			conn.Close()
+			delete(p.client.peers, id.address)
+		}
+		delete(p.client.peers, id.address)
+		p.client.peersLock.Unlock()
+
+		return nil, errors.New("skademlia: cannot evict any peers to make room for new peer")
 	}
+
+	return ptr, nil
 }
 
-func (b *Protocol) FindNode(node *noise.Node, target *ID, k int, a int, d int) (results []*ID) {
-	type request ID
-
-	type response struct {
-		requestee *request
-		ids       []*ID
+func (p Protocol) ClientHandshake(info noise.Info, ctx context.Context, authority string, conn net.Conn) (net.Conn, error) {
+	id, err := p.handshake(info, conn)
+	if err != nil {
+		return nil, err
 	}
 
-	var mu sync.Mutex
+	fmt.Printf("Connected to server %s.\n", id)
 
-	visited := map[[blake2b.Size256]byte]struct{}{
-		b.table.self.checksum: {},
-		target.checksum:       {},
-	}
-
-	lookups := make([]queue.Queue, d)
-
-	for i, id := range b.table.FindClosest(target, k) {
-		visited[id.checksum] = struct{}{}
-		lookups[i%d].PushBack(id)
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(d)
-
-	for _, lookup := range lookups { // Perform d parallel disjoint lookups.
-		go func(lookup queue.Queue) {
-			requests := make(chan *request, a)
-			responses := make(chan *response, a)
-
-			for i := 0; i < a; i++ { // Perform α queries in parallel per disjoint lookup.
-				go func() {
-					for id := range requests {
-						peer := b.PeerByID(node, (*ID)(id))
-
-						if peer == nil {
-							responses <- nil
-							continue
-						}
-
-						ids, err := b.Lookup(peer.Ctx(), (*ID)(id))
-
-						if err != nil {
-							responses <- nil
-							peer.Disconnect(err)
-							continue
-						}
-
-						responses <- &response{requestee: id, ids: ids}
-					}
-				}()
-			}
-
-			pending := 0
-
-			for lookup.Len() > 0 || pending > 0 {
-				for lookup.Len() > 0 && len(requests) < cap(requests) {
-					requests <- (*request)(lookup.PopFront().(*ID))
-					pending++
-				}
-
-				if pending > 0 {
-					res := <-responses
-
-					if res != nil {
-						for _, id := range res.ids {
-							mu.Lock()
-							if _, seen := visited[id.checksum]; !seen {
-								visited[id.checksum] = struct{}{}
-								lookup.PushBack(id)
-							}
-							mu.Unlock()
-						}
-
-						mu.Lock()
-						results = append(results, (*ID)(res.requestee))
-						mu.Unlock()
-					}
-
-					pending--
-				}
-			}
-
-			close(requests)
-
-			wg.Done()
-		}(lookup)
-	}
-
-	wg.Wait() // Wait until all d parallel disjoint lookups are complete.
-
-	sort.Slice(results, func(i, j int) bool {
-		return bytes.Compare(xor(results[i].checksum[:], target.checksum[:]), xor(results[j].checksum[:], target.checksum[:])) == -1
-	})
-
-	if len(results) > k {
-		results = results[:k]
-	}
-
-	return
+	return conn, nil
 }
 
-func (b *Protocol) evict(id *ID) {
-	b.logger.Printf("Peer %s could not be reached, and has been evicted.\n", id)
+func (p Protocol) ServerHandshake(info noise.Info, conn net.Conn) (net.Conn, error) {
+	id, err := p.handshake(info, conn)
+	if err != nil {
+		return nil, err
+	}
 
-	bucket := b.table.buckets[getBucketID(b.table.self.checksum, id.checksum)]
-	b.table.Delete(bucket, id)
+	fmt.Printf("Client %s has connected to you.\n", id)
+
+	go func() {
+		if _, err = p.client.Dial(id.address); err != nil {
+			_ = conn.Close()
+		}
+	}()
+
+	return conn, nil
+}
+
+func (p Protocol) DoPing(context.Context, *Ping) (*Ping, error) {
+	return &Ping{}, nil
+}
+
+func (p Protocol) FindNode(ctx context.Context, req *FindNodeRequest) (*FindNodeResponse, error) {
+	target, err := UnmarshalID(bytes.NewReader(req.Id))
+	if err != nil {
+		return nil, err
+	}
+
+	ids := p.client.table.FindClosest(&target, p.client.table.getBucketSize())
+
+	res := &FindNodeResponse{Ids: make([][]byte, len(ids))}
+
+	for i := range ids {
+		res.Ids[i] = ids[i].Marshal()
+	}
+
+	return res, nil
 }

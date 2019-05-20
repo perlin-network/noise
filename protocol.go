@@ -1,68 +1,50 @@
 package noise
 
 import (
-	"sync"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc/peer"
+	"net"
 )
 
-type Protocol func(ctx Context) (Protocol, error)
-type ProtocolBlock func(ctx Context) error
+type Protocol interface {
+	ClientHandshake(Info, context.Context, string, net.Conn) (net.Conn, error)
+	ServerHandshake(Info, net.Conn) (net.Conn, error)
+}
 
-func NewProtocol(blocks ...ProtocolBlock) Protocol {
-	result := make([]Protocol, len(blocks))
-
-	for i := len(blocks) - 1; i >= 0; i-- {
-		i := i
-
-		var next Protocol
-
-		if i != len(blocks)-1 {
-			next = result[i+1]
-		}
-
-		result[i] = func(ctx Context) (Protocol, error) {
-			if err := blocks[i](ctx); err != nil {
-				return nil, err
-			}
-
-			return next, nil
-		}
+func InfoFromPeer(peer *peer.Peer) Info {
+	if peer.AuthInfo == nil {
+		return nil
 	}
 
-	return result[0]
+	return peer.AuthInfo.(Info)
 }
 
-type Context struct {
-	n      *Node
-	p      *Peer
-	result chan error
-	stop   chan struct{}
+type Info map[string]interface{}
 
-	v  map[string]interface{}
-	vm *sync.RWMutex
+func (Info) AuthType() string {
+	return "noise"
 }
 
-func (c Context) Done() <-chan struct{} {
-	return c.stop
+func (i Info) Put(key string, val interface{}) {
+	i[key] = val
 }
 
-func (c Context) Node() *Node {
-	return c.n
+func (i Info) Get(key string) interface{} {
+	return i[key]
 }
 
-func (c Context) Peer() *Peer {
-	return c.p
+func (i Info) PutString(key, val string) {
+	i[key] = val
 }
 
-func (c Context) Get(key string) interface{} {
-	c.vm.RLock()
-	v := c.v[key]
-	c.vm.RUnlock()
-
-	return v
+func (i Info) String(key string) string {
+	return i[key].(string)
 }
 
-func (c Context) Set(key string, val interface{}) {
-	c.vm.Lock()
-	c.v[key] = val
-	c.vm.Unlock()
+func (i Info) PutBytes(key string, val []byte) {
+	i[key] = val
+}
+
+func (i Info) Bytes(key string) []byte {
+	return i[key].([]byte)
 }

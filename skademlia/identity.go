@@ -92,40 +92,6 @@ func UnmarshalID(b io.Reader) (m ID, err error) {
 	return
 }
 
-type IDs []*ID
-
-func (ids IDs) Marshal() []byte {
-	buf := []byte{byte(len(ids))}
-
-	for _, id := range ids {
-		buf = append(buf, id.Marshal()...)
-	}
-
-	return buf
-}
-
-func UnmarshalIDs(b io.Reader) (ids IDs, err error) {
-	var buf [1]byte
-
-	if _, err := io.ReadFull(b, buf[:]); err != nil {
-		return nil, errors.Wrap(err, "failed to read id array size")
-	}
-
-	ids = make(IDs, buf[0])
-
-	for i := range ids {
-		id, err := UnmarshalID(b)
-
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to unmarshal one of the ids")
-		}
-
-		ids[i] = &id
-	}
-
-	return
-}
-
 type Keypair struct {
 	privateKey edwards25519.PrivateKey
 	publicKey  edwards25519.PublicKey
@@ -134,8 +100,8 @@ type Keypair struct {
 	c1, c2              int
 }
 
-func (k *Keypair) ID(address string) *ID {
-	return NewID(address, k.publicKey, k.nonce)
+func (k *Keypair) ID(addr string) *ID {
+	return NewID(addr, k.publicKey, k.nonce)
 }
 
 func (k *Keypair) PrivateKey() edwards25519.PrivateKey {

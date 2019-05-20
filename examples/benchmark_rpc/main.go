@@ -1,116 +1,98 @@
 package main
 
 import (
-	"github.com/perlin-network/noise/xnoise"
-	"net/http"
-	_ "net/http/pprof"
-	"os"
-)
-
-import (
 	"fmt"
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/cipher"
 	"github.com/perlin-network/noise/handshake"
-	"github.com/perlin-network/noise/skademlia"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 	"math/rand"
 	"net"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 )
 
-const (
-	C1 = 8
-	C2 = 8
-)
+const payloadSize = 600
+const concurrency = 4
 
-func protocol(node *noise.Node) noise.Protocol {
-	ecdh := handshake.NewECDH()
-	ecdh.RegisterOpcodes(node)
-	ecdh.Logger().SetOutput(os.Stdout)
+var sendCount, recvCount uint64
 
-	aead := cipher.NewAEAD()
-	aead.RegisterOpcodes(node)
-	aead.Logger().SetOutput(os.Stdout)
+type server struct{}
 
-	keys, err := skademlia.NewKeys(C1, C2)
-	if err != nil {
-		panic(err)
+func (server) GetMessage(context.Context, *Message) (*Message, error) {
+	atomic.AddUint64(&recvCount, 1)
+
+	m := &Message{Contents: make([]byte, payloadSize)}
+
+	if _, err := rand.Read(m.Contents); err != nil {
+		return nil, err
 	}
 
-	overlay := skademlia.New(net.JoinHostPort("127.0.0.1", strconv.Itoa(node.Addr().(*net.TCPAddr).Port)), keys, xnoise.DialTCP)
-	overlay.RegisterOpcodes(node)
-	overlay.WithC1(C1)
-	overlay.WithC2(C2)
-	overlay.Logger().SetOutput(os.Stdout)
-
-	return noise.NewProtocol(xnoise.LogErrors, ecdh.Protocol(), aead.Protocol(), overlay.Protocol())
-}
-
-func launch() *noise.Node {
-	node, err := xnoise.ListenTCP(0)
-	if err != nil {
-		panic(err)
-	}
-
-	node.FollowProtocol(protocol(node))
-
-	fmt.Println("Listening for connections on port:", node.Addr().(*net.TCPAddr).Port)
-
-	return node
+	return m, nil
 }
 
 func main() {
-	go func() {
-		panic(http.ListenAndServe("localhost:6060", nil))
-	}()
+	protocol := noise.NewCredentials("127.0.0.1", handshake.NewECDH(), cipher.NewAEAD())
 
-	alice := launch()
-	defer alice.Shutdown()
-
-	bob := launch()
-	defer bob.Shutdown()
-
-	var sendCount uint64
-	var recvCount uint64
-
-	aliceToBob, err := xnoise.DialTCP(alice, bob.Addr().String())
-
-	if err != nil {
-		panic(err)
-	}
-
-	aliceToBob.WaitFor(skademlia.SignalAuthenticated)
-
-	var opcodeBenchmark byte = 0x32
-
-	bob.Handle(opcodeBenchmark, func(ctx noise.Context, buf []byte) ([]byte, error) {
-		atomic.AddUint64(&recvCount, 1)
-		return nil, nil
-	})
-
-	alice.Handle(opcodeBenchmark, nil)
-
-	// Notifier.
 	go func() {
 		for range time.Tick(1 * time.Second) {
 			fmt.Printf("Sent %d messages, and received %d messages.\n", atomic.SwapUint64(&sendCount, 0), atomic.SwapUint64(&recvCount, 0))
 		}
 	}()
 
-	var buf [600]byte
+	go func() {
+		l, err := net.Listen("tcp", ":3000")
+		if err != nil {
+			panic(err)
+		}
 
-	// Sender.
+		s := grpc.NewServer(grpc.Creds(protocol))
+		RegisterRouteMessageServer(s, &server{})
+
+		if err := s.Serve(l); err != nil {
+			panic(err)
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	conn, err := grpc.Dial(net.JoinHostPort("127.0.0.1", strconv.Itoa(3000)), grpc.WithTransportCredentials(protocol))
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	client := NewRouteMessageClient(conn)
+
 	for {
-		if _, err := rand.Read(buf[:]); err != nil {
-			panic(err)
+		var wg sync.WaitGroup
+		wg.Add(concurrency)
+
+		for i := 0; i < concurrency; i++ {
+			go func() {
+				defer wg.Done()
+
+				msg := &Message{Contents: make([]byte, payloadSize)}
+				if _, err := rand.Read(msg.Contents); err != nil {
+					panic(err)
+				}
+
+				res, err := client.GetMessage(context.Background(), msg)
+				if err != nil {
+					panic(err)
+				}
+
+				if len(res.Contents) != payloadSize {
+					panic("something wrong happened")
+				}
+
+				atomic.AddUint64(&sendCount, 1)
+			}()
 		}
 
-		if _, err := aliceToBob.Request(opcodeBenchmark, buf[:]); err != nil {
-			panic(err)
-		}
-
-		atomic.AddUint64(&sendCount, 1)
+		wg.Wait()
 	}
 }

@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package main;
+
+message Message {
+    bytes contents = 1;
+}
+
+service RouteMessage {
+    rpc GetMessage(Message) returns (Message) {}
+}
