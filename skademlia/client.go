@@ -102,7 +102,7 @@ func (c *Client) AllPeers() []*grpc.ClientConn {
 	c.peersLock.RLock()
 	defer c.peersLock.RUnlock()
 
-	conns := make([]*grpc.ClientConn, len(c.peers))
+	conns := make([]*grpc.ClientConn, 0, len(c.peers))
 
 	for _, conn := range c.peers {
 		conns = append(conns, conn)
