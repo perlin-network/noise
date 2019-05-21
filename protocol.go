@@ -7,8 +7,8 @@ import (
 )
 
 type Protocol interface {
-	ClientHandshake(Info, context.Context, string, net.Conn) (net.Conn, error)
-	ServerHandshake(Info, net.Conn) (net.Conn, error)
+	Client(Info, context.Context, string, net.Conn) (net.Conn, error)
+	Server(Info, net.Conn) (net.Conn, error)
 }
 
 func InfoFromPeer(peer *peer.Peer) Info {

@@ -2,7 +2,6 @@ package skademlia
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/edwards25519"
 	"github.com/pkg/errors"
@@ -86,7 +85,7 @@ func (p Protocol) handshake(info noise.Info, conn net.Conn) (*ID, error) {
 		}
 		cancel()
 
-		fmt.Printf("Routing table is full; evicting peer %s.\n", id)
+		p.client.logger.Printf("Routing table is full; evicting peer %s.\n", id)
 
 		// Ping was successful; disallow the current peer from connecting.
 
@@ -106,24 +105,24 @@ func (p Protocol) handshake(info noise.Info, conn net.Conn) (*ID, error) {
 	return ptr, nil
 }
 
-func (p Protocol) ClientHandshake(info noise.Info, ctx context.Context, authority string, conn net.Conn) (net.Conn, error) {
+func (p Protocol) Client(info noise.Info, ctx context.Context, authority string, conn net.Conn) (net.Conn, error) {
 	id, err := p.handshake(info, conn)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("Connected to server %s.\n", id)
+	p.client.logger.Printf("Connected to server %s.\n", id)
 
 	return conn, nil
 }
 
-func (p Protocol) ServerHandshake(info noise.Info, conn net.Conn) (net.Conn, error) {
+func (p Protocol) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
 	id, err := p.handshake(info, conn)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("Client %s has connected to you.\n", id)
+	p.client.logger.Printf("Client %s has connected to you.\n", id)
 
 	go func() {
 		if _, err = p.client.Dial(id.address); err != nil {

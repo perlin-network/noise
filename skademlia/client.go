@@ -8,13 +8,18 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/blake2b"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/peer"
+	"io/ioutil"
+	"log"
 	"sort"
 	"sync"
 	"time"
 )
 
 type Client struct {
+	logger *log.Logger
+
 	c1, c2, prefixDiffLen, prefixDiffMin int
 
 	creds *noise.Credentials
@@ -28,6 +33,9 @@ type Client struct {
 	peersLock sync.RWMutex
 
 	protocol Protocol
+
+	onPeerJoin  func(*grpc.ClientConn, *ID)
+	onPeerLeave func(*grpc.ClientConn, *ID)
 }
 
 func NewClient(addr string, keys *Keypair, opts ...Option) *Client {
@@ -35,6 +43,8 @@ func NewClient(addr string, keys *Keypair, opts ...Option) *Client {
 	table := NewTable(id)
 
 	c := &Client{
+		logger: log.New(ioutil.Discard, "", 0),
+
 		c1:            DefaultC1,
 		c2:            DefaultC2,
 		prefixDiffLen: DefaultPrefixDiffLen,
@@ -58,6 +68,18 @@ func NewClient(addr string, keys *Keypair, opts ...Option) *Client {
 
 func (c *Client) SetCredentials(creds *noise.Credentials) {
 	c.creds = creds
+}
+
+func (c *Client) OnPeerJoin(fn func(*grpc.ClientConn, *ID)) {
+	c.onPeerJoin = fn
+}
+
+func (c *Client) OnPeerLeave(fn func(*grpc.ClientConn, *ID)) {
+	c.onPeerLeave = fn
+}
+
+func (c *Client) Logger() *log.Logger {
+	return c.logger
 }
 
 func (c *Client) Protocol() Protocol {
@@ -92,11 +114,11 @@ func (c *Client) AllPeers() []*grpc.ClientConn {
 func (c *Client) ClosestPeers() []*grpc.ClientConn {
 	ids := c.table.FindClosest(c.table.self, c.table.getBucketSize())
 
-	conns := make([]*grpc.ClientConn, len(ids))
+	var conns []*grpc.ClientConn
 
 	for i := range ids {
 		if conn, err := c.Dial(ids[i].address); err == nil {
-			conns[i] = conn
+			conns = append(conns, conn)
 		}
 	}
 
@@ -153,13 +175,13 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 	}
 
 	c.peersLock.Lock()
-	c.peers[addr] = conn
+	c.peers[conn.Target()] = conn
 	c.peersLock.Unlock()
 
 	defer func() {
 		if err != nil {
 			c.peersLock.Lock()
-			delete(c.peers, addr)
+			delete(c.peers, conn.Target())
 			c.peersLock.Unlock()
 
 			conn.Close()
@@ -169,12 +191,66 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	_, err = NewOverlayClient(conn).DoPing(ctx, &Ping{})
-	if err != nil {
+	p := &peer.Peer{}
+
+	if _, err = NewOverlayClient(conn).DoPing(ctx, &Ping{}, grpc.Peer(p)); err != nil {
 		return nil, errors.Wrap(err, "failed to ping peer")
 	}
 
+	info := noise.InfoFromPeer(p)
+
+	if info == nil {
+		return nil, errors.New("could not recover skademlia id from peer")
+	}
+
+	id := info.Get(KeyID)
+
+	if id == nil {
+		return nil, errors.New("peer does not have skademlia id available")
+	}
+
+	go c.connLoop(conn, id.(*ID))
+
 	return conn, nil
+}
+
+func (c *Client) connLoop(conn *grpc.ClientConn, id *ID) {
+	if c.onPeerJoin != nil {
+		c.onPeerJoin(conn, id)
+	}
+
+	for {
+		changed := conn.WaitForStateChange(context.Background(), conn.GetState())
+
+		if !changed {
+			return
+		}
+
+		state := conn.GetState()
+
+		switch state {
+		case connectivity.TransientFailure:
+			c.peersLock.Lock()
+			delete(c.peers, conn.Target())
+			c.peersLock.Unlock()
+
+			if c.onPeerLeave != nil {
+				c.onPeerLeave(conn, id)
+			}
+
+			return
+		case connectivity.Shutdown:
+			c.peersLock.Lock()
+			delete(c.peers, conn.Target())
+			c.peersLock.Unlock()
+
+			if c.onPeerLeave != nil {
+				c.onPeerLeave(conn, id)
+			}
+
+			return
+		}
+	}
 }
 
 // RefreshPeriodically periodically refreshes the list of peers for a node given a time period.

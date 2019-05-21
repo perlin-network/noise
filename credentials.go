@@ -20,7 +20,7 @@ func (c *Credentials) ClientHandshake(ctx context.Context, authority string, con
 	var err error
 
 	for _, protocol := range c.Protocols {
-		conn, err = protocol.ClientHandshake(info, ctx, authority, conn)
+		conn, err = protocol.Client(info, ctx, authority, conn)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -34,7 +34,7 @@ func (c *Credentials) ServerHandshake(conn net.Conn) (net.Conn, credentials.Auth
 	var err error
 
 	for _, protocol := range c.Protocols {
-		conn, err = protocol.ServerHandshake(info, conn)
+		conn, err = protocol.Server(info, conn)
 		if err != nil {
 			return nil, nil, err
 		}

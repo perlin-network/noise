@@ -20,7 +20,7 @@ func NewECDH() ProtocolECDH {
 	return ProtocolECDH{}
 }
 
-func (ProtocolECDH) ClientHandshake(info noise.Info, ctx context.Context, auth string, conn net.Conn) (net.Conn, error) {
+func (ProtocolECDH) Client(info noise.Info, ctx context.Context, auth string, conn net.Conn) (net.Conn, error) {
 	if err := handshakeECDH(info, conn); err != nil {
 		return nil, err
 	}
@@ -28,7 +28,7 @@ func (ProtocolECDH) ClientHandshake(info noise.Info, ctx context.Context, auth s
 	return conn, nil
 }
 
-func (ProtocolECDH) ServerHandshake(info noise.Info, conn net.Conn) (net.Conn, error) {
+func (ProtocolECDH) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
 	if err := handshakeECDH(info, conn); err != nil {
 		return nil, err
 	}
