@@ -64,6 +64,18 @@ func (c *Client) Protocol() Protocol {
 	return c.protocol
 }
 
+func (c *Client) BucketSize() int {
+	return c.table.getBucketSize()
+}
+
+func (c *Client) Keys() *Keypair {
+	return c.keys
+}
+
+func (c *Client) ID() *ID {
+	return c.id
+}
+
 func (c *Client) AllPeers() []*grpc.ClientConn {
 	c.peersLock.RLock()
 	defer c.peersLock.RUnlock()
