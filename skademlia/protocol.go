@@ -89,13 +89,7 @@ func (p Protocol) handshake(info noise.Info, conn net.Conn) (*ID, error) {
 
 		// Ping was successful; disallow the current peer from connecting.
 
-		conn.Close()
-
 		p.client.peersLock.Lock()
-		if conn, exists := p.client.peers[id.address]; exists {
-			conn.Close()
-			delete(p.client.peers, id.address)
-		}
 		delete(p.client.peers, id.address)
 		p.client.peersLock.Unlock()
 
@@ -108,6 +102,17 @@ func (p Protocol) handshake(info noise.Info, conn net.Conn) (*ID, error) {
 func (p Protocol) Client(info noise.Info, ctx context.Context, authority string, conn net.Conn) (net.Conn, error) {
 	id, err := p.handshake(info, conn)
 	if err != nil {
+		if cerr := conn.Close(); cerr != nil {
+			err = errors.Wrap(cerr, err.Error())
+		}
+		return nil, err
+	}
+
+	if addr, ok := conn.RemoteAddr().(*net.TCPAddr); ok && addr.String() != id.Address() {
+		err := errors.Errorf("connected to peer with addr %s, but their id writes addr %d", addr, id.Address())
+		if cerr := conn.Close(); cerr != nil {
+			err = errors.Wrap(cerr, err.Error())
+		}
 		return nil, err
 	}
 
@@ -119,6 +124,9 @@ func (p Protocol) Client(info noise.Info, ctx context.Context, authority string,
 func (p Protocol) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
 	id, err := p.handshake(info, conn)
 	if err != nil {
+		if cerr := conn.Close(); cerr != nil {
+			err = errors.Wrap(cerr, err.Error())
+		}
 		return nil, err
 	}
 
