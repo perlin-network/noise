@@ -109,7 +109,7 @@ func (p Protocol) Client(info noise.Info, ctx context.Context, authority string,
 	}
 
 	if addr, ok := conn.RemoteAddr().(*net.TCPAddr); ok && addr.String() != id.Address() {
-		err := errors.Errorf("connected to peer with addr %s, but their id writes addr %d", addr, id.Address())
+		err := errors.Errorf("connected to peer with addr %s, but their id writes addr %s", addr, id.Address())
 		if cerr := conn.Close(); cerr != nil {
 			err = errors.Wrap(cerr, err.Error())
 		}
