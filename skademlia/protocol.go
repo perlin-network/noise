@@ -131,8 +131,8 @@ func (p Protocol) Client(info noise.Info, ctx context.Context, authority string,
 		return nil, err
 	}
 
-	if addr, ok := conn.RemoteAddr().(*net.TCPAddr); ok && addr.String() != id.Address() {
-		err := errors.Errorf("connected to peer with addr %s, but their id writes addr %s", addr, id.Address())
+	if !addressMatches(conn.RemoteAddr().String(), id.Address()) {
+		err := errors.Errorf("connected to peer with addr %s, but their id writes addr %s", conn.RemoteAddr().String(), id.Address())
 		if cerr := conn.Close(); cerr != nil {
 			err = errors.Wrap(cerr, err.Error())
 		}
@@ -142,6 +142,14 @@ func (p Protocol) Client(info noise.Info, ctx context.Context, authority string,
 	p.client.logger.Printf("Connected to server %s.\n", id)
 
 	return conn, nil
+}
+
+func addressMatches(bind string, subject string) bool {
+	var bindAddr *net.TCPAddr
+	var subjectAddr *net.TCPAddr
+	bindAddr, _ = net.ResolveTCPAddr("tcp", bind)
+	subjectAddr, _ = net.ResolveTCPAddr("tcp", subject)
+	return bindAddr.Port == subjectAddr.Port && (bindAddr.IP.Equal(net.ParseIP("::")) || bindAddr.IP.Equal(subjectAddr.IP))
 }
 
 func (p Protocol) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
