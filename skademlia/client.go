@@ -186,6 +186,8 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 		append(
 			c.dopts,
 			grpc.WithTransportCredentials(c.creds),
+			grpc.FailOnNonTempDialError(true),
+			grpc.WithBlock(),
 		)...,
 	)
 

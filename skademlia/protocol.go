@@ -119,8 +119,12 @@ func (p Protocol) handshake(info noise.Info, conn net.Conn) (*ID, error) {
 }
 
 func (p Protocol) Client(info noise.Info, ctx context.Context, authority string, conn net.Conn) (net.Conn, error) {
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithCancel(ctx)
+
 	id, err := p.handshake(info, conn)
 	if err != nil {
+		cancel()
 		if cerr := conn.Close(); cerr != nil {
 			err = errors.Wrap(cerr, err.Error())
 		}
