@@ -150,7 +150,7 @@ func addressMatches(bind string, subject string) bool {
 	subjectIp := net.ParseIP(subjectHost)
 	bindIp := net.ParseIP(bindHost)
 
-	return bindPort == subjectPort && (bindIp.IsUnspecified() || bindIp == nil || bindIp.Equal(subjectIp))
+	return bindPort == subjectPort && (bindIp.IsUnspecified() || bindIp == nil || subjectIp == nil || bindIp.Equal(subjectIp))
 }
 
 func (p Protocol) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
