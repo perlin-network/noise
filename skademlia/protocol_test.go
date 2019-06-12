@@ -19,7 +19,9 @@
 package skademlia
 
 import (
+	"strconv"
 	"testing"
+	"testing/quick"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -41,4 +43,21 @@ func TestAdressMatches(t *testing.T) {
 	for _, hostMatchTest := range addressMatchesTests {
 		assert.True(t, addressMatches(hostMatchTest.bind, hostMatchTest.subject) == hostMatchTest.equal, hostMatchTest.bind+" compared to "+hostMatchTest.subject)
 	}
+}
+
+func TestQuickCheckAddressMatches(t *testing.T) {
+	f := func(n int) bool {
+		return addressMatches(randomIp(n)+":"+randomPort(n), randomIp(n)+":"+randomPort(n))
+	}
+	if err := quick.Check(f, nil); err != nil {
+		t.Error(err)
+	}
+}
+
+func randomIp(n int) string {
+	return strconv.Itoa(n%257) + "." + strconv.Itoa(n%257) + "." + strconv.Itoa(n%257) + "." + strconv.Itoa(n%257)
+}
+
+func randomPort(n int) string {
+	return strconv.Itoa(n % 65536)
 }
