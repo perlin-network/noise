@@ -131,7 +131,7 @@ func (p Protocol) Client(info noise.Info, ctx context.Context, authority string,
 		return nil, err
 	}
 
-	if !addressMatches(conn.RemoteAddr().String(), id.Address()) {
+	if !addressMatches(id.Address(), conn.RemoteAddr().String()) {
 		err := errors.Errorf("connected to peer with addr %s, but their id writes addr %s", conn.RemoteAddr().String(), id.Address())
 		if cerr := conn.Close(); cerr != nil {
 			err = errors.Wrap(cerr, err.Error())
