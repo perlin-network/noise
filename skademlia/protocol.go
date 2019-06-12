@@ -145,11 +145,12 @@ func (p Protocol) Client(info noise.Info, ctx context.Context, authority string,
 }
 
 func addressMatches(bind string, subject string) bool {
-	var bindAddr *net.TCPAddr
-	var subjectAddr *net.TCPAddr
-	bindAddr, _ = net.ResolveTCPAddr("tcp", bind)
-	subjectAddr, _ = net.ResolveTCPAddr("tcp", subject)
-	return bindAddr.Port == subjectAddr.Port && (bindAddr.IP.Equal(net.ParseIP("::")) || bindAddr.IP.Equal(subjectAddr.IP))
+	bindHost, bindPort, _ := net.SplitHostPort(bind)
+	subjectHost, subjectPort, _ := net.SplitHostPort(subject)
+	subjectIp := net.ParseIP(subjectHost)
+	bindIp := net.ParseIP(bindHost)
+
+	return bindPort == subjectPort && (bindIp.IsUnspecified() || bindIp == nil || bindIp.Equal(subjectIp))
 }
 
 func (p Protocol) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
