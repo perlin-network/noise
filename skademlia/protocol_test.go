@@ -19,7 +19,6 @@
 package skademlia
 
 import (
-	"math/rand"
 	"net"
 	"strconv"
 	"testing"
@@ -51,8 +50,8 @@ func TestAddressMatches(t *testing.T) {
 }
 
 func TestQuickCheckAddressMatchesIPV4(t *testing.T) {
-	f := func(n int64, port uint16) bool {
-		return addressMatches(randomIpV4(n)+":"+strconv.Itoa(int(port)), randomIpV4(n)+":"+strconv.Itoa(int(port)))
+	f := func(ip [net.IPv4len]byte, port uint16) bool {
+		return addressMatches(net.IP(ip[:]).String()+":"+strconv.Itoa(int(port)), net.IP(ip[:]).String()+":"+strconv.Itoa(int(port)))
 	}
 	if err := quick.Check(f, nil); err != nil {
 		t.Error(err)
@@ -60,28 +59,11 @@ func TestQuickCheckAddressMatchesIPV4(t *testing.T) {
 }
 
 func TestQuickCheckAddressMatchesIPV6(t *testing.T) {
-	f := func(n int64, port uint16) bool {
-		return addressMatches("["+randomIpV6(n)+"]"+":"+strconv.Itoa(int(port)), "["+randomIpV6(n)+"]"+":"+strconv.Itoa(int(port)))
+	f := func(ip [net.IPv6len]byte, port uint16) bool {
+		return addressMatches("["+net.IP(ip[:]).String()+"]"+":"+strconv.Itoa(int(port)), "["+net.IP(ip[:]).String()+"]"+":"+strconv.Itoa(int(port)))
 
 	}
 	if err := quick.Check(f, nil); err != nil {
 		t.Error(err)
 	}
-}
-
-func randomIpV4(n int64) string {
-	return net.IP(randomBytes(n, net.IPv4len)).String()
-}
-
-func randomIpV6(n int64) string {
-	return net.IP(randomBytes(n, net.IPv6len)).String()
-}
-
-func randomBytes(n int64, len int) []byte {
-	rand.Seed(n)
-	bytes := make([]byte, len)
-	for i := 0; i < len; i++ {
-		bytes[i] = byte(rand.Intn(255))
-	}
-	return bytes
 }
