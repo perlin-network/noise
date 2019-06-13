@@ -34,13 +34,13 @@ var addressMatchesTests = []struct {
 }{
 	{"[7a8d:e2e:9b16:e1cc:f9c4:ce95:d96a:a32c]:100", "[7a8d:e2e:9b16:e1cc:f9c4:ce95:d96a:a32c]:100", true},
 	{"127.0.0.1:100", "127.0.0.1:100", true},
-	{":100", "127.0.0.1:100", true},
-	{"127.0.0.1:100", ":100", true},
 	{"[::]:100", "127.0.0.1:100", true},
 	{"127.0.0.1:100", "127.0.0.2:100", false},
 	{"127.0.0.1:100", "127.0.0.1:101", false},
 	{"0.0:0", "127.0.0.1:100", false},
 	{"invalid_address", "127.0.0.1:100", false},
+	{"google.com:80", "172.217.161.206:80", true},
+	{"google.com:80", "[2404:6800:400a:80b::200e]:80", true},
 }
 
 func TestAddressMatches(t *testing.T) {

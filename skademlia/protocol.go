@@ -149,14 +149,39 @@ func addressMatches(bind string, subject string) bool {
 	if err != nil {
 		return false
 	}
+
 	subjectHost, subjectPort, err := net.SplitHostPort(subject)
 	if err != nil {
 		return false
 	}
-	subjectIp := net.ParseIP(subjectHost)
-	bindIp := net.ParseIP(bindHost)
 
-	return bindPort == subjectPort && (bindIp.IsUnspecified() || bindIp == nil || subjectIp == nil || bindIp.Equal(subjectIp))
+	if bindPort != subjectPort {
+		return false
+	}
+
+	subjectAddrs, err := net.LookupIP(subjectHost)
+	if err != nil {
+		return false
+	}
+
+	bindAddrs, err := net.LookupIP(bindHost)
+	if err != nil {
+		return false
+	}
+
+	for _, bindAddr := range bindAddrs {
+		if bindAddr.IsUnspecified() {
+			return true
+		}
+
+		for _, subjectAddr := range subjectAddrs {
+			if bindAddr.Equal(subjectAddr) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (p Protocol) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
