@@ -51,14 +51,14 @@ func TestAddressMatches(t *testing.T) {
 
 func TestQuickCheckAddressMatchesIPV4(t *testing.T) {
 	f := func(ip [net.IPv4len]byte, port uint16) bool {
-		return addressMatches(net.IP(ip[:]).String()+":"+strconv.Itoa(int(port)), net.IP(ip[:]).String()+":"+strconv.Itoa(int(port)))
+		return addressMatches(net.IP(ip[:]).String()+":"+strconv.FormatUint(uint64(port), 10), net.IP(ip[:]).String()+":"+strconv.FormatUint(uint64(port), 10))
 	}
 	assert.NoError(t, quick.Check(f, nil))
 }
 
 func TestQuickCheckAddressMatchesIPV6(t *testing.T) {
 	f := func(ip [net.IPv6len]byte, port uint16) bool {
-		return addressMatches("["+net.IP(ip[:]).String()+"]"+":"+strconv.Itoa(int(port)), "["+net.IP(ip[:]).String()+"]"+":"+strconv.Itoa(int(port)))
+		return addressMatches("["+net.IP(ip[:]).String()+"]"+":"+strconv.FormatUint(uint64(port), 10), "["+net.IP(ip[:]).String()+"]"+":"+strconv.FormatUint(uint64(port), 10))
 
 	}
 	assert.NoError(t, quick.Check(f, nil))
