@@ -39,7 +39,7 @@ var addressMatchesTests = []struct {
 	{"127.0.0.1:100", "127.0.0.1:101", false},
 }
 
-func TestAdressMatches(t *testing.T) {
+func TestAddressMatches(t *testing.T) {
 	for _, hostMatchTest := range addressMatchesTests {
 		assert.True(t, addressMatches(hostMatchTest.bind, hostMatchTest.subject) == hostMatchTest.equal, hostMatchTest.bind+" compared to "+hostMatchTest.subject)
 	}
