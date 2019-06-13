@@ -145,8 +145,14 @@ func (p Protocol) Client(info noise.Info, ctx context.Context, authority string,
 }
 
 func addressMatches(bind string, subject string) bool {
-	bindHost, bindPort, _ := net.SplitHostPort(bind)
-	subjectHost, subjectPort, _ := net.SplitHostPort(subject)
+	bindHost, bindPort, err := net.SplitHostPort(bind)
+	if err != nil {
+		return false
+	}
+	subjectHost, subjectPort, err := net.SplitHostPort(subject)
+	if err != nil {
+		return false
+	}
 	subjectIp := net.ParseIP(subjectHost)
 	bindIp := net.ParseIP(bindHost)
 

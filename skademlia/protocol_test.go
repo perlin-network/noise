@@ -33,12 +33,15 @@ var addressMatchesTests = []struct {
 	subject string
 	equal   bool
 }{
+	{"[7a8d:e2e:9b16:e1cc:f9c4:ce95:d96a:a32c]:100", "[7a8d:e2e:9b16:e1cc:f9c4:ce95:d96a:a32c]:100", true},
 	{"127.0.0.1:100", "127.0.0.1:100", true},
 	{":100", "127.0.0.1:100", true},
 	{"127.0.0.1:100", ":100", true},
 	{"[::]:100", "127.0.0.1:100", true},
 	{"127.0.0.1:100", "127.0.0.2:100", false},
 	{"127.0.0.1:100", "127.0.0.1:101", false},
+	{"0.0:0", "127.0.0.1:100", false},
+	{"invalid_address", "127.0.0.1:100", false},
 }
 
 func TestAddressMatches(t *testing.T) {
@@ -58,7 +61,7 @@ func TestQuickCheckAddressMatchesIPV4(t *testing.T) {
 
 func TestQuickCheckAddressMatchesIPV6(t *testing.T) {
 	f := func(n int64, port uint16) bool {
-		return addressMatches(randomIpV6(n)+":"+strconv.Itoa(int(port)), randomIpV6(n)+":"+strconv.Itoa(int(port)))
+		return addressMatches("["+randomIpV6(n)+"]"+":"+strconv.Itoa(int(port)), "["+randomIpV6(n)+"]"+":"+strconv.Itoa(int(port)))
 
 	}
 	if err := quick.Check(f, nil); err != nil {
