@@ -39,8 +39,6 @@ var addressMatchesTests = []struct {
 	{"127.0.0.1:100", "127.0.0.1:101", false},
 	{"0.0:0", "127.0.0.1:100", false},
 	{"invalid_address", "127.0.0.1:100", false},
-	{"google.com:80", "172.217.161.206:80", true},
-	{"google.com:80", "[2404:6800:400a:80b::200e]:80", true},
 }
 
 func TestAddressMatches(t *testing.T) {
