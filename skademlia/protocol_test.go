@@ -53,9 +53,7 @@ func TestQuickCheckAddressMatchesIPV4(t *testing.T) {
 	f := func(ip [net.IPv4len]byte, port uint16) bool {
 		return addressMatches(net.IP(ip[:]).String()+":"+strconv.Itoa(int(port)), net.IP(ip[:]).String()+":"+strconv.Itoa(int(port)))
 	}
-	if err := quick.Check(f, nil); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, quick.Check(f, nil))
 }
 
 func TestQuickCheckAddressMatchesIPV6(t *testing.T) {
@@ -63,7 +61,5 @@ func TestQuickCheckAddressMatchesIPV6(t *testing.T) {
 		return addressMatches("["+net.IP(ip[:]).String()+"]"+":"+strconv.Itoa(int(port)), "["+net.IP(ip[:]).String()+"]"+":"+strconv.Itoa(int(port)))
 
 	}
-	if err := quick.Check(f, nil); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, quick.Check(f, nil))
 }
