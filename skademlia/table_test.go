@@ -86,3 +86,67 @@ func TestUpdateAndDeleteFromTable(t *testing.T) {
 
 	assert.NoError(t, quick.Check(f, &quick.Config{MaxCount: 1000}))
 }
+
+func TestFindClosestPeers(t *testing.T) {
+	t.Parallel()
+
+	var nodes []*ID
+
+	nodes = append(nodes,
+		&ID{address: "0000"},
+		&ID{address: "0001"},
+		&ID{address: "0002"},
+		&ID{address: "0003"},
+		&ID{address: "0004"},
+		&ID{address: "0005"},
+	)
+
+	var publicKey edwards25519.PublicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789010"))
+	nodes[0].checksum = publicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789011"))
+	nodes[1].checksum = publicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789012"))
+	nodes[2].checksum = publicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789013"))
+	nodes[3].checksum = publicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789014"))
+	nodes[4].checksum = publicKey
+
+	copy(publicKey[:], []byte("00000000000000000000000000000000"))
+	nodes[5].checksum = publicKey
+
+	table := NewTable(nodes[0])
+
+	for i := 1; i <= 5; i++ {
+		assert.NoError(t, table.Update(nodes[i]))
+	}
+
+	var testee []*ID
+	for _, peer := range table.FindClosest(nodes[5], 3) {
+		testee = append(testee, peer)
+	}
+	assert.Equalf(t, 3, len(testee), "expected 3 peers got %+v", testee)
+
+	answerKeys := []int{2, 3, 4}
+	for i, key := range answerKeys {
+		_answer := nodes[key]
+		assert.EqualValues(t, _answer, testee[i])
+	}
+
+	testee = []*ID{}
+	for _, peer := range table.FindClosest(nodes[4], 2) {
+		testee = append(testee, peer)
+	}
+	assert.Equalf(t, 2, len(testee), "expected 2 peers got %v", testee)
+	answerKeys = []int{2, 3}
+	for i, key := range answerKeys {
+		_answer := nodes[key]
+		assert.EqualValues(t, _answer, testee[i])
+	}
+}

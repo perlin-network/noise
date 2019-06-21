@@ -19,6 +19,9 @@
 package skademlia
 
 import (
+	"bytes"
+	"context"
+	"github.com/perlin-network/noise"
 	"net"
 	"strconv"
 	"testing"
@@ -60,4 +63,87 @@ func TestQuickCheckAddressMatchesIPV6(t *testing.T) {
 
 	}
 	assert.NoError(t, quick.Check(f, nil))
+}
+
+func getClient(t *testing.T) (*Client, net.Listener) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c1 := 1
+	c2 := 1
+	keys, err := NewKeys(c1, c2)
+	if err != nil {
+		t.Fatalf("error NewKeys(): %v", err)
+	}
+
+	c := NewClient(lis.Addr().String(), keys, WithC1(c1), WithC2(c2))
+	c.SetCredentials(noise.NewCredentials(lis.Addr().String(), c.Protocol()))
+
+	return c, lis
+}
+
+func TestProtocol(t *testing.T) {
+	c, cl := getClient(t)
+	defer cl.Close()
+	s, sl := getClient(t)
+	defer sl.Close()
+
+	sinfo := noise.Info{}
+	accept := make(chan struct{})
+	go serverHandle(t, s.protocol, sinfo, accept, sl)
+
+	cinfo := noise.Info{}
+	clientHandle(t, c.protocol, cinfo, sl.Addr().String())
+
+	<-accept
+
+	// Check ID
+	assert.NotNil(t, cinfo.Get(KeyID))
+	assert.NotNil(t, sinfo.Get(KeyID))
+
+	sid := sinfo.Get(KeyID).(*ID)
+	cid := cinfo.Get(KeyID).(*ID)
+	assert.Equal(t, c.id.checksum, sid.checksum)
+	assert.Equal(t, s.id.checksum, cid.checksum)
+
+	// Test FindNode
+	{
+		res, err := s.protocol.FindNode(context.Background(), &FindNodeRequest{
+			Id: cid.Marshal(),
+		})
+		assert.NoError(t, err)
+
+		id, err := UnmarshalID(bytes.NewReader(res.Ids[0]))
+		assert.NoError(t, err)
+		assert.Equal(t, c.id.id, id.id)
+	}
+}
+
+func serverHandle(t *testing.T, protocol Protocol, info noise.Info, accept chan struct{}, lis net.Listener) {
+	defer close(accept)
+
+	serverRawConn, err := lis.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := protocol.Server(info, serverRawConn); err != nil {
+		_ = serverRawConn.Close()
+		t.Fatalf("Error server: %v", err)
+	}
+}
+
+func clientHandle(t *testing.T, protocol Protocol, info noise.Info, lisAddr string) {
+	conn, err := net.Dial("tcp", lisAddr)
+	if err != nil {
+		t.Fatalf("Error client: %v", err)
+	}
+	defer conn.Close()
+
+	_, err = protocol.Client(info, context.Background(), "", conn)
+	if err != nil {
+		t.Fatalf("Error client: %v", err)
+	}
 }
