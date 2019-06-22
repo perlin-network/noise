@@ -22,12 +22,11 @@ import (
 	"bytes"
 	"context"
 	"github.com/perlin-network/noise"
+	"github.com/stretchr/testify/assert"
 	"net"
 	"strconv"
 	"testing"
 	"testing/quick"
-
-	"github.com/stretchr/testify/assert"
 )
 
 var addressMatchesTests = []struct {
@@ -92,10 +91,14 @@ func TestProtocol(t *testing.T) {
 
 	sinfo := noise.Info{}
 	accept := make(chan struct{})
-	go serverHandle(t, s.protocol, sinfo, accept, sl)
+	go func() {
+		defer close(accept)
+		serverHandle(t, s.protocol, sinfo, sl)
+	}()
 
 	cinfo := noise.Info{}
-	clientHandle(t, c.protocol, cinfo, sl.Addr().String())
+	cconn := clientHandle(t, c.protocol, cinfo, sl.Addr().String())
+	defer cconn.Close()
 
 	<-accept
 
@@ -121,12 +124,10 @@ func TestProtocol(t *testing.T) {
 	}
 }
 
-func serverHandle(t *testing.T, protocol Protocol, info noise.Info, accept chan struct{}, lis net.Listener) {
-	defer close(accept)
-
+func serverHandle(t *testing.T, protocol Protocol, info noise.Info, lis net.Listener) {
 	serverRawConn, err := lis.Accept()
 	if err != nil {
-		t.Fatal(err)
+		return
 	}
 
 	if _, err := protocol.Server(info, serverRawConn); err != nil {
@@ -135,15 +136,15 @@ func serverHandle(t *testing.T, protocol Protocol, info noise.Info, accept chan 
 	}
 }
 
-func clientHandle(t *testing.T, protocol Protocol, info noise.Info, lisAddr string) {
+func clientHandle(t *testing.T, protocol Protocol, info noise.Info, lisAddr string) net.Conn {
 	conn, err := net.Dial("tcp", lisAddr)
 	if err != nil {
 		t.Fatalf("Error client: %v", err)
 	}
-	defer conn.Close()
-
 	_, err = protocol.Client(info, context.Background(), "", conn)
 	if err != nil {
 		t.Fatalf("Error client: %v", err)
 	}
+
+	return conn
 }

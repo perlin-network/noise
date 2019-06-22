@@ -1,9 +1,12 @@
 package skademlia
 
 import (
+	"context"
 	"github.com/perlin-network/noise"
+	"github.com/perlin-network/noise/edwards25519"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -84,3 +87,195 @@ func TestClient(t *testing.T) {
 		assert.Fail(t, "OnPeerLeave never called")
 	}
 }
+
+func TestInterceptedServerStream(t *testing.T) {
+	c, lis := getClient(t)
+	defer lis.Close()
+	dss := &dummyServerStream{}
+
+	var nodes []*ID
+
+	nodes = append(nodes,
+		&ID{address: "0000"},
+		&ID{address: "0001"},
+		&ID{address: "0002"},
+		&ID{address: "0003"},
+		&ID{address: "0004"},
+		&ID{address: "0005"},
+		&ID{address: "0006"},
+	)
+
+	var publicKey edwards25519.PublicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789010"))
+	nodes[0].checksum = publicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789011"))
+	nodes[1].checksum = publicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789012"))
+	nodes[2].checksum = publicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789013"))
+	nodes[3].checksum = publicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789014"))
+	nodes[4].checksum = publicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789015"))
+	nodes[5].checksum = publicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789016"))
+	nodes[6].checksum = publicKey
+
+	c.table = NewTable(nodes[0])
+
+	for i := 1; i < 5; i++ {
+		assert.NoError(t, c.table.Update(nodes[i]))
+	}
+
+	// Test SendMsg
+
+	closest := c.table.FindClosest(nodes[4], 2)
+	assert.Len(t, closest, 2)
+	assert.Equal(t, "0002", closest[0].address)
+	assert.Equal(t, "0003", closest[1].address)
+
+	iss := InterceptedServerStream{
+		ServerStream: dss,
+		client:       c,
+		id:           nodes[5],
+	}
+
+	assert.NoError(t, iss.SendMsg(nil))
+
+	closest = c.table.FindClosest(nodes[4], 2)
+	assert.Len(t, closest, 2)
+	assert.Equal(t, "0005", closest[0].address)
+	assert.Equal(t, "0002", closest[1].address)
+
+	// Test RecvMsg
+
+	closest = c.table.FindClosest(nodes[5], 2)
+	assert.Len(t, closest, 2)
+	assert.Equal(t, "0004", closest[0].address)
+	assert.Equal(t, "0003", closest[1].address)
+
+	iss = InterceptedServerStream{
+		ServerStream: dummyServerStream{},
+		client:       c,
+		id:           nodes[6],
+	}
+
+	assert.NoError(t, iss.RecvMsg(nil))
+
+	closest = c.table.FindClosest(nodes[5], 2)
+	assert.Len(t, closest, 2)
+	assert.Equal(t, "0004", closest[0].address)
+	assert.Equal(t, "0006", closest[1].address)
+}
+
+func TestInterceptedClientStream(t *testing.T) {
+	c, lis := getClient(t)
+	defer lis.Close()
+
+	var nodes []*ID
+
+	nodes = append(nodes,
+		&ID{address: "0000"},
+		&ID{address: "0001"},
+		&ID{address: "0002"},
+		&ID{address: "0003"},
+		&ID{address: "0004"},
+		&ID{address: "0005"},
+		&ID{address: "0006"},
+	)
+
+	var publicKey edwards25519.PublicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789010"))
+	nodes[0].checksum = publicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789011"))
+	nodes[1].checksum = publicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789012"))
+	nodes[2].checksum = publicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789013"))
+	nodes[3].checksum = publicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789014"))
+	nodes[4].checksum = publicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789015"))
+	nodes[5].checksum = publicKey
+
+	copy(publicKey[:], []byte("12345678901234567890123456789016"))
+	nodes[6].checksum = publicKey
+
+	c.table = NewTable(nodes[0])
+
+	for i := 1; i < 5; i++ {
+		assert.NoError(t, c.table.Update(nodes[i]))
+	}
+
+	// Test SendMsg
+
+	closest := c.table.FindClosest(nodes[4], 2)
+	assert.Len(t, closest, 2)
+	assert.Equal(t, "0002", closest[0].address)
+	assert.Equal(t, "0003", closest[1].address)
+
+	iss := InterceptedClientStream{
+		ClientStream: dummyClientStream{},
+		client:       c,
+		id:           nodes[5],
+	}
+
+	assert.NoError(t, iss.SendMsg(nil))
+
+	closest = c.table.FindClosest(nodes[4], 2)
+	assert.Len(t, closest, 2)
+	assert.Equal(t, "0005", closest[0].address)
+	assert.Equal(t, "0002", closest[1].address)
+
+	// Test RecvMsg
+
+	closest = c.table.FindClosest(nodes[5], 2)
+	assert.Len(t, closest, 2)
+	assert.Equal(t, "0004", closest[0].address)
+	assert.Equal(t, "0003", closest[1].address)
+
+	iss = InterceptedClientStream{
+		ClientStream: dummyClientStream{},
+		client:       c,
+		id:           nodes[6],
+	}
+
+	assert.NoError(t, iss.RecvMsg(nil))
+
+	closest = c.table.FindClosest(nodes[5], 2)
+	assert.Len(t, closest, 2)
+	assert.Equal(t, "0004", closest[0].address)
+	assert.Equal(t, "0006", closest[1].address)
+}
+
+type dummyServerStream struct {
+}
+
+func (dummyServerStream) SetHeader(metadata.MD) error  { return nil }
+func (dummyServerStream) SendHeader(metadata.MD) error { return nil }
+func (dummyServerStream) SetTrailer(metadata.MD)       {}
+func (dummyServerStream) Context() context.Context     { return nil }
+func (dummyServerStream) SendMsg(m interface{}) error  { return nil }
+func (dummyServerStream) RecvMsg(m interface{}) error  { return nil }
+
+type dummyClientStream struct{}
+
+func (dummyClientStream) Header() (metadata.MD, error) { return nil, nil }
+func (dummyClientStream) Trailer() metadata.MD         { return nil }
+func (dummyClientStream) CloseSend() error             { return nil }
+func (dummyClientStream) Context() context.Context     { return nil }
+func (dummyClientStream) SendMsg(m interface{}) error  { return nil }
+func (dummyClientStream) RecvMsg(m interface{}) error  { return nil }

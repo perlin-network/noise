@@ -1,31 +1,28 @@
-package handshake
+package cipher
 
 import (
-	"bytes"
 	"context"
 	"github.com/perlin-network/noise"
+	"github.com/perlin-network/noise/handshake"
 	"net"
 	"testing"
 )
 
 func TestProtocol(t *testing.T) {
-	ecdh := NewECDH()
+	ecdh := NewAEAD()
 
 	accept := make(chan noise.Info, 1)
 	lis := launchServer(t, ecdh, accept)
 	defer lis.Close()
 
 	clientInfo := noise.Info{}
+	clientInfo.PutBytes(handshake.SharedKey, []byte("sharedkey"))
 	clientHandle(t, ecdh, clientInfo, lis.Addr().String())
 
-	serverInfo := <-accept
-
-	if !bytes.Equal(serverInfo.Bytes(SharedKey), clientInfo.Bytes(SharedKey)) {
-		t.Fatalf("Key is different: %x vs %x ", serverInfo.Bytes(SharedKey), clientInfo.Bytes(SharedKey))
-	}
+	<-accept
 }
 
-func launchServer(t *testing.T, protocol ProtocolECDH, accept chan noise.Info) net.Listener {
+func launchServer(t *testing.T, protocol ProtocolAEAD, accept chan noise.Info) net.Listener {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +32,7 @@ func launchServer(t *testing.T, protocol ProtocolECDH, accept chan noise.Info) n
 	return lis
 }
 
-func serverHandle(t *testing.T, protocol ProtocolECDH, accept chan noise.Info, lis net.Listener) {
+func serverHandle(t *testing.T, protocol ProtocolAEAD, accept chan noise.Info, lis net.Listener) {
 	serverRawConn, err := lis.Accept()
 	if err != nil {
 		close(accept)
@@ -43,6 +40,7 @@ func serverHandle(t *testing.T, protocol ProtocolECDH, accept chan noise.Info, l
 	}
 
 	info := noise.Info{}
+	info.PutBytes(handshake.SharedKey, []byte("sharedkey"))
 	if _, err := protocol.Server(info, serverRawConn); err != nil {
 		_ = serverRawConn.Close()
 		close(accept)
@@ -52,7 +50,7 @@ func serverHandle(t *testing.T, protocol ProtocolECDH, accept chan noise.Info, l
 	accept <- info
 }
 
-func clientHandle(t *testing.T, protocol ProtocolECDH, info noise.Info, lisAddr string) {
+func clientHandle(t *testing.T, protocol ProtocolAEAD, info noise.Info, lisAddr string) {
 	conn, err := net.Dial("tcp", lisAddr)
 	if err != nil {
 		t.Fatal(err)
