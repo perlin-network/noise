@@ -124,6 +124,37 @@ func TestProtocol(t *testing.T) {
 	}
 }
 
+func TestProtocolEviction(t *testing.T) {
+	s, sl := getClient(t)
+	s.table.setBucketSize(1)
+	defer sl.Close()
+
+	accept := make(chan struct{})
+	go func() {
+		for {
+			serverHandle(t, s.protocol, noise.Info{}, sl)
+			accept <- struct{}{}
+		}
+	}()
+
+	var clients []*Client
+	go func() {
+		for i := 0; i < 5; i++ {
+			c, _ := getClient(t)
+
+			_ = clientHandle(t, c.protocol, noise.Info{}, sl.Addr().String())
+			clients = append(clients, c)
+		}
+
+	}()
+
+	for i := 0; i < 5; i++ {
+		<-accept
+	}
+
+	assert.Len(t, s.ClosestPeerIDs(), 1)
+}
+
 func serverHandle(t *testing.T, protocol Protocol, info noise.Info, lis net.Listener) {
 	serverRawConn, err := lis.Accept()
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/edwards25519"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/crypto/blake2b"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"sync/atomic"
@@ -105,7 +106,7 @@ func TestInterceptedServerStream(t *testing.T) {
 		&ID{address: "0006"},
 	)
 
-	var publicKey edwards25519.PublicKey
+	var publicKey [blake2b.Size256]byte
 
 	copy(publicKey[:], []byte("12345678901234567890123456789010"))
 	nodes[0].checksum = publicKey
