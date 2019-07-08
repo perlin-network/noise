@@ -99,7 +99,7 @@ func (b *block) OnBegin(p *protocol.Protocol, peer *noise.Peer) error {
 
 	// Verify that the remote peer id is valid for the current node's c1 and c2 settings
 	if ok := VerifyPuzzle(id.PublicKey(), id.Hash(), id.nonce, b.c1, b.c2); !ok {
-		return errors.New("skademlia: peer connected with ID that fails to solve static/dynamic crpyo tpuzzle")
+		return errors.New("skademlia: peer connected with ID that fails to solve static/dynamic crypto puzzle")
 	}
 
 	// Register peer.
