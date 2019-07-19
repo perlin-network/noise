@@ -85,6 +85,7 @@ func TestPeerFlow(t *testing.T) {
 		assert.NoError(t, err)
 
 		_, msg, err := peer.DecodeMessage(buf)
+		assert.NoError(t, err)
 		assert.Equal(t, text, msg.(testMsg).Text)
 
 		// Create a new message.
