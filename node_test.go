@@ -245,7 +245,7 @@ func TestCallbacks(t *testing.T) {
 			"OnPeerInit":   1,
 		})
 
-		// check that the expected callbacks were called on the reciever
+		// check that the expected callbacks were called on the receiver
 		compareCB(callbacks[dst], map[string]int{
 			"OnPeerConnected": 1,
 			"OnPeerInit":      1,
