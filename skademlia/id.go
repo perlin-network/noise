@@ -3,12 +3,13 @@ package skademlia
 import (
 	"bytes"
 	"fmt"
+	"math/bits"
+
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/payload"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/blake2b"
-	"math/bits"
 )
 
 var (

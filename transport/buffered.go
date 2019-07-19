@@ -2,13 +2,14 @@ package transport
 
 import (
 	"fmt"
-	"github.com/perlin-network/noise/internal/bufconn"
-	"github.com/pkg/errors"
 	"math/rand"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/perlin-network/noise/internal/bufconn"
+	"github.com/pkg/errors"
 )
 
 var _ Layer = (*Buffered)(nil)

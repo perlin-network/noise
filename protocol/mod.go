@@ -1,11 +1,12 @@
 package protocol
 
 import (
+	"sync"
+	"sync/atomic"
+
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/log"
 	"github.com/pkg/errors"
-	"sync"
-	"sync/atomic"
 )
 
 const (

@@ -2,10 +2,11 @@ package noise
 
 import (
 	"fmt"
-	"github.com/perlin-network/noise/log"
-	"github.com/pkg/errors"
 	"reflect"
 	"sync"
+
+	"github.com/perlin-network/noise/log"
+	"github.com/pkg/errors"
 )
 
 type Opcode byte

@@ -3,8 +3,9 @@ package payload
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/pkg/errors"
 	"io"
+
+	"github.com/pkg/errors"
 )
 
 var _ io.Reader = (*Reader)(nil)

@@ -1,10 +1,11 @@
 package transport
 
 import (
-	"github.com/pkg/errors"
 	"net"
 	"strconv"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 var _ Layer = (*tcp)(nil)

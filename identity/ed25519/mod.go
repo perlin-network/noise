@@ -3,6 +3,7 @@ package ed25519
 import (
 	"encoding/hex"
 	"fmt"
+
 	"github.com/perlin-network/noise/identity"
 	"github.com/perlin-network/noise/internal/edwards25519"
 	"github.com/pkg/errors"

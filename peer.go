@@ -4,16 +4,17 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
-	"github.com/perlin-network/noise/callbacks"
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/payload"
-	"github.com/pkg/errors"
 	"io"
 	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/perlin-network/noise/callbacks"
+	"github.com/perlin-network/noise/log"
+	"github.com/perlin-network/noise/payload"
+	"github.com/pkg/errors"
 )
 
 type receiveHandle struct {

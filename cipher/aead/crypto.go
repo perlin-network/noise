@@ -3,10 +3,11 @@ package aead
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"hash"
+
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/hkdf"
-	"hash"
 )
 
 const sharedKeyLength = 32

@@ -1,14 +1,15 @@
 package ecdh
 
 import (
+	"sync/atomic"
+	"testing"
+	"time"
+
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/transport"
 	"github.com/stretchr/testify/assert"
-	"sync/atomic"
-	"testing"
-	"time"
 )
 
 type dummyBlock struct {

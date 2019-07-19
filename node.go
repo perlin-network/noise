@@ -2,16 +2,17 @@ package noise
 
 import (
 	"fmt"
+	"net"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/perlin-network/noise/callbacks"
 	"github.com/perlin-network/noise/identity"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/nat"
 	"github.com/perlin-network/noise/transport"
 	"github.com/pkg/errors"
-	"net"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 type Node struct {

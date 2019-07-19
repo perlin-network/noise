@@ -2,6 +2,7 @@ package ecdh
 
 import (
 	"crypto/sha512"
+
 	"github.com/perlin-network/noise/internal/edwards25519"
 )
 

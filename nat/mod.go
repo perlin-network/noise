@@ -2,9 +2,10 @@ package nat
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"net"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 // Provider represents a barebones generic interface to a NAT traversal network protocol.

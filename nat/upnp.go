@@ -1,13 +1,14 @@
 package nat
 
 import (
+	"net"
+	"strings"
+	"time"
+
 	"github.com/huin/goupnp"
 	"github.com/huin/goupnp/dcps/internetgateway1"
 	"github.com/huin/goupnp/dcps/internetgateway2"
 	"github.com/pkg/errors"
-	"net"
-	"strings"
-	"time"
 )
 
 type upnp struct {

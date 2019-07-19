@@ -1,13 +1,14 @@
 package skademlia
 
 import (
+	"time"
+
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/log"
 	"github.com/perlin-network/noise/payload"
 	"github.com/perlin-network/noise/protocol"
 	"github.com/perlin-network/noise/signature"
 	"github.com/pkg/errors"
-	"time"
 )
 
 const (

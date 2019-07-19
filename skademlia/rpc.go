@@ -2,11 +2,12 @@ package skademlia
 
 import (
 	"bytes"
-	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/protocol"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/perlin-network/noise"
+	"github.com/perlin-network/noise/protocol"
 )
 
 // Broadcast sends a message denoted by its opcode and content to all S/Kademlia IDs
