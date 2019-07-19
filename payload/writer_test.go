@@ -19,7 +19,7 @@ func TestWriter(t *testing.T) {
 	writer.WriteBytes(testBytes)
 
 	// check length
-	length += 4 + len([]byte(testBytes))
+	length += 4 + len(testBytes)
 	assert.Equal(t, length, writer.Len(), "found invalid length after WriteBytes")
 
 	// check bytes

@@ -88,7 +88,7 @@ func (a ID) Write() []byte {
 func prefixLen(buf []byte) int {
 	for i, b := range buf {
 		if b != 0 {
-			return i*8 + bits.LeadingZeros8(uint8(b))
+			return i*8 + bits.LeadingZeros8(b)
 		}
 	}
 
@@ -119,7 +119,7 @@ func prefixDiff(a, b []byte, n int) int {
 			shift := 8 - uint(n%8)
 			b = b >> shift
 		}
-		total += bits.OnesCount8(uint8(b))
+		total += bits.OnesCount8(b)
 	}
 	return total
 }

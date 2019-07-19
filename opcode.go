@@ -56,7 +56,7 @@ func MessageFromOpcode(opcode Opcode) (Message, error) {
 	opcodesMutex.Lock()
 	defer opcodesMutex.Unlock()
 
-	typ, exists := opcodes[Opcode(opcode)]
+	typ, exists := opcodes[opcode]
 	if !exists {
 		return nil, errors.Errorf("there is no message type registered to opcode %d", opcode)
 	}
