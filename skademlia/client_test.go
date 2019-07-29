@@ -8,6 +8,8 @@ import (
 	"golang.org/x/crypto/blake2b"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"net"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -87,6 +89,48 @@ func TestClient(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 		assert.Fail(t, "OnPeerLeave never called")
 	}
+}
+
+func TestClientEviction(t *testing.T) {
+	client, _ := getClient(t)
+	client.table.setBucketSize(1)
+
+	type peer struct {
+		c *Client
+		l net.Listener
+	}
+
+	var peers []*peer
+	var wg sync.WaitGroup
+
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+
+		c, lis := getClient(t)
+		peers = append(peers, &peer{
+			c: c,
+			l: lis,
+		})
+
+		go func(i int) {
+			p := peers[i]
+			s := p.c.Listen()
+
+			wg.Done()
+
+			_ = s.Serve(p.l)
+		}(i)
+	}
+
+	wg.Wait()
+
+	for _, p := range peers {
+		_, _ = client.Dial(p.l.Addr().String())
+	}
+
+	client.Bootstrap()
+
+	assert.Len(t, client.ClosestPeerIDs(), 1)
 }
 
 func TestInterceptedServerStream(t *testing.T) {
@@ -260,6 +304,25 @@ func TestInterceptedClientStream(t *testing.T) {
 	assert.Len(t, closest, 2)
 	assert.Equal(t, "0004", closest[0].address)
 	assert.Equal(t, "0006", closest[1].address)
+}
+
+func getClient(t *testing.T) (*Client, net.Listener) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c1 := 1
+	c2 := 1
+	keys, err := NewKeys(c1, c2)
+	if err != nil {
+		t.Fatalf("error NewKeys(): %v", err)
+	}
+
+	c := NewClient(lis.Addr().String(), keys, WithC1(c1), WithC2(c2))
+	c.SetCredentials(noise.NewCredentials(lis.Addr().String(), c.Protocol()))
+
+	return c, lis
 }
 
 type dummyServerStream struct {

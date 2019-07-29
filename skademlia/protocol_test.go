@@ -64,25 +64,6 @@ func TestQuickCheckAddressMatchesIPV6(t *testing.T) {
 	assert.NoError(t, quick.Check(f, nil))
 }
 
-func getClient(t *testing.T) (*Client, net.Listener) {
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	c1 := 1
-	c2 := 1
-	keys, err := NewKeys(c1, c2)
-	if err != nil {
-		t.Fatalf("error NewKeys(): %v", err)
-	}
-
-	c := NewClient(lis.Addr().String(), keys, WithC1(c1), WithC2(c2))
-	c.SetCredentials(noise.NewCredentials(lis.Addr().String(), c.Protocol()))
-
-	return c, lis
-}
-
 func TestProtocol(t *testing.T) {
 	c, cl := getClient(t)
 	defer cl.Close()
