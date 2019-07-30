@@ -21,12 +21,15 @@ package skademlia
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"github.com/perlin-network/noise"
+	"github.com/perlin-network/noise/edwards25519"
 	"github.com/stretchr/testify/assert"
 	"net"
 	"strconv"
 	"testing"
 	"testing/quick"
+	"time"
 )
 
 var addressMatchesTests = []struct {
@@ -65,9 +68,9 @@ func TestQuickCheckAddressMatchesIPV6(t *testing.T) {
 }
 
 func TestProtocol(t *testing.T) {
-	c, cl := getClient(t)
+	c, cl := getClient(t, 1, 1)
 	defer cl.Close()
-	s, sl := getClient(t)
+	s, sl := getClient(t, 1, 1)
 	defer sl.Close()
 
 	sinfo := noise.Info{}
@@ -106,7 +109,7 @@ func TestProtocol(t *testing.T) {
 }
 
 func TestProtocolEviction(t *testing.T) {
-	s, sl := getClient(t)
+	s, sl := getClient(t, 1, 1)
 	s.table.setBucketSize(1)
 	defer sl.Close()
 
@@ -121,7 +124,7 @@ func TestProtocolEviction(t *testing.T) {
 	var clients []*Client
 	go func() {
 		for i := 0; i < 5; i++ {
-			c, _ := getClient(t)
+			c, _ := getClient(t, 1, 1)
 
 			_ = clientHandle(t, c.protocol, noise.Info{}, sl.Addr().String())
 			clients = append(clients, c)
@@ -134,6 +137,198 @@ func TestProtocolEviction(t *testing.T) {
 	}
 
 	assert.Len(t, s.ClosestPeerIDs(), 1)
+}
+
+func TestProtocolBadHandshake(t *testing.T) {
+	tests := []struct {
+		name string
+		node func(addr string)
+	}{
+		{
+			name: "disconnected during read ID",
+			node: func(addr string) {
+				conn, err := net.Dial("tcp", addr)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				conn.Close()
+			},
+		},
+		{
+			name: "disconnected during read signature",
+			node: func(addr string) {
+				conn, err := net.Dial("tcp", addr)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				c, _ := getClient(t, 1, 1)
+				_, err = conn.Write(c.id.Marshal())
+				assert.NoError(t, err)
+
+				conn.Close()
+			},
+		},
+		{
+			name: "bad signature",
+			node: func(addr string) {
+				conn, err := net.Dial("tcp", addr)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				c, _ := getClient(t, 1, 1)
+				_, err = conn.Write(c.id.Marshal())
+				assert.NoError(t, err)
+
+				var signature [64]byte
+				edwards25519.Sign(c.keys.privateKey, []byte("invalid_message"))
+
+				_, err = conn.Write(signature[:])
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "bad puzzle c1",
+			node: func(addr string) {
+				conn, err := net.Dial("tcp", addr)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				c, _ := getClient(t, 1, 10)
+				buf := c.id.Marshal()
+				signature := edwards25519.Sign(c.keys.privateKey, buf)
+				handshake := append(buf, signature[:]...)
+
+				_, err = conn.Write(handshake[:])
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "bad puzzle c2",
+			node: func(addr string) {
+				conn, err := net.Dial("tcp", addr)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				c, _ := getClient(t, 10, 1)
+				buf := c.id.Marshal()
+				signature := edwards25519.Sign(c.keys.privateKey, buf)
+				handshake := append(buf, signature[:]...)
+
+				_, err = conn.Write(handshake[:])
+				assert.NoError(t, err)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Test Server
+			{
+				c, lis := getClient(t, 10, 10)
+
+				go tc.node(lis.Addr().String())
+
+				conn, err := lis.Accept()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				_, err = c.protocol.Server(noise.Info{}, conn)
+				assert.Error(t, err)
+			}
+
+			// Test Client
+			{
+				c, lis := getClient(t, 10, 10)
+
+				go tc.node(lis.Addr().String())
+
+				conn, err := lis.Accept()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				_, err = c.protocol.Client(noise.Info{}, context.Background(), "", conn)
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+// Test if the peer ID's address is different than connections's address
+func TestProtocolHandshakeClientBadAddress(t *testing.T) {
+	node := func(addr string) {
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		c, _ := getClient(t, 1, 1)
+		c.id.address = ":"
+		buf := c.id.Marshal()
+		signature := edwards25519.Sign(c.keys.privateKey, buf)
+
+		handshake := append(buf, signature[:]...)
+		_, err = conn.Write(handshake[:])
+		assert.NoError(t, err)
+	}
+	c, lis := getClient(t, 1, 1)
+
+	go node(lis.Addr().String())
+
+	conn, err := lis.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = c.protocol.Client(noise.Info{}, context.Background(), "", conn)
+	assert.Error(t, err)
+}
+
+// Test both nodes have the same ID
+func TestProtocolHandshakeSamePeerID(t *testing.T) {
+	c, lis := getClient(t, 1, 1)
+
+	node := func(addr string) {
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		buf := c.id.Marshal()
+		signature := edwards25519.Sign(c.keys.privateKey, buf)
+		handshake := append(buf, signature[:]...)
+
+		_, err = conn.Write(handshake[:])
+		assert.NoError(t, err)
+	}
+
+	go node(lis.Addr().String())
+
+	conn, err := lis.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = c.protocol.handshake(noise.Info{}, conn)
+	assert.Error(t, err)
+}
+
+func TestProtocolConnWriteError(t *testing.T) {
+	c, _ := getClient(t, 1, 1)
+
+	// Test the Write is incomplete
+	_, err := c.protocol.handshake(noise.Info{}, ErrorConn{isShortWrite: true})
+	assert.Error(t, err)
+
+	// Test the Write returns an error
+	_, err = c.protocol.handshake(noise.Info{}, ErrorConn{isWriteError: true})
+	assert.Error(t, err)
 }
 
 func serverHandle(t *testing.T, protocol Protocol, info noise.Info, lis net.Listener) {
@@ -160,3 +355,25 @@ func clientHandle(t *testing.T, protocol Protocol, info noise.Info, lisAddr stri
 
 	return conn
 }
+
+type ErrorConn struct {
+	isWriteError bool
+	isShortWrite bool
+}
+
+func (c ErrorConn) Write(b []byte) (n int, err error) {
+	if c.isWriteError {
+		return 0, fmt.Errorf("write error")
+	}
+	if c.isShortWrite {
+		return len(b) / 2, nil
+	}
+	return 0, nil
+}
+func (c ErrorConn) Read(b []byte) (n int, err error)   { return 0, nil }
+func (c ErrorConn) Close() error                       { return nil }
+func (c ErrorConn) LocalAddr() net.Addr                { return nil }
+func (c ErrorConn) RemoteAddr() net.Addr               { return nil }
+func (c ErrorConn) SetDeadline(t time.Time) error      { return nil }
+func (c ErrorConn) SetReadDeadline(t time.Time) error  { return nil }
+func (c ErrorConn) SetWriteDeadline(t time.Time) error { return nil }

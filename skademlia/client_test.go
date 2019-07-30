@@ -42,9 +42,9 @@ func TestClientFields(t *testing.T) {
 }
 
 func TestClient(t *testing.T) {
-	c1, lis1 := getClient(t)
+	c1, lis1 := getClient(t, 1, 1)
 	defer lis1.Close()
-	c2, lis2 := getClient(t)
+	c2, lis2 := getClient(t, 1, 1)
 	defer lis2.Close()
 
 	var onPeerJoinCalled int32
@@ -92,7 +92,7 @@ func TestClient(t *testing.T) {
 }
 
 func TestClientEviction(t *testing.T) {
-	client, _ := getClient(t)
+	client, _ := getClient(t, 1, 1)
 	client.table.setBucketSize(1)
 
 	type peer struct {
@@ -106,7 +106,7 @@ func TestClientEviction(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		wg.Add(1)
 
-		c, lis := getClient(t)
+		c, lis := getClient(t, 1, 1)
 		peers = append(peers, &peer{
 			c: c,
 			l: lis,
@@ -134,7 +134,7 @@ func TestClientEviction(t *testing.T) {
 }
 
 func TestInterceptedServerStream(t *testing.T) {
-	c, lis := getClient(t)
+	c, lis := getClient(t, 1, 1)
 	defer lis.Close()
 	dss := &dummyServerStream{}
 
@@ -221,7 +221,7 @@ func TestInterceptedServerStream(t *testing.T) {
 }
 
 func TestInterceptedClientStream(t *testing.T) {
-	c, lis := getClient(t)
+	c, lis := getClient(t, 1, 1)
 	defer lis.Close()
 
 	var nodes []*ID
@@ -306,14 +306,11 @@ func TestInterceptedClientStream(t *testing.T) {
 	assert.Equal(t, "0006", closest[1].address)
 }
 
-func getClient(t *testing.T) (*Client, net.Listener) {
+func getClient(t *testing.T, c1, c2 int) (*Client, net.Listener) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	c1 := 1
-	c2 := 1
 	keys, err := NewKeys(c1, c2)
 	if err != nil {
 		t.Fatalf("error NewKeys(): %v", err)
