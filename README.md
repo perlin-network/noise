@@ -188,6 +188,15 @@ Listening for peers on port: 3003
 go test -v -count=1 -race ./...
 ```
 
+## Documentation
+
+For more information, you can refer to the following:
+
+- [Noise](docs/noise.md)
+
+- [NAT Traversal](docs/nat.md) 
+
+
 ## We're hiring!
 
 Here at [Perlin](https://perlin.net), we spend days and weeks debating, tinkering, and researching what is out there in academia to bring to industries truly resilient, open-source, secure, economic, and decentralized software to empower companies, startups, and users.
