@@ -38,6 +38,7 @@ func InfoFromPeer(peer *peer.Peer) Info {
 	return peer.AuthInfo.(Info)
 }
 
+// Info implements gRPC's AuthInfo interface
 type Info map[string]interface{}
 
 func (Info) AuthType() string {

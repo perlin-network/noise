@@ -33,6 +33,7 @@ var (
 	ErrBucketFull = errors.New("bucket is full")
 )
 
+// Table represents the routing table.
 type Table struct {
 	self *ID
 
@@ -87,6 +88,7 @@ func (t *Table) Find(b *Bucket, target *ID) *list.Element {
 	return element
 }
 
+// Delete returns true if the target is deleted and false if the target does not exist in the table.
 func (t *Table) Delete(b *Bucket, target *ID) bool {
 	e := t.Find(b, target)
 
@@ -100,6 +102,10 @@ func (t *Table) Delete(b *Bucket, target *ID) bool {
 	return b.Remove(e) != nil
 }
 
+// Update will do the following:
+//	* If the target exists, move it to the front.
+//	* If the target does not exist and there's sufficient size, insert the target to the front.
+//	* If it could not insert the target, it returns ErrBucketFull.
 func (t *Table) Update(target *ID) error {
 	if target == nil {
 		return nil
@@ -127,6 +133,7 @@ func (t *Table) Update(target *ID) error {
 	return ErrBucketFull
 }
 
+// FindClosest returns the closest IDs
 func (t *Table) FindClosest(target *ID, k int) []*ID {
 	var checksum [blake2b.Size256]byte
 

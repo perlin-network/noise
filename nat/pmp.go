@@ -39,16 +39,22 @@ func (p *pmp) ExternalIP() (net.IP, error) {
 	return response.ExternalIPAddress[:], nil
 }
 
+// Add a port mapping.
 func (p *pmp) AddMapping(protocol string, externalPort, internalPort uint16, expiry time.Duration) error {
 	_, err := p.client.AddPortMapping(strings.ToLower(protocol), int(internalPort), int(externalPort), int(expiry/time.Second))
 	return err
 }
 
+// Delete a port mapping.
+// Internally, it will call add port mapping with lifetime of 0.
 func (p *pmp) DeleteMapping(protocol string, externalPort, internalPort uint16) (err error) {
 	_, err = p.client.AddPortMapping(strings.ToLower(protocol), int(internalPort), 0, 0)
 	return err
 }
 
+// Create NAT-PMP provider. Has a timeout of 1 second.
+// Block until the first NAT-PMP gateway with a external address is found.
+// It'll return nil if it's timed out or panic if there's no gateway found.
 func NewPMP() Provider {
 	gateways, err := activeGateways()
 	if err != nil {

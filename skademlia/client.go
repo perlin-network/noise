@@ -36,27 +36,37 @@ import (
 	"time"
 )
 
+// S/Kademlia client represents a single node in the overlay network .
+// It maintains a routing table for the overlay network that will be updated every time the node send or receive any message.
 type Client struct {
 	logger *log.Logger
 
+	// S/Kademlia's security parameters
 	c1, c2, prefixDiffLen, prefixDiffMin int
 
 	creds *noise.Credentials
 	dopts []grpc.DialOption
 
+	// Node's ID
 	id    *ID
+	// Node's keypair
 	keys  *Keypair
+	// Routing table
 	table *Table
 
+	// List of connected peers
 	peers     map[string]*grpc.ClientConn
 	peersLock sync.RWMutex
 
+	// S/Kademlia protocol
 	protocol Protocol
 
+	// Callbacks
 	onPeerJoin  func(*grpc.ClientConn, *ID)
 	onPeerLeave func(*grpc.ClientConn, *ID)
 }
 
+// NewClient creates a new S/Kademlia client with the given address and keys.
 func NewClient(addr string, keys *Keypair, opts ...Option) *Client {
 	id := keys.ID(addr)
 	table := NewTable(id)
@@ -85,14 +95,17 @@ func NewClient(addr string, keys *Keypair, opts ...Option) *Client {
 	return c
 }
 
+// Set the credentials that will be passed to gRPC TransportCredentials.
 func (c *Client) SetCredentials(creds *noise.Credentials) {
 	c.creds = creds
 }
 
+// Set the callback that will be called when a peer is connected.
 func (c *Client) OnPeerJoin(fn func(*grpc.ClientConn, *ID)) {
 	c.onPeerJoin = fn
 }
 
+// Set the callback that will be called when a peer disconnected.
 func (c *Client) OnPeerLeave(fn func(*grpc.ClientConn, *ID)) {
 	c.onPeerLeave = fn
 }
@@ -117,6 +130,7 @@ func (c *Client) ID() *ID {
 	return c.id
 }
 
+// Returns the list of connected peers
 func (c *Client) AllPeers() []*grpc.ClientConn {
 	c.peersLock.RLock()
 	defer c.peersLock.RUnlock()
@@ -130,6 +144,7 @@ func (c *Client) AllPeers() []*grpc.ClientConn {
 	return conns
 }
 
+// Returns an array of connections of the closest nodes.
 func (c *Client) ClosestPeers() []*grpc.ClientConn {
 	ids := c.table.FindClosest(c.table.self, c.table.getBucketSize())
 
@@ -144,10 +159,12 @@ func (c *Client) ClosestPeers() []*grpc.ClientConn {
 	return conns
 }
 
+// Returns an array of closest node IDs.
 func (c *Client) ClosestPeerIDs() []*ID {
 	return c.table.FindClosest(c.table.self, c.table.getBucketSize())
 }
 
+// Listen creates a new gRPC server.
 func (c *Client) Listen(opts ...grpc.ServerOption) *grpc.Server {
 	server := grpc.NewServer(
 		append(
@@ -163,6 +180,7 @@ func (c *Client) Listen(opts ...grpc.ServerOption) *grpc.Server {
 	return server
 }
 
+// Dial connects to the addr with a timeout of 3 seconds
 func (c *Client) Dial(addr string) (*grpc.ClientConn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -170,6 +188,7 @@ func (c *Client) Dial(addr string) (*grpc.ClientConn, error) {
 	return c.DialContext(ctx, addr)
 }
 
+// Dial connects to the addr using the ctx as context.
 func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn, error) {
 	if addr == c.table.self.address {
 		return nil, errors.New("attempted to dial self")
@@ -289,10 +308,12 @@ func (c *Client) RefreshPeriodically(stop chan struct{}, duration time.Duration)
 	}
 }
 
+// Bootstraps calls the FindNode with self as the target, bucket size as the k, a = 3, and d = 8.
 func (c *Client) Bootstrap() (results []*ID) {
 	return c.FindNode(c.table.self, c.table.getBucketSize(), 3, 8)
 }
 
+// FindNode returns k closest nodes to the target by performing α parallel queries in each of d parallel disjoint lookups.
 func (c *Client) FindNode(target *ID, k int, a int, d int) (results []*ID) {
 	type request ID
 

@@ -34,6 +34,10 @@ const (
 	KeyID = "skademlia.id"
 )
 
+// Protocol implements S/Kademlia protocol.
+// It implements RPC procedures:
+//	* Ping
+//	* FindNode
 type Protocol struct {
 	client *Client
 }

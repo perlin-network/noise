@@ -28,6 +28,7 @@ import (
 	"io"
 )
 
+// S/Kademlia node ID
 type ID struct {
 	address   string
 	publicKey edwards25519.PublicKey
@@ -35,6 +36,7 @@ type ID struct {
 	id, checksum, nonce [blake2b.Size256]byte
 }
 
+// NewID returns an ID for the given address, publickey, and nonce.
 func NewID(address string, publicKey edwards25519.PublicKey, nonce [blake2b.Size256]byte) *ID {
 	id := blake2b.Sum256(publicKey[:])
 	checksum := blake2b.Sum256(id[:])
@@ -119,6 +121,7 @@ type Keypair struct {
 	c1, c2              int
 }
 
+// ID creates a new ID for the given addr.
 func (k *Keypair) ID(addr string) *ID {
 	return NewID(addr, k.publicKey, k.nonce)
 }
@@ -131,6 +134,7 @@ func (k *Keypair) PublicKey() edwards25519.PublicKey {
 	return k.publicKey
 }
 
+// Create a new keypair with c1 and c2 as the static and dynamic cryptographic puzzles protocol parameters.
 func NewKeys(c1, c2 int) (*Keypair, error) {
 	publicKey, privateKey, id, checksum, err := generateKeys(c1)
 
@@ -159,6 +163,7 @@ func NewKeys(c1, c2 int) (*Keypair, error) {
 	return keys, nil
 }
 
+// LoadKeys returns the keypair from an existing private key and cryptographic puzzles protocol parameters.
 func LoadKeys(privateKey edwards25519.PrivateKey, c1, c2 int) (*Keypair, error) {
 	publicKey := privateKey.Public()
 

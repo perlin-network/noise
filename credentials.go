@@ -25,6 +25,9 @@ import (
 	"net"
 )
 
+// Credential implements gRPC's TransportCredentials interface.
+// It keeps an array of protocols which be called sequentially.
+// If one of the protocols returns an error, it'll immediately exit the loop and return the error.
 type Credentials struct {
 	Host      string
 	Protocols []Protocol
