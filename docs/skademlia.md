@@ -3,7 +3,7 @@
 The S/Kademlia protocol is a overlay network protocol which allows p2p applications to easily achieve reliability in:
 1) routing messages to/from peers,
 2) bootstrapping new peers into the network,
-3) and maintaining a clear overview of the liveness of all peers a node is connected to
+3) and maintaining a clear overview of the liveness of all peers a node is connected to.
 
 ## Identity Scheme 
 
