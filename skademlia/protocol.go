@@ -196,7 +196,7 @@ func (p Protocol) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
 	p.client.logger.Printf("Client %s has connected to you.\n", id)
 
 	go func() {
-		if _, err = p.client.Dial(id.address); err != nil {
+		if _, err = p.client.Dial(id.address, 3*time.Second); err != nil {
 			_ = conn.Close()
 		}
 	}()
