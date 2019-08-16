@@ -40,6 +40,8 @@ func (p *pmp) ExternalIP() (net.IP, error) {
 }
 
 // Add a port mapping.
+//
+// protocol must be either "tcp" or "udp". Otherwise, an error will be returned.
 func (p *pmp) AddMapping(protocol string, externalPort, internalPort uint16, expiry time.Duration) error {
 	_, err := p.client.AddPortMapping(strings.ToLower(protocol), int(internalPort), int(externalPort), int(expiry/time.Second))
 	return err
@@ -47,6 +49,8 @@ func (p *pmp) AddMapping(protocol string, externalPort, internalPort uint16, exp
 
 // Delete a port mapping.
 // Internally, it will call add port mapping with lifetime of 0.
+//
+// protocol must be either "tcp" or "udp". Otherwise, an error will be returned.
 func (p *pmp) DeleteMapping(protocol string, externalPort, internalPort uint16) (err error) {
 	_, err = p.client.AddPortMapping(strings.ToLower(protocol), int(internalPort), 0, 0)
 	return err

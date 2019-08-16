@@ -48,9 +48,9 @@ type Client struct {
 	dopts []grpc.DialOption
 
 	// Node's ID
-	id    *ID
+	id *ID
 	// Node's keypair
-	keys  *Keypair
+	keys *Keypair
 	// Routing table
 	table *Table
 
@@ -66,7 +66,12 @@ type Client struct {
 	onPeerLeave func(*grpc.ClientConn, *ID)
 }
 
-// NewClient creates a new S/Kademlia client with the given address and keys.
+// NewClient creates a new S/Kademlia client for a node with the given address and keys.
+//
+// addr is the IPv4 or IPv6 address of net.Listener of the node, including its port. e.g. 127.0.0.1:3000
+//
+// keys is the keypair for the node which will be used to generate the node's ID and to secure communications between nodes.
+// You can use NewKeys() method to generate the keys.
 func NewClient(addr string, keys *Keypair, opts ...Option) *Client {
 	id := keys.ID(addr)
 	table := NewTable(id)
@@ -144,7 +149,9 @@ func (c *Client) AllPeers() []*grpc.ClientConn {
 	return conns
 }
 
-// Returns an array of connections of the closest nodes.
+// Returns an array of gRPC connections of the closest nodes.
+//
+// Returns an empty array if there's no peer.
 func (c *Client) ClosestPeers() []*grpc.ClientConn {
 	ids := c.table.FindClosest(c.table.self, c.table.getBucketSize())
 
@@ -181,6 +188,8 @@ func (c *Client) Listen(opts ...grpc.ServerOption) *grpc.Server {
 }
 
 // Dial connects to the addr with a timeout of 3 seconds
+//
+// addr is the IPv4 or IPv6 address of the node, including its port. e.g. 127.0.0.1:3000
 func (c *Client) Dial(addr string) (*grpc.ClientConn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -189,6 +198,8 @@ func (c *Client) Dial(addr string) (*grpc.ClientConn, error) {
 }
 
 // Dial connects to the addr using the ctx as context.
+//
+// addr is the IPv4 or IPv6 address of the node, including its port. e.g. 127.0.0.1:3000
 func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn, error) {
 	if addr == c.table.self.address {
 		return nil, errors.New("attempted to dial self")

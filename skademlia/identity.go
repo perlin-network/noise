@@ -135,6 +135,10 @@ func (k *Keypair) PublicKey() edwards25519.PublicKey {
 }
 
 // Create a new keypair with c1 and c2 as the static and dynamic cryptographic puzzles protocol parameters.
+//
+// c1 is the minimum number of prefixed zero bits of 256 bits blake2b(blake2b(publicKey)).
+//
+// c2 is the minimum number of prefixed zero bit of 256 bits xor(checksum, nonce).
 func NewKeys(c1, c2 int) (*Keypair, error) {
 	publicKey, privateKey, id, checksum, err := generateKeys(c1)
 

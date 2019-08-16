@@ -96,6 +96,9 @@ func (u *upnp) deviceInternalAddress() (net.IP, error) {
 	return nil, errors.Errorf("upnp: could not find local address within device net range %v", deviceAddress)
 }
 
+// Create UPnP provider. Support IGDv1 and IGDv2.
+//
+// Will panic if there's no gateway found.
 func NewUPnP() Provider {
 	found := make(chan *upnp, 2)
 

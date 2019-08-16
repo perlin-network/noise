@@ -67,6 +67,9 @@ func (t *Table) setBucketSize(size int) {
 	atomic.StoreUint32(&t.bucketSize, uint32(size))
 }
 
+// Returns the list.Element of the target in the bucket.
+//
+// Returns nil if the target does not exist in the bucket.
 func (t *Table) Find(b *Bucket, target *ID) *list.Element {
 	if target == nil {
 		return nil
@@ -88,7 +91,7 @@ func (t *Table) Find(b *Bucket, target *ID) *list.Element {
 	return element
 }
 
-// Delete returns true if the target is deleted and false if the target does not exist in the table.
+// Delete returns true if the target is deleted and false if the target does not exist in the bucket.
 func (t *Table) Delete(b *Bucket, target *ID) bool {
 	e := t.Find(b, target)
 
