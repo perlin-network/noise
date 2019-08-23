@@ -40,7 +40,7 @@ import (
 
 func main() {
     params := noise.DefaultParams()
-    params.Keys = ed25519.Random()
+    params.Keys = ed25519.RandomKeys()
     params.Port = uint16(3000)
     
     node, err := noise.NewNode(params)
