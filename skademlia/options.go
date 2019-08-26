@@ -19,7 +19,10 @@
 
 package skademlia
 
-import "google.golang.org/grpc"
+import (
+	"google.golang.org/grpc"
+	"time"
+)
 
 const (
 	DefaultPrefixDiffLen = 128
@@ -58,5 +61,17 @@ func WithPrefixDiffLen(prefixDiffLen int) Option {
 func WithPrefixDiffMin(prefixDiffMin int) Option {
 	return func(c *Client) {
 		c.prefixDiffMin = prefixDiffMin
+	}
+}
+
+type dialOptions struct {
+	timeout time.Duration
+}
+
+type DialOption func(o *dialOptions)
+
+func WithTimeout(timeout time.Duration) DialOption {
+	return func(o *dialOptions) {
+		o.timeout = timeout
 	}
 }

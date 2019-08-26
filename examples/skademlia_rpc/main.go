@@ -97,7 +97,7 @@ func main() {
 	time.Sleep(100 * time.Millisecond)
 
 	for _, addr := range flag.Args() {
-		conn, err := client.Dial(addr, 3*time.Second)
+		conn, err := client.Dial(addr)
 		if err != nil {
 			panic(err)
 		}

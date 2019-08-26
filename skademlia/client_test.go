@@ -67,7 +67,7 @@ func TestClient(t *testing.T) {
 	}()
 	defer server.Stop()
 
-	conn, err := c2.Dial(lis1.Addr().String(), 3*time.Second)
+	conn, err := c2.Dial(lis1.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestClientEviction(t *testing.T) {
 	wg.Wait()
 
 	for _, p := range peers {
-		_, _ = client.Dial(p.l.Addr().String(), 3*time.Second)
+		_, _ = client.Dial(p.l.Addr().String())
 	}
 
 	client.Bootstrap()
