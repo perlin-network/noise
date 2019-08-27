@@ -130,13 +130,13 @@ func (c *Client) AllPeers() []*grpc.ClientConn {
 	return conns
 }
 
-func (c *Client) ClosestPeers() []*grpc.ClientConn {
+func (c *Client) ClosestPeers(opts ...DialOption) []*grpc.ClientConn {
 	ids := c.table.FindClosest(c.table.self, c.table.getBucketSize())
 
 	var conns []*grpc.ClientConn
 
 	for i := range ids {
-		if conn, err := c.Dial(ids[i].address, WithTimeout(3*time.Second)); err == nil {
+		if conn, err := c.Dial(ids[i].address, opts...); err == nil {
 			conns = append(conns, conn)
 		}
 	}
@@ -213,7 +213,9 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 			delete(c.peers, conn.Target())
 			c.peersLock.Unlock()
 
-			conn.Close()
+			if cerr := conn.Close(); cerr != nil {
+				err = errors.Wrap(cerr, err.Error())
+			}
 		}
 	}()
 
@@ -243,6 +245,23 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 	return conn, nil
 }
 
+func (c *Client) DisconnectByAddress(address string) error {
+	for _, conn := range c.AllPeers() {
+		if conn.Target() == address {
+			for _, id := range c.table.FindClosest(c.table.self, c.table.getBucketSize()) {
+				if id.Address() == address {
+					bucket := c.table.buckets[getBucketID(c.table.self.checksum, id.checksum)]
+					c.table.Delete(bucket, id)
+				}
+			}
+
+			return conn.Close()
+		}
+	}
+
+	return errors.Errorf("could not disconnect peer: peer with address %s not found", address)
+}
+
 func (c *Client) connLoop(conn *grpc.ClientConn, id *ID) {
 	if c.onPeerJoin != nil {
 		c.onPeerJoin(conn, id)
@@ -259,15 +278,7 @@ func (c *Client) connLoop(conn *grpc.ClientConn, id *ID) {
 
 		switch state {
 		case connectivity.TransientFailure:
-			c.peersLock.Lock()
-			delete(c.peers, conn.Target())
-			c.peersLock.Unlock()
-
-			if c.onPeerLeave != nil {
-				c.onPeerLeave(conn, id)
-			}
-
-			return
+			fallthrough
 		case connectivity.Shutdown:
 			c.peersLock.Lock()
 			delete(c.peers, conn.Target())
