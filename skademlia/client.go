@@ -136,7 +136,7 @@ func (c *Client) ClosestPeers() []*grpc.ClientConn {
 	var conns []*grpc.ClientConn
 
 	for i := range ids {
-		if conn, err := c.Dial(ids[i].address); err == nil {
+		if conn, err := c.Dial(ids[i].address, WithTimeout(3*time.Second)); err == nil {
 			conns = append(conns, conn)
 		}
 	}
@@ -163,8 +163,16 @@ func (c *Client) Listen(opts ...grpc.ServerOption) *grpc.Server {
 	return server
 }
 
-func (c *Client) Dial(addr string) (*grpc.ClientConn, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+func (c *Client) Dial(addr string, opts ...DialOption) (*grpc.ClientConn, error) {
+	args := &dialOptions{
+		timeout: 3 * time.Second,
+	}
+
+	for _, opt := range opts {
+		opt(args)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), args.timeout)
 	defer cancel()
 
 	return c.DialContext(ctx, addr)
@@ -327,7 +335,7 @@ func (c *Client) FindNode(target *ID, k int, a int, d int) (results []*ID) {
 				go func() {
 					for id := range requests {
 						f := func() error {
-							conn, err := c.Dial(id.address)
+							conn, err := c.Dial(id.address, WithTimeout(3*time.Second))
 
 							if err != nil {
 								responses <- nil
