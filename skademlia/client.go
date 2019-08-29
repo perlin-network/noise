@@ -190,12 +190,11 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 		return nil, errors.New("attempted to dial self")
 	}
 
-	c.peersLock.RLock()
+	c.peersLock.Lock()
 	if conn, exists := c.peers[addr]; exists {
-		c.peersLock.RUnlock()
+		c.peersLock.Unlock()
 		return conn, nil
 	}
-	c.peersLock.RUnlock()
 
 	conn, err := grpc.DialContext(ctx, addr,
 		append(
@@ -205,12 +204,11 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 			grpc.WithBlock(),
 		)...,
 	)
-
 	if err != nil {
+		c.peersLock.Unlock()
 		return nil, errors.Wrap(err, "failed to dial peer")
 	}
 
-	c.peersLock.Lock()
 	c.peers[conn.Target()] = conn
 	c.peersLock.Unlock()
 
@@ -288,12 +286,18 @@ func (c *Client) connLoop(conn *grpc.ClientConn, id *ID) {
 			fallthrough
 		case connectivity.Shutdown:
 			c.peersLock.Lock()
-			delete(c.peers, conn.Target())
-			c.peersLock.Unlock()
+			if _, ok := c.peers[conn.Target()]; ok {
+				delete(c.peers, conn.Target())
+				c.peersLock.Unlock()
 
-			if c.onPeerLeave != nil {
-				c.onPeerLeave(conn, id)
+				if c.onPeerLeave != nil {
+					c.onPeerLeave(conn, id)
+				}
+
+				return
 			}
+
+			c.peersLock.Unlock()
 
 			return
 		}
