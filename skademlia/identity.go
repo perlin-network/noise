@@ -26,6 +26,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/blake2b"
 	"io"
+	"time"
 )
 
 type ID struct {
@@ -33,6 +34,8 @@ type ID struct {
 	publicKey edwards25519.PublicKey
 
 	id, checksum, nonce [blake2b.Size256]byte
+
+	lastFailTime time.Time
 }
 
 func NewID(address string, publicKey edwards25519.PublicKey, nonce [blake2b.Size256]byte) *ID {

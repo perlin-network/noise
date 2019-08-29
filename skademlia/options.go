@@ -75,3 +75,9 @@ func WithTimeout(timeout time.Duration) DialOption {
 		o.timeout = timeout
 	}
 }
+
+func WithClientFilter(filter ClientFilter) Option {
+	return func(c *Client) {
+		c.clientFilter = filter
+	}
+}

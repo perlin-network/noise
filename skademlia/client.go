@@ -55,6 +55,8 @@ type Client struct {
 
 	onPeerJoin  func(*grpc.ClientConn, *ID)
 	onPeerLeave func(*grpc.ClientConn, *ID)
+
+	clientFilter ClientFilter
 }
 
 func NewClient(addr string, keys *Keypair, opts ...Option) *Client {
@@ -74,6 +76,8 @@ func NewClient(addr string, keys *Keypair, opts ...Option) *Client {
 		table: table,
 
 		peers: make(map[string]*grpc.ClientConn),
+
+		clientFilter: Dummy,
 	}
 
 	c.protocol = Protocol{client: c}
@@ -135,9 +139,12 @@ func (c *Client) ClosestPeers(opts ...DialOption) []*grpc.ClientConn {
 
 	var conns []*grpc.ClientConn
 
-	for i := range ids {
+	for i := range c.clientFilter(ids) {
 		if conn, err := c.Dial(ids[i].address, opts...); err == nil {
 			conns = append(conns, conn)
+			ids[i].lastFailTime = time.Time{}
+		} else {
+			ids[i].lastFailTime = time.Now()
 		}
 	}
 
