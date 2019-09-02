@@ -175,7 +175,7 @@ func (t *Table) FindClosest(target *ID, k int) []*ID {
 
 func getBucketID(self, target [blake2b.Size256]byte) int {
 	l := prefixLen(xor(target[:], self[:]))
-	if l == blake2b.Size256 * 8 {
+	if l == blake2b.Size256*8 {
 		return l - 1
 	}
 
