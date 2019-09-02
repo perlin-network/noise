@@ -65,5 +65,5 @@ func prefixLen(a []byte) int {
 		}
 	}
 
-	return len(a)*8
+	return len(a) * 8
 }
