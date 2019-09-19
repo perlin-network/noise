@@ -106,11 +106,15 @@ func (t *Table) Update(target *ID) error {
 	}
 
 	b := t.buckets[getBucketID(t.self.checksum, target.checksum)]
-	e := t.Find(b, target)
 
-	if e != nil {
+	if found := t.Find(b, target); found != nil {
 		b.Lock()
-		b.MoveToFront(e)
+
+		// address might differ for same public key (checksum
+		id := found.Value.(*ID)
+		id.address = target.address
+
+		b.MoveToFront(found)
 		b.Unlock()
 
 		return nil
