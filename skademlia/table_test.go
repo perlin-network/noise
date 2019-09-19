@@ -20,6 +20,7 @@
 package skademlia
 
 import (
+	"crypto/rand"
 	"github.com/perlin-network/noise/edwards25519"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/blake2b"
@@ -149,4 +150,38 @@ func TestFindClosestPeers(t *testing.T) {
 		_answer := nodes[key]
 		assert.EqualValues(t, _answer, testee[i])
 	}
+}
+
+func TestUpdateSamePublicKey(t *testing.T) {
+	getPK := func() edwards25519.PublicKey {
+		var pk edwards25519.PublicKey
+		if _, err := rand.Read(pk[:]); err != nil {
+			t.Fatal(err)
+		}
+		return pk
+	}
+
+	rootID := NewID("127.0.0.1", getPK(), [blake2b.Size256]byte{})
+	table := NewTable(rootID)
+
+	updated := NewID("127.0.0.2", getPK(), [blake2b.Size256]byte{})
+	if !assert.NoError(t, table.Update(updated)) {
+		return
+	}
+
+	// we create new id with same public key but different address
+	addressToChange := "127.0.0.3"
+	updatedCopy := NewID(addressToChange, updated.publicKey, updated.nonce)
+	if !assert.NoError(t, table.Update(updatedCopy)) {
+		return
+	}
+
+	found := table.FindClosest(rootID, 10)
+	if !assert.Equal(t, 1, len(found)) {
+		return
+	}
+
+	// we expect id in the table to have same public key but updated address
+	assert.Equal(t, updated.publicKey, found[0].publicKey)
+	assert.Equal(t, addressToChange, found[0].address)
 }
