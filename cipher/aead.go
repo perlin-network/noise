@@ -1,0 +1,3 @@
+package aead
+
+import . "aead"
