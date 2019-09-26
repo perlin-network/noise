@@ -24,6 +24,7 @@ import (
 	"github.com/perlin-network/noise/edwards25519"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/blake2b"
+	"sync"
 	"testing"
 	"testing/quick"
 )
@@ -173,8 +174,11 @@ func TestUpdateSamePublicKey(t *testing.T) {
 	addressToChange := "127.0.0.3"
 	updatedCopy := NewID(addressToChange, updated.publicKey, updated.nonce)
 
+	wg := sync.WaitGroup{}
 	// ensure that updating table (and id) safe to be done concurrently
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		if !assert.NoError(t, table.Update(updatedCopy)) {
 			return
 		}
@@ -184,6 +188,8 @@ func TestUpdateSamePublicKey(t *testing.T) {
 	if !assert.Equal(t, 1, len(found)) {
 		return
 	}
+
+	wg.Wait()
 
 	// we expect id in the table to have same public key but updated address
 	assert.Equal(t, updated.publicKey, found[0].publicKey)
