@@ -136,7 +136,7 @@ func (c *Client) ClosestPeers(opts ...DialOption) []*grpc.ClientConn {
 	var conns []*grpc.ClientConn
 
 	for i := range ids {
-		if conn, err := c.Dial(ids[i].address, opts...); err == nil {
+		if conn, err := c.Dial(ids[i].Address(), opts...); err == nil {
 			conns = append(conns, conn)
 		}
 	}
@@ -179,7 +179,7 @@ func (c *Client) Dial(addr string, opts ...DialOption) (*grpc.ClientConn, error)
 }
 
 func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn, error) {
-	if addr == c.table.self.address {
+	if addr == c.table.self.Address() {
 		return nil, errors.New("attempted to dial self")
 	}
 
@@ -318,10 +318,8 @@ func (c *Client) Bootstrap() (results []*ID) {
 }
 
 func (c *Client) FindNode(target *ID, k int, a int, d int) (results []*ID) {
-	type request ID
-
 	type response struct {
-		requester *request
+		requester *ID
 		ids       []*ID
 	}
 
@@ -344,14 +342,14 @@ func (c *Client) FindNode(target *ID, k int, a int, d int) (results []*ID) {
 
 	for _, lookup := range lookups { // Perform d parallel disjoint lookups.
 		go func(lookup queue.Queue) {
-			requests := make(chan *request, a)
+			requests := make(chan *ID, a)
 			responses := make(chan *response, a)
 
 			for i := 0; i < a; i++ { // Perform α queries in parallel per disjoint lookup.
 				go func() {
 					for id := range requests {
 						f := func() error {
-							conn, err := c.Dial(id.address, WithTimeout(3*time.Second))
+							conn, err := c.Dial(id.Address(), WithTimeout(3*time.Second))
 
 							if err != nil {
 								responses <- nil
@@ -395,7 +393,7 @@ func (c *Client) FindNode(target *ID, k int, a int, d int) (results []*ID) {
 
 			for lookup.Len() > 0 || pending > 0 {
 				for lookup.Len() > 0 && len(requests) < cap(requests) {
-					requests <- (*request)(lookup.PopFront().(*ID))
+					requests <- lookup.PopFront().(*ID)
 					pending++
 				}
 

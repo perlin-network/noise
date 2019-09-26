@@ -26,11 +26,14 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/blake2b"
 	"io"
+	"sync"
 )
 
 type ID struct {
 	address   string
 	publicKey edwards25519.PublicKey
+
+	sync.RWMutex
 
 	id, checksum, nonce [blake2b.Size256]byte
 }
@@ -49,8 +52,11 @@ func NewID(address string, publicKey edwards25519.PublicKey, nonce [blake2b.Size
 	}
 }
 
-func (m ID) Address() string {
-	return m.address
+func (m *ID) Address() string {
+	m.RLock()
+	t := m.address
+	m.RUnlock()
+	return t
 }
 
 func (m ID) PublicKey() edwards25519.PublicKey {
@@ -66,16 +72,24 @@ func (m ID) Nonce() [blake2b.Size256]byte {
 }
 
 func (m ID) String() string {
-	return fmt.Sprintf("%s[%x]", m.address, m.publicKey)
+	return fmt.Sprintf("%s[%x]", (&m).Address(), m.publicKey)
+}
+
+func (m *ID) SetAddress(address string) {
+	m.Lock()
+	m.address = address
+	m.Unlock()
 }
 
 func (m ID) Marshal() []byte {
-	buf := make([]byte, 2+len(m.address)+edwards25519.SizePublicKey+blake2b.Size256)
+	address := (&m).Address()
 
-	binary.BigEndian.PutUint16(buf[0:2], uint16(len(m.address)))
-	copy(buf[2:2+len(m.address)], m.address)
-	copy(buf[2+len(m.address):2+len(m.address)+edwards25519.SizePublicKey], m.publicKey[:])
-	copy(buf[2+len(m.address)+edwards25519.SizePublicKey:2+len(m.address)+edwards25519.SizePublicKey+blake2b.Size256], m.nonce[:])
+	buf := make([]byte, 2+len(address)+edwards25519.SizePublicKey+blake2b.Size256)
+
+	binary.BigEndian.PutUint16(buf[0:2], uint16(len(address)))
+	copy(buf[2:2+len(address)], address)
+	copy(buf[2+len(address):2+len(address)+edwards25519.SizePublicKey], m.publicKey[:])
+	copy(buf[2+len(address)+edwards25519.SizePublicKey:2+len(address)+edwards25519.SizePublicKey+blake2b.Size256], m.nonce[:])
 
 	return buf
 }

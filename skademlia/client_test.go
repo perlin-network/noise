@@ -100,20 +100,30 @@ func TestClientEviction(t *testing.T) {
 		l net.Listener
 	}
 
-	var peers []*peer
+	var peers = struct {
+		peers []*peer
+		sync.RWMutex
+	}{}
+
 	var wg sync.WaitGroup
 
 	for i := 0; i < 3; i++ {
 		wg.Add(1)
 
 		c, lis := getClient(t, 1, 1)
-		peers = append(peers, &peer{
+
+		peers.Lock()
+		peers.peers = append(peers.peers, &peer{
 			c: c,
 			l: lis,
 		})
+		peers.Unlock()
 
 		go func(i int) {
-			p := peers[i]
+			peers.RLock()
+			p := peers.peers[i]
+			peers.RUnlock()
+
 			s := p.c.Listen()
 
 			wg.Done()
@@ -124,7 +134,7 @@ func TestClientEviction(t *testing.T) {
 
 	wg.Wait()
 
-	for _, p := range peers {
+	for _, p := range peers.peers {
 		_, _ = client.Dial(p.l.Addr().String())
 	}
 

@@ -172,9 +172,13 @@ func TestUpdateSamePublicKey(t *testing.T) {
 	// we create new id with same public key but different address
 	addressToChange := "127.0.0.3"
 	updatedCopy := NewID(addressToChange, updated.publicKey, updated.nonce)
-	if !assert.NoError(t, table.Update(updatedCopy)) {
-		return
-	}
+
+	// ensure that updating table (and id) safe to be done concurrently
+	go func() {
+		if !assert.NoError(t, table.Update(updatedCopy)) {
+			return
+		}
+	}()
 
 	found := table.FindClosest(rootID, 10)
 	if !assert.Equal(t, 1, len(found)) {
@@ -183,5 +187,5 @@ func TestUpdateSamePublicKey(t *testing.T) {
 
 	// we expect id in the table to have same public key but updated address
 	assert.Equal(t, updated.publicKey, found[0].publicKey)
-	assert.Equal(t, addressToChange, found[0].address)
+	assert.Equal(t, addressToChange, found[0].Address())
 }

@@ -111,8 +111,7 @@ func (t *Table) Update(target *ID) error {
 		b.Lock()
 
 		// address might differ for same public key (checksum
-		id := found.Value.(*ID)
-		id.address = target.address
+		found.Value.(*ID).SetAddress(target.address)
 
 		b.MoveToFront(found)
 		b.Unlock()

@@ -87,7 +87,7 @@ func (p Protocol) handshake(info noise.Info, conn net.Conn) (*ID, error) {
 		bucket.Unlock()
 
 		p.client.peersLock.RLock()
-		lastConn, exists := p.client.peers[lastID.address]
+		lastConn, exists := p.client.peers[lastID.Address()]
 		p.client.peersLock.RUnlock()
 
 		if !exists {
@@ -109,7 +109,7 @@ func (p Protocol) handshake(info noise.Info, conn net.Conn) (*ID, error) {
 		// Ping was successful; disallow the current peer from connecting.
 
 		p.client.peersLock.Lock()
-		delete(p.client.peers, id.address)
+		delete(p.client.peers, id.Address())
 		p.client.peersLock.Unlock()
 
 		return nil, errors.New("skademlia: cannot evict any peers to make room for new peer")
@@ -196,7 +196,7 @@ func (p Protocol) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
 	p.client.logger.Printf("Client %s has connected to you.\n", id)
 
 	go func() {
-		if _, err = p.client.Dial(id.address, WithTimeout(3*time.Second)); err != nil {
+		if _, err = p.client.Dial(id.Address(), WithTimeout(3*time.Second)); err != nil {
 			_ = conn.Close()
 		}
 	}()
