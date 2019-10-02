@@ -124,7 +124,9 @@ func (c *Client) AllPeers() []*grpc.ClientConn {
 	conns := make([]*grpc.ClientConn, 0, len(c.peers))
 
 	for _, conn := range c.peers {
-		conns = append(conns, conn)
+		if connState := conn.GetState(); connState == connectivity.Ready {
+			conns = append(conns, conn)
+		}
 	}
 
 	return conns
@@ -189,6 +191,7 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 		return conn, nil
 	}
 
+	c.peersLock.Unlock()
 	conn, err := grpc.DialContext(ctx, addr,
 		append(
 			c.dopts,
@@ -199,10 +202,10 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 	)
 
 	if err != nil {
-		c.peersLock.Unlock()
 		return nil, errors.Wrap(err, "failed to dial peer")
 	}
 
+	c.peersLock.Lock()
 	c.peers[conn.Target()] = conn
 	c.peersLock.Unlock()
 
