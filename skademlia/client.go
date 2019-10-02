@@ -213,7 +213,7 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 	if err != nil {
 		c.peersLock.Unlock()
 
-		globalPeerBlacklist.Store(addr, now.Add(60 * time.Second))
+		globalPeerBlacklist.Store(addr, now.Add(60*time.Second))
 
 		return nil, errors.Wrap(err, "failed to dial peer")
 	}
