@@ -22,7 +22,6 @@ package skademlia
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"github.com/perlin-network/noise"
 	"github.com/phf/go-queue/queue"
 	"github.com/pkg/errors"
@@ -50,7 +49,6 @@ type Client struct {
 	table *Table
 
 	peers     map[string]*grpc.ClientConn
-	peerBlacklist sync.Map
 	peersLock sync.RWMutex
 
 	protocol Protocol
@@ -185,14 +183,6 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 		return nil, errors.New("attempted to dial self")
 	}
 
-	now := time.Now()
-	if blacklistExpirationVal, exists := c.peerBlacklist.Load(addr); exists {
-		blacklistExpiration := blacklistExpirationVal.(time.Time)
-		if now.Before(blacklistExpiration) {
-			return nil, fmt.Errorf("Attempted to connect to a blacklisted peer %s (expires %v)", addr, blacklistExpiration)
-		}
-	}
-
 	c.peersLock.Lock()
 	if conn, exists := c.peers[addr]; exists {
 		c.peersLock.Unlock()
@@ -210,9 +200,6 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 
 	if err != nil {
 		c.peersLock.Unlock()
-
-		c.peerBlacklist.Store(addr, now.Add(60*time.Second))
-
 		return nil, errors.Wrap(err, "failed to dial peer")
 	}
 
