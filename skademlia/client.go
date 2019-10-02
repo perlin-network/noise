@@ -22,6 +22,7 @@ package skademlia
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"github.com/perlin-network/noise"
 	"github.com/phf/go-queue/queue"
 	"github.com/pkg/errors"
