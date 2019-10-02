@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/peer"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"sort"
 	"sync"
 	"time"
@@ -50,9 +49,9 @@ type Client struct {
 	keys  *Keypair
 	table *Table
 
-	peers         map[string]*grpc.ClientConn
+	peers     map[string]*grpc.ClientConn
 	peerBlacklist sync.Map
-	peersLock     sync.RWMutex
+	peersLock sync.RWMutex
 
 	protocol Protocol
 
@@ -212,7 +211,7 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 	if err != nil {
 		c.peersLock.Unlock()
 
-		c.peerBlacklist.Store(addr, now.Add(time.Duration(45+rand.Intn(45))*time.Second))
+		c.peerBlacklist.Store(addr, now.Add(60*time.Second))
 
 		return nil, errors.Wrap(err, "failed to dial peer")
 	}
