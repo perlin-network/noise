@@ -52,6 +52,7 @@ type Client struct {
 
 	peers         map[string]*grpc.ClientConn
 	peerBlacklist sync.Map
+	peerFailList  sync.Map
 	peersLock     sync.RWMutex
 
 	protocol Protocol
@@ -212,10 +213,21 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 	if err != nil {
 		c.peersLock.Unlock()
 
-		c.peerBlacklist.Store(addr, now.Add(time.Duration(45+rand.Intn(45))*time.Second))
+		peerFailCountVal, exists := c.peerFailList.Load(addr)
+		peerFailCount := 0
+		if exists {
+			peerFailCount = peerFailCountVal.(int)
+		}
+		peerFailCount++
+		c.peerFailList.Store(addr, peerFailCount)
+		if peerFailCount > 10 {
+			c.peerBlacklist.Store(addr, now.Add(time.Duration(45+rand.Intn(45))*time.Second))
+		}
 
 		return nil, errors.Wrap(err, "failed to dial peer")
 	}
+
+	c.peerFailList.Store(addr, 0)
 
 	c.peers[conn.Target()] = conn
 	c.peersLock.Unlock()
