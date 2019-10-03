@@ -305,8 +305,15 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 				}
 			}
 		case connectivity.TransientFailure:
+			fallthrough
+		case connectivity.Shutdown:
 			c.peersLock.Lock()
 			delete(c.peersID, conn.Target())
+
+			if state == connectivity.Shutdown {
+				delete(c.peers, conn.Target())
+			}
+
 			c.peersLock.Unlock()
 
 			if c.onPeerLeave != nil && id != nil {
@@ -314,24 +321,10 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 			}
 
 			id = nil
-		case connectivity.Shutdown:
-			c.peersLock.Lock()
-			delete(c.peersID, conn.Target())
 
-			if _, ok := c.peers[conn.Target()]; ok {
-				delete(c.peers, conn.Target())
-				c.peersLock.Unlock()
-
-				if c.onPeerLeave != nil && id != nil {
-					c.onPeerLeave(conn, id)
-				}
-
+			if state == connectivity.Shutdown {
 				return
 			}
-
-			c.peersLock.Unlock()
-
-			return
 		}
 
 		changed := conn.WaitForStateChange(context.Background(), state)
