@@ -180,53 +180,27 @@ func (c *Client) Dial(addr string, opts ...DialOption) (*grpc.ClientConn, error)
 	return c.DialContext(ctx, addr)
 }
 
-func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn, error) {
-	if addr == c.table.self.address {
-		return nil, errors.New("attempted to dial self")
-	}
+func (c *Client) waitForReady(conn *grpc.ClientConn, timeout time.Duration, alsoPing bool) (*ID, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 
-	c.peersLock.Lock()
-	if conn, exists := c.peers[addr]; exists {
-		c.peersLock.Unlock()
-		return conn, nil
-	}
-
-	c.peersLock.Unlock()
-	conn, err := grpc.DialContext(ctx, addr,
-		append(
-			c.dopts,
-			grpc.WithTransportCredentials(c.creds),
-			grpc.FailOnNonTempDialError(true),
-			grpc.WithBlock(),
-		)...,
-	)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to dial peer")
-	}
-
-	c.peersLock.Lock()
-	c.peers[conn.Target()] = conn
-	c.peersLock.Unlock()
-
-	defer func() {
-		if err != nil {
-			c.peersLock.Lock()
-			delete(c.peers, conn.Target())
-			c.peersLock.Unlock()
-
-			if cerr := conn.Close(); cerr != nil {
-				err = errors.Wrap(cerr, err.Error())
-			}
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	p := &peer.Peer{}
 
-	if _, err = NewOverlayClient(conn).DoPing(ctx, &Ping{}, grpc.Peer(p)); err != nil {
+	/* TODO: turn this loop into a channel fed by connLoop */
+	for i := 0; i < 100 && conn.GetState() != connectivity.Ready; i++ {
+		time.Sleep(15 * time.Millisecond)
+	}
+
+	if conn.GetState() != connectivity.Ready {
+		return nil, errors.New("Peer did not become ready")
+	}
+
+	if !alsoPing {
+		return nil, nil
+	}
+
+	if _, err := NewOverlayClient(conn).DoPing(ctx, &Ping{}, grpc.Peer(p)); err != nil {
 		return nil, errors.Wrap(err, "failed to ping peer")
 	}
 
@@ -242,7 +216,60 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 		return nil, errors.New("peer does not have skademlia id available")
 	}
 
-	go c.connLoop(conn, id.(*ID))
+	return id.(*ID), nil
+}
+
+func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn, error) {
+	if addr == c.table.self.address {
+		return nil, errors.New("attempted to dial self")
+	}
+
+	c.peersLock.Lock()
+	if conn, exists := c.peers[addr]; exists {
+		c.peersLock.Unlock()
+		_, err := c.waitForReady(conn, 3*time.Second, false)
+
+		if err != nil {
+			return nil, errors.Wrap(err, "connection did not become ready")
+		}
+
+		return conn, nil
+	}
+
+	conn, err := grpc.DialContext(ctx, addr,
+		append(
+			c.dopts,
+			grpc.WithTransportCredentials(c.creds),
+			grpc.FailOnNonTempDialError(true),
+		)...,
+	)
+
+	if err != nil {
+		c.peersLock.Unlock()
+		return nil, errors.Wrap(err, "failed to dial peer")
+	}
+
+	c.peers[conn.Target()] = conn
+	c.peersLock.Unlock()
+
+	defer func() {
+		if err != nil {
+			c.peersLock.Lock()
+			delete(c.peers, conn.Target())
+			c.peersLock.Unlock()
+
+			if cerr := conn.Close(); cerr != nil {
+				err = errors.Wrap(cerr, err.Error())
+			}
+		}
+	}()
+
+	id, err := c.waitForReady(conn, 3*time.Second, true)
+	if err != nil {
+		return nil, errors.Wrap(err, "connection did not become ready")
+	}
+
+	go c.connLoop(conn, id)
 
 	return conn, nil
 }
