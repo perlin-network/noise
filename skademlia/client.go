@@ -306,8 +306,6 @@ func (c *Client) connLoop(conn *grpc.ClientConn, id *ID) {
 		state := conn.GetState()
 
 		switch state {
-		case connectivity.TransientFailure:
-			fallthrough
 		case connectivity.Shutdown:
 			c.peersLock.Lock()
 			if _, ok := c.peers[conn.Target()]; ok {
