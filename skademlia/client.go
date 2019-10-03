@@ -350,7 +350,6 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 			 * and all references to it should be lost
 			 */
 			if state == connectivity.Shutdown {
-				conn.Close()
 				goto connLoopDone
 			}
 		}
@@ -365,8 +364,9 @@ connLoopDone:
 	 */
 	c.peersLock.Lock()
 	delete(c.peers, conn.Target())
-	conn.Close()
 	c.peersLock.Unlock()
+
+	conn.Close()
 
 	c.logger.Printf("Finish connLoop on %s", conn.Target())
 
