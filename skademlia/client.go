@@ -334,7 +334,7 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 			return
 		}
 
-		changed := conn.WaitForStateChange(context.Background(), conn.GetState())
+		changed := conn.WaitForStateChange(context.Background(), state)
 
 		if !changed {
 			return
