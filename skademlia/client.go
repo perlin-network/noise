@@ -226,14 +226,16 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 
 	c.peersLock.Lock()
 	if conn, exists := c.peers[addr]; exists {
-		c.peersLock.Unlock()
-		_, err := c.waitForReady(conn, 3*time.Second, false)
+		if conn.GetState() != connectivity.Shutdown {
+			c.peersLock.Unlock()
+			_, err := c.waitForReady(conn, 3*time.Second, false)
 
-		if err != nil {
-			return nil, errors.Wrap(err, "connection did not become ready")
+			if err != nil {
+				return nil, errors.Wrap(err, "connection did not become ready")
+			}
+
+			return conn, nil
 		}
-
-		return conn, nil
 	}
 
 	conn, err := grpc.DialContext(ctx, addr,
@@ -264,12 +266,12 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 		}
 	}()
 
+	go c.connLoop(conn, id)
+
 	id, err := c.waitForReady(conn, 3*time.Second, true)
 	if err != nil {
 		return nil, errors.Wrap(err, "connection did not become ready")
 	}
-
-	go c.connLoop(conn, id)
 
 	return conn, nil
 }
