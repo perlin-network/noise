@@ -25,6 +25,7 @@ import (
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/edwards25519"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc"
 	"net"
 	"strconv"
 	"testing"
@@ -68,25 +69,39 @@ func TestQuickCheckAddressMatchesIPV6(t *testing.T) {
 }
 
 func TestProtocol(t *testing.T) {
-	c, cl := getClient(t, 1, 1)
-	defer cl.Close()
-	s, sl := getClient(t, 1, 1)
-	defer sl.Close()
+	c := newClientTestContainer(t, 1, 1)
+	c.serve()
+	defer c.cleanup()
 
-	sinfo := noise.Info{}
+	s := newClientTestContainer(t, 1, 1)
+	s.serve()
+	defer s.cleanup()
+
+	var sinfo noise.Info
+	s.onServer = func(info noise.Info) {
+		sinfo = info
+	}
+
+	var cinfo noise.Info
+	c.onClient = func(info noise.Info) {
+		cinfo = info
+	}
+
 	accept := make(chan struct{})
+	c.client.OnPeerJoin(func(conn *grpc.ClientConn, id *ID) {
+		close(accept)
+	})
+
 	go func() {
-		defer close(accept)
-		serverHandle(t, s.protocol, sinfo, sl)
-		// Wait until node has successfully dialed the peer.
-		time.Sleep(1 * time.Second)
+		_, err := c.client.Dial(s.lis.Addr().String())
+		if err != nil {
+			assert.FailNow(t, "failed to dial")
+		}
 	}()
 
-	cinfo := noise.Info{}
-	cconn := clientHandle(t, c.protocol, cinfo, sl.Addr().String())
-	defer cconn.Close()
-
 	<-accept
+
+	time.Sleep(500 * time.Millisecond)
 
 	// Check ID
 	assert.NotNil(t, cinfo.Get(KeyID))
@@ -94,51 +109,20 @@ func TestProtocol(t *testing.T) {
 
 	sid := sinfo.Get(KeyID).(*ID)
 	cid := cinfo.Get(KeyID).(*ID)
-	assert.Equal(t, c.id.checksum, sid.checksum)
-	assert.Equal(t, s.id.checksum, cid.checksum)
+	assert.Equal(t, c.client.id.checksum, sid.checksum)
+	assert.Equal(t, s.client.id.checksum, cid.checksum)
 
 	// Test FindNode
 	{
-		res, err := s.protocol.FindNode(context.Background(), &FindNodeRequest{
+		res, err := s.client.protocol.FindNode(context.Background(), &FindNodeRequest{
 			Id: cid.Marshal(),
 		})
 		assert.NoError(t, err)
 
 		id, err := UnmarshalID(bytes.NewReader(res.Ids[0]))
 		assert.NoError(t, err)
-		assert.Equal(t, c.id.id, id.id)
+		assert.Equal(t, c.client.id.id, id.id)
 	}
-}
-
-func TestProtocolEviction(t *testing.T) {
-	s, sl := getClient(t, 1, 1)
-	s.table.setBucketSize(1)
-	defer sl.Close()
-
-	accept := make(chan struct{})
-	go func() {
-		for {
-			serverHandle(t, s.protocol, noise.Info{}, sl)
-			accept <- struct{}{}
-		}
-	}()
-
-	var clients []*Client
-	go func() {
-		for i := 0; i < 5; i++ {
-			c, _ := getClient(t, 1, 1)
-
-			_ = clientHandle(t, c.protocol, noise.Info{}, sl.Addr().String())
-			clients = append(clients, c)
-		}
-
-	}()
-
-	for i := 0; i < 5; i++ {
-		<-accept
-	}
-
-	assert.Len(t, s.ClosestPeerIDs(), 1)
 }
 
 func TestProtocolBadHandshake(t *testing.T) {
@@ -165,8 +149,8 @@ func TestProtocolBadHandshake(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				c, _ := getClient(t, 1, 1)
-				_, err = conn.Write(c.id.Marshal())
+				c := newClientTestContainer(t, 1, 1)
+				_, err = conn.Write(c.client.id.Marshal())
 				assert.NoError(t, err)
 
 				conn.Close()
@@ -180,12 +164,12 @@ func TestProtocolBadHandshake(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				c, _ := getClient(t, 1, 1)
-				_, err = conn.Write(c.id.Marshal())
+				c := newClientTestContainer(t, 1, 1)
+				_, err = conn.Write(c.client.id.Marshal())
 				assert.NoError(t, err)
 
 				var signature [64]byte
-				edwards25519.Sign(c.keys.privateKey, []byte("invalid_message"))
+				edwards25519.Sign(c.client.keys.privateKey, []byte("invalid_message"))
 
 				_, err = conn.Write(signature[:])
 				assert.NoError(t, err)
@@ -199,9 +183,9 @@ func TestProtocolBadHandshake(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				c, _ := getClient(t, 1, 10)
-				buf := c.id.Marshal()
-				signature := edwards25519.Sign(c.keys.privateKey, buf)
+				c := newClientTestContainer(t, 1, 10)
+				buf := c.client.id.Marshal()
+				signature := edwards25519.Sign(c.client.keys.privateKey, buf)
 				handshake := append(buf, signature[:]...)
 
 				_, err = conn.Write(handshake[:])
@@ -216,9 +200,9 @@ func TestProtocolBadHandshake(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				c, _ := getClient(t, 10, 1)
-				buf := c.id.Marshal()
-				signature := edwards25519.Sign(c.keys.privateKey, buf)
+				c := newClientTestContainer(t, 10, 1)
+				buf := c.client.id.Marshal()
+				signature := edwards25519.Sign(c.client.keys.privateKey, buf)
 				handshake := append(buf, signature[:]...)
 
 				_, err = conn.Write(handshake[:])
@@ -231,31 +215,31 @@ func TestProtocolBadHandshake(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Test Server
 			{
-				c, lis := getClient(t, 10, 10)
+				c := newClientTestContainer(t, 10, 10)
 
-				go tc.node(lis.Addr().String())
+				go tc.node(c.lis.Addr().String())
 
-				conn, err := lis.Accept()
+				conn, err := c.lis.Accept()
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				_, err = c.protocol.Server(noise.Info{}, conn)
+				_, err = c.client.protocol.Server(noise.Info{}, conn)
 				assert.Error(t, err)
 			}
 
 			// Test Client
 			{
-				c, lis := getClient(t, 10, 10)
+				c := newClientTestContainer(t, 10, 10)
 
-				go tc.node(lis.Addr().String())
+				go tc.node(c.lis.Addr().String())
 
-				conn, err := lis.Accept()
+				conn, err := c.lis.Accept()
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				_, err = c.protocol.Client(noise.Info{}, context.Background(), "", conn)
+				_, err = c.client.protocol.Client(noise.Info{}, context.Background(), "", conn)
 				assert.Error(t, err)
 			}
 		})
@@ -270,31 +254,31 @@ func TestProtocolHandshakeClientBadAddress(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		c, _ := getClient(t, 1, 1)
-		c.id.address = ":"
-		buf := c.id.Marshal()
-		signature := edwards25519.Sign(c.keys.privateKey, buf)
+		c := newClientTestContainer(t, 1, 1)
+		c.client.id.address = ":"
+		buf := c.client.id.Marshal()
+		signature := edwards25519.Sign(c.client.keys.privateKey, buf)
 
 		handshake := append(buf, signature[:]...)
 		_, err = conn.Write(handshake[:])
 		assert.NoError(t, err)
 	}
-	c, lis := getClient(t, 1, 1)
+	c := newClientTestContainer(t, 1, 1)
 
-	go node(lis.Addr().String())
+	go node(c.lis.Addr().String())
 
-	conn, err := lis.Accept()
+	conn, err := c.lis.Accept()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = c.protocol.Client(noise.Info{}, context.Background(), "", conn)
+	_, err = c.client.protocol.Client(noise.Info{}, context.Background(), "", conn)
 	assert.Error(t, err)
 }
 
 // Test both nodes have the same ID
 func TestProtocolHandshakeSamePeerID(t *testing.T) {
-	c, lis := getClient(t, 1, 1)
+	c := newClientTestContainer(t, 1, 1)
 
 	node := func(addr string) {
 		conn, err := net.Dial("tcp", addr)
@@ -302,34 +286,34 @@ func TestProtocolHandshakeSamePeerID(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		buf := c.id.Marshal()
-		signature := edwards25519.Sign(c.keys.privateKey, buf)
+		buf := c.client.id.Marshal()
+		signature := edwards25519.Sign(c.client.keys.privateKey, buf)
 		handshake := append(buf, signature[:]...)
 
 		_, err = conn.Write(handshake[:])
 		assert.NoError(t, err)
 	}
 
-	go node(lis.Addr().String())
+	go node(c.lis.Addr().String())
 
-	conn, err := lis.Accept()
+	conn, err := c.lis.Accept()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = c.protocol.handshake(noise.Info{}, conn)
+	_, err = c.client.protocol.handshake(noise.Info{}, conn)
 	assert.Error(t, err)
 }
 
 func TestProtocolConnWriteError(t *testing.T) {
-	c, _ := getClient(t, 1, 1)
+	c := newClientTestContainer(t, 1, 1)
 
 	// Test the Write is incomplete
-	_, err := c.protocol.handshake(noise.Info{}, ErrorConn{isShortWrite: true})
+	_, err := c.client.protocol.handshake(noise.Info{}, ErrorConn{isShortWrite: true})
 	assert.Error(t, err)
 
 	// Test the Write returns an error
-	_, err = c.protocol.handshake(noise.Info{}, ErrorConn{isWriteError: true})
+	_, err = c.client.protocol.handshake(noise.Info{}, ErrorConn{isWriteError: true})
 	assert.Error(t, err)
 }
 
