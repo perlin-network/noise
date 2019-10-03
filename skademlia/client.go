@@ -284,7 +284,7 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 	var id *ID
 
 	id = nil
-
+	failureCount := 0
 
 	for {
 		state := conn.GetState()
@@ -296,13 +296,23 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 			if id == nil {
 				id, err = c.getPeerID(conn, 3*time.Second)
 				if err == nil {
+					failureCount = 0
+
 					if c.onPeerJoin != nil {
 						c.onPeerJoin(conn, id)
 					}
+				} else {
+					failureCount++
 				}
 
 			}
 		case connectivity.TransientFailure:
+			failureCount++
+			if failureCount > 30 {
+				conn.Close()
+				state = connectivity.Shutdown
+			}
+
 			fallthrough
 		case connectivity.Shutdown:
 			c.peersLock.Lock()
