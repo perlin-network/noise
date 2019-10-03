@@ -76,7 +76,7 @@ func NewClient(addr string, keys *Keypair, opts ...Option) *Client {
 		keys:  keys,
 		table: table,
 
-		peers: make(map[string]*grpc.ClientConn),
+		peers:   make(map[string]*grpc.ClientConn),
 		peersID: make(map[string]*ID),
 
 		cleanupChannel: make(chan struct{}),
@@ -290,7 +290,7 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 	id = nil
 	failureCount := 0
 
-	state     := connectivity.Idle
+	state := connectivity.Idle
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		changed := conn.WaitForStateChange(ctx, state)
