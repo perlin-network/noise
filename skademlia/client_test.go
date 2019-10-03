@@ -319,6 +319,11 @@ func getClient(t *testing.T, c1, c2 int) (*Client, net.Listener) {
 	c := NewClient(lis.Addr().String(), keys, WithC1(c1), WithC2(c2))
 	c.SetCredentials(noise.NewCredentials(lis.Addr().String(), c.Protocol()))
 
+	go func() {
+		server := c.Listen()
+
+		_ = server.Serve(lis)
+	}()
 	return c, lis
 }
 

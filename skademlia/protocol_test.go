@@ -78,6 +78,8 @@ func TestProtocol(t *testing.T) {
 	go func() {
 		defer close(accept)
 		serverHandle(t, s.protocol, sinfo, sl)
+		// Wait until node has successfully dialed the peer.
+		time.Sleep(1 * time.Second)
 	}()
 
 	cinfo := noise.Info{}
