@@ -56,6 +56,8 @@ type Client struct {
 
 	onPeerJoin  func(*grpc.ClientConn, *ID)
 	onPeerLeave func(*grpc.ClientConn, *ID)
+
+	cleanupChannel chan struct{}
 }
 
 func NewClient(addr string, keys *Keypair, opts ...Option) *Client {
@@ -76,6 +78,8 @@ func NewClient(addr string, keys *Keypair, opts ...Option) *Client {
 
 		peers: make(map[string]*grpc.ClientConn),
 		peersID: make(map[string]*ID),
+
+		cleanupChannel: make(chan struct{}),
 	}
 
 	c.protocol = Protocol{client: c}
@@ -286,8 +290,29 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 	id = nil
 	failureCount := 0
 
+	state     := connectivity.Idle
 	for {
-		state := conn.GetState()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		changed := conn.WaitForStateChange(ctx, state)
+		state = conn.GetState()
+		cancel()
+
+		select {
+		case _, open := <-c.cleanupChannel:
+			if !open {
+				state = connectivity.Shutdown
+				changed = true
+			}
+		default:
+		}
+
+		if !changed {
+			continue
+		}
+
+		if failureCount > 30 {
+			state = connectivity.Shutdown
+		}
 
 		switch state {
 		case connectivity.Ready:
@@ -308,11 +333,6 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 			}
 		case connectivity.TransientFailure:
 			failureCount++
-			if failureCount > 30 {
-				conn.Close()
-				state = connectivity.Shutdown
-			}
-
 			fallthrough
 		case connectivity.Shutdown:
 			c.peersLock.Lock()
@@ -330,14 +350,9 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 			 * and all references to it should be lost
 			 */
 			if state == connectivity.Shutdown {
+				conn.Close()
 				goto connLoopDone
 			}
-		}
-
-		changed := conn.WaitForStateChange(context.Background(), state)
-
-		if !changed {
-			goto connLoopDone
 		}
 	}
 
