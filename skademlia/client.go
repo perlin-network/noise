@@ -295,25 +295,18 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 
 			if id == nil {
 				id, err = c.getPeerID(conn, 3*time.Second)
-				if err != nil {
-					conn.Close()
-					continue
+				if err == nil {
+					if c.onPeerJoin != nil {
+						c.onPeerJoin(conn, id)
+					}
 				}
 
-				if c.onPeerJoin != nil {
-					c.onPeerJoin(conn, id)
-				}
 			}
 		case connectivity.TransientFailure:
 			fallthrough
 		case connectivity.Shutdown:
 			c.peersLock.Lock()
 			delete(c.peersID, conn.Target())
-
-			if state == connectivity.Shutdown {
-				delete(c.peers, conn.Target())
-			}
-
 			c.peersLock.Unlock()
 
 			if c.onPeerLeave != nil && id != nil {
@@ -322,17 +315,37 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 
 			id = nil
 
+			/*
+			 * We no longer need to monitor this connection
+			 * and all references to it should be lost
+			 */
 			if state == connectivity.Shutdown {
-				return
+				goto connLoopDone
 			}
 		}
 
 		changed := conn.WaitForStateChange(context.Background(), state)
 
 		if !changed {
-			return
+			goto connLoopDone
 		}
 	}
+
+connLoopDone:
+
+	/*
+	 * For a permenant failure, the connection instance is
+	 * removed from the connection cache so that new
+	 * connections will succeed
+	 */
+	c.peersLock.Lock()
+	delete(c.peers, conn.Target())
+	conn.Close()
+	c.peersLock.Unlock()
+
+	c.logger.Printf("Finish connLoop on %s", conn.Target())
+
+	return
 }
 
 // RefreshPeriodically periodically refreshes the list of peers for a node given a time period.
