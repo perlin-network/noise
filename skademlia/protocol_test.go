@@ -101,7 +101,7 @@ func TestProtocol(t *testing.T) {
 
 	<-accept
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	// Check ID
 	assert.NotNil(t, cinfo.Get(KeyID))
