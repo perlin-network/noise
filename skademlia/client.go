@@ -49,6 +49,7 @@ type Client struct {
 	table *Table
 
 	peers     map[string]*grpc.ClientConn
+	peersID   map[string]*ID
 	peersLock sync.RWMutex
 
 	protocol Protocol
@@ -74,6 +75,7 @@ func NewClient(addr string, keys *Keypair, opts ...Option) *Client {
 		table: table,
 
 		peers: make(map[string]*grpc.ClientConn),
+		peersID: make(map[string]*ID),
 	}
 
 	c.protocol = Protocol{client: c}
@@ -180,25 +182,19 @@ func (c *Client) Dial(addr string, opts ...DialOption) (*grpc.ClientConn, error)
 	return c.DialContext(ctx, addr)
 }
 
-func (c *Client) waitForReady(conn *grpc.ClientConn, timeout time.Duration, alsoPing bool) (*ID, error) {
+func (c *Client) getPeerID(conn *grpc.ClientConn, timeout time.Duration) (*ID, error) {
+	c.peersLock.Lock()
+	if id, exists := c.peersID[conn.Target()]; exists {
+		c.peersLock.Unlock()
+		return id, nil
+	}
+	c.peersLock.Unlock()
+
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 
 	defer cancel()
 
 	p := &peer.Peer{}
-
-	/* TODO: turn this loop into a channel fed by connLoop */
-	for i := 0; i < 100 && conn.GetState() != connectivity.Ready; i++ {
-		time.Sleep(15 * time.Millisecond)
-	}
-
-	if conn.GetState() != connectivity.Ready {
-		return nil, errors.New("Peer did not become ready")
-	}
-
-	if !alsoPing {
-		return nil, nil
-	}
 
 	if _, err := NewOverlayClient(conn).DoPing(ctx, &Ping{}, grpc.Peer(p)); err != nil {
 		return nil, errors.Wrap(err, "failed to ping peer")
@@ -216,6 +212,10 @@ func (c *Client) waitForReady(conn *grpc.ClientConn, timeout time.Duration, also
 		return nil, errors.New("peer does not have skademlia id available")
 	}
 
+	c.peersLock.Lock()
+	c.peersID[conn.Target()] = id.(*ID)
+	c.peersLock.Unlock()
+
 	return id.(*ID), nil
 }
 
@@ -226,16 +226,14 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 
 	c.peersLock.Lock()
 	if conn, exists := c.peers[addr]; exists {
-		if conn.GetState() != connectivity.Shutdown {
-			c.peersLock.Unlock()
-			_, err := c.waitForReady(conn, 3*time.Second, false)
+		c.peersLock.Unlock()
 
-			if err != nil {
-				return nil, errors.Wrap(err, "connection did not become ready")
-			}
-
-			return conn, nil
+		_, err := c.getPeerID(conn, 3*time.Second)
+		if err != nil {
+			return nil, errors.Wrap(err, "connection could not be identified")
 		}
+
+		return conn, nil
 	}
 
 	conn, err := grpc.DialContext(ctx, addr,
@@ -252,25 +250,14 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 	}
 
 	c.peers[conn.Target()] = conn
+
+	go c.connLoop(conn)
+
 	c.peersLock.Unlock()
 
-	defer func() {
-		if err != nil {
-			c.peersLock.Lock()
-			delete(c.peers, conn.Target())
-			c.peersLock.Unlock()
-
-			if cerr := conn.Close(); cerr != nil {
-				err = errors.Wrap(cerr, err.Error())
-			}
-		}
-	}()
-
-	go c.connLoop(conn, id)
-
-	id, err := c.waitForReady(conn, 3*time.Second, true)
+	_, err = c.getPeerID(conn, 3*time.Second)
 	if err != nil {
-		return nil, errors.Wrap(err, "connection did not become ready")
+		return nil, errors.Wrap(err, "connection could not be identified")
 	}
 
 	return conn, nil
@@ -293,28 +280,49 @@ func (c *Client) DisconnectByAddress(address string) error {
 	return errors.Errorf("could not disconnect peer: peer with address %s not found", address)
 }
 
-func (c *Client) connLoop(conn *grpc.ClientConn, id *ID) {
-	if c.onPeerJoin != nil {
-		c.onPeerJoin(conn, id)
-	}
+func (c *Client) connLoop(conn *grpc.ClientConn) {
+	var id *ID
+
+	id = nil
+
 
 	for {
-		changed := conn.WaitForStateChange(context.Background(), conn.GetState())
-
-		if !changed {
-			return
-		}
-
 		state := conn.GetState()
 
 		switch state {
+		case connectivity.Ready:
+			var err error
+
+			if id == nil {
+				id, err = c.getPeerID(conn, 3*time.Second)
+				if err != nil {
+					conn.Close()
+					continue
+				}
+
+				if c.onPeerJoin != nil {
+					c.onPeerJoin(conn, id)
+				}
+			}
+		case connectivity.TransientFailure:
+			c.peersLock.Lock()
+			delete(c.peersID, conn.Target())
+			c.peersLock.Unlock()
+
+			if c.onPeerLeave != nil && id != nil {
+				c.onPeerLeave(conn, id)
+			}
+
+			id = nil
 		case connectivity.Shutdown:
 			c.peersLock.Lock()
+			delete(c.peersID, conn.Target())
+
 			if _, ok := c.peers[conn.Target()]; ok {
 				delete(c.peers, conn.Target())
 				c.peersLock.Unlock()
 
-				if c.onPeerLeave != nil {
+				if c.onPeerLeave != nil && id != nil {
 					c.onPeerLeave(conn, id)
 				}
 
@@ -323,6 +331,12 @@ func (c *Client) connLoop(conn *grpc.ClientConn, id *ID) {
 
 			c.peersLock.Unlock()
 
+			return
+		}
+
+		changed := conn.WaitForStateChange(context.Background(), conn.GetState())
+
+		if !changed {
 			return
 		}
 	}
