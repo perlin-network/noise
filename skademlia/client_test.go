@@ -294,8 +294,8 @@ type clientTestContainer struct {
 	client   *Client
 	lis      net.Listener
 	server   *grpc.Server
-	onClient func(noise.Info)
-	onServer func(noise.Info)
+	onClient func(*noise.Info)
+	onServer func(*noise.Info)
 }
 
 // Rename to close
@@ -310,7 +310,7 @@ func (c *clientTestContainer) serve() {
 	}()
 }
 
-func (c *clientTestContainer) Client(info noise.Info, ctx context.Context, authority string, conn net.Conn) (net.Conn, error) {
+func (c *clientTestContainer) Client(info *noise.Info, ctx context.Context, authority string, conn net.Conn) (net.Conn, error) {
 	if c.onClient != nil {
 		c.onClient(info)
 	}
@@ -318,7 +318,7 @@ func (c *clientTestContainer) Client(info noise.Info, ctx context.Context, autho
 	return conn, nil
 }
 
-func (c *clientTestContainer) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
+func (c *clientTestContainer) Server(info *noise.Info, conn net.Conn) (net.Conn, error) {
 	if c.onServer != nil {
 		c.onServer(info)
 	}

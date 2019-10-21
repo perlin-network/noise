@@ -38,7 +38,7 @@ type Protocol struct {
 	client *Client
 }
 
-func (p Protocol) registerPeerID(info noise.Info, id *ID) error {
+func (p Protocol) registerPeerID(info *noise.Info, id *ID) error {
 	info.Put(KeyID, id)
 
 	for p.client.table.Update(id) == ErrBucketFull {
@@ -81,7 +81,7 @@ func (p Protocol) registerPeerID(info noise.Info, id *ID) error {
 	return nil
 }
 
-func (p Protocol) handshake(info noise.Info, conn net.Conn) (*ID, error) {
+func (p Protocol) handshake(info *noise.Info, conn net.Conn) (*ID, error) {
 	buf := p.client.id.Marshal()
 	signature := edwards25519.Sign(p.client.keys.privateKey, buf)
 
@@ -122,7 +122,7 @@ func (p Protocol) handshake(info noise.Info, conn net.Conn) (*ID, error) {
 	return ptr, nil
 }
 
-func (p Protocol) Client(info noise.Info, ctx context.Context, authority string, conn net.Conn) (net.Conn, error) {
+func (p Protocol) Client(info *noise.Info, ctx context.Context, authority string, conn net.Conn) (net.Conn, error) {
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithCancel(ctx)
 
@@ -191,7 +191,7 @@ func addressMatches(bind string, subject string) bool {
 	return false
 }
 
-func (p Protocol) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
+func (p Protocol) Server(info *noise.Info, conn net.Conn) (net.Conn, error) {
 	id, err := p.handshake(info, conn)
 	if err != nil {
 		if cerr := conn.Close(); cerr != nil {

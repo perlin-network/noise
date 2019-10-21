@@ -77,13 +77,13 @@ func TestProtocol(t *testing.T) {
 	s.serve()
 	defer s.cleanup()
 
-	var sinfo noise.Info
-	s.onServer = func(info noise.Info) {
+	var sinfo *noise.Info
+	s.onServer = func(info *noise.Info) {
 		sinfo = info
 	}
 
-	var cinfo noise.Info
-	c.onClient = func(info noise.Info) {
+	var cinfo *noise.Info
+	c.onClient = func(info *noise.Info) {
 		cinfo = info
 	}
 
@@ -224,7 +224,7 @@ func TestProtocolBadHandshake(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				_, err = c.client.protocol.Server(noise.Info{}, conn)
+				_, err = c.client.protocol.Server(noise.NewInfo(), conn)
 				assert.Error(t, err)
 			}
 
@@ -239,7 +239,7 @@ func TestProtocolBadHandshake(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				_, err = c.client.protocol.Client(noise.Info{}, context.Background(), "", conn)
+				_, err = c.client.protocol.Client(noise.NewInfo(), context.Background(), "", conn)
 				assert.Error(t, err)
 			}
 		})
@@ -272,7 +272,7 @@ func TestProtocolHandshakeClientBadAddress(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = c.client.protocol.Client(noise.Info{}, context.Background(), "", conn)
+	_, err = c.client.protocol.Client(noise.NewInfo(), context.Background(), "", conn)
 	assert.Error(t, err)
 }
 
@@ -301,7 +301,7 @@ func TestProtocolHandshakeSamePeerID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = c.client.protocol.handshake(noise.Info{}, conn)
+	_, err = c.client.protocol.handshake(noise.NewInfo(), conn)
 	assert.Error(t, err)
 }
 
@@ -309,11 +309,11 @@ func TestProtocolConnWriteError(t *testing.T) {
 	c := newClientTestContainer(t, 1, 1)
 
 	// Test the Write is incomplete
-	_, err := c.client.protocol.handshake(noise.Info{}, ErrorConn{isShortWrite: true})
+	_, err := c.client.protocol.handshake(noise.NewInfo(), ErrorConn{isShortWrite: true})
 	assert.Error(t, err)
 
 	// Test the Write returns an error
-	_, err = c.client.protocol.handshake(noise.Info{}, ErrorConn{isWriteError: true})
+	_, err = c.client.protocol.handshake(noise.NewInfo(), ErrorConn{isWriteError: true})
 	assert.Error(t, err)
 }
 
@@ -323,7 +323,7 @@ func serverHandle(t *testing.T, protocol Protocol, info noise.Info, lis net.List
 		return
 	}
 
-	if _, err := protocol.Server(info, serverRawConn); err != nil {
+	if _, err := protocol.Server(&info, serverRawConn); err != nil {
 		_ = serverRawConn.Close()
 		t.Fatalf("Error server: %v", err)
 	}
@@ -334,7 +334,7 @@ func clientHandle(t *testing.T, protocol Protocol, info noise.Info, lisAddr stri
 	if err != nil {
 		t.Fatalf("Error client: %v", err)
 	}
-	_, err = protocol.Client(info, context.Background(), "", conn)
+	_, err = protocol.Client(&info, context.Background(), "", conn)
 	if err != nil {
 		t.Fatalf("Error client: %v", err)
 	}

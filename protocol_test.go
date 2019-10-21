@@ -10,7 +10,7 @@ func TestInfo(t *testing.T) {
 	p := &peer.Peer{}
 	assert.Nil(t, InfoFromPeer(p))
 
-	p.AuthInfo = Info{}
+	p.AuthInfo = NewInfo()
 
 	info := InfoFromPeer(p)
 	assert.NotNil(t, info)

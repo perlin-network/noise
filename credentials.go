@@ -35,7 +35,7 @@ func NewCredentials(host string, protocols ...Protocol) *Credentials {
 }
 
 func (c *Credentials) ClientHandshake(ctx context.Context, authority string, conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	info := make(Info)
+	info := NewInfo()
 	var err error
 
 	for _, protocol := range c.Protocols {
@@ -49,7 +49,7 @@ func (c *Credentials) ClientHandshake(ctx context.Context, authority string, con
 }
 
 func (c *Credentials) ServerHandshake(conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	info := make(Info)
+	info := NewInfo()
 	var err error
 
 	for _, protocol := range c.Protocols {

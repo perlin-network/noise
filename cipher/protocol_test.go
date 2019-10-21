@@ -17,7 +17,7 @@ func TestProtocol(t *testing.T) {
 	lis := launchServer(t, ecdh, sharedKey, accept)
 	defer lis.Close()
 
-	clientInfo := noise.Info{}
+	clientInfo := noise.NewInfo()
 	clientInfo.PutBytes(handshake.SharedKey, sharedKey)
 	clientConn := clientHandle(t, ecdh, clientInfo, lis.Addr().String())
 
@@ -42,7 +42,7 @@ func TestProtocolKeyMismatch(t *testing.T) {
 	lis := launchServer(t, ecdh, []byte("server_secret_key"), accept)
 	defer lis.Close()
 
-	clientInfo := noise.Info{}
+	clientInfo := noise.NewInfo()
 	clientInfo.PutBytes(handshake.SharedKey, []byte("client_secret_key"))
 	clientConn := clientHandle(t, ecdh, clientInfo, lis.Addr().String())
 
@@ -75,7 +75,7 @@ func serverHandle(t *testing.T, protocol ProtocolAEAD, sharedKey []byte, accept 
 		t.Fatal(err)
 	}
 
-	info := noise.Info{}
+	info := noise.NewInfo()
 	info.PutBytes(handshake.SharedKey, sharedKey)
 	conn, err := protocol.Server(info, rawConn)
 	if err != nil {
@@ -86,7 +86,7 @@ func serverHandle(t *testing.T, protocol ProtocolAEAD, sharedKey []byte, accept 
 	accept <- conn.(*connAEAD)
 }
 
-func clientHandle(t *testing.T, protocol ProtocolAEAD, info noise.Info, lisAddr string) *connAEAD {
+func clientHandle(t *testing.T, protocol ProtocolAEAD, info *noise.Info, lisAddr string) *connAEAD {
 	rawConn, err := net.Dial("tcp", lisAddr)
 	if err != nil {
 		t.Fatal(err)

@@ -39,7 +39,7 @@ func NewECDH() ProtocolECDH {
 	return ProtocolECDH{}
 }
 
-func (ProtocolECDH) Client(info noise.Info, ctx context.Context, auth string, conn net.Conn) (net.Conn, error) {
+func (ProtocolECDH) Client(info *noise.Info, ctx context.Context, auth string, conn net.Conn) (net.Conn, error) {
 	if err := handshakeECDH(info, conn); err != nil {
 		return nil, err
 	}
@@ -47,7 +47,7 @@ func (ProtocolECDH) Client(info noise.Info, ctx context.Context, auth string, co
 	return conn, nil
 }
 
-func (ProtocolECDH) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
+func (ProtocolECDH) Server(info *noise.Info, conn net.Conn) (net.Conn, error) {
 	if err := handshakeECDH(info, conn); err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func (ProtocolECDH) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
 	return conn, nil
 }
 
-func handshakeECDH(info noise.Info, conn net.Conn) error {
+func handshakeECDH(info *noise.Info, conn net.Conn) error {
 	ephemeralPublicKey, ephemeralPrivateKey, err := edwards25519.GenerateKey(nil)
 	if err != nil {
 		return errors.New("ecdh: failed to generate ephemeral keypair")

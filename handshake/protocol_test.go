@@ -20,7 +20,7 @@ func TestProtocol(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	accept := make(chan noise.Info)
+	accept := make(chan *noise.Info)
 	go func() {
 		serverRawConn, err := lis.Accept()
 		if err != nil {
@@ -30,7 +30,7 @@ func TestProtocol(t *testing.T) {
 
 		// Initiate server handshake
 
-		info := noise.Info{}
+		info := noise.NewInfo()
 		if _, err := ecdh.Server(info, serverRawConn); err != nil {
 			_ = serverRawConn.Close()
 			close(accept)
@@ -49,7 +49,7 @@ func TestProtocol(t *testing.T) {
 
 	// Initiate client handshake
 
-	clientInfo := noise.Info{}
+	clientInfo := noise.NewInfo()
 	if _, err := ecdh.Client(clientInfo, context.Background(), "", conn); err != nil {
 		t.Fatalf("Error protocol.Client(): %v", err)
 	}
@@ -119,7 +119,7 @@ func TestProtocolBadHandshake(t *testing.T) {
 				}
 
 				ecdh := NewECDH()
-				_, err = ecdh.Server(noise.Info{}, conn)
+				_, err = ecdh.Server(noise.NewInfo(), conn)
 				assert.Error(t, err)
 			}
 
@@ -133,7 +133,7 @@ func TestProtocolBadHandshake(t *testing.T) {
 				}
 
 				ecdh := NewECDH()
-				_, err = ecdh.Client(noise.Info{}, context.Background(), "", conn)
+				_, err = ecdh.Client(noise.NewInfo(), context.Background(), "", conn)
 				assert.Error(t, err)
 			}
 		})
@@ -144,11 +144,11 @@ func TestProtocolConnWriteError(t *testing.T) {
 	ecdh := NewECDH()
 
 	// Test the Write is incomplete
-	_, err := ecdh.Server(noise.Info{}, ErrorConn{isShortWrite: true})
+	_, err := ecdh.Server(noise.NewInfo(), ErrorConn{isShortWrite: true})
 	assert.Error(t, err)
 
 	// Test the Write returns an error
-	_, err = ecdh.Server(noise.Info{}, ErrorConn{isWriteError: true})
+	_, err = ecdh.Server(noise.NewInfo(), ErrorConn{isWriteError: true})
 	assert.Error(t, err)
 }
 

@@ -23,47 +23,76 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/peer"
 	"net"
+	"sync"
 )
 
 type Protocol interface {
-	Client(Info, context.Context, string, net.Conn) (net.Conn, error)
-	Server(Info, net.Conn) (net.Conn, error)
+	Client(*Info, context.Context, string, net.Conn) (net.Conn, error)
+	Server(*Info, net.Conn) (net.Conn, error)
 }
 
-func InfoFromPeer(peer *peer.Peer) Info {
+func InfoFromPeer(peer *peer.Peer) *Info {
 	if peer.AuthInfo == nil {
 		return nil
 	}
 
-	return peer.AuthInfo.(Info)
+	return peer.AuthInfo.(*Info)
 }
 
-type Info map[string]interface{}
+// Info is thread safe.
+type Info struct {
+	data map[string]interface{}
+	mu   sync.RWMutex
+}
 
-func (Info) AuthType() string {
+func NewInfo() *Info {
+	return &Info{
+		data: make(map[string]interface{}),
+	}
+}
+
+func (*Info) AuthType() string {
 	return "noise"
 }
 
-func (i Info) Put(key string, val interface{}) {
-	i[key] = val
+func (i *Info) Put(key string, val interface{}) {
+	i.mu.Lock()
+	i.data[key] = val
+	i.mu.Unlock()
 }
 
-func (i Info) Get(key string) interface{} {
-	return i[key]
+func (i *Info) Get(key string) interface{} {
+	i.mu.RLock()
+	v := i.data[key]
+	i.mu.RUnlock()
+
+	return v
 }
 
-func (i Info) PutString(key, val string) {
-	i[key] = val
+func (i *Info) PutString(key, val string) {
+	i.mu.Lock()
+	i.data[key] = val
+	i.mu.Unlock()
 }
 
-func (i Info) String(key string) string {
-	return i[key].(string)
+func (i *Info) String(key string) string {
+	i.mu.RLock()
+	v := i.data[key].(string)
+	i.mu.RUnlock()
+
+	return v
 }
 
-func (i Info) PutBytes(key string, val []byte) {
-	i[key] = val
+func (i *Info) PutBytes(key string, val []byte) {
+	i.mu.Lock()
+	i.data[key] = val
+	i.mu.Unlock()
 }
 
-func (i Info) Bytes(key string) []byte {
-	return i[key].([]byte)
+func (i *Info) Bytes(key string) []byte {
+	i.mu.RLock()
+	v := i.data[key].([]byte)
+	i.mu.RUnlock()
+
+	return v
 }

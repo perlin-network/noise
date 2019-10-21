@@ -13,12 +13,12 @@ type dummmyProtocol struct {
 	serverCall time.Time
 }
 
-func (d *dummmyProtocol) Client(info Info, ctx context.Context, auth string, conn net.Conn) (net.Conn, error) {
+func (d *dummmyProtocol) Client(info *Info, ctx context.Context, auth string, conn net.Conn) (net.Conn, error) {
 	d.clientCall = time.Now()
 	return conn, nil
 }
 
-func (d *dummmyProtocol) Server(info Info, conn net.Conn) (net.Conn, error) {
+func (d *dummmyProtocol) Server(info *Info, conn net.Conn) (net.Conn, error) {
 	d.serverCall = time.Now()
 	return conn, nil
 
