@@ -57,42 +57,42 @@ func (*Info) AuthType() string {
 
 func (i *Info) Put(key string, val interface{}) {
 	i.mu.Lock()
-	i.data[key] = val
+	defer i.mu.Unlock()
+
 	i.mu.Unlock()
 }
 
 func (i *Info) Get(key string) interface{} {
 	i.mu.RLock()
-	v := i.data[key]
-	i.mu.RUnlock()
+	defer i.mu.Unlock()
 
-	return v
+	return i.data[key]
 }
 
 func (i *Info) PutString(key, val string) {
 	i.mu.Lock()
+	defer i.mu.Unlock()
+
 	i.data[key] = val
-	i.mu.Unlock()
 }
 
 func (i *Info) String(key string) string {
 	i.mu.RLock()
-	v := i.data[key].(string)
-	i.mu.RUnlock()
+	defer i.mu.RUnlock()
 
-	return v
+	return i.data[key].(string)
 }
 
 func (i *Info) PutBytes(key string, val []byte) {
 	i.mu.Lock()
+	defer i.mu.Unlock()
+
 	i.data[key] = val
-	i.mu.Unlock()
 }
 
 func (i *Info) Bytes(key string) []byte {
 	i.mu.RLock()
-	v := i.data[key].([]byte)
-	i.mu.RUnlock()
+	defer i.mu.RUnlock()
 
-	return v
+	return i.data[key].([]byte)
 }
