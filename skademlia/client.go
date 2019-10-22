@@ -49,12 +49,15 @@ type Client struct {
 	table *Table
 
 	peers     map[string]*grpc.ClientConn
+	peersID   map[string]*ID
 	peersLock sync.RWMutex
 
 	protocol Protocol
 
 	onPeerJoin  func(*grpc.ClientConn, *ID)
 	onPeerLeave func(*grpc.ClientConn, *ID)
+
+	cleanupChannel chan struct{}
 }
 
 func NewClient(addr string, keys *Keypair, opts ...Option) *Client {
@@ -73,7 +76,10 @@ func NewClient(addr string, keys *Keypair, opts ...Option) *Client {
 		keys:  keys,
 		table: table,
 
-		peers: make(map[string]*grpc.ClientConn),
+		peers:   make(map[string]*grpc.ClientConn),
+		peersID: make(map[string]*ID),
+
+		cleanupChannel: make(chan struct{}),
 	}
 
 	c.protocol = Protocol{client: c}
@@ -124,7 +130,9 @@ func (c *Client) AllPeers() []*grpc.ClientConn {
 	conns := make([]*grpc.ClientConn, 0, len(c.peers))
 
 	for _, conn := range c.peers {
-		conns = append(conns, conn)
+		if connState := conn.GetState(); connState == connectivity.Ready {
+			conns = append(conns, conn)
+		}
 	}
 
 	return conns
@@ -178,52 +186,21 @@ func (c *Client) Dial(addr string, opts ...DialOption) (*grpc.ClientConn, error)
 	return c.DialContext(ctx, addr)
 }
 
-func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn, error) {
-	if addr == c.table.self.Address() {
-		return nil, errors.New("attempted to dial self")
-	}
-
+func (c *Client) getPeerID(conn *grpc.ClientConn, timeout time.Duration) (*ID, error) {
 	c.peersLock.Lock()
-	if conn, exists := c.peers[addr]; exists {
+	if id, exists := c.peersID[conn.Target()]; exists {
 		c.peersLock.Unlock()
-		return conn, nil
+		return id, nil
 	}
-
-	conn, err := grpc.DialContext(ctx, addr,
-		append(
-			c.dopts,
-			grpc.WithTransportCredentials(c.creds),
-			grpc.FailOnNonTempDialError(true),
-			grpc.WithBlock(),
-		)...,
-	)
-
-	if err != nil {
-		c.peersLock.Unlock()
-		return nil, errors.Wrap(err, "failed to dial peer")
-	}
-
-	c.peers[conn.Target()] = conn
 	c.peersLock.Unlock()
 
-	defer func() {
-		if err != nil {
-			c.peersLock.Lock()
-			delete(c.peers, conn.Target())
-			c.peersLock.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 
-			if cerr := conn.Close(); cerr != nil {
-				err = errors.Wrap(cerr, err.Error())
-			}
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	p := &peer.Peer{}
 
-	if _, err = NewOverlayClient(conn).DoPing(ctx, &Ping{}, grpc.Peer(p)); err != nil {
+	if _, err := NewOverlayClient(conn).DoPing(ctx, &Ping{}, grpc.Peer(p)); err != nil {
 		return nil, errors.Wrap(err, "failed to ping peer")
 	}
 
@@ -239,7 +216,53 @@ func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn
 		return nil, errors.New("peer does not have skademlia id available")
 	}
 
-	go c.connLoop(conn, id.(*ID))
+	c.peersLock.Lock()
+	c.peersID[conn.Target()] = id.(*ID)
+	c.peersLock.Unlock()
+
+	return id.(*ID), nil
+}
+
+func (c *Client) DialContext(ctx context.Context, addr string) (*grpc.ClientConn, error) {
+	if addr == c.table.self.Address() {
+		return nil, errors.New("attempted to dial self")
+	}
+
+	c.peersLock.Lock()
+	if conn, exists := c.peers[addr]; exists {
+		c.peersLock.Unlock()
+
+		_, err := c.getPeerID(conn, 3*time.Second)
+		if err != nil {
+			return nil, errors.Wrap(err, "connection could not be identified")
+		}
+
+		return conn, nil
+	}
+
+	conn, err := grpc.DialContext(ctx, addr,
+		append(
+			c.dopts,
+			grpc.WithTransportCredentials(c.creds),
+			grpc.FailOnNonTempDialError(true),
+		)...,
+	)
+
+	if err != nil {
+		c.peersLock.Unlock()
+		return nil, errors.Wrap(err, "failed to dial peer")
+	}
+
+	c.peers[conn.Target()] = conn
+
+	go c.connLoop(conn)
+
+	c.peersLock.Unlock()
+
+	_, err = c.getPeerID(conn, 3*time.Second)
+	if err != nil {
+		return nil, errors.Wrap(err, "connection could not be identified")
+	}
 
 	return conn, nil
 }
@@ -261,41 +284,93 @@ func (c *Client) DisconnectByAddress(address string) error {
 	return errors.Errorf("could not disconnect peer: peer with address %s not found", address)
 }
 
-func (c *Client) connLoop(conn *grpc.ClientConn, id *ID) {
-	if c.onPeerJoin != nil {
-		c.onPeerJoin(conn, id)
-	}
+func (c *Client) connLoop(conn *grpc.ClientConn) {
+	var id *ID
 
+	id = nil
+	failureCount := 0
+
+	state := connectivity.Idle
 	for {
-		changed := conn.WaitForStateChange(context.Background(), conn.GetState())
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		changed := conn.WaitForStateChange(ctx, state)
+		state = conn.GetState()
+		cancel()
 
-		if !changed {
-			return
+		select {
+		case _, open := <-c.cleanupChannel:
+			if !open {
+				state = connectivity.Shutdown
+				changed = true
+			}
+		default:
 		}
 
-		state := conn.GetState()
+		if !changed {
+			continue
+		}
+
+		if failureCount > 30 {
+			state = connectivity.Shutdown
+		}
 
 		switch state {
+		case connectivity.Ready:
+			var err error
+
+			if id == nil {
+				id, err = c.getPeerID(conn, 3*time.Second)
+				if err == nil {
+					failureCount = 0
+
+					if c.onPeerJoin != nil {
+						c.onPeerJoin(conn, id)
+					}
+				} else {
+					failureCount++
+				}
+
+			}
 		case connectivity.TransientFailure:
+			failureCount++
 			fallthrough
 		case connectivity.Shutdown:
 			c.peersLock.Lock()
-			if _, ok := c.peers[conn.Target()]; ok {
-				delete(c.peers, conn.Target())
-				c.peersLock.Unlock()
-
-				if c.onPeerLeave != nil {
-					c.onPeerLeave(conn, id)
-				}
-
-				return
-			}
-
+			delete(c.peersID, conn.Target())
 			c.peersLock.Unlock()
 
-			return
+			if c.onPeerLeave != nil && id != nil {
+				c.onPeerLeave(conn, id)
+			}
+
+			id = nil
+
+			/*
+			 * We no longer need to monitor this connection
+			 * and all references to it should be lost
+			 */
+			if state == connectivity.Shutdown {
+				goto connLoopDone
+			}
 		}
 	}
+
+connLoopDone:
+
+	/*
+	 * For a permenant failure, the connection instance is
+	 * removed from the connection cache so that new
+	 * connections will succeed
+	 */
+	c.peersLock.Lock()
+	delete(c.peers, conn.Target())
+	c.peersLock.Unlock()
+
+	conn.Close()
+
+	c.logger.Printf("Finish connLoop on %s", conn.Target())
+
+	return
 }
 
 // RefreshPeriodically periodically refreshes the list of peers for a node given a time period.

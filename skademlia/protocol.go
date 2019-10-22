@@ -38,6 +38,49 @@ type Protocol struct {
 	client *Client
 }
 
+func (p Protocol) registerPeerID(info noise.Info, id *ID) error {
+	info.Put(KeyID, id)
+
+	for p.client.table.Update(id) == ErrBucketFull {
+		bucket := p.client.table.buckets[getBucketID(p.client.table.self.checksum, id.checksum)]
+
+		bucket.Lock()
+		last := bucket.Back()
+		lastID := last.Value.(*ID)
+		bucket.Unlock()
+
+		p.client.peersLock.RLock()
+		lastConn, exists := p.client.peers[lastID.address]
+		p.client.peersLock.RUnlock()
+
+		if !exists {
+			p.client.table.Delete(bucket, lastID)
+			continue
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		if _, err := NewOverlayClient(lastConn).DoPing(ctx, &Ping{}); err != nil {
+			p.client.table.Delete(bucket, lastID)
+			lastConn.Close()
+			cancel()
+			continue
+		}
+		cancel()
+
+		p.client.logger.Printf("Routing table is full; evicting peer %s.\n", id)
+
+		// Ping was successful; disallow the current peer from connecting.
+
+		p.client.peersLock.Lock()
+		delete(p.client.peers, id.address)
+		p.client.peersLock.Unlock()
+
+		return errors.New("skademlia: cannot evict any peers to make room for new peer")
+	}
+
+	return nil
+}
+
 func (p Protocol) handshake(info noise.Info, conn net.Conn) (*ID, error) {
 	buf := p.client.id.Marshal()
 	signature := edwards25519.Sign(p.client.keys.privateKey, buf)
@@ -76,45 +119,6 @@ func (p Protocol) handshake(info noise.Info, conn net.Conn) (*ID, error) {
 
 	ptr := &id
 
-	info.Put(KeyID, ptr)
-
-	for p.client.table.Update(ptr) == ErrBucketFull {
-		bucket := p.client.table.buckets[getBucketID(p.client.table.self.checksum, id.checksum)]
-
-		bucket.Lock()
-		last := bucket.Back()
-		lastID := last.Value.(*ID)
-		bucket.Unlock()
-
-		p.client.peersLock.RLock()
-		lastConn, exists := p.client.peers[lastID.Address()]
-		p.client.peersLock.RUnlock()
-
-		if !exists {
-			p.client.table.Delete(bucket, lastID)
-			continue
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		if _, err = NewOverlayClient(lastConn).DoPing(ctx, &Ping{}); err != nil {
-			p.client.table.Delete(bucket, lastID)
-			lastConn.Close()
-			cancel()
-			continue
-		}
-		cancel()
-
-		p.client.logger.Printf("Routing table is full; evicting peer %s.\n", id)
-
-		// Ping was successful; disallow the current peer from connecting.
-
-		p.client.peersLock.Lock()
-		delete(p.client.peers, id.Address())
-		p.client.peersLock.Unlock()
-
-		return nil, errors.New("skademlia: cannot evict any peers to make room for new peer")
-	}
-
 	return ptr, nil
 }
 
@@ -140,6 +144,9 @@ func (p Protocol) Client(info noise.Info, ctx context.Context, authority string,
 	}
 
 	p.client.logger.Printf("Connected to server %s.\n", id)
+
+	/* We verified that the server is valid, add them to the routing table */
+	p.registerPeerID(info, id)
 
 	return conn, nil
 }
@@ -193,11 +200,17 @@ func (p Protocol) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
 		return nil, err
 	}
 
-	p.client.logger.Printf("Client %s has connected to you.\n", id)
+	p.client.logger.Printf("Client %s has connected to you", id)
 
 	go func() {
 		if _, err = p.client.Dial(id.Address(), WithTimeout(3*time.Second)); err != nil {
+			p.client.logger.Printf("Client %s was not able to be dialed back, closing connection", id)
 			_ = conn.Close()
+		} else {
+			/* We were able to dial the peer, add them to our table */
+			p.client.logger.Printf("Client %s was successfully dialed back, adding it as a peer", id)
+
+			p.registerPeerID(info, id)
 		}
 	}()
 
