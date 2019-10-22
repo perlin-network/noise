@@ -64,7 +64,7 @@ func (i *Info) Put(key string, val interface{}) {
 
 func (i *Info) Get(key string) interface{} {
 	i.mu.RLock()
-	defer i.mu.Unlock()
+	defer i.mu.RUnlock()
 
 	return i.data[key]
 }
