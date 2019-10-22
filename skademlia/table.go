@@ -110,11 +110,19 @@ func (t *Table) Update(target *ID) error {
 	if found := t.Find(b, target); found != nil {
 		b.Lock()
 
-		// address might differ for same public key (checksum
 		id := found.Value.(*ID)
-		id.address = target.address
+		// address might differ for same public key (checksum)
+		if id.address != target.address {
+			// address is different so we remove the existing ID, add the ID that has new address
 
-		b.MoveToFront(found)
+			b.Remove(found)
+			b.PushFront(target)
+		} else {
+			// there's no change on the ID
+
+			b.MoveToFront(found)
+		}
+
 		b.Unlock()
 
 		return nil
