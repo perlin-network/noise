@@ -38,9 +38,7 @@ type Protocol struct {
 	client *Client
 }
 
-func (p Protocol) registerPeerID(info noise.Info, id *ID) error {
-	info.Put(KeyID, id)
-
+func (p Protocol) registerPeerID(id *ID) error {
 	for p.client.table.Update(id) == ErrBucketFull {
 		bucket := p.client.table.buckets[getBucketID(p.client.table.self.checksum, id.checksum)]
 
@@ -145,6 +143,8 @@ func (p Protocol) Client(info noise.Info, ctx context.Context, authority string,
 
 	p.client.logger.Printf("Connected to server %s.\n", id)
 
+	info.Put(KeyID, id)
+
 	/* We verified that the server is valid, add them to the routing table */
 	p.registerPeerID(info, id)
 
@@ -201,6 +201,8 @@ func (p Protocol) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
 	}
 
 	p.client.logger.Printf("Client %s has connected to you", id)
+
+	info.Put(KeyID, id)
 
 	go func() {
 		if _, err = p.client.Dial(id.address, WithTimeout(3*time.Second)); err != nil {
