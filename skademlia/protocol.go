@@ -146,7 +146,7 @@ func (p Protocol) Client(info noise.Info, ctx context.Context, authority string,
 	info.Put(KeyID, id)
 
 	/* We verified that the server is valid, add them to the routing table */
-	p.registerPeerID(info, id)
+	_ = p.registerPeerID(id)
 
 	return conn, nil
 }
@@ -212,7 +212,7 @@ func (p Protocol) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
 			/* We were able to dial the peer, add them to our table */
 			p.client.logger.Printf("Client %s was successfully dialed back, adding it as a peer", id)
 
-			p.registerPeerID(info, id)
+			_ = p.registerPeerID(id)
 		}
 	}()
 
