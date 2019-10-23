@@ -111,15 +111,23 @@ func (t *Table) Update(target *ID) error {
 		b.Lock()
 
 		id := found.Value.(*ID)
-		// address might differ for same public key (checksum)
-		if id.address != target.address {
-			// address is different so we remove the existing ID, add the ID that has new address
 
+		// To make sure the peer ID's address is correct,
+		// add checking if the address is different, then the ID is re-added.
+		// Read below for more information.
+
+		// A peer's ID can have different address since the first time the ID was added to the table.
+		// If the peer has same ID reconnects with different address and its ID is still on the table,
+		// then the address of the existing ID is incorrect.
+
+		// The reason that a peer's ID can stay on the table after it's disconnected,
+		// is because we only remove the ID (evict) to make space for other peer's ID on the bucket.
+		// (Unless the client explicitly disconnects the peer)
+
+		if id.address != target.address {
 			b.Remove(found)
 			b.PushFront(target)
 		} else {
-			// there's no change on the ID
-
 			b.MoveToFront(found)
 		}
 
