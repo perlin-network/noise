@@ -1,6 +1,7 @@
 package skademlia
 
 import (
+	"bytes"
 	"context"
 	"github.com/perlin-network/noise"
 	"github.com/perlin-network/noise/edwards25519"
@@ -9,6 +10,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"net"
+	"sort"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -85,8 +87,10 @@ func TestClient(t *testing.T) {
 }
 
 func TestClientEviction(t *testing.T) {
+	bucketSize := 2
+
 	s := newClientTestContainer(t, 1, 1)
-	s.client.table.setBucketSize(1)
+	s.client.table.setBucketSize(bucketSize)
 	s.serve()
 	defer s.cleanup()
 
@@ -96,25 +100,66 @@ func TestClientEviction(t *testing.T) {
 		accept <- struct{}{}
 	})
 
-	var clients []*Client
-	for i := 0; i < 5; i++ {
+	peersByBuckets := make(map[int][]*ID)
+	for i := 0; i < 10; i++ {
 		c := newClientTestContainer(t, 1, 1)
 		c.serve()
 
-		//noinspection GoDeferInLoop
-		defer c.cleanup()
-
-		_, err := c.client.Dial(s.lis.Addr().String())
+		_, err := s.client.Dial(c.lis.Addr().String())
 		assert.NoError(t, err)
 
-		clients = append(clients, c.client)
+		bucketID := getBucketID(s.client.id.checksum, c.client.id.checksum)
+		peersByBuckets[bucketID] = append(peersByBuckets[bucketID], c.client.id)
+
+		// Wait for the server to dial the peer and update the table.
+		time.Sleep(150 * time.Millisecond)
+
+		// Kill the client to make sure it can get evicted.
+		c.cleanup()
 	}
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 10; i++ {
 		<-accept
 	}
 
-	assert.Len(t, s.client.ClosestPeerIDs(), 1)
+	// Get the peers closest to the server.
+	var expectedClosestPeerIDs []*ID
+	var closest = len(s.client.table.buckets)
+	for closest >= 0 {
+		if ids := peersByBuckets[closest]; ids != nil {
+			for i := 0; i < len(ids); i++ {
+				id := ids[i]
+
+				// Prepend to sort it by the latest peers.
+				expectedClosestPeerIDs = append([]*ID{id}, expectedClosestPeerIDs...)
+			}
+		}
+
+		if len(expectedClosestPeerIDs) >= bucketSize {
+			break
+		}
+		closest--
+	}
+
+	if expectedClosestPeerIDs == nil {
+		assert.FailNow(t, "failed to find expected closest peer IDs")
+	}
+
+	sort.Slice(expectedClosestPeerIDs, func(i, j int) bool {
+		return bytes.Compare(xor(expectedClosestPeerIDs[i].checksum[:], s.client.id.checksum[:]), xor(expectedClosestPeerIDs[j].checksum[:], s.client.id.checksum[:])) == -1
+	})
+
+	if len(expectedClosestPeerIDs) > bucketSize {
+		expectedClosestPeerIDs = expectedClosestPeerIDs[:bucketSize]
+	}
+
+	closestPeerIDs := s.client.ClosestPeerIDs()
+	for i := 0; i < len(closestPeerIDs); i++ {
+		actual := closestPeerIDs[i]
+		expected := expectedClosestPeerIDs[i]
+
+		assert.Equal(t, expected.id, actual.id, )
+	}
 }
 
 func TestInterceptedServerStream(t *testing.T) {
