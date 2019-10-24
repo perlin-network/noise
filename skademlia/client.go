@@ -54,8 +54,9 @@ type Client struct {
 
 	protocol Protocol
 
-	onPeerJoin  func(*grpc.ClientConn, *ID)
-	onPeerLeave func(*grpc.ClientConn, *ID)
+	callbackLock sync.Mutex
+	onPeerJoin   func(*grpc.ClientConn, *ID)
+	onPeerLeave  func(*grpc.ClientConn, *ID)
 
 	cleanupChannel chan struct{}
 }
@@ -96,10 +97,16 @@ func (c *Client) SetCredentials(creds *noise.Credentials) {
 }
 
 func (c *Client) OnPeerJoin(fn func(*grpc.ClientConn, *ID)) {
+	c.callbackLock.Lock()
+	defer c.callbackLock.Unlock()
+
 	c.onPeerJoin = fn
 }
 
 func (c *Client) OnPeerLeave(fn func(*grpc.ClientConn, *ID)) {
+	c.callbackLock.Lock()
+	defer c.callbackLock.Unlock()
+
 	c.onPeerLeave = fn
 }
 
@@ -323,8 +330,12 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 				if err == nil {
 					failureCount = 0
 
-					if c.onPeerJoin != nil {
-						c.onPeerJoin(conn, id)
+					c.callbackLock.Lock()
+					onPeerJoin := c.onPeerJoin
+					c.callbackLock.Unlock()
+
+					if onPeerJoin != nil {
+						onPeerJoin(conn, id)
 					}
 				} else {
 					failureCount++
@@ -339,8 +350,12 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 			delete(c.peersID, conn.Target())
 			c.peersLock.Unlock()
 
-			if c.onPeerLeave != nil && id != nil {
-				c.onPeerLeave(conn, id)
+			c.callbackLock.Lock()
+			onPeerLeave := c.onPeerLeave
+			c.callbackLock.Unlock()
+
+			if onPeerLeave != nil && id != nil {
+				onPeerLeave(conn, id)
 			}
 
 			id = nil
