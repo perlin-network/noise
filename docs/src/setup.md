@@ -11,7 +11,7 @@ After installing _Go_, you may choose to either:
 export GO111MODULE=on
 
 # Run this inside your projects directory.
-go get github.com/perlin-network/noise
+go get github.com/Yayg/noise
 ```
 
 2. or checkout the source code on Github and run any of the following commands below.

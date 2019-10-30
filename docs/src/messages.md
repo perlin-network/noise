@@ -13,7 +13,7 @@ The `opcode` is a single unsigned byte that designates what a message contents (
 The `opcode <-> message` pairing may be specified entirely up to the user in code like so:
 
 ```go
-import "github.com/perlin-network/noise"
+import "github.com/Yayg/noise"
 
 var _ noise.Message = (*RandomMessage)(nil)
 
@@ -138,7 +138,7 @@ Simply pass a callback function to your `*noise.Node` instance, which will be fe
 You may intercept all incoming/outgoing messages on a per-peer level, such that you can choose to enforce encryption/decryption only for a particular set of peers!
 
 ```go
-import "github.com/perlin-network/noise"
+import "github.com/Yayg/noise"
 
 func main() {
 	params := noise.DefaultParams()
@@ -243,8 +243,8 @@ You may choose to omit having to use the `payload` package at any time, and dire
 // is formatted in terms of little-endian ordered bytes.
 
 import (
-	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/payload"
+	"github.com/Yayg/noise"
+	"github.com/Yayg/noise/payload"
 )
 
 var _ noise.Message = (*TestMessage)(nil)

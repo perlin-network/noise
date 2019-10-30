@@ -1,8 +1,8 @@
 package eddsa
 
 import (
-	"github.com/perlin-network/noise/internal/edwards25519"
-	"github.com/perlin-network/noise/signature"
+	"github.com/Yayg/noise/internal/edwards25519"
+	"github.com/Yayg/noise/signature"
 	"github.com/pkg/errors"
 )
 

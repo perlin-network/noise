@@ -3,7 +3,7 @@ package skademlia
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/perlin-network/noise/identity/ed25519"
+	"github.com/Yayg/noise/identity/ed25519"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/blake2b"
 	"testing"

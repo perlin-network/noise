@@ -6,8 +6,8 @@ As a result, noise provides a flexible, asynchronous callback manager that allow
 callback functions to operate/be invoked when a particular event occurs within the `callbacks` package.
 
 ```go
-import "github.com/perlin-network/noise"
-import "github.com/perlin-network/noise/callbacks"
+import "github.com/Yayg/noise"
+import "github.com/Yayg/noise/callbacks"
 import "fmt"
 
 func main() {
@@ -37,7 +37,7 @@ may be returned from within the callback to deregister the callback function aft
 ```go
 package noise
 
-import "github.com/perlin-network/noise/payload"
+import "github.com/Yayg/noise/payload"
 
 type OnErrorCallback func(node *Node, err error) error
 type OnPeerErrorCallback func(node *Node, peer *Peer, err error) error

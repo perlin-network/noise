@@ -1,8 +1,8 @@
 package protocol
 
 import (
-	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/payload"
+	"github.com/Yayg/noise"
+	"github.com/Yayg/noise/payload"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )

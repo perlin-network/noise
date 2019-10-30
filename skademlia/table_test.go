@@ -3,8 +3,8 @@ package skademlia
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/protocol"
+	"github.com/Yayg/noise"
+	"github.com/Yayg/noise/protocol"
 	"github.com/stretchr/testify/assert"
 	"sort"
 	"sync"

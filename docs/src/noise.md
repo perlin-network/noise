@@ -21,7 +21,7 @@ Out of its own low-level constructs, noise additionally comes bundled with a hig
 
 Every single building block is easily configurable, and may be mixed and matched together to help you kickstart your journey on developing secure, debuggable, and highly-performant p2p applications.
 
-> **noise** is truly open-source and free. You can find the source code on [GitHub](https://github.com/perlin-network/noise). Issues and feature requests can be posted on the [GitHub issue tracker](https://github.com/perlin-network/noise/issues).
+> **noise** is truly open-source and free. You can find the source code on [GitHub](https://github.com/Yayg/noise). Issues and feature requests can be posted on the [GitHub issue tracker](https://github.com/Yayg/noise/issues).
 
 ```go
 package main
@@ -29,13 +29,13 @@ package main
 import (
 	"fmt"
 	
-	"github.com/perlin-network/noise"
-    "github.com/perlin-network/noise/cipher/aead"
-    "github.com/perlin-network/noise/handshake/ecdh"
-    "github.com/perlin-network/noise/identity/ed25519"
-    "github.com/perlin-network/noise/protocol"
-    "github.com/perlin-network/noise/rpc"
-    "github.com/perlin-network/noise/skademlia"
+	"github.com/Yayg/noise"
+    "github.com/Yayg/noise/cipher/aead"
+    "github.com/Yayg/noise/handshake/ecdh"
+    "github.com/Yayg/noise/identity/ed25519"
+    "github.com/Yayg/noise/protocol"
+    "github.com/Yayg/noise/rpc"
+    "github.com/Yayg/noise/skademlia"
 )
 
 func main() {
@@ -95,4 +95,4 @@ We are heavily active, ready to answer any questions/assist you with any code/do
 
 ## License
 
-**noise**, and all of its source code is released under the MIT [License](https://github.com/perlin-network/noise/blob/master/LICENSE).
+**noise**, and all of its source code is released under the MIT [License](https://github.com/Yayg/noise/blob/master/LICENSE).

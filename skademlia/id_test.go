@@ -3,7 +3,7 @@ package skademlia
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/perlin-network/noise/payload"
+	"github.com/Yayg/noise/payload"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

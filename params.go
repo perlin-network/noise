@@ -1,9 +1,9 @@
 package noise
 
 import (
-	"github.com/perlin-network/noise/identity"
-	"github.com/perlin-network/noise/nat"
-	"github.com/perlin-network/noise/transport"
+	"github.com/Yayg/noise/identity"
+	"github.com/Yayg/noise/nat"
+	"github.com/Yayg/noise/transport"
 	"time"
 )
 

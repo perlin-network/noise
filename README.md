@@ -2,18 +2,18 @@
 
 [![GoDoc][1]][2] [![Discord][7]][8] [![MIT licensed][5]][6] [![Build Status][9]][10] [![Go Report Card][11]][12] [![Coverage Statusd][13]][14]
 
-[1]: https://godoc.org/github.com/perlin-network/noise?status.svg
-[2]: https://godoc.org/github.com/perlin-network/noise
+[1]: https://godoc.org/github.com/Yayg/noise?status.svg
+[2]: https://godoc.org/github.com/Yayg/noise
 [5]: https://img.shields.io/badge/license-MIT-blue.svg
 [6]: LICENSE
 [7]: https://img.shields.io/discord/458332417909063682.svg
 [8]: https://discord.gg/dMYfDPM
-[9]: https://travis-ci.org/perlin-network/noise.svg?branch=master
-[10]: https://travis-ci.org/perlin-network/noise
-[11]: https://goreportcard.com/badge/github.com/perlin-network/noise
-[12]: https://goreportcard.com/report/github.com/perlin-network/noise
-[13]: https://codecov.io/gh/perlin-network/noise/branch/master/graph/badge.svg
-[14]: https://codecov.io/gh/perlin-network/noise
+[9]: https://travis-ci.org/Yayg/noise.svg?branch=master
+[10]: https://travis-ci.org/Yayg/noise
+[11]: https://goreportcard.com/badge/github.com/Yayg/noise
+[12]: https://goreportcard.com/report/github.com/Yayg/noise
+[13]: https://codecov.io/gh/Yayg/noise/branch/master/graph/badge.svg
+[14]: https://codecov.io/gh/Yayg/noise
 
 
 <img align="right" width=400 src="docs/media/chat.gif">
@@ -53,13 +53,13 @@ package main
 import (
     "fmt"
 	
-    "github.com/perlin-network/noise"
-    "github.com/perlin-network/noise/cipher/aead"
-    "github.com/perlin-network/noise/handshake/ecdh"
-    "github.com/perlin-network/noise/identity/ed25519"
-    "github.com/perlin-network/noise/protocol"
-    "github.com/perlin-network/noise/rpc"
-    "github.com/perlin-network/noise/skademlia"
+    "github.com/Yayg/noise"
+    "github.com/Yayg/noise/cipher/aead"
+    "github.com/Yayg/noise/handshake/ecdh"
+    "github.com/Yayg/noise/identity/ed25519"
+    "github.com/Yayg/noise/protocol"
+    "github.com/Yayg/noise/rpc"
+    "github.com/Yayg/noise/skademlia"
 )
 
 type chatMessage struct {
@@ -135,7 +135,7 @@ After installing _Go_, you may choose to either:
 export GO111MODULE=on
 
 # Run this inside your projects directory.
-go get github.com/perlin-network/noise
+go get github.com/Yayg/noise
 ```
 
 2. or checkout the source code on Github and run any of the following commands below.
@@ -187,4 +187,4 @@ We are heavily active, ready to answer any questions/assist you with any code/do
 
 ## License
 
-**noise**, and all of its source code is released under the MIT [License](https://github.com/perlin-network/noise/blob/master/LICENSE).
+**noise**, and all of its source code is released under the MIT [License](https://github.com/Yayg/noise/blob/master/LICENSE).

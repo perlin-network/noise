@@ -11,8 +11,8 @@ The shared key from prior blocks would be passed through a SHA256-based [HKDF](h
 Any other hash function may optionally be set to perform key derivation like so:
 
 ```go
-import "github.com/perlin-network/noise"
-import "github.com/perlin-network/noise/cipher/aead"
+import "github.com/Yayg/noise"
+import "github.com/Yayg/noise/cipher/aead"
 import "crypto/sha256"
 import "crypto/sha512"
 
@@ -29,8 +29,8 @@ ChaCha20-Poly1305 and XChaCha20-Poly1305 are also supported, but note that the s
 You may set the cipher to use w/ `aead` like so:
 
 ```go
-import "github.com/perlin-network/noise"
-import "github.com/perlin-network/noise/cipher/aead"
+import "github.com/Yayg/noise"
+import "github.com/Yayg/noise/cipher/aead"
 import "crypto/cipher"
 
 block := aead.New()
@@ -55,8 +55,8 @@ An `ACK` message is sent between two peers, and received using the atomic lockin
 Timeouts for expecting to receive the `ACK` message can be easily set like so:
 
 ```go
-import "github.com/perlin-network/noise"
-import "github.com/perlin-network/noise/cipher/aead"
+import "github.com/Yayg/noise"
+import "github.com/Yayg/noise/cipher/aead"
 import "time"
 
 block := aead.New().WithACKTimeout(3 * time.Second)

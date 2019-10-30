@@ -1,7 +1,7 @@
 package noise
 
 import (
-	"github.com/perlin-network/noise/payload"
+	"github.com/Yayg/noise/payload"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"testing"

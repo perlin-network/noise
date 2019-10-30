@@ -2,8 +2,8 @@ package noise
 
 import (
 	"fmt"
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/transport"
+	"github.com/Yayg/noise/log"
+	"github.com/Yayg/noise/transport"
 	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"

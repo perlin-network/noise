@@ -2,10 +2,10 @@ package ecdh
 
 import (
 	"crypto"
-	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/internal/edwards25519"
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/protocol"
+	"github.com/Yayg/noise"
+	"github.com/Yayg/noise/internal/edwards25519"
+	"github.com/Yayg/noise/log"
+	"github.com/Yayg/noise/protocol"
 	"github.com/pkg/errors"
 	"time"
 )

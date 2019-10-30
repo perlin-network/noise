@@ -7,7 +7,7 @@ You can create multiple nodes within a single application, though most of the ti
 To make management of nodes simple within Noise, all node-level logic/operations are encapsulated and accessible under a single entity: `*noise.Node`.
 
 ```go
-import "github.com/perlin-network/noise"
+import "github.com/Yayg/noise"
 
 func main() {
 	// Instantiate a default set of node parameters.

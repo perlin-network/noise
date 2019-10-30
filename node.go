@@ -2,11 +2,11 @@ package noise
 
 import (
 	"fmt"
-	"github.com/perlin-network/noise/callbacks"
-	"github.com/perlin-network/noise/identity"
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/nat"
-	"github.com/perlin-network/noise/transport"
+	"github.com/Yayg/noise/callbacks"
+	"github.com/Yayg/noise/identity"
+	"github.com/Yayg/noise/log"
+	"github.com/Yayg/noise/nat"
+	"github.com/Yayg/noise/transport"
 	"github.com/pkg/errors"
 	"net"
 	"sync"

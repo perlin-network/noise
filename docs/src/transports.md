@@ -9,8 +9,8 @@ To use either one of the transport layers, it is a matter of setting the option 
 
 ```go
 import (
-	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/transport"
+	"github.com/Yayg/noise"
+	"github.com/Yayg/noise/transport"
 )
 
 params := noise.DefaultParams()

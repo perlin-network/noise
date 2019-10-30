@@ -3,8 +3,8 @@ package skademlia
 import (
 	"bytes"
 	"container/list"
-	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/protocol"
+	"github.com/Yayg/noise"
+	"github.com/Yayg/noise/protocol"
 	"github.com/pkg/errors"
 	"sort"
 	"sync"

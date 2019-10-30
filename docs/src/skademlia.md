@@ -18,7 +18,7 @@ In order to incorporate S/Kademlia as an overlay network into your protocol, you
 up like so:
 
 ```go
-import "github.com/perlin-network/noise"
+import "github.com/Yayg/noise"
 import "github.com/perlin-network/skademlia"
 
 func main() {
@@ -49,7 +49,7 @@ S/Kademlia performs its own handshake procedure to validate node identities, and
 handshake procedures/message cipher setup blocks may be registered before S/Kademlia like so:
 
 ```go
-import "github.com/perlin-network/noise"
+import "github.com/Yayg/noise"
 import "github.com/perlin-network/skademlia"
 import "github.com/perlin-network/handshake/ecdh"
 import "github.com/perlin-network/cipher/aead"
@@ -93,8 +93,8 @@ A Kademlia table is instantiated when the S/Kademlia block is registered to a pr
 In order to grab an instance of the Kademlia table underlying our node, you may call `skademlia.Table(*noise.Node)`:
 
 ```go
-import "github.com/perlin-network/noise"
-import "github.com/perlin-network/noise/skademlia"
+import "github.com/Yayg/noise"
+import "github.com/Yayg/noise/skademlia"
 
 var node *noise.Node
 
@@ -180,7 +180,7 @@ to within our network.
 You may invoke the `FIND_NODE` RPC call after setting up your node to work with S/Kademlia like so:
 
 ```go
-import "github.com/perlin-network/noise"
+import "github.com/Yayg/noise"
 import "github.com/perlin-network/skademlia"
 
 func main() {
@@ -248,7 +248,7 @@ message we wish to broadcast, we may make use of the `skademlia.BroadcastAsync(*
 The `chat` example in Noise calls `BroadcastAsync` to broadcast a chat message to peers closest to us like so:
 
 ```go
-import "github.com/perlin-network/noise/payload"
+import "github.com/Yayg/noise/payload"
 
 var _ noise.Message = (*chatMessage)(nil)
 

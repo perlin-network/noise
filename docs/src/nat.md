@@ -9,8 +9,8 @@ Using either one of the schemes above is a matter of setting the `NAT` option li
 
 ```go
 import (
-	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/nat"
+	"github.com/Yayg/noise"
+	"github.com/Yayg/noise/nat"
 )
 
 params := noise.DefaultParams()

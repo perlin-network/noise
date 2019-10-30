@@ -8,7 +8,7 @@ After taking some time to configure and instantiate your node, you can dial/conn
 package main
 
 import (
-	"github.com/perlin-network/noise"
+	"github.com/Yayg/noise"
 )
 
 func main() {

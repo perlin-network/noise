@@ -1,7 +1,7 @@
 package ed25519_test
 
 import (
-	"github.com/perlin-network/noise/identity/ed25519"
+	"github.com/Yayg/noise/identity/ed25519"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )

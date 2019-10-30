@@ -3,9 +3,9 @@ package skademlia
 import (
 	"bytes"
 	"fmt"
-	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/payload"
-	"github.com/perlin-network/noise/protocol"
+	"github.com/Yayg/noise"
+	"github.com/Yayg/noise/payload"
+	"github.com/Yayg/noise/protocol"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/blake2b"
 	"math/bits"

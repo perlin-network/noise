@@ -1,7 +1,7 @@
 package skademlia
 
 import (
-	"github.com/perlin-network/noise/signature/eddsa"
+	"github.com/Yayg/noise/signature/eddsa"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"testing/quick"
