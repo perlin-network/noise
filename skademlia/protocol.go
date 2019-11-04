@@ -207,7 +207,6 @@ func (p Protocol) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
 	go func() {
 		if _, err = p.client.Dial(id.address, WithTimeout(3*time.Second)); err != nil {
 			p.client.logger.Printf("Client %s was not able to be dialed back, closing connection", id)
-			_ = conn.Close()
 		} else {
 			/* We were able to dial the peer, add them to our table */
 			p.client.logger.Printf("Client %s was successfully dialed back, adding it as a peer", id)
