@@ -51,6 +51,7 @@ func DeriveAEAD(suiteFn suiteFn, hashFn hashFn, ephemeralSharedKey []byte, conte
 
 // AEAD via. AES-256 GCM (Galois Counter Mode).
 func Aes256GCM() func(sharedKey []byte) (cipher.AEAD, error) {
+	// TODO: document this somewhere, and/or use an alternative implementation of AES
 	// if !cpu.Initialized || (cpu.Initialized && !cpu.ARM64.HasAES && !cpu.X86.HasAES && !cpu.S390X.HasAESGCM) {
 	// 	panic("UNSUPPORTED: CPU does not support AES-NI instructions.")
 	// }
