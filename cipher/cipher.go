@@ -22,10 +22,10 @@ package cipher
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"hash"
+
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/hkdf"
-	"golang.org/x/sys/cpu"
-	"hash"
 )
 
 type suiteFn func([]byte) (cipher.AEAD, error)
@@ -51,9 +51,10 @@ func DeriveAEAD(suiteFn suiteFn, hashFn hashFn, ephemeralSharedKey []byte, conte
 
 // AEAD via. AES-256 GCM (Galois Counter Mode).
 func Aes256GCM() func(sharedKey []byte) (cipher.AEAD, error) {
-	if !cpu.Initialized || (cpu.Initialized && !cpu.ARM64.HasAES && !cpu.X86.HasAES && !cpu.S390X.HasAESGCM) {
-		panic("UNSUPPORTED: CPU does not support AES-NI instructions.")
-	}
+	// TODO: document this somewhere, and/or use an alternative implementation of AES
+	// if !cpu.Initialized || (cpu.Initialized && !cpu.ARM64.HasAES && !cpu.X86.HasAES && !cpu.S390X.HasAESGCM) {
+	// 	panic("UNSUPPORTED: CPU does not support AES-NI instructions.")
+	// }
 
 	return func(sharedKey []byte) (cipher.AEAD, error) {
 		block, _ := aes.NewCipher(sharedKey)
