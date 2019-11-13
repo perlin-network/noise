@@ -138,18 +138,21 @@ func (c *Client) AllPeers() []*grpc.ClientConn {
 	return conns
 }
 
-func (c *Client) ClosestPeers(opts ...DialOption) []*grpc.ClientConn {
+func (c *Client) ClosestPeers(opts ...DialOption) []ClosestPeer {
 	ids := c.table.FindClosest(c.table.self, c.table.getBucketSize())
 
-	var conns []*grpc.ClientConn
+	var peers []ClosestPeer
 
 	for i := range ids {
 		if conn, err := c.Dial(ids[i].address, opts...); err == nil {
-			conns = append(conns, conn)
+			peers = append(peers, ClosestPeer{
+				conn: conn,
+				id:   ids[i],
+			})
 		}
 	}
 
-	return conns
+	return peers
 }
 
 func (c *Client) ClosestPeerIDs() []*ID {
@@ -611,4 +614,17 @@ func (s InterceptedServerStream) RecvMsg(m interface{}) error {
 	}
 
 	return nil
+}
+
+type ClosestPeer struct {
+	conn *grpc.ClientConn
+	id   *ID
+}
+
+func (c ClosestPeer) Conn() *grpc.ClientConn {
+	return c.conn
+}
+
+func (c ClosestPeer) ID() *ID {
+	return c.id
 }

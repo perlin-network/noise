@@ -120,10 +120,10 @@ func main() {
 			panic(err)
 		}
 
-		conns := client.ClosestPeers()
+		closestPeers := client.ClosestPeers()
 
-		for _, conn := range conns {
-			chat := NewChatClient(conn)
+		for _, closestPeer := range closestPeers {
+			chat := NewChatClient(closestPeer.Conn())
 
 			stream, err := chat.Stream(context.Background())
 			if err != nil {
