@@ -33,3 +33,8 @@ matrix:
         - GO111MODULE=on go test -coverprofile=coverage.txt -covermode=atomic -bench -race ./...
       after_success:
         - bash <(curl -s https://codecov.io/bash)
+
+    - name: "Run linter"
+      before_script:
+        - curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b $GOPATH/bin v1.20.1
+      script: golangci-lint -c .golangci.yml run
