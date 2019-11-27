@@ -37,4 +37,5 @@ matrix:
     - name: "Run linter"
       before_script:
         - curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b $GOPATH/bin v1.20.1
+        - go mod download
       script: golangci-lint -c .golangci.yml run
