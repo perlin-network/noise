@@ -1,0 +1,21 @@
+run:
+  skip-dirs:
+    - edwards25519
+
+linters-settings:
+  gocognit:
+    min-complexity: 45
+
+  godox:
+    keywords:
+      - NOTE
+      - BUG
+      - HACK
+
+linters:
+  enable-all: true
+  disable:
+    - gochecknoglobals
+    - goimports
+    - funlen
+    - maligned

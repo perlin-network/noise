@@ -3,10 +3,10 @@ package handshake
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"fmt"
 	"github.com/perlin-network/noise"
 	"github.com/stretchr/testify/assert"
-	"math/rand"
 	"net"
 	"testing"
 	"time"
@@ -21,20 +21,21 @@ func TestProtocol(t *testing.T) {
 	}
 
 	accept := make(chan noise.Info)
+
 	go func() {
 		serverRawConn, err := lis.Accept()
-		if err != nil {
+		if !assert.NoError(t, err) {
 			close(accept)
-			t.Fatal(err)
+			return
 		}
 
 		// Initiate server handshake
 
 		info := noise.Info{}
-		if _, err := ecdh.Server(info, serverRawConn); err != nil {
+		if _, err := ecdh.Server(info, serverRawConn); !assert.NoError(t, err) {
 			_ = serverRawConn.Close()
 			close(accept)
-			t.Fatalf("Error protocol.Server(): %v", err)
+			return
 		}
 
 		accept <- info
@@ -78,12 +79,17 @@ func TestProtocolBadHandshake(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer conn.Close()
+
+				defer func() {
+					_ = conn.Close()
+				}()
 
 				// Write random message
 
 				msg := make([]byte, 96)
-				rand.Read(msg)
+				if _, err := rand.Read(msg); err != nil {
+					t.Fatal(err)
+				}
 
 				_, err = conn.Write(msg)
 				assert.NoError(t, err)
@@ -102,12 +108,15 @@ func TestProtocolBadHandshake(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, 96, n)
 
-				conn.Close()
+				if err := conn.Close(); err != nil {
+					t.Fatal(err)
+				}
 			},
 		},
 	}
 
 	for _, tc := range tests {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			// Test Server
 			{
@@ -161,11 +170,14 @@ func (c ErrorConn) Write(b []byte) (n int, err error) {
 	if c.isWriteError {
 		return 0, fmt.Errorf("write error")
 	}
+
 	if c.isShortWrite {
 		return len(b) / 2, nil
 	}
+
 	return 0, nil
 }
+
 func (c ErrorConn) Read(b []byte) (n int, err error)   { return 0, nil }
 func (c ErrorConn) Close() error                       { return nil }
 func (c ErrorConn) LocalAddr() net.Addr                { return nil }

@@ -39,7 +39,9 @@ func NewECDH() ProtocolECDH {
 	return ProtocolECDH{}
 }
 
-func (ProtocolECDH) Client(info noise.Info, ctx context.Context, auth string, conn net.Conn) (net.Conn, error) {
+func (ProtocolECDH) Client( // nolint:golint
+	info noise.Info, ctx context.Context, auth string, conn net.Conn,
+) (net.Conn, error) {
 	if err := handshakeECDH(info, conn); err != nil {
 		return nil, err
 	}
@@ -55,7 +57,7 @@ func (ProtocolECDH) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
 	return conn, nil
 }
 
-func handshakeECDH(info noise.Info, conn net.Conn) error {
+func handshakeECDH(info noise.Info, conn net.Conn) error { // nolint:interfacer
 	ephemeralPublicKey, ephemeralPrivateKey, err := edwards25519.GenerateKey(nil)
 	if err != nil {
 		return errors.New("ecdh: failed to generate ephemeral keypair")
@@ -73,6 +75,7 @@ func handshakeECDH(info noise.Info, conn net.Conn) error {
 	if err != nil {
 		return errors.Wrap(err, "ecdh: failed to send handshake message")
 	}
+
 	if n != len(handshake) {
 		return errors.New("short write sending handshake message")
 	}
@@ -81,8 +84,10 @@ func handshakeECDH(info noise.Info, conn net.Conn) error {
 		return errors.Wrap(err, "ecdh: failed to receive handshake from server")
 	}
 
-	var remotePublicKey edwards25519.PublicKey
-	var remoteSignature edwards25519.Signature
+	var (
+		remotePublicKey edwards25519.PublicKey
+		remoteSignature edwards25519.Signature
+	)
 
 	copy(remotePublicKey[:], handshake[:edwards25519.SizePublicKey])
 	copy(remoteSignature[:], handshake[edwards25519.SizePublicKey:edwards25519.SizePublicKey+edwards25519.SizeSignature])
@@ -92,5 +97,6 @@ func handshakeECDH(info noise.Info, conn net.Conn) error {
 	}
 
 	info.PutBytes(SharedKey, computeSharedKey(ephemeralPrivateKey, remotePublicKey))
+
 	return nil
 }

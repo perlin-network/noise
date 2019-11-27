@@ -31,8 +31,8 @@ import (
 
 func TestPreventLoadingIllegalKeys(t *testing.T) {
 	f := func(address string, privateKey edwards25519.PrivateKey, nonce [blake2b.Size256]byte, c1, c2 byte) bool {
-		c1 = c1 / 32
-		c2 = c2 / 32
+		c1 /= 32
+		c2 /= 32
 
 		publicKey := privateKey.Public()
 
@@ -62,8 +62,8 @@ func TestPreventLoadingIllegalKeys(t *testing.T) {
 
 func TestCreateThenLoadKeys(t *testing.T) {
 	f := func(address string, c1, c2 byte) bool {
-		c1 = c1 / 32
-		c2 = c2 / 32
+		c1 /= 32
+		c2 /= 32
 
 		keys, err := NewKeys(int(c1), int(c2))
 
@@ -134,7 +134,7 @@ func TestMarshalUnmarshalID(t *testing.T) {
 		m := NewID(address, pub, nonce)
 		m2, err := UnmarshalID(bytes.NewReader(m.Marshal()))
 
-		if m3, err := UnmarshalID(bytes.NewReader(buf)); (m3 == zero && !assert.Error(t, err)) || (m3 != zero && !assert.NoError(t, err)) {
+		if m3, err := UnmarshalID(bytes.NewReader(buf)); (m3 == zero && !assert.Error(t, err)) || (m3 != zero && !assert.NoError(t, err)) { // nolint:lll
 			return false
 		}
 
@@ -142,5 +142,4 @@ func TestMarshalUnmarshalID(t *testing.T) {
 	}
 
 	assert.NoError(t, quick.Check(f, &quick.Config{MaxCount: 1000}))
-
 }

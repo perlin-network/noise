@@ -33,10 +33,12 @@ type hashFn func() hash.Hash
 
 const sharedKeyLength = 32
 
-func DeriveAEAD(suiteFn suiteFn, hashFn hashFn, ephemeralSharedKey []byte, context []byte) (cipher.AEAD, []byte, error) {
+func DeriveAEAD(
+	suiteFn suiteFn, hashFn hashFn, ephemeralSharedKey []byte, context []byte,
+) (cipher.AEAD, []byte, error) {
 	deriver := hkdf.New(hashFn, ephemeralSharedKey, nil, context)
-
 	sharedKey := make([]byte, sharedKeyLength)
+
 	if _, err := deriver.Read(sharedKey); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to derive key via hkdf")
 	}
@@ -55,7 +57,6 @@ func Aes256GCM() func(sharedKey []byte) (cipher.AEAD, error) {
 	// if !cpu.Initialized || (cpu.Initialized && !cpu.ARM64.HasAES && !cpu.X86.HasAES && !cpu.S390X.HasAESGCM) {
 	// 	panic("UNSUPPORTED: CPU does not support AES-NI instructions.")
 	// }
-
 	return func(sharedKey []byte) (cipher.AEAD, error) {
 		block, _ := aes.NewCipher(sharedKey)
 		suite, _ := cipher.NewGCM(block)

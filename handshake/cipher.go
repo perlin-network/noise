@@ -26,13 +26,13 @@ import (
 
 func computeSharedKey(nodePrivateKey edwards25519.PrivateKey, remotePublicKey edwards25519.PublicKey) []byte {
 	var nodeSecretKeyBuf, sharedKeyBuf [32]byte
+
 	copy(nodeSecretKeyBuf[:], deriveSecretKey(nodePrivateKey))
 
 	var sharedKeyElement, publicKeyElement edwards25519.ExtendedGroupElement
+
 	publicKeyElement.FromBytes((*[32]byte)(&remotePublicKey))
-
 	edwards25519.GeScalarMult(&sharedKeyElement, &nodeSecretKeyBuf, &publicKeyElement)
-
 	sharedKeyElement.ToBytes(&sharedKeyBuf)
 
 	return sharedKeyBuf[:]

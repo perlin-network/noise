@@ -49,11 +49,12 @@ func prefixDiff(a, b []byte, n int) int {
 
 		if n > 8*i && n < 8*(i+1) {
 			shift := 8 - uint(n%8)
-			b = b >> shift
+			b >>= shift
 		}
 
-		total += bits.OnesCount8(uint8(b))
+		total += bits.OnesCount8(b)
 	}
+
 	return total
 }
 
@@ -61,7 +62,7 @@ func prefixDiff(a, b []byte, n int) int {
 func prefixLen(a []byte) int {
 	for i, b := range a {
 		if b != 0 {
-			return i*8 + bits.LeadingZeros8(uint8(b))
+			return i*8 + bits.LeadingZeros8(b)
 		}
 	}
 

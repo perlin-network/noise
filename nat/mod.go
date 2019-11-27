@@ -59,6 +59,7 @@ func IsPrivateIP(ip net.IP) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -89,7 +90,7 @@ func activeGateways() ([]net.IP, error) {
 
 			if IsPrivateIP(address.IP) {
 				if ip := address.IP.Mask(address.Mask).To4(); ip != nil {
-					ip[3] = ip[3] | 0x01
+					ip[3] |= 0x01
 					gateways = append(gateways, ip)
 				}
 			}

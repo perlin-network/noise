@@ -2,21 +2,31 @@ package cipher
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"github.com/stretchr/testify/assert"
-	"math/rand"
 	"testing"
 )
 
 func TestSliceForAppend(t *testing.T) {
 	// Test without capacity
 	buf := make([]byte, 128)
-	rand.Read(buf)
+
+	_, err := rand.Read(buf)
+	if !assert.NoError(t, err) {
+		return
+	}
+
 	testSliceForAppend(t, buf)
 
 	// Test with capacity
 	buf = make([]byte, 128, 256)
-	rand.Read(buf)
+
+	_, err = rand.Read(buf)
+	if !assert.NoError(t, err) {
+		return
+	}
+
 	testSliceForAppend(t, buf)
 }
 
@@ -42,7 +52,12 @@ func testSliceForAppend(t *testing.T, buf []byte) {
 func TestParseFrame(t *testing.T) {
 	// Test msg length lower than MsgLenFieldSize (4)
 	buf := make([]byte, 1)
-	rand.Read(buf)
+
+	_, err := rand.Read(buf)
+	if !assert.NoError(t, err) {
+		return
+	}
+
 	current, next, err := parseFrame(buf, 8)
 	assert.Nil(t, current)
 	assert.Equal(t, buf, next)
@@ -65,12 +80,17 @@ func TestParseFrame(t *testing.T) {
 
 func getMsg(t *testing.T, size int, frameSize uint32) []byte {
 	msg := make([]byte, size)
-	rand.Read(msg)
+
+	_, err := rand.Read(msg)
+	if !assert.NoError(t, err) {
+		return nil
+	}
 
 	msgLength := make([]byte, 4)
 	binary.BigEndian.PutUint32(msgLength, frameSize)
 
 	var buf = bytes.NewBuffer(msgLength)
+
 	assert.NoError(t, binary.Write(buf, binary.LittleEndian, msg))
 
 	return buf.Bytes()

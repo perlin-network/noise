@@ -49,21 +49,27 @@ var addressMatchesTests = []struct {
 
 func TestAddressMatches(t *testing.T) {
 	for _, hostMatchTest := range addressMatchesTests {
-		assert.True(t, addressMatches(hostMatchTest.bind, hostMatchTest.subject) == hostMatchTest.equal, hostMatchTest.bind+" compared to "+hostMatchTest.subject)
+		am := addressMatches(hostMatchTest.bind, hostMatchTest.subject)
+		assert.True(t, am == hostMatchTest.equal, hostMatchTest.bind+" compared to "+hostMatchTest.subject)
 	}
 }
 
 func TestQuickCheckAddressMatchesIPV4(t *testing.T) {
 	f := func(ip [net.IPv4len]byte, port uint16) bool {
-		return addressMatches(net.IP(ip[:]).String()+":"+strconv.FormatUint(uint64(port), 10), net.IP(ip[:]).String()+":"+strconv.FormatUint(uint64(port), 10))
+		return addressMatches(
+			net.IP(ip[:]).String()+":"+strconv.FormatUint(uint64(port), 10),
+			net.IP(ip[:]).String()+":"+strconv.FormatUint(uint64(port), 10),
+		)
 	}
 	assert.NoError(t, quick.Check(f, nil))
 }
 
 func TestQuickCheckAddressMatchesIPV6(t *testing.T) {
 	f := func(ip [net.IPv6len]byte, port uint16) bool {
-		return addressMatches("["+net.IP(ip[:]).String()+"]"+":"+strconv.FormatUint(uint64(port), 10), "["+net.IP(ip[:]).String()+"]"+":"+strconv.FormatUint(uint64(port), 10))
-
+		return addressMatches(
+			"["+net.IP(ip[:]).String()+"]"+":"+strconv.FormatUint(uint64(port), 10),
+			"["+net.IP(ip[:]).String()+"]"+":"+strconv.FormatUint(uint64(port), 10),
+		)
 	}
 	assert.NoError(t, quick.Check(f, nil))
 }
@@ -71,30 +77,34 @@ func TestQuickCheckAddressMatchesIPV6(t *testing.T) {
 func TestProtocol(t *testing.T) {
 	c := newClientTestContainer(t, 1, 1)
 	c.serve()
+
 	defer c.cleanup()
 
 	s := newClientTestContainer(t, 1, 1)
 	s.serve()
+
 	defer s.cleanup()
 
 	var sinfo noise.Info
+
 	s.onServer = func(info noise.Info) {
 		sinfo = info
 	}
 
 	var cinfo noise.Info
+
 	c.onClient = func(info noise.Info) {
 		cinfo = info
 	}
 
 	accept := make(chan struct{})
+
 	c.client.OnPeerJoin(func(conn *grpc.ClientConn, id *ID) {
 		close(accept)
 	})
 
 	go func() {
-		_, err := c.client.Dial(s.lis.Addr().String())
-		if err != nil {
+		if _, err := c.client.Dial(s.lis.Addr().String()); err != nil {
 			assert.FailNow(t, "failed to dial")
 		}
 	}()
@@ -109,6 +119,7 @@ func TestProtocol(t *testing.T) {
 
 	sid := sinfo.Get(KeyID).(*ID)
 	cid := cinfo.Get(KeyID).(*ID)
+
 	assert.Equal(t, c.client.id.checksum, sid.checksum)
 	assert.Equal(t, s.client.id.checksum, cid.checksum)
 
@@ -117,9 +128,11 @@ func TestProtocol(t *testing.T) {
 		res, err := s.client.protocol.FindNode(context.Background(), &FindNodeRequest{
 			Id: cid.Marshal(),
 		})
+
 		assert.NoError(t, err)
 
 		id, err := UnmarshalID(bytes.NewReader(res.Ids[0]))
+
 		assert.NoError(t, err)
 		assert.Equal(t, c.client.id.id, id.id)
 	}
@@ -138,7 +151,9 @@ func TestProtocolBadHandshake(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				conn.Close()
+				if err := conn.Close(); err != nil {
+					t.Fatal(err)
+				}
 			},
 		},
 		{
@@ -153,7 +168,9 @@ func TestProtocolBadHandshake(t *testing.T) {
 				_, err = conn.Write(c.client.id.Marshal())
 				assert.NoError(t, err)
 
-				conn.Close()
+				if err := conn.Close(); err != nil {
+					t.Fatal(err)
+				}
 			},
 		},
 		{
@@ -188,7 +205,7 @@ func TestProtocolBadHandshake(t *testing.T) {
 				signature := edwards25519.Sign(c.client.keys.privateKey, buf)
 				handshake := append(buf, signature[:]...)
 
-				_, err = conn.Write(handshake[:])
+				_, err = conn.Write(handshake)
 				assert.NoError(t, err)
 			},
 		},
@@ -205,13 +222,14 @@ func TestProtocolBadHandshake(t *testing.T) {
 				signature := edwards25519.Sign(c.client.keys.privateKey, buf)
 				handshake := append(buf, signature[:]...)
 
-				_, err = conn.Write(handshake[:])
+				_, err = conn.Write(handshake)
 				assert.NoError(t, err)
 			},
 		},
 	}
 
 	for _, tc := range tests {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			// Test Server
 			{
@@ -250,8 +268,8 @@ func TestProtocolBadHandshake(t *testing.T) {
 func TestProtocolHandshakeClientBadAddress(t *testing.T) {
 	node := func(addr string) {
 		conn, err := net.Dial("tcp", addr)
-		if err != nil {
-			t.Fatal(err)
+		if !assert.NoError(t, err) {
+			return
 		}
 
 		c := newClientTestContainer(t, 1, 1)
@@ -260,9 +278,10 @@ func TestProtocolHandshakeClientBadAddress(t *testing.T) {
 		signature := edwards25519.Sign(c.client.keys.privateKey, buf)
 
 		handshake := append(buf, signature[:]...)
-		_, err = conn.Write(handshake[:])
+		_, err = conn.Write(handshake)
 		assert.NoError(t, err)
 	}
+
 	c := newClientTestContainer(t, 1, 1)
 
 	go node(c.lis.Addr().String())
@@ -282,15 +301,15 @@ func TestProtocolHandshakeSamePeerID(t *testing.T) {
 
 	node := func(addr string) {
 		conn, err := net.Dial("tcp", addr)
-		if err != nil {
-			t.Fatal(err)
+		if !assert.NoError(t, err) {
+			return
 		}
 
 		buf := c.client.id.Marshal()
 		signature := edwards25519.Sign(c.client.keys.privateKey, buf)
 		handshake := append(buf, signature[:]...)
 
-		_, err = conn.Write(handshake[:])
+		_, err = conn.Write(handshake)
 		assert.NoError(t, err)
 	}
 
@@ -301,7 +320,7 @@ func TestProtocolHandshakeSamePeerID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = c.client.protocol.handshake(noise.Info{}, conn)
+	_, err = c.client.protocol.handshake(conn)
 	assert.Error(t, err)
 }
 
@@ -309,37 +328,12 @@ func TestProtocolConnWriteError(t *testing.T) {
 	c := newClientTestContainer(t, 1, 1)
 
 	// Test the Write is incomplete
-	_, err := c.client.protocol.handshake(noise.Info{}, ErrorConn{isShortWrite: true})
+	_, err := c.client.protocol.handshake(ErrorConn{isShortWrite: true})
 	assert.Error(t, err)
 
 	// Test the Write returns an error
-	_, err = c.client.protocol.handshake(noise.Info{}, ErrorConn{isWriteError: true})
+	_, err = c.client.protocol.handshake(ErrorConn{isWriteError: true})
 	assert.Error(t, err)
-}
-
-func serverHandle(t *testing.T, protocol Protocol, info noise.Info, lis net.Listener) {
-	serverRawConn, err := lis.Accept()
-	if err != nil {
-		return
-	}
-
-	if _, err := protocol.Server(info, serverRawConn); err != nil {
-		_ = serverRawConn.Close()
-		t.Fatalf("Error server: %v", err)
-	}
-}
-
-func clientHandle(t *testing.T, protocol Protocol, info noise.Info, lisAddr string) net.Conn {
-	conn, err := net.Dial("tcp", lisAddr)
-	if err != nil {
-		t.Fatalf("Error client: %v", err)
-	}
-	_, err = protocol.Client(info, context.Background(), "", conn)
-	if err != nil {
-		t.Fatalf("Error client: %v", err)
-	}
-
-	return conn
 }
 
 type ErrorConn struct {
@@ -351,11 +345,14 @@ func (c ErrorConn) Write(b []byte) (n int, err error) {
 	if c.isWriteError {
 		return 0, fmt.Errorf("write error")
 	}
+
 	if c.isShortWrite {
 		return len(b) / 2, nil
 	}
+
 	return 0, nil
 }
+
 func (c ErrorConn) Read(b []byte) (n int, err error)   { return 0, nil }
 func (c ErrorConn) Close() error                       { return nil }
 func (c ErrorConn) LocalAddr() net.Addr                { return nil }

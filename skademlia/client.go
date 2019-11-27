@@ -292,12 +292,13 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 
 	id = nil
 	failureCount := 0
-
 	state := connectivity.Idle
+
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		changed := conn.WaitForStateChange(ctx, state)
 		state = conn.GetState()
+
 		cancel()
 
 		select {
@@ -332,7 +333,6 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 				} else {
 					failureCount++
 				}
-
 			}
 		case connectivity.TransientFailure:
 			failureCount++
@@ -361,7 +361,7 @@ func (c *Client) connLoop(conn *grpc.ClientConn) {
 connLoopDone:
 
 	/*
-	 * For a permenant failure, the connection instance is
+	 * For a permanent failure, the connection instance is
 	 * removed from the connection cache so that new
 	 * connections will succeed
 	 */
@@ -369,11 +369,9 @@ connLoopDone:
 	delete(c.peers, conn.Target())
 	c.peersLock.Unlock()
 
-	conn.Close()
+	_ = conn.Close()
 
 	c.logger.Printf("Finish connLoop on %s", conn.Target())
-
-	return
 }
 
 // RefreshPeriodically periodically refreshes the list of peers for a node given a time period.
@@ -395,7 +393,7 @@ func (c *Client) Bootstrap() (results []*ID) {
 	return c.FindNode(c.table.self, c.table.getBucketSize(), 3, 8)
 }
 
-func (c *Client) FindNode(target *ID, k int, a int, d int) (results []*ID) {
+func (c *Client) FindNode(target *ID, k int, a int, d int) []*ID {
 	type request ID
 
 	type response struct {
@@ -403,7 +401,10 @@ func (c *Client) FindNode(target *ID, k int, a int, d int) (results []*ID) {
 		ids       []*ID
 	}
 
-	var mu sync.Mutex
+	var (
+		mu      sync.Mutex
+		results []*ID
+	)
 
 	visited := map[[blake2b.Size256]byte]struct{}{
 		c.table.self.checksum: {},
@@ -414,10 +415,12 @@ func (c *Client) FindNode(target *ID, k int, a int, d int) (results []*ID) {
 
 	for i, id := range c.table.FindClosest(target, k) {
 		visited[id.checksum] = struct{}{}
+
 		lookups[i%d].PushBack(id)
 	}
 
 	var wg sync.WaitGroup
+
 	wg.Add(d)
 
 	for _, lookup := range lookups { // Perform d parallel disjoint lookups.
@@ -428,6 +431,7 @@ func (c *Client) FindNode(target *ID, k int, a int, d int) (results []*ID) {
 			for i := 0; i < a; i++ { // Perform α queries in parallel per disjoint lookup.
 				go func() {
 					for id := range requests {
+						id := id
 						f := func() error {
 							conn, err := c.Dial(id.address, WithTimeout(3*time.Second))
 
@@ -508,17 +512,21 @@ func (c *Client) FindNode(target *ID, k int, a int, d int) (results []*ID) {
 	wg.Wait() // Wait until all d parallel disjoint lookups are complete.
 
 	sort.Slice(results, func(i, j int) bool {
-		return bytes.Compare(xor(results[i].checksum[:], target.checksum[:]), xor(results[j].checksum[:], target.checksum[:])) == -1
+		return bytes.Compare(
+			xor(results[i].checksum[:], target.checksum[:]), xor(results[j].checksum[:], target.checksum[:]),
+		) == -1
 	})
 
 	if len(results) > k {
 		results = results[:k]
 	}
 
-	return
+	return results
 }
 
-func (c *Client) serverUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func (c *Client) serverUnaryInterceptor(
+	ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler,
+) (interface{}, error) {
 	res, err := handler(ctx, req)
 
 	p, ok := peer.FromContext(ctx)
@@ -539,7 +547,9 @@ func (c *Client) serverUnaryInterceptor(ctx context.Context, req interface{}, in
 	return res, err
 }
 
-func (c *Client) serverStreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func (c *Client) serverStreamInterceptor(
+	srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler,
+) error {
 	p, ok := peer.FromContext(ss.Context())
 	if !ok {
 		return errors.New("could not load peer")

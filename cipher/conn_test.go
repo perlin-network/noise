@@ -46,7 +46,8 @@ func (c *testConn) Close() error {
 }
 
 func newTestConn(in, out *bytes.Buffer) *connAEAD {
-	key := []byte{0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xd2, 0x4c, 0xce, 0x4f, 0x49, 0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xd2, 0x4c, 0xce, 0x4f, 0x49}
+	key := []byte{0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xd2, 0x4c, 0xce, 0x4f, 0x49, 0x1f,
+		0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xd2, 0x4c, 0xce, 0x4f, 0x49}
 
 	tc := testConn{
 		in:  in,
@@ -63,31 +64,40 @@ func newConnPair() (client, server *connAEAD) {
 	serverBuf := new(bytes.Buffer)
 	clientConn := newTestConn(clientBuf, serverBuf)
 	serverConn := newTestConn(serverBuf, clientBuf)
+
 	return clientConn, serverConn
 }
 
 func TestPingPong(t *testing.T) {
 	clientConn, serverConn := newConnPair()
 	clientMsg := []byte("Client Message")
+
 	if n, err := clientConn.Write(clientMsg); n != len(clientMsg) || err != nil {
 		t.Fatalf("Client Write() = %v, %v; want %v, <nil>", n, err, len(clientMsg))
 	}
+
 	rcvClientMsg := make([]byte, len(clientMsg))
+
 	if n, err := serverConn.Read(rcvClientMsg); n != len(rcvClientMsg) || err != nil {
 		t.Fatalf("Server Read() = %v, %v; want %v, <nil>", n, err, len(rcvClientMsg))
 	}
+
 	if !reflect.DeepEqual(clientMsg, rcvClientMsg) {
 		t.Fatalf("Client Write()/Server Read() = %v, want %v", rcvClientMsg, clientMsg)
 	}
 
 	serverMsg := []byte("Server Message")
+
 	if n, err := serverConn.Write(serverMsg); n != len(serverMsg) || err != nil {
 		t.Fatalf("Server Write() = %v, %v; want %v, <nil>", n, err, len(serverMsg))
 	}
+
 	rcvServerMsg := make([]byte, len(serverMsg))
+
 	if n, err := clientConn.Read(rcvServerMsg); n != len(rcvServerMsg) || err != nil {
 		t.Fatalf("Client Read() = %v, %v; want %v, <nil>", n, err, len(rcvServerMsg))
 	}
+
 	if !reflect.DeepEqual(serverMsg, rcvServerMsg) {
 		t.Fatalf("Server Write()/Client Read() = %v, want %v", rcvServerMsg, serverMsg)
 	}
@@ -96,19 +106,24 @@ func TestPingPong(t *testing.T) {
 func TestSmallReadBuffer(t *testing.T) {
 	clientConn, serverConn := newConnPair()
 	msg := []byte("Very Important Message")
+
 	if n, err := clientConn.Write(msg); err != nil {
 		t.Fatalf("Write() = %v, %v; want %v, <nil>", n, err, len(msg))
 	}
+
 	rcvMsg := make([]byte, len(msg))
 	n := 2 // Arbitrary index to break rcvMsg in two.
 	rcvMsg1 := rcvMsg[:n]
 	rcvMsg2 := rcvMsg[n:]
+
 	if n, err := serverConn.Read(rcvMsg1); n != len(rcvMsg1) || err != nil {
 		t.Fatalf("Read() = %v, %v; want %v, <nil>", n, err, len(rcvMsg1))
 	}
+
 	if n, err := serverConn.Read(rcvMsg2); n != len(rcvMsg2) || err != nil {
 		t.Fatalf("Read() = %v, %v; want %v, <nil>", n, err, len(rcvMsg2))
 	}
+
 	if !reflect.DeepEqual(msg, rcvMsg) {
 		t.Fatalf("Write()/Read() = %v, want %v", rcvMsg, msg)
 	}

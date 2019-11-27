@@ -40,7 +40,10 @@ func (p *pmp) ExternalIP() (net.IP, error) {
 }
 
 func (p *pmp) AddMapping(protocol string, externalPort, internalPort uint16, expiry time.Duration) error {
-	_, err := p.client.AddPortMapping(strings.ToLower(protocol), int(internalPort), int(externalPort), int(expiry/time.Second))
+	_, err := p.client.AddPortMapping(
+		strings.ToLower(protocol), int(internalPort), int(externalPort), int(expiry/time.Second),
+	)
+
 	return err
 }
 
