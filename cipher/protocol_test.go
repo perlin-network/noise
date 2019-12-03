@@ -15,7 +15,10 @@ func TestProtocol(t *testing.T) {
 
 	ecdh := NewAEAD()
 	lis := launchServer(t, ecdh, sharedKey, accept)
-	defer lis.Close()
+
+	defer func() {
+		_ = lis.Close()
+	}()
 
 	clientInfo := noise.Info{}
 	clientInfo.PutBytes(handshake.SharedKey, sharedKey)
@@ -24,6 +27,7 @@ func TestProtocol(t *testing.T) {
 	serverConn := <-accept
 
 	msg := []byte("secret_message")
+
 	go func() {
 		_, err := serverConn.Write(msg)
 		assert.NoError(t, err)
@@ -40,7 +44,10 @@ func TestProtocolKeyMismatch(t *testing.T) {
 
 	ecdh := NewAEAD()
 	lis := launchServer(t, ecdh, []byte("server_secret_key"), accept)
-	defer lis.Close()
+
+	defer func() {
+		_ = lis.Close()
+	}()
 
 	clientInfo := noise.Info{}
 	clientInfo.PutBytes(handshake.SharedKey, []byte("client_secret_key"))
@@ -63,6 +70,7 @@ func launchServer(t *testing.T, protocol ProtocolAEAD, sharedKey []byte, accept 
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	go serverHandle(t, protocol, sharedKey, accept, lis)
 
 	return lis
@@ -70,17 +78,18 @@ func launchServer(t *testing.T, protocol ProtocolAEAD, sharedKey []byte, accept 
 
 func serverHandle(t *testing.T, protocol ProtocolAEAD, sharedKey []byte, accept chan *connAEAD, lis net.Listener) {
 	rawConn, err := lis.Accept()
-	if err != nil {
+	if !assert.NoError(t, err) {
 		close(accept)
-		t.Fatal(err)
+		return
 	}
 
 	info := noise.Info{}
 	info.PutBytes(handshake.SharedKey, sharedKey)
+
 	conn, err := protocol.Server(info, rawConn)
-	if err != nil {
+	if !assert.NoError(t, err) {
 		close(accept)
-		t.Fatalf("Error protocol.Server(): %v", err)
+		return
 	}
 
 	accept <- conn.(*connAEAD)

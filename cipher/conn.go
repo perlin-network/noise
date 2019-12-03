@@ -139,10 +139,10 @@ func (c *connAEAD) Read(b []byte) (n int, err error) {
 func (c *connAEAD) Write(b []byte) (n int, err error) {
 	n = len(b)
 
-	numFrames := int(math.Ceil(float64(len(b)) / float64(c.limit)))
-	size := len(b) + numFrames*c.overhead
+	numFrames := int(math.Ceil(float64(n) / float64(c.limit)))
+	size := n + numFrames*c.overhead
+	frameLen := n
 
-	frameLen := len(b)
 	if size > WriteBufferMaxSize {
 		size = WriteBufferMaxSize
 
@@ -155,8 +155,8 @@ func (c *connAEAD) Write(b []byte) (n int, err error) {
 
 	for start := 0; start < n; start += frameLen {
 		end := start + frameLen
-		if end > len(b) {
-			end = len(b)
+		if end > n {
+			end = n
 		}
 
 		i := 0
@@ -224,5 +224,6 @@ func min(a, b int) int {
 	if a < b {
 		return a
 	}
+
 	return b
 }

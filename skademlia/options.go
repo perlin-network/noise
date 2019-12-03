@@ -48,7 +48,7 @@ func WithC2(c2 int) Option {
 
 func WithDialOptions(opts ...grpc.DialOption) Option {
 	return func(c *Client) {
-		c.dopts = append(opts)
+		c.dopts = opts
 	}
 }
 

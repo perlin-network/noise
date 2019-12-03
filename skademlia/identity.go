@@ -75,7 +75,10 @@ func (m ID) Marshal() []byte {
 	binary.BigEndian.PutUint16(buf[0:2], uint16(len(m.address)))
 	copy(buf[2:2+len(m.address)], m.address)
 	copy(buf[2+len(m.address):2+len(m.address)+edwards25519.SizePublicKey], m.publicKey[:])
-	copy(buf[2+len(m.address)+edwards25519.SizePublicKey:2+len(m.address)+edwards25519.SizePublicKey+blake2b.Size256], m.nonce[:])
+	copy(
+		buf[2+len(m.address)+edwards25519.SizePublicKey:2+len(m.address)+edwards25519.SizePublicKey+blake2b.Size256],
+		m.nonce[:],
+	)
 
 	return buf
 }

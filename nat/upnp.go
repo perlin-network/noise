@@ -62,7 +62,10 @@ func (u *upnp) AddMapping(protocol string, externalPort, internalPort uint16, li
 
 	_ = u.DeleteMapping(protocol, externalPort, internalPort)
 
-	return u.client.AddPortMapping("", externalPort, strings.ToUpper(protocol), internalPort, ip.String(), true, "noise", uint32(lifetime/time.Second))
+	return u.client.AddPortMapping(
+		"", externalPort, strings.ToUpper(protocol), internalPort, ip.String(), true, "noise",
+		uint32(lifetime/time.Second),
+	)
 }
 
 func (u *upnp) DeleteMapping(protocol string, externalPort, internalPort uint16) error {
@@ -100,18 +103,21 @@ func NewUPnP() Provider {
 	found := make(chan *upnp, 2)
 
 	// IGDv1
-	go discover(found, internetgateway1.URN_WANConnectionDevice_1, func(device *goupnp.RootDevice, client goupnp.ServiceClient) *upnp {
+	matcher := func(device *goupnp.RootDevice, client goupnp.ServiceClient) *upnp {
 		switch client.Service.ServiceType {
 		case internetgateway1.URN_WANIPConnection_1:
 			return &upnp{device.URLBase.Host, &internetgateway1.WANIPConnection1{ServiceClient: client}}
 		case internetgateway1.URN_WANPPPConnection_1:
 			return &upnp{device.URLBase.Host, &internetgateway1.WANPPPConnection1{ServiceClient: client}}
 		}
+
 		return nil
-	})
+	}
+
+	go discover(found, internetgateway1.URN_WANConnectionDevice_1, matcher)
 
 	// IGDv2
-	go discover(found, internetgateway2.URN_WANConnectionDevice_2, func(device *goupnp.RootDevice, client goupnp.ServiceClient) *upnp {
+	matcher = func(device *goupnp.RootDevice, client goupnp.ServiceClient) *upnp {
 		switch client.Service.ServiceType {
 		case internetgateway2.URN_WANIPConnection_1:
 			return &upnp{device.URLBase.Host, &internetgateway2.WANIPConnection1{ServiceClient: client}}
@@ -120,8 +126,11 @@ func NewUPnP() Provider {
 		case internetgateway2.URN_WANPPPConnection_1:
 			return &upnp{device.URLBase.Host, &internetgateway2.WANPPPConnection1{ServiceClient: client}}
 		}
+
 		return nil
-	})
+	}
+
+	go discover(found, internetgateway2.URN_WANConnectionDevice_2, matcher)
 
 	for i := 0; i < cap(found); i++ {
 		if c := <-found; c != nil {
@@ -142,25 +151,26 @@ func discover(out chan<- *upnp, target string, matcher func(*goupnp.RootDevice, 
 	found := false
 
 	for i := 0; i < len(devices) && !found; i++ {
-		if devices[i].Root == nil {
+		device := devices[i]
+		if device.Root == nil {
 			continue
 		}
 
-		devices[i].Root.Device.VisitServices(func(service *goupnp.Service) {
+		device.Root.Device.VisitServices(func(service *goupnp.Service) {
 			if found {
 				return
 			}
 
 			client := goupnp.ServiceClient{
 				SOAPClient: service.NewSOAPClient(),
-				RootDevice: devices[i].Root,
-				Location:   devices[i].Location,
+				RootDevice: device.Root,
+				Location:   device.Location,
 				Service:    service,
 			}
 
 			client.SOAPClient.HTTPClient.Timeout = 3 * time.Second
 
-			upnp := matcher(devices[i].Root, client)
+			upnp := matcher(device.Root, client)
 			if upnp == nil {
 				return
 			}

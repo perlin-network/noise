@@ -33,7 +33,9 @@ func NewAEAD() ProtocolAEAD {
 	return ProtocolAEAD{}
 }
 
-func (ProtocolAEAD) Client(info noise.Info, ctx context.Context, auth string, conn net.Conn) (net.Conn, error) {
+func (ProtocolAEAD) Client( // nolint:golint
+	info noise.Info, ctx context.Context, auth string, conn net.Conn,
+) (net.Conn, error) {
 	suite, _, err := DeriveAEAD(Aes256GCM(), sha256.New, info.Bytes(handshake.SharedKey), nil)
 	if err != nil {
 		return nil, err

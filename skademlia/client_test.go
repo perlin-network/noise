@@ -45,10 +45,17 @@ func TestClientFields(t *testing.T) {
 func TestClient(t *testing.T) {
 	c1 := newClientTestContainer(t, 1, 1)
 	c1.serve()
-	defer c1.lis.Close()
+
+	defer func() {
+		_ = c1.lis.Close()
+	}()
+
 	c2 := newClientTestContainer(t, 1, 1)
 	c2.serve()
-	defer c2.lis.Close()
+
+	defer func() {
+		_ = c2.lis.Close()
+	}()
 
 	var onPeerJoinCalled int32
 
@@ -66,7 +73,10 @@ func TestClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	assert.Len(t, c2.client.Bootstrap(), 1)
 	assert.Len(t, c2.client.AllPeers(), 1)
@@ -92,6 +102,7 @@ func TestClientEviction(t *testing.T) {
 	s := newClientTestContainer(t, 1, 1)
 	s.client.table.setBucketSize(bucketSize)
 	s.serve()
+
 	defer s.cleanup()
 
 	accept := make(chan struct{})
@@ -101,6 +112,7 @@ func TestClientEviction(t *testing.T) {
 	})
 
 	peersByBuckets := make(map[int][]*ID)
+
 	for i := 0; i < 10; i++ {
 		c := newClientTestContainer(t, 1, 1)
 		c.serve()
@@ -123,8 +135,11 @@ func TestClientEviction(t *testing.T) {
 	}
 
 	// Get the peers closest to the server.
-	var expectedClosestPeerIDs []*ID
-	var closest = len(s.client.table.buckets)
+	var (
+		expectedClosestPeerIDs []*ID
+		closest                = len(s.client.table.buckets)
+	)
+
 	for closest >= 0 {
 		if ids := peersByBuckets[closest]; ids != nil {
 			for i := 0; i < len(ids); i++ {
@@ -138,6 +153,7 @@ func TestClientEviction(t *testing.T) {
 		if len(expectedClosestPeerIDs) >= bucketSize {
 			break
 		}
+
 		closest--
 	}
 
@@ -146,7 +162,10 @@ func TestClientEviction(t *testing.T) {
 	}
 
 	sort.Slice(expectedClosestPeerIDs, func(i, j int) bool {
-		return bytes.Compare(xor(expectedClosestPeerIDs[i].checksum[:], s.client.id.checksum[:]), xor(expectedClosestPeerIDs[j].checksum[:], s.client.id.checksum[:])) == -1
+		return bytes.Compare(
+			xor(expectedClosestPeerIDs[i].checksum[:], s.client.id.checksum[:]),
+			xor(expectedClosestPeerIDs[j].checksum[:], s.client.id.checksum[:]),
+		) == -1
 	})
 
 	if len(expectedClosestPeerIDs) > bucketSize {
@@ -158,13 +177,14 @@ func TestClientEviction(t *testing.T) {
 		actual := closestPeerIDs[i]
 		expected := expectedClosestPeerIDs[i]
 
-		assert.Equal(t, expected.id, actual.id, )
+		assert.Equal(t, expected.id, actual.id)
 	}
 }
 
 func TestInterceptedServerStream(t *testing.T) {
 	c := newClientTestContainer(t, 1, 1)
 	defer c.cleanup()
+
 	dss := &dummyServerStream{}
 
 	var nodes []*ID
@@ -181,25 +201,25 @@ func TestInterceptedServerStream(t *testing.T) {
 
 	var publicKey [blake2b.Size256]byte
 
-	copy(publicKey[:], []byte("12345678901234567890123456789010"))
+	copy(publicKey[:], "12345678901234567890123456789010")
 	nodes[0].checksum = publicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789011"))
+	copy(publicKey[:], "12345678901234567890123456789011")
 	nodes[1].checksum = publicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789012"))
+	copy(publicKey[:], "12345678901234567890123456789012")
 	nodes[2].checksum = publicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789013"))
+	copy(publicKey[:], "12345678901234567890123456789013")
 	nodes[3].checksum = publicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789014"))
+	copy(publicKey[:], "12345678901234567890123456789014")
 	nodes[4].checksum = publicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789015"))
+	copy(publicKey[:], "12345678901234567890123456789015")
 	nodes[5].checksum = publicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789016"))
+	copy(publicKey[:], "12345678901234567890123456789016")
 	nodes[6].checksum = publicKey
 
 	c.client.table = NewTable(nodes[0])
@@ -267,25 +287,25 @@ func TestInterceptedClientStream(t *testing.T) {
 
 	var publicKey edwards25519.PublicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789010"))
+	copy(publicKey[:], "12345678901234567890123456789010")
 	nodes[0].checksum = publicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789011"))
+	copy(publicKey[:], "12345678901234567890123456789011")
 	nodes[1].checksum = publicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789012"))
+	copy(publicKey[:], "12345678901234567890123456789012")
 	nodes[2].checksum = publicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789013"))
+	copy(publicKey[:], "12345678901234567890123456789013")
 	nodes[3].checksum = publicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789014"))
+	copy(publicKey[:], "12345678901234567890123456789014")
 	nodes[4].checksum = publicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789015"))
+	copy(publicKey[:], "12345678901234567890123456789015")
 	nodes[5].checksum = publicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789016"))
+	copy(publicKey[:], "12345678901234567890123456789016")
 	nodes[6].checksum = publicKey
 
 	c.client.table = NewTable(nodes[0])
@@ -346,7 +366,7 @@ type clientTestContainer struct {
 // Rename to close
 func (c *clientTestContainer) cleanup() {
 	c.server.Stop()
-	c.lis.Close()
+	_ = c.lis.Close()
 }
 
 func (c *clientTestContainer) serve() {
@@ -355,7 +375,9 @@ func (c *clientTestContainer) serve() {
 	}()
 }
 
-func (c *clientTestContainer) Client(info noise.Info, ctx context.Context, authority string, conn net.Conn) (net.Conn, error) {
+func (c *clientTestContainer) Client( // nolint:golint
+	info noise.Info, ctx context.Context, authority string, conn net.Conn,
+) (net.Conn, error) {
 	if c.onClient != nil {
 		c.onClient(info)
 	}
@@ -376,6 +398,7 @@ func newClientTestContainer(t *testing.T, c1, c2 int) *clientTestContainer {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	keys, err := NewKeys(c1, c2)
 	if err != nil {
 		t.Fatalf("error NewKeys(): %v", err)
@@ -389,7 +412,6 @@ func newClientTestContainer(t *testing.T, c1, c2 int) *clientTestContainer {
 	c.SetCredentials(noise.NewCredentials(lis.Addr().String(), c.Protocol(), testClient))
 
 	server := c.Listen()
-
 	testClient.server = server
 
 	return testClient

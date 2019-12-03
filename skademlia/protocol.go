@@ -59,16 +59,19 @@ func (p Protocol) registerPeerID(id *ID) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		if _, err := NewOverlayClient(lastConn).DoPing(ctx, &Ping{}); err != nil {
 			p.client.table.Delete(bucket, lastID)
-			lastConn.Close()
+
+			_ = lastConn.Close()
+
 			cancel()
+
 			continue
 		}
+
 		cancel()
 
 		p.client.logger.Printf("Routing table is full; evicting peer %s.\n", id)
 
 		// Ping was successful; disallow the current peer from connecting.
-
 		p.client.peersLock.Lock()
 		delete(p.client.peers, id.address)
 		p.client.peersLock.Unlock()
@@ -79,13 +82,13 @@ func (p Protocol) registerPeerID(id *ID) error {
 	return nil
 }
 
-func (p Protocol) handshake(info noise.Info, conn net.Conn) (*ID, error) {
+func (p Protocol) handshake(conn net.Conn) (*ID, error) { // nolint:interfacer
 	buf := p.client.id.Marshal()
 	signature := edwards25519.Sign(p.client.keys.privateKey, buf)
 
 	handshake := append(buf, signature[:]...)
 
-	n, err := conn.Write(handshake[:])
+	n, err := conn.Write(handshake)
 	if err != nil {
 		return nil, err
 	}
@@ -120,24 +123,32 @@ func (p Protocol) handshake(info noise.Info, conn net.Conn) (*ID, error) {
 	return ptr, nil
 }
 
-func (p Protocol) Client(info noise.Info, ctx context.Context, authority string, conn net.Conn) (net.Conn, error) {
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithCancel(ctx)
+func (p Protocol) Client( // nolint:golint
+	info noise.Info, ctx context.Context, authority string, conn net.Conn,
+) (net.Conn, error) {
+	_, cancel := context.WithCancel(ctx)
 
-	id, err := p.handshake(info, conn)
+	id, err := p.handshake(conn)
 	if err != nil {
 		cancel()
+
 		if cerr := conn.Close(); cerr != nil {
 			err = errors.Wrap(cerr, err.Error())
 		}
+
 		return nil, err
 	}
 
 	if !addressMatches(id.Address(), conn.RemoteAddr().String()) {
-		err := errors.Errorf("connected to peer with addr %s, but their id writes addr %s", conn.RemoteAddr().String(), id.Address())
+		err := errors.Errorf(
+			"connected to peer with addr %s, but their id writes addr %s",
+			conn.RemoteAddr().String(), id.Address(),
+		)
+
 		if cerr := conn.Close(); cerr != nil {
 			err = errors.Wrap(cerr, err.Error())
 		}
+
 		return nil, err
 	}
 
@@ -192,11 +203,12 @@ func addressMatches(bind string, subject string) bool {
 }
 
 func (p Protocol) Server(info noise.Info, conn net.Conn) (net.Conn, error) {
-	id, err := p.handshake(info, conn)
+	id, err := p.handshake(conn)
 	if err != nil {
 		if cerr := conn.Close(); cerr != nil {
 			err = errors.Wrap(cerr, err.Error())
 		}
+
 		return nil, err
 	}
 

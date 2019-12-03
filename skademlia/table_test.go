@@ -104,22 +104,22 @@ func TestFindClosestPeers(t *testing.T) {
 
 	var publicKey edwards25519.PublicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789010"))
+	copy(publicKey[:], "12345678901234567890123456789010")
 	nodes[0].checksum = publicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789011"))
+	copy(publicKey[:], "12345678901234567890123456789011")
 	nodes[1].checksum = publicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789012"))
+	copy(publicKey[:], "12345678901234567890123456789012")
 	nodes[2].checksum = publicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789013"))
+	copy(publicKey[:], "12345678901234567890123456789013")
 	nodes[3].checksum = publicKey
 
-	copy(publicKey[:], []byte("12345678901234567890123456789014"))
+	copy(publicKey[:], "12345678901234567890123456789014")
 	nodes[4].checksum = publicKey
 
-	copy(publicKey[:], []byte("00000000000000000000000000000000"))
+	copy(publicKey[:], "00000000000000000000000000000000")
 	nodes[5].checksum = publicKey
 
 	table := NewTable(nodes[0])
@@ -129,9 +129,8 @@ func TestFindClosestPeers(t *testing.T) {
 	}
 
 	var testee []*ID
-	for _, peer := range table.FindClosest(nodes[5], 3) {
-		testee = append(testee, peer)
-	}
+	testee = append(testee, table.FindClosest(nodes[5], 3)...)
+
 	assert.Equalf(t, 3, len(testee), "expected 3 peers got %+v", testee)
 
 	answerKeys := []int{2, 3, 4}
@@ -141,10 +140,10 @@ func TestFindClosestPeers(t *testing.T) {
 	}
 
 	testee = []*ID{}
-	for _, peer := range table.FindClosest(nodes[4], 2) {
-		testee = append(testee, peer)
-	}
+	testee = append(testee, table.FindClosest(nodes[4], 2)...)
+
 	assert.Equalf(t, 2, len(testee), "expected 2 peers got %v", testee)
+
 	answerKeys = []int{2, 3}
 	for i, key := range answerKeys {
 		_answer := nodes[key]
@@ -155,9 +154,11 @@ func TestFindClosestPeers(t *testing.T) {
 func TestUpdateSamePublicKey(t *testing.T) {
 	getPK := func() edwards25519.PublicKey {
 		var pk edwards25519.PublicKey
+
 		if _, err := rand.Read(pk[:]); err != nil {
 			t.Fatal(err)
 		}
+
 		return pk
 	}
 
@@ -172,6 +173,7 @@ func TestUpdateSamePublicKey(t *testing.T) {
 	// we create new id with same public key but different address
 	addressToChange := "127.0.0.3"
 	updatedCopy := NewID(addressToChange, updated.publicKey, updated.nonce)
+
 	if !assert.NoError(t, table.Update(updatedCopy)) {
 		return
 	}
