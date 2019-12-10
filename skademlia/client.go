@@ -146,8 +146,8 @@ func (c *Client) ClosestPeers(opts ...DialOption) []ClosestPeer {
 	for i := range ids {
 		if conn, err := c.Dial(ids[i].address, opts...); err == nil {
 			peers = append(peers, ClosestPeer{
-				conn: conn,
-				id:   ids[i],
+				Conn: conn,
+				ID:   ids[i],
 			})
 		}
 	}
@@ -627,14 +627,6 @@ func (s InterceptedServerStream) RecvMsg(m interface{}) error {
 }
 
 type ClosestPeer struct {
-	conn *grpc.ClientConn
-	id   *ID
-}
-
-func (c ClosestPeer) Conn() *grpc.ClientConn {
-	return c.conn
-}
-
-func (c ClosestPeer) ID() *ID {
-	return c.id
+	Conn *grpc.ClientConn
+	ID   *ID
 }

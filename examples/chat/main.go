@@ -123,7 +123,7 @@ func main() {
 		closestPeers := client.ClosestPeers()
 
 		for _, closestPeer := range closestPeers {
-			chat := NewChatClient(closestPeer.Conn())
+			chat := NewChatClient(closestPeer.Conn)
 
 			stream, err := chat.Stream(context.Background())
 			if err != nil {
