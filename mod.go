@@ -9,10 +9,10 @@ package noise
 // may be registered to a node by (*Node).Handle before the node starts listening for new peers.
 type Handler func(ctx HandlerContext) error
 
-// Binder is an interface that may be implemented by libraries and projects built on top of Noise to hook callbacks
+// Protocol is an interface that may be implemented by libraries and projects built on top of Noise to hook callbacks
 // onto a series of events that are emitted throughout a nodes lifecycle. They may be registered to a node by
 // (*Node).Bind before the node starts listening for new peers.
-type Binder interface {
+type Protocol interface {
 	// Bind is called when the node has successfully started listening for new peers. Important node information
 	// such as the nodes binding host, binding port, public address, and ID are not initialized until after
 	// (*Node).Listen has successfully been called. Bind gets called the very moment such information has successfully

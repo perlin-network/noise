@@ -12,7 +12,7 @@ const BucketSize int = 16
 
 var ErrBucketFull = errors.New("bucket is full")
 
-var _ noise.Binder = (*Protocol)(nil)
+var _ noise.Protocol = (*Protocol)(nil)
 
 type Protocol struct {
 	node  *noise.Node

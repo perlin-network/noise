@@ -37,7 +37,7 @@ type Node struct {
 	inbound  *clientMap
 
 	codec    *Codec
-	binders  []Binder
+	binders  []Protocol
 	handlers []Handler
 
 	kill chan error
@@ -305,7 +305,7 @@ func (n *Node) dialIfNotExists(ctx context.Context, addr string) (*Client, error
 	return nil, fmt.Errorf("attempted to dial %s several times but failed: %w", addr, err)
 }
 
-func (n *Node) Bind(binders ...Binder) {
+func (n *Node) Bind(binders ...Protocol) {
 	n.binders = append(n.binders, binders...)
 }
 
