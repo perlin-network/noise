@@ -54,9 +54,9 @@ func PrefixLen(a []byte) int {
 }
 
 // SortByDistance sorts ids by descending XOR distance with respect to id.
-func SortByDistance(id noise.ID, ids []noise.ID) []noise.ID {
+func SortByDistance(id noise.PublicKey, ids []noise.ID) []noise.ID {
 	sort.Slice(ids, func(i, j int) bool {
-		return bytes.Compare(XOR(ids[i].ID[:], id.ID[:]), XOR(ids[j].ID[:], id.ID[:])) == -1
+		return bytes.Compare(XOR(ids[i].ID[:], id[:]), XOR(ids[j].ID[:], id[:])) == -1
 	})
 
 	return ids

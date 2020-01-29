@@ -1,6 +1,7 @@
 package kademlia
 
 import (
+	"fmt"
 	"github.com/perlin-network/noise"
 	"io"
 )
@@ -22,22 +23,20 @@ func UnmarshalPong([]byte) (Pong, error) { return Pong{}, nil }
 // FindNodeRequest represents a FIND_NODE RPC call in the Kademlia specification. It contains a target ID to which
 // a peer is supposed to respond with a slice of IDs that neighbor the target ID w.r.t. XOR distance.
 type FindNodeRequest struct {
-	Target noise.ID
+	Target noise.PublicKey
 }
 
 func (r FindNodeRequest) Marshal() []byte {
-	return r.Target.Marshal()
+	return r.Target[:]
 }
 
 func UnmarshalFindNodeRequest(buf []byte) (FindNodeRequest, error) {
-	var req FindNodeRequest
-
-	target, err := noise.UnmarshalID(buf)
-	if err != nil {
-		return req, err
+	if len(buf) != noise.SizePublicKey {
+		return FindNodeRequest{}, fmt.Errorf("expected buf to be %d bytes, but got %d bytes: %w", noise.SizePublicKey, len(buf), io.ErrUnexpectedEOF)
 	}
 
-	req.Target = target
+	var req FindNodeRequest
+	copy(req.Target[:], buf)
 
 	return req, nil
 }

@@ -42,7 +42,7 @@ func NewIterator(node *noise.Node, table *Table, opts ...IteratorOption) *Iterat
 	return it
 }
 
-func (it *Iterator) Find(target noise.ID) []noise.ID {
+func (it *Iterator) Find(target noise.PublicKey) []noise.ID {
 	var closest []noise.ID
 
 	it.init(target)
@@ -61,12 +61,12 @@ func (it *Iterator) Find(target noise.ID) []noise.ID {
 	return closest
 }
 
-func (it *Iterator) init(target noise.ID) {
+func (it *Iterator) init(target noise.PublicKey) {
 	it.results = make(chan noise.ID, 1)
 
 	it.visited = map[noise.PublicKey]struct{}{
 		it.node.ID().ID: {},
-		target.ID:       {},
+		target:          {},
 	}
 
 	it.buckets = make([][]noise.ID, it.numParallelLookups)
@@ -152,7 +152,7 @@ func (it *Iterator) lookupRequest(id noise.ID, out chan<- []noise.ID) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	obj, err := it.node.RequestMessage(ctx, id.Address, FindNodeRequest{Target: id})
+	obj, err := it.node.RequestMessage(ctx, id.Address, FindNodeRequest{Target: id.ID})
 	if err != nil {
 		out <- nil
 		return

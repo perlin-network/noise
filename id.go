@@ -62,14 +62,14 @@ func (e ID) Marshal() []byte {
 // UnmarshalID deserializes buf, representing a slice of bytes, ID instance. It throws io.ErrUnexpectedEOF if the
 // contents of buf is malformed.
 func UnmarshalID(buf []byte) (ID, error) {
-	if len(buf) < PublicKeySize {
+	if len(buf) < SizePublicKey {
 		return ID{}, io.ErrUnexpectedEOF
 	}
 
 	var id PublicKey
 
-	copy(id[:], buf[:PublicKeySize])
-	buf = buf[PublicKeySize:]
+	copy(id[:], buf[:SizePublicKey])
+	buf = buf[SizePublicKey:]
 
 	if len(buf) < net.IPv6len {
 		return ID{}, io.ErrUnexpectedEOF

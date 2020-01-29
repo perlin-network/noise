@@ -22,7 +22,7 @@ func merge(clients ...[]*noise.Client) []*noise.Client {
 
 func getBucketIndex(self, target noise.PublicKey) int {
 	l := kademlia.PrefixLen(kademlia.XOR(target[:], self[:]))
-	if l == noise.PublicKeySize*8 {
+	if l == noise.SizePublicKey*8 {
 		return l - 1
 	}
 
@@ -88,7 +88,7 @@ func TestTableEviction(t *testing.T) {
 
 	// Query all peer IDs that the leader node knows about.
 
-	before := overlay.Table().Bucket(nodes[0].ID())
+	before := overlay.Table().Bucket(nodes[0].ID().ID)
 	assert.Len(t, before, kademlia.BucketSize)
 
 	// Close the node that is at the bottom of the bucket.
@@ -112,7 +112,7 @@ func TestTableEviction(t *testing.T) {
 	// Query all peer IDs that the leader node knows about again, and check that node 0 was evicted and that
 	// the follower node has been put to the head of the bucket.
 
-	after := overlay.Table().Bucket(nodes[0].ID())
+	after := overlay.Table().Bucket(nodes[0].ID().ID)
 	assert.Len(t, after, kademlia.BucketSize)
 
 	assert.EqualValues(t, after[0].Address, follower.Addr())

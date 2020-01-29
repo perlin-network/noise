@@ -23,12 +23,12 @@ func NewProtocol() *Protocol {
 	return &Protocol{}
 }
 
-func (p *Protocol) Find(target noise.ID, opts ...IteratorOption) []noise.ID {
+func (p *Protocol) Find(target noise.PublicKey, opts ...IteratorOption) []noise.ID {
 	return NewIterator(p.node, p.table, opts...).Find(target)
 }
 
 func (p *Protocol) Discover(opts ...IteratorOption) []noise.ID {
-	return p.Find(p.node.ID(), opts...)
+	return p.Find(p.node.ID().ID, opts...)
 }
 
 func (p *Protocol) Ping(ctx context.Context, addr string) error {
@@ -68,7 +68,7 @@ func (p *Protocol) Ack(id noise.ID) {
 			return
 		}
 
-		bucket := p.table.Bucket(id)
+		bucket := p.table.Bucket(id.ID)
 		last := bucket[len(bucket)-1]
 
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -76,12 +76,12 @@ func (p *Protocol) Ack(id noise.ID) {
 		cancel()
 
 		if err != nil {
-			p.table.Delete(last)
+			p.table.Delete(last.ID)
 			continue
 		}
 
 		if _, ok := pong.(Pong); !ok {
-			p.table.Delete(last)
+			p.table.Delete(last.ID)
 			continue
 		}
 

@@ -9,7 +9,7 @@ import (
 type Table struct {
 	sync.RWMutex
 
-	entries [noise.PublicKeySize * 8][]noise.ID
+	entries [noise.SizePublicKey * 8][]noise.ID
 	self    noise.ID
 }
 
@@ -27,7 +27,7 @@ func (t *Table) Self() noise.ID {
 	return t.self
 }
 
-func (t *Table) Bucket(target noise.ID) []noise.ID {
+func (t *Table) Bucket(target noise.PublicKey) []noise.ID {
 	t.RLock()
 	defer t.RUnlock()
 
@@ -42,7 +42,7 @@ func (t *Table) Update(target noise.ID) error {
 	t.Lock()
 	defer t.Unlock()
 
-	idx := t.getBucketIndex(target)
+	idx := t.getBucketIndex(target.ID)
 
 	for i, id := range t.entries[idx] {
 		if id.ID == target.ID { // Found the target ID already inside the routing table.
@@ -59,12 +59,12 @@ func (t *Table) Update(target noise.ID) error {
 	return fmt.Errorf("cannot insert id %x into routing table: %w", target.ID, ErrBucketFull)
 }
 
-func (t *Table) Recorded(target noise.ID) bool {
+func (t *Table) Recorded(target noise.PublicKey) bool {
 	t.RLock()
 	defer t.RUnlock()
 
 	for _, id := range t.entries[t.getBucketIndex(target)] {
-		if id.ID == target.ID {
+		if id.ID == target {
 			return true
 		}
 	}
@@ -72,14 +72,14 @@ func (t *Table) Recorded(target noise.ID) bool {
 	return false
 }
 
-func (t *Table) Delete(target noise.ID) bool {
+func (t *Table) Delete(target noise.PublicKey) bool {
 	t.Lock()
 	defer t.Unlock()
 
 	idx := t.getBucketIndex(target)
 
 	for i, id := range t.entries[idx] {
-		if id.ID == target.ID {
+		if id.ID == target {
 			t.entries[idx] = append(t.entries[idx][:i], t.entries[idx][i+1:]...)
 			return true
 		}
@@ -89,15 +89,15 @@ func (t *Table) Delete(target noise.ID) bool {
 }
 
 func (t *Table) Peers() []noise.ID {
-	return t.FindClosest(t.self, BucketSize)
+	return t.FindClosest(t.self.ID, BucketSize)
 }
 
-func (t *Table) FindClosest(target noise.ID, k int) []noise.ID {
+func (t *Table) FindClosest(target noise.PublicKey, k int) []noise.ID {
 	var closest []noise.ID
 
 	f := func(bucket []noise.ID) {
 		for _, id := range bucket {
-			if id.ID != target.ID {
+			if id.ID != target {
 				closest = append(closest, id)
 			}
 		}
@@ -129,9 +129,9 @@ func (t *Table) FindClosest(target noise.ID, k int) []noise.ID {
 	return closest
 }
 
-func (t *Table) getBucketIndex(target noise.ID) int {
-	l := PrefixLen(XOR(target.ID[:], t.self.ID[:]))
-	if l == noise.PublicKeySize*8 {
+func (t *Table) getBucketIndex(target noise.PublicKey) int {
+	l := PrefixLen(XOR(target[:], t.self.ID[:]))
+	if l == noise.SizePublicKey*8 {
 		return l - 1
 	}
 
