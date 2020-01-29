@@ -6,9 +6,7 @@ import (
 	"crypto/cipher"
 	"errors"
 	"fmt"
-	"github.com/agl/ed25519/extra25519"
 	"github.com/oasislabs/ed25519"
-	"github.com/oasislabs/ed25519/extra/x25519"
 	"go.uber.org/zap"
 	"io"
 	"net"
@@ -398,17 +396,12 @@ func (c *Client) handshake(ctx context.Context) {
 		return
 	}
 
-	var (
-		ed25519Sec [ed25519.PrivateKeySize]byte
-		ed25519Pub [ed25519.PublicKeySize]byte
-	)
-
-	copy(ed25519Sec[:], sec[:])
-	copy(ed25519Pub[:], msg.data[:ed25519.PublicKeySize])
+	var peerPublicKey PublicKey
+	copy(peerPublicKey[:], msg.data[:ed25519.PublicKeySize])
 
 	// Verify ownership of our peers Ed25519 public key by verifying the signature they sent.
 
-	if !PublicKey(ed25519Pub).Verify([]byte(".__noise_handshake"), msg.data[ed25519.PublicKeySize:]) {
+	if !peerPublicKey.Verify([]byte(".__noise_handshake"), msg.data[ed25519.PublicKeySize:]) {
 		c.reportError(errors.New("could not verify session handshake"))
 		return
 	}
@@ -416,23 +409,7 @@ func (c *Client) handshake(ctx context.Context) {
 	// Transform all Ed25519 points to Curve25519 points and perform a Diffie-Hellman handshake
 	// to derive a shared key.
 
-	var (
-		curve25519Sec [x25519.ScalarSize]byte
-		curve25519Pub [x25519.PointSize]byte
-	)
-
-	extra25519.PrivateKeyToCurve25519(&curve25519Sec, &ed25519Sec)
-
-	if !extra25519.PublicKeyToCurve25519(&curve25519Pub, &ed25519Pub) {
-		c.reportError(errors.New("got an invalid ed25519 public key"))
-		return
-	}
-
-	shared, err := x25519.X25519(curve25519Sec[:], curve25519Pub[:])
-	if err != nil {
-		c.reportError(fmt.Errorf("could not derive a shared key: %w", err))
-		return
-	}
+	shared, err := ECDH(sec, peerPublicKey)
 
 	// Use the derived shared key from Diffie-Hellman to encrypt/decrypt all future communications
 	// with AES-256 Galois Counter Mode (GCM).

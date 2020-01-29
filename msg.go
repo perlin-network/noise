@@ -72,7 +72,9 @@ func (ctx *HandlerContext) Send(data []byte) error {
 
 // DecodeMessage decodes the raw bytes that some peer has sent you into a Go type. The Go type must have previously
 // been registered to the node to which the handler this context is under was registered on. An error is thrown
-// otherwise. It is highly recommended that should you choose to have your application utilize noise's serialization/
+// otherwise.
+//
+// It is highly recommended that should you choose to have your application utilize noise's serialization/
 // deserialization framework for data over-the-wire, that all handlers use them by default.
 //
 // DecodeMessage may be called concurrently.
@@ -83,7 +85,9 @@ func (ctx *HandlerContext) DecodeMessage() (Serializable, error) {
 // SendMessage encodes and serializes a Go type into a byte slice, and sends data back to the peer that has sent you
 // data as either a response or message. Refer to (*HandlerContext).Send for more details. An error is thrown if
 // the Go type passed in has not been registered to the node to which the handler this context is under was registered
-// on. It is highly recommended that should you choose to have your application utilize noise's
+// on.
+//
+// It is highly recommended that should you choose to have your application utilize noise's
 // serialization/deserialization framework for data over-the-wire, that all handlers use them by default.
 //
 // SendMessage may be called concurrently.
