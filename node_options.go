@@ -14,6 +14,10 @@ type NodeOption func(n *Node)
 // failed. By default, the max number of attempts a connection is dialed is 3.
 func WithNodeMaxDialAttempts(maxDialAttempts int) NodeOption {
 	return func(n *Node) {
+		if maxDialAttempts <= 0 {
+			maxDialAttempts = 1
+		}
+
 		n.maxDialAttempts = maxDialAttempts
 	}
 }
@@ -23,6 +27,10 @@ func WithNodeMaxDialAttempts(maxDialAttempts int) NodeOption {
 // causes the connection pool to release the oldest inbound connection in the pool.
 func WithNodeMaxInboundConnections(maxInboundConnections int) NodeOption {
 	return func(n *Node) {
+		if maxInboundConnections <= 0 {
+			maxInboundConnections = 128
+		}
+
 		n.maxInboundConnections = maxInboundConnections
 	}
 }
@@ -32,12 +40,17 @@ func WithNodeMaxInboundConnections(maxInboundConnections int) NodeOption {
 // max number causes the connection pool to release the oldest outbound connection in the pool.
 func WithNodeMaxOutboundConnections(maxOutboundConnections int) NodeOption {
 	return func(n *Node) {
+		if maxOutboundConnections <= 0 {
+			maxOutboundConnections = 128
+		}
+
 		n.maxOutboundConnections = maxOutboundConnections
 	}
 }
 
 // WithNodeIdleTimeout sets the duration in which should there be no subsequent reads/writes on a connection, the
 // connection shall timeout and have resources related to it released. By default, the timeout is set to be 3 seconds.
+// If an idle timeout of 0 is specified, idle timeouts will be disabled.
 func WithNodeIdleTimeout(idleTimeout time.Duration) NodeOption {
 	return func(n *Node) {
 		n.idleTimeout = idleTimeout
@@ -48,6 +61,10 @@ func WithNodeIdleTimeout(idleTimeout time.Duration) NodeOption {
 // disables any logs.
 func WithNodeLogger(logger *zap.Logger) NodeOption {
 	return func(n *Node) {
+		if logger == nil {
+			logger = zap.NewNop()
+		}
+
 		n.logger = logger
 	}
 }

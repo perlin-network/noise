@@ -1,0 +1,172 @@
+package noise
+
+import (
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
+	"net"
+	"testing"
+	"testing/quick"
+	"time"
+)
+
+func TestNodeOptions(t *testing.T) {
+	a := func(a int) bool {
+		if a <= 0 {
+			a = 1
+		}
+
+		n, err := NewNode(WithNodeMaxDialAttempts(a))
+		if !assert.NoError(t, err) {
+			return false
+		}
+
+		if !assert.EqualValues(t, n.maxDialAttempts, a) {
+			return false
+		}
+
+		return true
+	}
+
+	assert.NoError(t, quick.Check(a, nil))
+
+	b := func(a int) bool {
+		if a <= 0 {
+			a = 128
+		} else if a > 1000 {
+			a = 1000
+		}
+
+		n, err := NewNode(WithNodeMaxInboundConnections(a))
+		if !assert.NoError(t, err) {
+			return false
+		}
+
+		if !assert.EqualValues(t, n.maxInboundConnections, a) {
+			return false
+		}
+
+		return true
+	}
+
+	assert.NoError(t, quick.Check(b, nil))
+
+	c := func(a int) bool {
+		if a <= 0 {
+			a = 128
+		} else if a > 1000 {
+			a = 1000
+		}
+
+		n, err := NewNode(WithNodeMaxOutboundConnections(a))
+		if !assert.NoError(t, err) {
+			return false
+		}
+
+		if !assert.EqualValues(t, n.maxOutboundConnections, a) {
+			return false
+		}
+
+		return true
+	}
+
+	assert.NoError(t, quick.Check(c, nil))
+
+	d := func(a time.Duration) bool {
+		n, err := NewNode(WithNodeIdleTimeout(a))
+		if !assert.NoError(t, err) {
+			return false
+		}
+
+		if !assert.EqualValues(t, n.idleTimeout, a) {
+			return false
+		}
+
+		return true
+	}
+
+	assert.NoError(t, quick.Check(d, nil))
+
+	e := func(a bool) bool {
+		var logger *zap.Logger
+		if a {
+			logger = zap.NewNop()
+		}
+
+		n, err := NewNode(WithNodeLogger(logger))
+		if !assert.NoError(t, err) {
+			return false
+		}
+
+		if !assert.NotNil(t, n.logger) {
+			return false
+		}
+
+		return true
+	}
+
+	assert.NoError(t, quick.Check(e, nil))
+
+	f := func(publicKey PublicKey, host net.IP, port uint16) bool {
+		h := host.String() // Make-shift 'normalizeIP(net.IP)'.
+		if h == "<nil>" {
+			h = ""
+		}
+
+		id := NewID(publicKey, host, port)
+
+		n, err := NewNode(WithNodeID(id))
+		if !assert.NoError(t, err) {
+			return false
+		}
+
+		if !assert.EqualValues(t, n.id, id) {
+			return false
+		}
+
+		return true
+	}
+
+	assert.NoError(t, quick.Check(f, nil))
+
+	g := func(privateKey PrivateKey) bool {
+		n, err := NewNode(WithNodePrivateKey(privateKey))
+		if !assert.NoError(t, err) {
+			return false
+		}
+
+		if !assert.EqualValues(t, n.privateKey, privateKey) {
+			return false
+		}
+
+		if !assert.EqualValues(t, n.publicKey, privateKey.Public()) {
+			return false
+		}
+
+		return true
+	}
+
+	assert.NoError(t, quick.Check(g, nil))
+
+	h := func(host net.IP, port uint16, address string) bool {
+		n, err := NewNode(WithNodeBindHost(host), WithNodeBindPort(port), WithNodeAddress(address))
+		if !assert.NoError(t, err) {
+			return false
+		}
+
+		if !assert.EqualValues(t, n.host, host) {
+			return false
+		}
+
+		if !assert.EqualValues(t, n.port, port) {
+			return false
+		}
+
+		if !assert.EqualValues(t, n.addr, address) {
+			return false
+		}
+
+		return true
+	}
+
+	assert.NoError(t, quick.Check(h, nil))
+}

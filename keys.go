@@ -74,3 +74,11 @@ func (k PrivateKey) String() string {
 func (k PrivateKey) MarshalJSON() ([]byte, error) {
 	return json.Marshal(hex.EncodeToString(k[:]))
 }
+
+// Public returns the public key associated to this private key.
+func (k PrivateKey) Public() PublicKey {
+	var publicKey PublicKey
+	copy(publicKey[:], (ed25519.PrivateKey)(k[:]).Public().(ed25519.PublicKey))
+
+	return publicKey
+}

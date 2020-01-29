@@ -191,8 +191,13 @@ func (c *Client) waitUntilClosed() {
 }
 
 func (c *Client) startTimeout(ctx context.Context) {
-	c.timeout.timer = time.NewTimer(c.node.idleTimeout)
 	c.timeout.reset = make(chan struct{}, 1)
+
+	if c.node.idleTimeout == 0 {
+		return
+	}
+
+	c.timeout.timer = time.NewTimer(c.node.idleTimeout)
 
 	go func() {
 		defer c.timeout.timer.Stop()

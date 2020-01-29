@@ -1,6 +1,6 @@
 # noise
 
-[![GoDoc][1]][2] [![Discord][7]][8] [![MIT licensed][5]][6] ![Build Status][9] [![Go Report Card][11]][12] [![Coverage Statusd][13]][14]
+[![GoDoc][1]][2] [![Discord][7]][8] [![MIT licensed][5]][6] ![Build Status][9] [![Go Report Card][11]][12] [![Coverage Status][13]][14]
 
 [1]: https://godoc.org/github.com/perlin-network/noise?status.svg
 [2]: https://godoc.org/github.com/perlin-network/noise
