@@ -1,0 +1,58 @@
+name: CI
+on: [push]
+
+jobs:
+  unit_tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+
+      - name: Setup Go
+        uses: actions/setup-go@v1
+        with:
+          go-version: '1.13.3'
+
+      - name: Cache go modules
+        uses: actions/cache@v1
+        with:
+          path: /home/runner/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Run unit tests
+        run: make unit_test
+
+      - name: Save code coverage
+        uses: actions/upload-artifact@v1
+        with:
+          name: coverage_unit
+          path: coverage_unit.txt
+
+  code_coverage:
+    runs-on: ubuntu-latest
+    needs: [unit_tests]
+    steps:
+      - name: Download unit tests code coverage
+        uses: actions/download-artifact@v1
+        with:
+          name: coverage_unit
+          path: .
+
+      - name: Download integration tests code coverage
+        uses: actions/download-artifact@v1
+        with:
+          name: coverage_integration
+          path: .
+
+      - name: Concat coverage
+        run: |
+                echo "mode: atomic" > coverage.txt
+                grep -h -v "mode: atomic" coverage_*.txt >> coverage.txt
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v1.0.3
+        with:
+          token: ${{secrets.CODECOV_TOKEN}}
+          file: coverage.txt

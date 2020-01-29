@@ -1,0 +1,140 @@
+package noise
+
+import (
+	"bufio"
+	"encoding/binary"
+	"io"
+	"net"
+	"sync"
+)
+
+type connWriterState byte
+
+const (
+	connWriterInit connWriterState = iota
+	connWriterRunning
+	connWriterFlushing
+	connWriterClosed
+)
+
+type connWriter struct {
+	sync.Mutex
+	state   connWriterState
+	pending [][]byte
+	cond    sync.Cond
+}
+
+func newConnWriter() *connWriter {
+	c := &connWriter{state: connWriterInit}
+	c.cond.L = &c.Mutex
+
+	return c
+}
+
+func (c *connWriter) close() {
+	c.Lock()
+	defer c.Unlock()
+
+	if c.state == connWriterInit || c.state == connWriterClosed {
+		return
+	}
+
+	c.state = connWriterFlushing
+	c.cond.Signal()
+
+	for c.state != connWriterClosed {
+		c.cond.Wait()
+	}
+}
+
+func (c *connWriter) write(data []byte) {
+	c.Lock()
+	defer c.Unlock()
+
+	if c.state != connWriterInit && c.state != connWriterRunning {
+		return
+	}
+
+	c.pending = append(c.pending, data)
+	c.cond.Broadcast()
+}
+
+func (c *connWriter) loop(conn net.Conn) error {
+	c.Lock()
+	c.state = connWriterRunning
+	c.Unlock()
+
+	header := make([]byte, 4)
+	writer := bufio.NewWriter(conn)
+
+	defer func() {
+		c.Lock()
+		defer c.Unlock()
+
+		c.state = connWriterClosed
+		c.cond.Signal()
+	}()
+
+	for {
+		c.Lock()
+		for c.state == connWriterRunning && len(c.pending) == 0 {
+			c.cond.Wait()
+		}
+		pending, state := c.pending, c.state
+		c.pending = nil
+		c.Unlock()
+
+		if len(pending) == 0 && state == connWriterFlushing {
+			return nil
+		}
+
+		for _, data := range pending {
+			binary.BigEndian.PutUint32(header[:4], uint32(len(data)))
+
+			if _, err := writer.Write(header); err != nil {
+				return err
+			}
+
+			if _, err := writer.Write(data); err != nil {
+				return err
+			}
+		}
+
+		if err := writer.Flush(); err != nil {
+			return err
+		}
+	}
+}
+
+type connReader struct {
+	pending chan []byte
+}
+
+func newConnReader() *connReader {
+	return &connReader{pending: make(chan []byte, 1024)}
+}
+
+func (c *connReader) loop(conn net.Conn) error {
+	defer close(c.pending)
+
+	header := make([]byte, 4)
+	reader := bufio.NewReader(conn)
+
+	for {
+		if _, err := io.ReadFull(reader, header); err != nil {
+			return err
+		}
+
+		size := binary.BigEndian.Uint32(header[:4])
+
+		data := make([]byte, size)
+		if _, err := io.ReadFull(reader, data); err != nil {
+			return err
+		}
+
+		select {
+		case c.pending <- data:
+		default:
+		}
+	}
+}

@@ -1,6 +1,6 @@
-# Noise
+# noise
 
-[![GoDoc][1]][2] [![Discord][7]][8] [![MIT licensed][5]][6] [![Build Status][9]][10] [![Go Report Card][11]][12] [![Coverage Statusd][13]][14]
+[![GoDoc][1]][2] [![Discord][7]][8] [![MIT licensed][5]][6] [![Go Report Card][11]][12] [![Coverage Statusd][13]][14]
 
 [1]: https://godoc.org/github.com/perlin-network/noise?status.svg
 [2]: https://godoc.org/github.com/perlin-network/noise
@@ -8,182 +8,137 @@
 [6]: LICENSE
 [7]: https://img.shields.io/discord/458332417909063682.svg
 [8]: https://discord.gg/dMYfDPM
-[9]: https://travis-ci.org/perlin-network/noise.svg?branch=master
-[10]: https://travis-ci.org/perlin-network/noise
 [11]: https://goreportcard.com/badge/github.com/perlin-network/noise
 [12]: https://goreportcard.com/report/github.com/perlin-network/noise
 [13]: https://codecov.io/gh/perlin-network/noise/branch/master/graph/badge.svg
 [14]: https://codecov.io/gh/perlin-network/noise
 
+**noise** is an opinionated, easy-to-use P2P network stack for decentralized applications, and cryptographic protocols written in Go.
 
-<img align="right" width=400 src="docs/media/chat.gif">
+**noise** is made to be minimal, robust, developer-friendly, performant, secure, and cross-platform across multitudes of devices by making use of a small amount of well-tested, production-grade dependencies.
 
-**noise** is an opinionated, easy-to-use P2P network stack for
-*decentralized applications, and cryptographic protocols* written in
-[Go](https://golang.org/) by [the Perlin team](https://perlin.net).
-
-**noise** is made to be robust, developer-friendly, performant, secure, and
-cross-platform across multitudes of devices by making use of well-tested,
-production-grade dependencies.
-
-<hr/>
-
-By itself, **noise** is a low-level, stateless, concurrent networking library that easily allows you to incorporate fundamental features any modern p2p application needs such as:
-
-1) cryptographic primitives (Ed25519, PoW, AES-256),
-2) message serialization/deserialization schemes (byte-order little endian, protobuf, msgpack),
-3) network timeout/error management (on dial, on receive message, on send buffer full),
-4) network-level atomic operations (receive-then-lock),
-5) and NAT traversal support (NAT-PMP, UPnP).
-
-Out of its own low-level constructs, noise additionally comes bundled with a high-level `protocol` package comprised of a large number of production-ready, high-level protocol building blocks such as:
-
-1) handshake protocol implementations (Elliptic-Curve Diffie Hellman),
-2) peer routing/discovery protocol implementations (S/Kademlia),
-3) message broadcasting protocol implementations (S/Kademlia),
-4) overlay network protocol implementations (S/Kademlia),
-5) cryptographic identity schemes (Ed25519 w/ EdDSA signatures),
-6) and authenticated encryption schemes (AES-256 GCM AEAD).
-
-Every single building block is easily configurable, and may be mixed and matched together to help you kickstart your journey on developing secure, debuggable, and highly-performant p2p applications.
+- Listen for incoming peers, query peers, and ping peers.
+- Request for/respond to messages, fire-and-forget messages, and optionally automatically serialize/deserialize messages across peers.
+- Optionally cancel/timeout pinging peers, sending messages to peers, receiving messages from peers, or requesting messages from peers via `context` support.
+- Fine-grained control over a node and peers lifecycle and goroutines and resources (synchronously/asynchronously/gracefully start listening for new peers, stop listening for new peers, send messages to a peer, disconnect an existing peer, wait for a peer to be ready, wait for a peer to have disconnected).
+- Limit resource consumption by pooling connections and specifying the max number of inbound/outbound connections allowed at any given time.
+- Reclaim resources exhaustively by timing out idle peers with a configurable timeout.
+- Establish a shared secret by performing an Elliptic-Curve Diffie-Hellman Handshake under Curve25519.
+- Establish an encrypted session amongst a pair of peers via authenticated-encryption-with-associated-data (AEAD). Built-in support for AES 256-bit Galois Counter Mode (GCM).
+- Peer-to-peer routing, discovery, identities, and handshake protocol via Kademlia overlay network protocol.
 
 ```go
 package main
 
 import (
-    "fmt"
-	
-    "github.com/perlin-network/noise"
-    "github.com/perlin-network/noise/cipher/aead"
-    "github.com/perlin-network/noise/handshake/ecdh"
-    "github.com/perlin-network/noise/identity/ed25519"
-    "github.com/perlin-network/noise/protocol"
-    "github.com/perlin-network/noise/rpc"
-    "github.com/perlin-network/noise/skademlia"
+	"context"
+	"fmt"
+	"github.com/perlin-network/noise"
 )
 
-type chatMessage struct {
-	text string
+func check(err error) {
+    if err != nil {
+        panic(err)
+    }
 }
 
-func (chatMessage) Read(reader payload.Reader) (noise.Message, error) {
-	text, err := reader.ReadString()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to read chat msg")
-	}
-
-	return chatMessage{text: text}, nil
-}
-
-func (m chatMessage) Write() []byte {
-	return payload.NewWriter(nil).WriteString(m.text).Bytes()
-}
-
+// This example demonstrates how to send/handle RPC requests across peers, how to listen for incoming peers, how
+// to check if a message received is a request or not, how to reply to a RPC request, and how to cleanup node
+// instances after you are done using them.
 func main() {
-    // Register message type to Noise.
-    opcodeChatMessage := noise.RegisterMessage(noise.NextAvailableOpcode(), (*chatMessage)(nil))
-    
-    params := noise.DefaultParams()
-    params.Keys = ed25519.Random()
-    params.Port = uint16(3000)
-    
-    node, err := noise.NewNode(params)
-    if err != nil {
-        panic(err)
-    }
-    
-    protocol.New().
-    	Register(ecdh.New()).
-    	Register(aead.New()).
-    	Register(skademlia.New()).
-    	Enforce(node)
-    
-    fmt.Printf("Listening for peers on port %d.\n", node.ExternalPort())
-    
-    go node.Listen()
-    
-    // Dial peer via TCP located at address 127.0.0.1:3001.
-    peer, err := node.Dial("127.0.0.1:3001")
-    if err != nil {
-        panic(err)
-    }
-    
-    // Wait until the peer has finished all cryptographic handshake procedures.
-    skademlia.WaitUntilAuthenticated(peer)
-    
-    // Send a single chat message over the peer knowing that it's encrypted over the wire.
-    err = peer.SendMessage(chatMessage{text: "Hello peer!"})
-    if err != nil {
-        panic(err)
-    }
-    
-    // Receive and print out a single chat message back from our peer.
-    fmt.Println(<-peer.Receive(opcodeChatMessage))
+	// Let there be nodes Alice and Bob.
+
+	alice, err := noise.NewNode()
+	check(err)
+
+	bob, err := noise.NewNode()
+	check(err)
+
+	// Gracefully release resources for Alice and Bob at the end of the example.
+
+	defer alice.Close()
+	defer bob.Close()
+
+	// When Bob gets a message from Alice, print it out and respond to Alice with 'Hi Alice!'
+
+	bob.Handle(func(ctx noise.HandlerContext) error {
+		if !ctx.IsRequest() {
+			return nil
+		}
+
+		fmt.Printf("Got a message from Alice: '%s'\n", string(ctx.Data()))
+
+		return ctx.Send([]byte("Hi Alice!"))
+	})
+
+	// Have Alice and Bob start listening for new peers.
+
+    check(alice.Listen())
+    check(bob.Listen())
+
+	// Have Alice send Bob a request with the message 'Hi Bob!'
+
+	res, err := alice.Request(context.TODO(), bob.Addr(), []byte("Hi Bob!"))
+	check(err)
+
+	// Print out the response Bob got from Alice.
+
+	fmt.Printf("Got a message from Bob: '%s'\n", string(res))
+
+	// Output:
+	// Got a message from Alice: 'Hi Bob!'
+	// Got a message from Bob: 'Hi Alice!'
 }
 ```
 
 ## Setup
 
-Make sure to have at the bare minimum [Go 1.11](https://golang.org/dl/) installed before incorporating **noise** into your project.
+**noise** was intended to be used in Go projects that utilize Go modules. You may incorporate noise into your project as a library dependency by executing the following:
 
-After installing _Go_, you may choose to either:
-
-1. directly incorporate noise as a library dependency to your project,
-
-```bash
-# Be sure to have Go modules enabled: https://github.com/golang/go/wiki/Modules
-export GO111MODULE=on
-
-# Run this inside your projects directory.
-go get github.com/perlin-network/noise
+```shell
+% go get -u github.com/perlin-network/noise
 ```
 
-2. or checkout the source code on Github and run any of the following commands below.
+Afterwards, read up on the extensive examples we have laid out for you which you may find in our docs that are located [here](https://godoc.org/github.com/perlin-network/noise).
 
-```bash
-# Be sure to have Go modules enabled: https://github.com/golang/go/wiki/Modules
-export GO111MODULE=on
+## Benchmarks
 
-# Run an example creating a cluster of 3 peers automatically
-# discovering one another.
-[terminal 1] go run examples/chat/main.go -p 3000
-[terminal 2] go run examples/chat/main.go -p 3001 127.0.0.1:3000
-[terminal 3] go run examples/chat/main.go -p 3002 127.0.0.1:3001
+Benchmarks measure CPU time and allocations of a single node sending messages, requests, and responses to/from itself over 8 logical cores on a loopback adapter.
 
-# Optionally run test cases.
-go test -v -count=1 -race ./...
+Take these benchmark numbers with a grain of salt.
+
+```
+% cat /proc/cpuinfo | grep 'model name' | uniq
+model name	: Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz
+
+% go test -bench=. -benchtime=30s -benchmem
+goos: linux
+goarch: amd64
+pkg: github.com/perlin-network/noise
+BenchmarkRPC-8           2978550             14136 ns/op            1129 B/op         27 allocs/op
+BenchmarkSend-8          9239581              4546 ns/op             503 B/op         12 allocs/op
+PASS
+ok      github.com/perlin-network/noise 101.966s
 ```
 
-## We're hiring!
+## Update
 
-Here at [Perlin](https://perlin.net), we spend days and weeks debating, tinkering, and researching what is out there in academia to bring to industries truly resilient, open-source, secure, economic, and decentralized software to empower companies, startups, and users.
-                                                        
-Our doors are open to academics that have a knack for distributed systems, engineers that want to explore unknown waters, frontend developers that want to make and evangelize the next generation of customer-facing applications, and graphics designers that yearn to instrument together greater user experiences for decentralized applications.
+To mark the start of the new year, Noise has been completely redesigned to factor in privacy, security, and performance improvements that have been established from experience reports which were well-received since it's inception.
 
-## Contributions
+To accommodate for this significant refactor, and the desire to push Noise into a fully open-source project, a decision was made to reboot Noise to adopt a proper versioning system. This decision entails rebooting Noise to start from v0.1.0.
 
-First of all, _thank you so much_ for taking part in our efforts for creating a p2p networking stack that can meet everyones needs without sacrificing developer productivity!
+For existing projects that have previously adopted Noise, we highly recommend updating your project. Should it be infeasible however, it is possible to vendor in the latest version of Noise prior to this update as a library dependency.
 
-All code contributions to _noise_ should comply with all idiomatic Go standards listed [here](https://github.com/golang/go/wiki/CodeReviewComments).
-
-All commit messages should be in the format:
-
-```bash
-module_name_1, module_name_2: description of the changes you made to the two
-    modules here as a sentence
+```shell
+% go get github.com/perlin-network/noise@f9c1f15b7d8d725161ed56860f4f6f5bdd9d1eca
 ```
 
-Be sure to use only imperative, present tense within your commit messages and optionally include motivation for your changes _two lines breaks_ away from your commit message.
+We warn however that no assistance will be provided to those using versions of Noise prior to this update.
 
-This allows other maintainers and contributors to know which modules you are modifying/creating within the code/docs repository.
+## Versioning
 
-Lastly, be sure to consider backwards compatibility.
+Breaking changes will comprise of an increment of the MINOR version, with bug patches/improvements involving an increment of the PATCH version. Semantic versioning will be adopted starting from v1.0.0.
 
-New modules/methods are perfectly fine, but changing code living in `noise.Node` or `noise.Peer` radically for example would break a lot of existing projects utilizing _noise_.
-
-Additionally, if you'd like to talk to us or any of the team in real-time, be sure to join our [Discord server](https://discord.gg/dMYfDPM)!
-
-We are heavily active, ready to answer any questions/assist you with any code/doc contributions at almost any time.
 
 ## License
 

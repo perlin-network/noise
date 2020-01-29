@@ -1,312 +1,338 @@
 package noise
 
 import (
+	"context"
+	"errors"
 	"fmt"
-	"github.com/perlin-network/noise/callbacks"
-	"github.com/perlin-network/noise/identity"
-	"github.com/perlin-network/noise/log"
-	"github.com/perlin-network/noise/nat"
-	"github.com/perlin-network/noise/transport"
-	"github.com/pkg/errors"
+	"github.com/oasislabs/ed25519"
+	"go.uber.org/atomic"
+	"go.uber.org/zap"
 	"net"
-	"sync"
-	"sync/atomic"
+	"strconv"
 	"time"
 )
 
 type Node struct {
-	Keys identity.Keypair
+	logger *zap.Logger
 
-	nat       nat.Provider
-	transport transport.Layer
+	host net.IP
+	port uint16
+	addr string
 
-	listener                   net.Listener
-	host                       string
-	internalPort, externalPort uint16
+	publicKey  PublicKey
+	privateKey PrivateKey
 
-	maxMessageSize uint64
+	id ID
 
-	sendMessageTimeout    time.Duration
-	receiveMessageTimeout time.Duration
+	maxDialAttempts        int
+	maxInboundConnections  int
+	maxOutboundConnections int
 
-	sendWorkerBusyTimeout time.Duration
+	idleTimeout time.Duration
 
-	onListenerErrorCallbacks *callbacks.SequentialCallbackManager
-	onPeerConnectedCallbacks *callbacks.SequentialCallbackManager
-	onPeerDialedCallbacks    *callbacks.SequentialCallbackManager
-	onPeerInitCallbacks      *callbacks.SequentialCallbackManager
+	listener  net.Listener
+	listening atomic.Bool
 
-	metadata sync.Map
+	outbound *clientMap
+	inbound  *clientMap
 
-	kill     chan chan struct{}
-	killOnce uint32
+	codec    *Codec
+	binders  []Binder
+	handlers []Handler
+
+	kill chan error
 }
 
-func NewNode(params parameters) (*Node, error) {
-	if params.Port != 0 && (params.Port < 1024 || params.Port > 65535) {
-		return nil, errors.Errorf("port must be either 0 or between [1024, 65535]; port specified was %d", params.Port)
+// NewNode instantiates a new node instance, and pre-configures the node with provided options.
+// Default values for some non-specified options are instantiated as well, which may yield an error.
+func NewNode(opts ...NodeOption) (*Node, error) {
+	n := &Node{kill: make(chan error, 1)}
+
+	for _, opt := range opts {
+		opt(n)
 	}
 
-	if params.Transport == nil {
-		return nil, errors.New("no transport layer was registered; try set params.Transport to transport.NewTCP()")
+	if n.logger == nil {
+		n.logger = zap.NewNop()
 	}
 
-	listener, err := params.Transport.Listen(params.Host, params.Port)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to start listening for peers on port %d", params.Port)
-	}
-
-	params.Port = params.Transport.Port(listener.Addr())
-
-	node := Node{
-		Keys: params.Keys,
-
-		nat:       params.NAT,
-		transport: params.Transport,
-
-		listener: listener,
-		host:     params.Host,
-
-		internalPort: params.Port,
-
-		maxMessageSize: params.MaxMessageSize,
-
-		sendMessageTimeout:    params.SendMessageTimeout,
-		receiveMessageTimeout: params.ReceiveMessageTimeout,
-
-		sendWorkerBusyTimeout: params.SendWorkerBusyTimeout,
-
-		onListenerErrorCallbacks: callbacks.NewSequentialCallbackManager(),
-		onPeerConnectedCallbacks: callbacks.NewSequentialCallbackManager(),
-		onPeerDialedCallbacks:    callbacks.NewSequentialCallbackManager(),
-		onPeerInitCallbacks:      callbacks.NewSequentialCallbackManager(),
-
-		kill: make(chan chan struct{}, 1),
-	}
-
-	if params.ExternalPort > 0 {
-		node.externalPort = params.ExternalPort
-	} else {
-		node.externalPort = params.Port
-	}
-
-	for key, val := range params.Metadata {
-		node.Set(key, val)
-	}
-
-	if node.nat != nil {
-		err = node.nat.AddMapping(node.transport.String(), node.internalPort, node.externalPort, 1*time.Hour)
+	if n.privateKey == ZeroPrivateKey {
+		_, privateKey, err := ed25519.GenerateKey(nil)
 		if err != nil {
-			return nil, errors.Wrap(err, "nat: failed to port-forward")
+			return nil, err
 		}
+
+		copy(n.privateKey[:], privateKey)
 	}
 
-	return &node, nil
-}
+	copy(n.publicKey[:], ed25519.PrivateKey(n.privateKey[:]).Public().(ed25519.PublicKey)[:])
 
-func (n *Node) InternalPort() uint16 {
-	return n.internalPort
-}
-
-func (n *Node) ExternalPort() uint16 {
-	return n.externalPort
-}
-
-// Listen makes our node start listening for peers.
-func (n *Node) Listen() {
-	for {
-		select {
-		case signal := <-n.kill:
-			close(signal)
-			return
-		default:
-		}
-
-		conn, err := n.listener.Accept()
-
-		if err != nil {
-			n.onListenerErrorCallbacks.RunCallbacks(err)
-			continue
-		}
-
-		peer := newPeer(n, conn)
-		peer.init()
-
-		if errs := n.onPeerConnectedCallbacks.RunCallbacks(peer); len(errs) > 0 {
-			log.Warn().Errs("errors", errs).Msg("Got errors running OnPeerConnected callbacks.")
-		}
-
-		if errs := n.onPeerInitCallbacks.RunCallbacks(peer); len(errs) > 0 {
-			log.Warn().Errs("errors", errs).Msg("Got errors running OnPeerInit callbacks.")
-		}
-
-	}
-}
-
-// Dial has our node attempt to dial and establish a connection with a remote peer.
-func (n *Node) Dial(address string) (*Peer, error) {
-	if n.ExternalAddress() == address {
-		return nil, errors.New("noise: node attempted to dial itself")
+	if n.maxDialAttempts == 0 {
+		n.maxDialAttempts = 3
 	}
 
-	conn, err := n.transport.Dial(address)
-
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to connect to peer %s", conn)
+	if n.maxInboundConnections == 0 {
+		n.maxInboundConnections = 128
 	}
 
-	peer := newPeer(n, conn)
-	peer.init()
-
-	if errs := n.onPeerDialedCallbacks.RunCallbacks(peer); len(errs) > 0 {
-		log.Error().Errs("errors", errs).Msg("Got errors running OnPeerConnected callbacks.")
+	if n.maxOutboundConnections == 0 {
+		n.maxOutboundConnections = 128
 	}
 
-	if errs := n.onPeerInitCallbacks.RunCallbacks(peer); len(errs) > 0 {
-		log.Error().Errs("errors", errs).Msg("Got errors running OnPeerInit callbacks.")
+	if n.idleTimeout == 0 {
+		n.idleTimeout = 10 * time.Second
 	}
 
-	return peer, nil
+	n.inbound = newClientMap(n.maxInboundConnections)
+	n.outbound = newClientMap(n.maxOutboundConnections)
+
+	n.codec = NewCodec()
+
+	return n, nil
 }
 
-// OnListenerError registers a callback for whenever our nodes listener fails to accept an incoming peer.
-func (n *Node) OnListenerError(c OnErrorCallback) {
-	n.onListenerErrorCallbacks.RegisterCallback(func(params ...interface{}) error {
-		if len(params) != 1 {
-			panic(errors.Errorf("noise: OnListenerError received unexpected args %v", params))
-		}
-
-		err, ok := params[0].(error)
-
-		if !ok {
-			return nil
-		}
-
-		return c(n, errors.Wrap(err, "failed to accept an incoming peer"))
-	})
-}
-
-// OnPeerConnected registers a callback for whenever a peer has successfully been accepted by our node.
-func (n *Node) OnPeerConnected(c OnPeerInitCallback) {
-	n.onPeerConnectedCallbacks.RegisterCallback(func(params ...interface{}) error {
-		if len(params) != 1 {
-			panic(errors.Errorf("noise: OnPeerConnected received unexpected args %v", params))
-		}
-
-		return c(n, params[0].(*Peer))
-	})
-}
-
-// OnPeerDisconnected registers a callback whenever a peer has been disconnected.
-func (n *Node) OnPeerDisconnected(srcCallbacks ...OnPeerDisconnectCallback) {
-	n.onPeerInitCallbacks.RegisterCallback(func(params ...interface{}) error {
-		if len(params) != 1 {
-			panic(errors.Errorf("noise: OnPeerDisconnected received unexpected args %v", params))
-		}
-
-		peer := params[0].(*Peer)
-		peer.OnDisconnect(srcCallbacks...)
-		return nil
-	})
-}
-
-// OnPeerDialed registers a callback for whenever a peer has been successfully dialed.
-func (n *Node) OnPeerDialed(c OnPeerInitCallback) {
-	n.onPeerDialedCallbacks.RegisterCallback(func(params ...interface{}) error {
-		if len(params) != 1 {
-			panic(errors.Errorf("noise: OnPeerDialed received unexpected args %v", params))
-		}
-
-		return c(n, params[0].(*Peer))
-	})
-}
-
-// OnPeerInit registers a callback for whenever a peer has either been successfully
-// dialed, or otherwise accepted by our node.
+// Listen has the node start listening for new peers. If an error occurs while starting the listener due to
+// misconfigured options or resource exhaustion, an error is returned.
 //
-// In essence a helper function that registers callbacks for both `OnPeerConnected`
-// and `OnPeerDialed` at once.
-func (n *Node) OnPeerInit(srcCallbacks ...OnPeerInitCallback) {
-	targetCallbacks := make([]callbacks.Callback, 0, len(srcCallbacks))
+// Listen may be called concurrently.
+func (n *Node) Listen() error {
+	if !n.listening.CAS(false, true) {
+		return errors.New("node is already listening")
+	}
 
-	for _, c := range srcCallbacks {
-		c := c
-		targetCallbacks = append(targetCallbacks, func(params ...interface{}) error {
-			if len(params) != 1 {
-				panic(errors.Errorf("noise: OnPeerInit received unexpected args %v", params))
+	var err error
+
+	defer func() {
+		if err != nil {
+			n.listening.Store(false)
+		}
+	}()
+
+	n.listener, err = net.Listen("tcp", net.JoinHostPort(normalizeIP(n.host), strconv.FormatUint(uint64(n.port), 10)))
+	if err != nil {
+		return err
+	}
+
+	addr, ok := n.listener.Addr().(*net.TCPAddr)
+	if !ok {
+		err = fmt.Errorf("did not listen for tcp: %w", n.listener.Close())
+		return err
+	}
+
+	n.host = addr.IP
+	n.port = uint16(addr.Port)
+
+	if n.addr == "" {
+		n.addr = net.JoinHostPort(normalizeIP(n.host), strconv.FormatUint(uint64(n.port), 10))
+	}
+
+	n.id = NewID(n.publicKey, n.host, n.port)
+
+	for _, binder := range n.binders {
+		if err = binder.Bind(n); err != nil {
+			return err
+		}
+	}
+
+	go func() {
+		defer close(n.kill)
+		defer n.inbound.release()
+		defer n.listening.Store(false)
+
+		for {
+			conn, err := n.listener.Accept()
+			if err != nil {
+				n.kill <- err
+				break
 			}
 
-			return c(n, params[0].(*Peer))
-		})
+			addr := conn.RemoteAddr().String()
+
+			client, exists := n.inbound.get(n, addr)
+			if !exists {
+				go client.inbound(conn, addr)
+			}
+		}
+	}()
+
+	return nil
+}
+
+func (n *Node) RegisterMessage(ser Serializable, de interface{}) uint16 {
+	return n.codec.Register(ser, de)
+}
+
+func (n *Node) EncodeMessage(msg Serializable) ([]byte, error) {
+	return n.codec.Encode(msg)
+}
+
+func (n *Node) DecodeMessage(data []byte) (Serializable, error) {
+	return n.codec.Decode(data)
+}
+
+func (n *Node) SendMessage(ctx context.Context, addr string, msg Serializable) error {
+	data, err := n.EncodeMessage(msg)
+	if err != nil {
+		return err
 	}
 
-	n.onPeerInitCallbacks.RegisterCallback(targetCallbacks...)
+	return n.Send(ctx, addr, data)
 }
 
-// Set sets a metadata entry given a key-value pair on our node.
-func (n *Node) Set(key string, val interface{}) {
-	n.metadata.Store(key, val)
+func (n *Node) RequestMessage(ctx context.Context, addr string, req Serializable) (Serializable, error) {
+	data, err := n.EncodeMessage(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	data, err = n.Request(ctx, addr, data)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := n.DecodeMessage(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode request: %w", err)
+	}
+
+	return res, nil
 }
 
-// Get returns the value to a metadata key from our node, or otherwise returns nil should
-// there be no corresponding value to a provided key.
-func (n *Node) Get(key string) interface{} {
-	val, _ := n.metadata.Load(key)
-	return val
+func (n *Node) Send(ctx context.Context, addr string, data []byte) error {
+	if !n.listening.Load() {
+		return errors.New("node must be listening before it can send a message")
+	}
+
+	c, err := n.dialIfNotExists(ctx, addr)
+	if err != nil {
+		return err
+	}
+
+	if err := c.send(0, data); err != nil {
+		return err
+	}
+
+	for _, binder := range c.node.binders {
+		binder.OnMessageSent(c)
+	}
+
+	return nil
 }
 
-func (n *Node) LoadOrStore(key string, val interface{}) interface{} {
-	val, _ = n.metadata.LoadOrStore(key, val)
-	return val
+func (n *Node) Request(ctx context.Context, addr string, data []byte) ([]byte, error) {
+	if !n.listening.Load() {
+		return nil, errors.New("node must be listening before it can send a request")
+	}
+
+	c, err := n.dialIfNotExists(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	msg, err := c.request(ctx, data)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, binder := range c.node.binders {
+		binder.OnMessageSent(c)
+	}
+
+	return msg.data, nil
 }
 
-func (n *Node) Has(key string) bool {
-	_, exists := n.metadata.Load(key)
-	return exists
+func (n *Node) Ping(ctx context.Context, addr string) (*Client, error) {
+	if !n.listening.Load() {
+		return nil, errors.New("node must be listening before it can ping")
+	}
+
+	return n.dialIfNotExists(ctx, addr)
 }
 
-func (n *Node) Delete(key string) {
-	n.metadata.Delete(key)
-}
+// Close gracefully stops all live inbound/outbound peer connections registered on this node, and stops the node
+// from handling/accepting new incoming peer connections. It returns an error if an error occurs closing the nodes
+// listener.
+//
+// Close may be called concurrently.
+func (n *Node) Close() error {
+	if n.listening.CAS(true, false) {
+		if err := n.listener.Close(); err != nil {
+			return err
+		}
+	}
 
-// Fence blocks the current goroutine until the node stops listening for peers.
-func (n *Node) Fence() {
 	<-n.kill
+
+	return nil
 }
 
-func (n *Node) Kill() {
-	if !atomic.CompareAndSwapUint32(&n.killOnce, 0, 1) {
-		return
+func (n *Node) dialIfNotExists(ctx context.Context, addr string) (*Client, error) {
+	var err error
+
+	if addr, err = ResolveAddress(addr); err != nil {
+		return nil, err
 	}
 
-	signal := make(chan struct{})
-	n.kill <- signal
+	for i := 0; i < n.maxDialAttempts; i++ {
+		client, exists := n.outbound.get(n, addr)
+		if !exists {
+			go client.outbound(ctx, addr)
+		}
 
-	if err := n.listener.Close(); err != nil {
-		n.onListenerErrorCallbacks.RunCallbacks(err)
-	}
+		select {
+		case <-ctx.Done():
+			err = fmt.Errorf("failed to dial peer: %w", ctx.Err())
+		case <-client.ready:
+			err = client.Error()
+		case <-client.readerDone:
+			err = client.Error()
+		case <-client.writerDone:
+			err = client.Error()
+		}
 
-	<-signal
-	close(n.kill)
+		if err == nil {
+			return client, nil
+		}
 
-	if n.nat != nil {
-		err := n.nat.DeleteMapping(n.transport.String(), n.internalPort, n.externalPort)
+		client.close()
+		client.waitUntilClosed()
 
-		if err != nil {
-			panic(errors.Wrap(err, "nat: failed to remove port-forward"))
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
 		}
 	}
+
+	return nil, fmt.Errorf("attempted to dial %s several times but failed: %w", addr, err)
 }
 
-func (n *Node) ExternalAddress() string {
-	if n.nat != nil && nat.IsPrivateIP(net.ParseIP(n.host)) {
-		externalIP, err := n.nat.ExternalIP()
-		if err != nil {
-			panic(err)
-		}
+func (n *Node) Bind(binders ...Binder) {
+	n.binders = append(n.binders, binders...)
+}
 
-		return fmt.Sprintf("%s:%d", externalIP.String(), n.externalPort)
-	}
+func (n *Node) Handle(handlers ...Handler) {
+	n.handlers = append(n.handlers, handlers...)
+}
 
-	return fmt.Sprintf("%s:%d", n.host, n.externalPort)
+func (n *Node) Sign(data []byte) []byte {
+	return n.privateKey.Sign(data)
+}
+
+func (n *Node) Inbound() []*Client {
+	return n.inbound.slice()
+}
+
+func (n *Node) Outbound() []*Client {
+	return n.outbound.slice()
+}
+
+func (n *Node) Addr() string {
+	return n.addr
+}
+
+func (n *Node) Logger() *zap.Logger {
+	return n.logger
+}
+
+func (n *Node) ID() ID {
+	return n.id
 }
