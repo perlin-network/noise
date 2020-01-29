@@ -26,7 +26,7 @@ jobs:
         run: make test-coverage
 
       - name: Upload coverage report
-          uses: codecov/codecov-action@v1.0.5
+        uses: codecov/codecov-action@v1.0.5
           with:
             token: ${{secrets.CODECOV_TOKEN}}
             file: ./coverage.txt
