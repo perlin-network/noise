@@ -107,11 +107,6 @@ func TestNodeOptions(t *testing.T) {
 	assert.NoError(t, quick.Check(e, nil))
 
 	f := func(publicKey PublicKey, host net.IP, port uint16) bool {
-		h := host.String() // Make-shift 'normalizeIP(net.IP)'.
-		if h == "<nil>" {
-			h = ""
-		}
-
 		id := NewID(publicKey, host, port)
 
 		n, err := NewNode(WithNodeID(id))

@@ -433,6 +433,10 @@ func (c *Client) handshake(ctx context.Context) {
 	// to derive a shared key.
 
 	shared, err := ECDH(sec, peerPublicKey)
+	if err != nil {
+		c.reportError(err)
+		return
+	}
 
 	// Use the derived shared key from Diffie-Hellman to encrypt/decrypt all future communications
 	// with AES-256 Galois Counter Mode (GCM).

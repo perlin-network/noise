@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// ChatMessage is an example struct that is registered on exmaple nodes, and serialized/deserialized on-the-fly.
+// ChatMessage is an example struct that is registered on example nodes, and serialized/deserialized on-the-fly.
 type ChatMessage struct {
 	content string
 }

@@ -109,12 +109,11 @@ func (r *requestMap) nextNonce() (<-chan message, uint64, error) {
 	r.nonce++
 	nonce := r.nonce
 
-	ch, exists := r.entries[nonce]
-	if exists {
+	if _, exists := r.entries[nonce]; exists {
 		return nil, 0, errors.New("ran out of available nonce to use for making a new request")
 	}
 
-	ch = make(chan message, 1)
+	ch := make(chan message, 1)
 	r.entries[nonce] = ch
 
 	return ch, nonce, nil
