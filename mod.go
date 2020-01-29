@@ -5,8 +5,11 @@
 // multitudes of devices by making use of a small amount of well-tested, production-grade dependencies.
 package noise
 
-// Handler is called whenever a node receives data from either an inbound/outbound peer connection. Several handlers
+// Handler is called whenever a node receives data from either an inbound/outbound peer connection. Multiple handlers
 // may be registered to a node by (*Node).Handle before the node starts listening for new peers.
+//
+// Returning an error in a handler closes the connection and marks the connection to have closed unexpectedly or due
+// to error. Should you intend to wish to skip a handler from processing some given data, return a nil error.
 type Handler func(ctx HandlerContext) error
 
 // Protocol is an interface that may be implemented by libraries and projects built on top of Noise to hook callbacks

@@ -313,7 +313,7 @@ func (c *Client) request(ctx context.Context, data []byte) (message, error) {
 }
 
 func (c *Client) send(nonce uint64, data []byte) error {
-	data = message{nonce: nonce, data: data}.Marshal()
+	data = message{nonce: nonce, data: data}.marshal()
 
 	if c.suite != nil {
 		var err error
