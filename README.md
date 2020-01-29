@@ -1,6 +1,6 @@
 # noise
 
-[![GoDoc][1]][2] [![Discord][7]][8] [![MIT licensed][5]][6] [![Go Report Card][11]][12] [![Coverage Statusd][13]][14]
+[![GoDoc][1]][2] [![Discord][7]][8] [![MIT licensed][5]][6] ![Build Status][9] [![Go Report Card][11]][12] [![Coverage Statusd][13]][14]
 
 [1]: https://godoc.org/github.com/perlin-network/noise?status.svg
 [2]: https://godoc.org/github.com/perlin-network/noise
@@ -8,6 +8,7 @@
 [6]: LICENSE
 [7]: https://img.shields.io/discord/458332417909063682.svg
 [8]: https://discord.gg/dMYfDPM
+[9]: https://github.com/perlin-network/noise/workflows/CI/badge.svg
 [11]: https://goreportcard.com/badge/github.com/perlin-network/noise
 [12]: https://goreportcard.com/report/github.com/perlin-network/noise
 [13]: https://codecov.io/gh/perlin-network/noise/branch/master/graph/badge.svg
