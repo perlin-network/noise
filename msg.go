@@ -1,126 +1,101 @@
 package noise
 
 import (
-	"bytes"
-	"github.com/perlin-network/noise/payload"
-	"github.com/pkg/errors"
+	"encoding/binary"
+	"errors"
+	"go.uber.org/atomic"
+	"io"
 )
 
-// To have Noise send/receive messages of a given type, said type must implement the
-// following Message interface.
-//
-// Noise by default encodes messages as bytes in little-endian order, and provides
-// utility classes to assist with serializing/deserializing arbitrary Go types into
-// bytes efficiently.
-//
-// By exposing raw network packets as bytes to users, any additional form of serialization
-// or message packing or compression scheme or cipher scheme may be bootstrapped on top of
-// any particular message type registered to Noise.
-type Message interface {
-	Read(reader payload.Reader) (Message, error)
-	Write() []byte
+type message struct {
+	nonce uint64
+	data  []byte
 }
 
-// EncodeMessage serializes a message body into its byte representation, and prefixes
-// said byte representation with the messages opcode for the purpose of sending said
-// bytes over the wire.
-//
-// Additional header/footer bytes is prepended/appended accordingly.
-//
-// Refer to the functions `OnEncodeHeader` and `OnEncodeFooter` available in `noise.Peer`
-// to prepend/append additional information on every single message sent over the wire.
-func (p *Peer) EncodeMessage(message Message) ([]byte, error) {
-	opcode, err := OpcodeFromMessage(message)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not find opcode registered for message")
-	}
+func (m message) marshal() []byte {
+	header := make([]byte, 8)
+	binary.BigEndian.PutUint64(header[:8], m.nonce)
 
-	var buf bytes.Buffer
-
-	_, err = buf.Write(payload.NewWriter(nil).WriteByte(byte(opcode)).Bytes())
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to serialize message opcode")
-	}
-
-	_, err = buf.Write(message.Write())
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to serialize and write message contents")
-	}
-
-	header, errs := p.onEncodeHeaderCallbacks.RunCallbacks([]byte{}, p.node, buf.Bytes())
-
-	if len(errs) > 0 {
-		err := errs[0]
-
-		for _, e := range errs[1:] {
-			err = errors.Wrap(e, e.Error())
-		}
-
-		return nil, errors.Wrap(err, "failed to serialize custom footer")
-	}
-
-	footer, errs := p.onEncodeFooterCallbacks.RunCallbacks([]byte{}, p.node, buf.Bytes())
-
-	if len(errs) > 0 {
-		err := errs[0]
-
-		for _, e := range errs[1:] {
-			err = errors.Wrap(e, e.Error())
-		}
-
-		return nil, errors.Wrap(err, "failed to serialize custom footer")
-	}
-
-	return append(header.([]byte), append(buf.Bytes(), footer.([]byte)...)...), nil
+	return append(header, m.data...)
 }
 
-func (p *Peer) DecodeMessage(buf []byte) (Opcode, Message, error) {
-	reader := payload.NewReader(buf)
-
-	// Read custom header from network packet.
-	errs := p.onDecodeHeaderCallbacks.RunCallbacks(p.node, reader)
-
-	if len(errs) > 0 {
-		err := errs[0]
-
-		for _, e := range errs[1:] {
-			err = errors.Wrap(e, e.Error())
-		}
-
-		return OpcodeNil, nil, errors.Wrap(err, "failed to decode custom headers")
+func unmarshalMessage(data []byte) (message, error) {
+	if len(data) < 8 {
+		return message{}, io.ErrUnexpectedEOF
 	}
 
-	afterHeaderSize := len(buf) - reader.Len()
+	nonce := binary.BigEndian.Uint64(data[:8])
+	data = data[8:]
 
-	opcode, err := reader.ReadByte()
+	return message{nonce: nonce, data: data}, nil
+}
+
+// HandlerContext provides contextual information upon the recipient of data from an inbound/outbound connection. It
+// provides the option of responding to a request should the data received be of a request.
+type HandlerContext struct {
+	client *Client
+	msg    message
+	sent   atomic.Bool
+}
+
+// ID returns the ID of the inbound/outbound peer that sent you the data that is currently being handled.
+func (ctx *HandlerContext) ID() ID {
+	return ctx.client.ID()
+}
+
+// Data returns the raw bytes that some peer has sent to you.
+//
+// Data may be called concurrently.
+func (ctx *HandlerContext) Data() []byte {
+	return ctx.msg.data
+}
+
+// IsRequest marks whether or not the data received was intended to be of a request.
+//
+// IsRequest may be called concurrently.
+func (ctx *HandlerContext) IsRequest() bool {
+	return ctx.msg.nonce > 0
+}
+
+// Send sends data back to the peer that has sent you data. Should the data the peer send you be of a request, Send
+// will send data back as a response. It returns an error if multiple responses attempt to be sent to a single request,
+// or if an error occurred while attempting to send the peer a message.
+//
+// Send may be called concurrently.
+func (ctx *HandlerContext) Send(data []byte) error {
+	if ctx.IsRequest() && !ctx.sent.CAS(false, true) {
+		return errors.New("server-side may only send back a single response to a request")
+	}
+
+	return ctx.client.send(ctx.msg.nonce, data)
+}
+
+// DecodeMessage decodes the raw bytes that some peer has sent you into a Go type. The Go type must have previously
+// been registered to the node to which the handler this context is under was registered on. An error is thrown
+// otherwise.
+//
+// It is highly recommended that should you choose to have your application utilize noise's serialization/
+// deserialization framework for data over-the-wire, that all handlers use them by default.
+//
+// DecodeMessage may be called concurrently.
+func (ctx *HandlerContext) DecodeMessage() (Serializable, error) {
+	return ctx.client.node.DecodeMessage(ctx.Data())
+}
+
+// SendMessage encodes and serializes a Go type into a byte slice, and sends data back to the peer that has sent you
+// data as either a response or message. Refer to (*HandlerContext).Send for more details. An error is thrown if
+// the Go type passed in has not been registered to the node to which the handler this context is under was registered
+// on.
+//
+// It is highly recommended that should you choose to have your application utilize noise's
+// serialization/deserialization framework for data over-the-wire, that all handlers use them by default.
+//
+// SendMessage may be called concurrently.
+func (ctx *HandlerContext) SendMessage(msg Serializable) error {
+	data, err := ctx.client.node.EncodeMessage(msg)
 	if err != nil {
-		return OpcodeNil, nil, errors.Wrap(err, "failed to read opcode")
+		return err
 	}
 
-	message, err := MessageFromOpcode(Opcode(opcode))
-	if err != nil {
-		return Opcode(opcode), nil, errors.Wrap(err, "opcode<->message pairing not registered")
-	}
-
-	message, err = message.Read(reader)
-	if err != nil {
-		return Opcode(opcode), nil, errors.Wrap(err, "failed to read message contents")
-	}
-
-	afterMessageSize := len(buf) - reader.Len()
-
-	// Read custom footer from network packet.
-	errs = p.onDecodeFooterCallbacks.RunCallbacks(p.node, buf[afterHeaderSize:afterMessageSize], reader)
-
-	if len(errs) > 0 {
-		err := errs[0]
-
-		for _, e := range errs[1:] {
-			err = errors.Wrap(e, e.Error())
-		}
-
-		return OpcodeNil, nil, errors.Wrap(err, "failed to decode custom footer")
-	}
-
-	return Opcode(opcode), message, nil
+	return ctx.Send(data)
 }

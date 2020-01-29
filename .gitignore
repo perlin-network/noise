@@ -1,11 +1,6 @@
 .idea/
 .vscode/
+*.iml
 
 vendor/
 coverage.txt
-
-*.exe
-
-*.iml
-
-docs/book
