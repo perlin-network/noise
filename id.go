@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+// ID represents a peer ID. It comprises of a cryptographic public key, and a public, reachable network address
+// specified by a IPv4/IPv6 host and 16-bit port number.
 type ID struct {
 	// The Ed25519 public key of the bearer of this ID.
 	ID PublicKey `json:"public_key"`

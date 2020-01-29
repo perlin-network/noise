@@ -5,12 +5,33 @@
 // multitudes of devices by making use of a small amount of well-tested, production-grade dependencies.
 package noise
 
+// Handler is called whenever a node receives data from either an inbound/outbound peer connection. Several handlers
+// may be registered to a node by (*Node).Handle before the node starts listening for new peers.
 type Handler func(ctx HandlerContext) error
 
+// Binder is an interface that may be implemented by libraries and projects built on top of Noise to hook callbacks
+// onto a series of events that are emitted throughout a nodes lifecycle. They may be registered to a node by
+// (*Node).Bind before the node starts listening for new peers.
 type Binder interface {
+	// Bind is called when the node has successfully started listening for new peers. Important node information
+	// such as the nodes binding host, binding port, public address, and ID are not initialized until after
+	// (*Node).Listen has successfully been called. Bind gets called the very moment such information has successfully
+	// been initialized.
+	//
+	// Errors returned from implementations of Bind will propagate back up to (*Node).Listen as a returned error.
 	Bind(node *Node) error
+
+	// OnPeerJoin is called when a node successfully receives an incoming peer/connects to an outgoing peer, and
+	// completes noise's protocol handshake.
 	OnPeerJoin(client *Client)
+
+	// OnPeerLeave is called whenever any inbound/outbound connection that has successfully connected to a node
+	// has been terminated.
 	OnPeerLeave(client *Client)
+
+	// OnMessageSent is called whenever a message or request is successfully sent to a peer.
 	OnMessageSent(client *Client)
+
+	// OnMessageRecv is called whenever a message or response is received from a peer.
 	OnMessageRecv(client *Client)
 }

@@ -43,17 +43,17 @@
 - Logging is handled by [uber-go/zap](https://github.com/uber-go/zap).
 - Byte buffer pooling is handled by [valyala/bytebufferpool](https://github.com/valyala/bytebufferpool).
 - Unit tests are handled by [stretchr/testify](https://github.com/stretchr/testify).
-- Elliptic-curve Diffie Hellman Key Exchange (ECDH) over Curve25519 is handled by the `x25519` package of [agl/ed25519](https://github.com/agl/ed25519).
 - Ed25519 signatures are handled by [oasislabs/ed25519](https://github.com/oasislabs/ed25519).
+- Elliptic-curve Diffie Hellman Key Exchange (ECDH) over Curve25519 is handled by the `x25519` package of [agl/ed25519](https://github.com/agl/ed25519).
 
 ## Setup
 
 **noise** was intended to be used in Go projects that utilize Go modules. You may incorporate noise into your project as a library dependency by executing the following:
 
 ```shell
-go get -u github.com/perlin-network/noise
+% go get -u github.com/perlin-network/noise
 ```
-
+ 
 ## Example
 
 ```go
@@ -128,7 +128,7 @@ Benchmarks measure CPU time and allocations of a single node sending messages, r
 
 Take these benchmark numbers with a grain of salt.
 
-```
+```shell
 % cat /proc/cpuinfo | grep 'model name' | uniq
 model name	: Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz
 
