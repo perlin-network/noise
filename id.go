@@ -40,11 +40,11 @@ func (e ID) Size() int {
 // String returns a JSON representation of this ID.
 func (e ID) String() string {
 	var builder strings.Builder
-	builder.WriteString(`{"public_key": `)
+	builder.WriteString(`{"public_key": "`)
 	builder.WriteString(hex.EncodeToString(e.ID[:]))
-	builder.WriteString(`, "address": `)
+	builder.WriteString(`", "address": "`)
 	builder.WriteString(e.Address)
-	builder.WriteString("}")
+	builder.WriteString(`"}`)
 	return builder.String()
 }
 

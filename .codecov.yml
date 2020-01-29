@@ -4,7 +4,9 @@ codecov:
   max_report_age: off
 
 ignore:
-  - "./cmd"
+  - "./cmd/basic"
+  - "./cmd/benchmark_rpc"
+  - "./cmd/benchmark_send"
 
 comment: false
 
