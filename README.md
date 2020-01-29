@@ -31,7 +31,7 @@
 
 ## Defaults
 
-- No logs are printed by default.
+- No logs are printed by default. Set a logger via `noise.WithNodeLogger(*zap.Logger)`.
 - A random Ed25519 keypair is generated for a new node.
 - Peers attempt to be dialed at most three times.
 - A total of 128 outbound connections are allowed at any time.
@@ -44,7 +44,7 @@
 - Byte buffer pooling is handled by [valyala/bytebufferpool](https://github.com/valyala/bytebufferpool).
 - Unit tests are handled by [stretchr/testify](https://github.com/stretchr/testify).
 - Ed25519 signatures are handled by [oasislabs/ed25519](https://github.com/oasislabs/ed25519).
-- Elliptic-curve Diffie Hellman Key Exchange (ECDH) over Curve25519 is handled by the `x25519` package of [agl/ed25519](https://github.com/agl/ed25519).
+- Elliptic-curve Diffie Hellman Key Exchange (ECDH) over Curve25519 is handled by [agl/ed25519](https://github.com/agl/ed25519).
 
 ## Setup
 
