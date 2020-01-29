@@ -1,8 +1,9 @@
 name: CI
-on: [push]
+on: [push, pull_request]
 
 jobs:
-  unit_test:
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
@@ -12,7 +13,7 @@ jobs:
         with:
           go-version: '1.13.3'
 
-      - name: Cache go modules
+      - name: Cache Go modules
         uses: actions/cache@v1
         with:
           path: /home/runner/go/pkg/mod
@@ -22,26 +23,11 @@ jobs:
         run: go mod download
 
       - name: Run unit tests
-        run: make unit_test
-
-      - name: Save code coverage
-        uses: actions/upload-artifact@v1
-        with:
-          name: coverage
-          path: coverage.txt
-
-  code_coverage:
-    runs-on: ubuntu-latest
-    needs: [unit_test]
-    steps:
-      - name: Download code coverage
-        uses: actions/download-artifact@v1
-        with:
-          name: coverage
-          path: .
+        run: make test-coverage
 
       - name: Upload coverage report
-        uses: codecov/codecov-action@v1.0.3
-        with:
-          token: ${{secrets.CODECOV_TOKEN}}
-          file: coverage.txt
+          uses: codecov/codecov-action@v1.0.5
+          with:
+            token: ${{secrets.CODECOV_TOKEN}}
+            file: ./coverage.txt
+            yml: ./.codecov.yml

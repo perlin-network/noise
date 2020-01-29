@@ -345,7 +345,7 @@ func (c *Client) recv(ctx context.Context) (message, error) {
 			}
 		}
 
-		msg, err := UnmarshalMessage(data)
+		msg, err := unmarshalMessage(data)
 		if err != nil {
 			return message{}, err
 		}

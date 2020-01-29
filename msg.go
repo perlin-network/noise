@@ -19,7 +19,7 @@ func (m message) Marshal() []byte {
 	return append(header, m.data...)
 }
 
-func UnmarshalMessage(data []byte) (message, error) {
+func unmarshalMessage(data []byte) (message, error) {
 	if len(data) < 8 {
 		return message{}, io.ErrUnexpectedEOF
 	}
