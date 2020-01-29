@@ -1,4 +1,4 @@
-// noise is an opinionated, easy-to-use P2P network stack for decentralized applications, and
+// Package noise is an opinionated, easy-to-use P2P network stack for decentralized applications, and
 // cryptographic protocols written in Go.
 //
 // noise is made to be minimal, robust, developer-friendly, performant, secure, and cross-platform across

@@ -8,26 +8,26 @@ import (
 )
 
 const (
-	// Size in bytes of a peers public key.
+	// PublicKeySize is the size in bytes of a nodes/peers public key.
 	PublicKeySize = ed25519.PublicKeySize
 
-	// Size in bytes of a peers private key.
+	// PrivateKeySize is the size in bytes of a nodes/peers private key.
 	PrivateKeySize = ed25519.PrivateKeySize
 )
 
 type (
-	// Default peer public key type.
+	// PublicKey is the default node/peer public key type.
 	PublicKey [PublicKeySize]byte
 
-	// Default peer private key type.
+	// PrivateKey is the default node/peer private key type.
 	PrivateKey [PrivateKeySize]byte
 )
 
 var (
-	// Zero-value for a peer public key.
+	// ZeroPublicKey is the zero-value for a node/peer public key.
 	ZeroPublicKey PublicKey
 
-	// Zero-value for a peer private key.
+	// ZeroPrivateKey is the zero-value for a node/peer private key.
 	ZeroPrivateKey PrivateKey
 )
 

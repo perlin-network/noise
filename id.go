@@ -10,7 +10,8 @@ import (
 )
 
 // ID represents a peer ID. It comprises of a cryptographic public key, and a public, reachable network address
-// specified by a IPv4/IPv6 host and 16-bit port number.
+// specified by a IPv4/IPv6 host and 16-bit port number. The size of an ID in terms of its byte representation
+// is static, with its contents being deterministic.
 type ID struct {
 	// The Ed25519 public key of the bearer of this ID.
 	ID PublicKey `json:"public_key"`
@@ -47,7 +48,7 @@ func (e ID) String() string {
 	return builder.String()
 }
 
-// Marshal serializes this ID into bytes.
+// Marshal serializes this ID into its byte representation.
 func (e ID) Marshal() []byte {
 	buf := make([]byte, e.Size())
 

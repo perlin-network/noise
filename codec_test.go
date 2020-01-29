@@ -14,7 +14,7 @@ func (t test2) Marshal() []byte {
 	return t.data
 }
 
-func UnmarshalTest2(data []byte) (test2, error) {
+func unmarshalTest2(data []byte) (test2, error) {
 	return test2{data: data}, nil
 }
 
@@ -26,7 +26,7 @@ func (t test) Marshal() []byte {
 	return t.data
 }
 
-func UnmarshalTest(data []byte) (test, error) {
+func unmarshalTest(data []byte) (test, error) {
 	return test{data: data}, nil
 }
 
@@ -35,7 +35,7 @@ func TestCodecRegisterEncodeDecode(t *testing.T) {
 
 	codec := newCodec()
 
-	opcode := codec.register(test{}, UnmarshalTest)
+	opcode := codec.register(test{}, unmarshalTest)
 
 	msg := test{data: []byte("hello world")}
 
@@ -70,8 +70,8 @@ func TestPanicIfDuplicateMessagesRegistered(t *testing.T) {
 	codec := newCodec()
 
 	assert.Panics(t, func() {
-		codec.register(test{}, UnmarshalTest)
-		codec.register(test2{}, UnmarshalTest2)
-		codec.register(test{}, UnmarshalTest)
+		codec.register(test{}, unmarshalTest)
+		codec.register(test2{}, unmarshalTest2)
+		codec.register(test{}, unmarshalTest)
 	})
 }
