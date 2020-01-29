@@ -60,7 +60,7 @@ func (k PublicKey) MarshalJSON() ([]byte, error) {
 	return json.Marshal(k.String())
 }
 
-// Sign uses this private key to sign data and return a cryptographic signature as a slice of bytes.
+// Sign uses this private key to sign data and return its cryptographic signature as a slice of bytes.
 func (k PrivateKey) Sign(data []byte) []byte {
 	return ed25519.Sign(k[:], data)
 }

@@ -21,6 +21,21 @@ const (
 	clientSideOutbound clientSide = true
 )
 
+// Client represents an pooled inbound/outbound connection under some node. Should a client successfully undergo
+// noise's protocol handshake, information about the peer representative of this client, such as its ID is available.
+//
+// A clients connection may be closed through (*Client).Close, through the result of a failed handshake, through
+// exceeding the max inbound/outbound connection count configured on the clients associated node, through a node
+// gracefully being stopped, through a Handler configured on the node returning an error upon recipient of some data,
+// or through receiving unexpected/suspicious data.
+//
+// The lifecycle of a client may be controlled through (*Client).WaitUntilReady, and (*Client).WaitUntilClosed. It
+// provably has been useful in writing unit tests where a client instance is used under high concurrency scenarios.
+//
+// A client in total has four goroutines associated to it: a goroutine responsible for handling writing messages, a
+// goroutine responsible for handling the recipient of messages, a goroutine for timing out the client connection
+// should there be no further read/writes after some configured timeout on the clients associatd node, and a goroutine
+// for handling protocol logic such as handshaking/executing Handler's.
 type Client struct {
 	node *Node
 
@@ -138,6 +153,9 @@ func (c *Client) WaitUntilClosed() {
 	c.waitUntilClosed()
 }
 
+// Error returns the very first error that has caused this clients connection to have dropped.
+//
+// Error may be called concurrently.
 func (c *Client) Error() error {
 	c.err.Lock()
 	defer c.err.Unlock()

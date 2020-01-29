@@ -9,11 +9,13 @@ import (
 	"sync"
 )
 
+// Serializable attributes whether or not a type has a byte representation that it may be serialized into.
 type Serializable interface {
+	// Marshal converts this type into it's byte representation as a slice.
 	Marshal() []byte
 }
 
-type Codec struct {
+type codec struct {
 	sync.RWMutex
 
 	counter uint16
@@ -21,14 +23,14 @@ type Codec struct {
 	de      map[uint16]reflect.Value
 }
 
-func NewCodec() *Codec {
-	return &Codec{
+func newCodec() *codec {
+	return &codec{
 		ser: make(map[reflect.Type]uint16, math.MaxUint16),
 		de:  make(map[uint16]reflect.Value, math.MaxUint16),
 	}
 }
 
-func (c *Codec) Register(ser Serializable, de interface{}) uint16 {
+func (c *codec) register(ser Serializable, de interface{}) uint16 {
 	c.Lock()
 	defer c.Unlock()
 
@@ -53,7 +55,7 @@ func (c *Codec) Register(ser Serializable, de interface{}) uint16 {
 	return c.counter - 1
 }
 
-func (c *Codec) Encode(msg Serializable) ([]byte, error) {
+func (c *codec) encode(msg Serializable) ([]byte, error) {
 	c.RLock()
 	defer c.RUnlock()
 
@@ -74,7 +76,7 @@ func (c *Codec) Encode(msg Serializable) ([]byte, error) {
 	return append(buf, msg.Marshal()...), nil
 }
 
-func (c *Codec) Decode(data []byte) (Serializable, error) {
+func (c *codec) decode(data []byte) (Serializable, error) {
 	if len(data) < 2 {
 		return nil, io.ErrUnexpectedEOF
 	}

@@ -1,8 +1,7 @@
-package noise_test
+package noise
 
 import (
 	"encoding/binary"
-	"github.com/perlin-network/noise"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -34,9 +33,9 @@ func UnmarshalTest(data []byte) (test, error) {
 func TestCodecRegisterEncodeDecode(t *testing.T) {
 	t.Parallel()
 
-	codec := noise.NewCodec()
+	codec := newCodec()
 
-	opcode := codec.Register(test{}, UnmarshalTest)
+	opcode := codec.register(test{}, UnmarshalTest)
 
 	msg := test{data: []byte("hello world")}
 
@@ -44,23 +43,23 @@ func TestCodecRegisterEncodeDecode(t *testing.T) {
 	binary.BigEndian.PutUint16(expected[:2], opcode)
 	copy(expected[2:], msg.data)
 
-	data, err := codec.Encode(msg)
+	data, err := codec.encode(msg)
 	assert.NoError(t, err)
 
 	assert.EqualValues(t, opcode, binary.BigEndian.Uint16(data[:2]))
 	assert.EqualValues(t, expected, data)
 
-	obj, err := codec.Decode(data)
+	obj, err := codec.decode(data)
 	assert.NoError(t, err)
 	assert.IsType(t, obj, test{})
 
 	// Failure cases.
 
 	data[0] = 99
-	_, err = codec.Decode(data)
+	_, err = codec.decode(data)
 	assert.Error(t, err)
 
-	_, err = codec.Encode(test2{data: []byte("should not be encodable")})
+	_, err = codec.encode(test2{data: []byte("should not be encodable")})
 	assert.Error(t, err)
 
 }
@@ -68,11 +67,11 @@ func TestCodecRegisterEncodeDecode(t *testing.T) {
 func TestPanicIfDuplicateMessagesRegistered(t *testing.T) {
 	t.Parallel()
 
-	codec := noise.NewCodec()
+	codec := newCodec()
 
 	assert.Panics(t, func() {
-		codec.Register(test{}, UnmarshalTest)
-		codec.Register(test2{}, UnmarshalTest2)
-		codec.Register(test{}, UnmarshalTest)
+		codec.register(test{}, UnmarshalTest)
+		codec.register(test2{}, UnmarshalTest2)
+		codec.register(test{}, UnmarshalTest)
 	})
 }
