@@ -9,10 +9,10 @@ import (
 const autoTrimThreshold = 10
 
 type SequentialCallbackManager struct {
-	callbacksMutex sync.Mutex // this mutex only protects the `callbacks` pointer itself.
-
-	callbacks           *[]callbackState
 	pendingRemovalCount uint64
+
+	callbacksMutex sync.Mutex // this mutex only protects the `callbacks` pointer itself.
+	callbacks      *[]callbackState
 
 	reverse bool
 }
