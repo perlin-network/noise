@@ -121,20 +121,6 @@ PASS
 ok      github.com/perlin-network/noise 101.966s
 ```
 
-## Update
-
-To mark the start of the new year, Noise has been completely redesigned to factor in privacy, security, and performance improvements that have been established from experience reports which were well-received since it's inception.
-
-To accommodate for this significant refactor, and the desire to push Noise into a fully open-source project, a decision was made to reboot Noise to adopt a proper versioning system. This decision entails rebooting Noise to start from v0.1.0.
-
-For existing projects that have previously adopted Noise, we highly recommend updating your project. Should it be infeasible however, it is possible to vendor in the latest version of Noise prior to this update as a library dependency.
-
-```shell
-% go get github.com/perlin-network/noise@f9c1f15b7d8d725161ed56860f4f6f5bdd9d1eca
-```
-
-We warn however that no assistance will be provided to those using versions of Noise prior to this update.
-
 ## Versioning
 
 Breaking changes will comprise of an increment of the MINOR version, with bug patches/improvements involving an increment of the PATCH version. Semantic versioning will be adopted starting from v1.0.0.
