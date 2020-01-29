@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+// Iterator represents a S/Kademlia overlay network iterator over all peers that may be discovered in the network. It
+// is used for peer discovery, and for finding peers by their public key over an overlay network.
 type Iterator struct {
 	sync.Mutex
 
@@ -24,6 +26,8 @@ type Iterator struct {
 	numParallelRequestsPerLookup int
 }
 
+// NewIterator instantiates a new overlay network iterator bounded to a node and routing table that may be
+// optionally configured with a variadic list of functional options.
 func NewIterator(node *noise.Node, table *Table, opts ...IteratorOption) *Iterator {
 	it := &Iterator{
 		node:   node,
@@ -42,6 +46,8 @@ func NewIterator(node *noise.Node, table *Table, opts ...IteratorOption) *Iterat
 	return it
 }
 
+// Find attempts to salvage through the Kademlia overlay network through the peers of the node this iterator
+// is bound to for a target public key. It blocks the current goroutine until the search is complete.
 func (it *Iterator) Find(target noise.PublicKey) []noise.ID {
 	var closest []noise.ID
 

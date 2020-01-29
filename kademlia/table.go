@@ -6,6 +6,7 @@ import (
 	"sync"
 )
 
+// Table represents a Kademlia routing table.
 type Table struct {
 	sync.RWMutex
 
@@ -13,6 +14,8 @@ type Table struct {
 	self    noise.ID
 }
 
+// NewTable instantiates a new routing table whose XOR distance metric is defined with respect to some
+// given ID.
 func NewTable(self noise.ID) *Table {
 	table := &Table{self: self}
 
@@ -23,10 +26,12 @@ func NewTable(self noise.ID) *Table {
 	return table
 }
 
+// Self returns the ID which this routing table's XOR distance metric is defined with respect to.
 func (t *Table) Self() noise.ID {
 	return t.self
 }
 
+// Bucket returns all IDs in the bucket where target resides within.
 func (t *Table) Bucket(target noise.PublicKey) []noise.ID {
 	t.RLock()
 	defer t.RUnlock()
@@ -34,6 +39,9 @@ func (t *Table) Bucket(target noise.PublicKey) []noise.ID {
 	return t.entries[t.getBucketIndex(target)]
 }
 
+// Update attempts to insert the target node/peer ID into this routing table. If the bucket it was expected
+// to be inserted within is full, ErrBucketFull is returned. If the ID already exists in its respective routing
+// table bucket, it is moved to the head of the bucket.
 func (t *Table) Update(target noise.ID) error {
 	if target.ID == noise.ZeroPublicKey {
 		return nil
@@ -46,19 +54,22 @@ func (t *Table) Update(target noise.ID) error {
 
 	for i, id := range t.entries[idx] {
 		if id.ID == target.ID { // Found the target ID already inside the routing table.
-			t.entries[idx][0], t.entries[idx][i] = t.entries[idx][i], t.entries[idx][0]
+			t.entries[idx] = append(append([]noise.ID{target}, t.entries[idx][:i]...), t.entries[idx][i+1:]...)
 			return nil
 		}
 	}
 
-	if len(t.entries[idx]) < BucketSize {
+	if len(t.entries[idx]) < BucketSize { // The bucket is not yet under full capacity.
 		t.entries[idx] = append([]noise.ID{target}, t.entries[idx]...)
 		return nil
 	}
 
+	// The bucket is at full capacity. Return ErrBucketFull.
+
 	return fmt.Errorf("cannot insert id %x into routing table: %w", target.ID, ErrBucketFull)
 }
 
+// Recorded returns true if target is already recorded in this routing table.
 func (t *Table) Recorded(target noise.PublicKey) bool {
 	t.RLock()
 	defer t.RUnlock()
@@ -72,6 +83,7 @@ func (t *Table) Recorded(target noise.PublicKey) bool {
 	return false
 }
 
+// Delete removes target from this routing table.
 func (t *Table) Delete(target noise.PublicKey) bool {
 	t.Lock()
 	defer t.Unlock()
@@ -88,10 +100,12 @@ func (t *Table) Delete(target noise.PublicKey) bool {
 	return false
 }
 
+// Peers returns BucketSize closest peer IDs to the ID which this routing table's distance metric is defined against.
 func (t *Table) Peers() []noise.ID {
 	return t.FindClosest(t.self.ID, BucketSize)
 }
 
+// FindClosest returns the k closest peer IDs to target, and sorts them based on how close they are.
 func (t *Table) FindClosest(target noise.PublicKey, k int) []noise.ID {
 	var closest []noise.ID
 
