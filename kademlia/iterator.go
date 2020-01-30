@@ -24,6 +24,8 @@ type Iterator struct {
 	maxNumResults                int
 	numParallelLookups           int
 	numParallelRequestsPerLookup int
+
+	lookupTimeout time.Duration
 }
 
 // NewIterator instantiates a new overlay network iterator bounded to a node and routing table that may be
@@ -37,6 +39,8 @@ func NewIterator(node *noise.Node, table *Table, opts ...IteratorOption) *Iterat
 		maxNumResults:                BucketSize,
 		numParallelLookups:           3,
 		numParallelRequestsPerLookup: 8,
+
+		lookupTimeout: 3 * time.Second,
 	}
 
 	for _, opt := range opts {
@@ -155,7 +159,7 @@ func (it *Iterator) processLookupRequests(in <-chan noise.ID, out chan<- []noise
 }
 
 func (it *Iterator) lookupRequest(id noise.ID, out chan<- []noise.ID) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), it.lookupTimeout)
 	defer cancel()
 
 	obj, err := it.node.RequestMessage(ctx, id.Address, FindNodeRequest{Target: id.ID})

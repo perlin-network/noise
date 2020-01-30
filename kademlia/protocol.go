@@ -26,11 +26,15 @@ type Protocol struct {
 	table  *Table
 
 	events Events
+
+	pingTimeout time.Duration
 }
 
 // New returns a new instance of the Kademlia protocol.
 func New(opts ...ProtocolOption) *Protocol {
-	p := &Protocol{}
+	p := &Protocol{
+		pingTimeout: 3 * time.Second,
+	}
 
 	for _, opt := range opts {
 		opt(p)
@@ -102,7 +106,7 @@ func (p *Protocol) Ack(id noise.ID) {
 		bucket := p.table.Bucket(id.ID)
 		last := bucket[len(bucket)-1]
 
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), p.pingTimeout)
 		pong, err := p.node.RequestMessage(ctx, last.Address, Ping{})
 		cancel()
 

@@ -151,9 +151,9 @@ Releases are marked with a version number formatted as MAJOR.MINOR.PATCH. Major 
 
 Therefore, **noise** _mostly_ respects semantic versioning.
 
-The rationale behind this is due to improper tagging of prior releases (v0.1.0, v1.0.0, and v1.1.0), which has caused for the improper caching of module information on _proxy.golang.org_ and _sum.golang.org_.
+The rationale behind this is due to improper tagging of prior releases (v0.1.0, v1.0.0, v1.1.0, and v1.1.1), which has caused for the improper caching of module information on _proxy.golang.org_ and _sum.golang.org_.
 
-As a result, _noise's initial development phase starts from v1.1.1_. Until Noise's API is stable, subsequent releases will only comprise of bumps in MINOR and PATCH.
+As a result, _noise's initial development phase starts from v1.1.2_. Until Noise's API is stable, subsequent releases will only comprise of bumps in MINOR and PATCH.
 
 ## License
 

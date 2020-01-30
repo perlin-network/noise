@@ -127,8 +127,8 @@ func (n *Node) Listen() error {
 
 	addr, ok := n.listener.Addr().(*net.TCPAddr)
 	if !ok {
-		err = fmt.Errorf("did not listen for tcp: %w", n.listener.Close())
-		return err
+		n.listener.Close()
+		return errors.New("did not bind to a tcp addr")
 	}
 
 	n.host = addr.IP
@@ -136,9 +136,34 @@ func (n *Node) Listen() error {
 
 	if n.addr == "" {
 		n.addr = net.JoinHostPort(normalizeIP(n.host), strconv.FormatUint(uint64(n.port), 10))
-	}
+		n.id = NewID(n.publicKey, n.host, n.port)
+	} else {
+		resolved, err := ResolveAddress(n.addr)
+		if err != nil {
+			n.listener.Close()
+			return err
+		}
 
-	n.id = NewID(n.publicKey, n.host, n.port)
+		hostStr, portStr, err := net.SplitHostPort(resolved)
+		if err != nil {
+			n.listener.Close()
+			return err
+		}
+
+		host := net.ParseIP(hostStr)
+		if host == nil {
+			n.listener.Close()
+			return errors.New("host in provided public address is invalid (must be IPv4/IPv6)")
+		}
+
+		port, err := strconv.ParseUint(portStr, 10, 16)
+		if err != nil {
+			n.listener.Close()
+			return err
+		}
+
+		n.id = NewID(n.publicKey, host, uint16(port))
+	}
 
 	for _, protocol := range n.protocols {
 		if protocol.Bind == nil {
@@ -146,6 +171,7 @@ func (n *Node) Listen() error {
 		}
 
 		if err = protocol.Bind(n); err != nil {
+			n.listener.Close()
 			return err
 		}
 	}
@@ -383,6 +409,14 @@ func (n *Node) dialIfNotExists(ctx context.Context, addr string) (*Client, error
 		client.waitUntilClosed()
 
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			for _, protocol := range n.protocols {
+				if protocol.OnPingFailed == nil {
+					continue
+				}
+
+				protocol.OnPingFailed(addr, err)
+			}
+
 			return nil, err
 		}
 	}

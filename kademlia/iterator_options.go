@@ -1,6 +1,9 @@
 package kademlia
 
-import "go.uber.org/zap"
+import (
+	"go.uber.org/zap"
+	"time"
+)
 
 // IteratorOption represents a functional option which may be passed to NewIterator, or to (*Protocol).Find or
 // (*Protocol).Discover to configure Iterator.
@@ -35,5 +38,13 @@ func WithIteratorNumParallelLookups(numParallelLookups int) IteratorOption {
 func WithIteratorNumParallelRequestsPerLookup(numParallelRequestsPerLookup int) IteratorOption {
 	return func(it *Iterator) {
 		it.numParallelRequestsPerLookup = numParallelRequestsPerLookup
+	}
+}
+
+// WithIteratorLookupTimeout sets the max duration to wait until we declare a lookup request sent in amidst
+// a single disjoint lookup to have timed out. By default, it is set to 3 seconds.
+func WithIteratorLookupTimeout(lookupTimeout time.Duration) IteratorOption {
+	return func(it *Iterator) {
+		it.lookupTimeout = lookupTimeout
 	}
 }
