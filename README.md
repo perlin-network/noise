@@ -33,7 +33,7 @@
 ## Defaults
 
 - No logs are printed by default. Set a logger via `noise.WithNodeLogger(*zap.Logger)`.
-- A random Ed25519 keypair is generated for a new node.
+- A random Ed25519 key pair is generated for a new node.
 - Peers attempt to be dialed at most three times.
 - A total of 128 outbound connections are allowed at any time.
 - A total of 128 inbound connections are allowed at any time.
@@ -131,7 +131,7 @@ Take these benchmark numbers with a grain of salt.
 
 ```shell
 % cat /proc/cpuinfo | grep 'model name' | uniq
-model name	: Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz
+model name : Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz
 
 % go test -bench=. -benchtime=30s -benchmem
 goos: linux
@@ -145,9 +145,9 @@ ok      github.com/perlin-network/noise 101.966s
 
 ## Versioning
 
-**noise** is currently in it's initial development phase, and therefore does not promise that subsequent releases will not comprise of breaking changes. Be aware of this should you choose to utilize Noise for projects that are in production.
+**noise** is currently in its initial development phase and therefore does not promise that subsequent releases will not comprise of breaking changes. Be aware of this should you choose to utilize Noise for projects that are in production.
 
-Releases are marked with a version number formatted as MAJOR.MINOR.PATCH. Major breaking changes involve a bump in MAJOR, minor backwards-compatible changes involve a bump in MINOR, and patches and bug fixes involve an bump in PATCH starting from v2.0.0.
+Releases are marked with a version number formatted as MAJOR.MINOR.PATCH. Major breaking changes involve a bump in MAJOR, minor backward-compatible changes involve a bump in MINOR, and patches and bug fixes involve a bump in PATCH starting from v2.0.0.
 
 Therefore, **noise** _mostly_ respects semantic versioning.
 
