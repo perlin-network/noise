@@ -21,8 +21,8 @@ func main() {
 	}
 	defer node.Close()
 
-	overlay := kademlia.NewProtocol()
-	node.Bind(overlay)
+	overlay := kademlia.New()
+	node.Bind(overlay.Protocol())
 
 	if err := node.Listen(); err != nil {
 		panic(err)

@@ -17,20 +17,26 @@ const BucketSize int = 16
 // ErrBucketFull is returned when a routing table bucket is at max capacity.
 var ErrBucketFull = errors.New("bucket is full")
 
-// Protocol implements noise.Protocol.
-var _ noise.Protocol = (*Protocol)(nil)
-
 // Protocol implements routing/discovery portion of the Kademlia protocol with improvements suggested by the
 // S/Kademlia paper. It is expected that Protocol is bound to a noise.Node via (*noise.Node).Bind before the node
 // starts listening for incoming peers.
 type Protocol struct {
-	node  *noise.Node
-	table *Table
+	node   *noise.Node
+	logger *zap.Logger
+	table  *Table
+
+	events Events
 }
 
-// NewProtocol returns a new instance of Kademlia.
-func NewProtocol() *Protocol {
-	return &Protocol{}
+// New returns a new instance of the Kademlia protocol.
+func New(opts ...ProtocolOption) *Protocol {
+	p := &Protocol{}
+
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
 }
 
 // Find executes the FIND_NODE S/Kademlia RPC call to find the closest peers to some given target public key. It
@@ -61,22 +67,6 @@ func (p *Protocol) Ping(ctx context.Context, addr string) error {
 	return nil
 }
 
-// Bind implements noise.Protocol and registers messages Ping, Pong, FindNodeRequest, FindNodeResponse, and
-// handles them by register the (*Protocol).Handle Handler.
-func (p *Protocol) Bind(node *noise.Node) error {
-	p.node = node
-	p.table = NewTable(p.node.ID())
-
-	node.RegisterMessage(Ping{}, UnmarshalPing)
-	node.RegisterMessage(Pong{}, UnmarshalPong)
-	node.RegisterMessage(FindNodeRequest{}, UnmarshalFindNodeRequest)
-	node.RegisterMessage(FindNodeResponse{}, UnmarshalFindNodeResponse)
-
-	node.Handle(p.Handle)
-
-	return nil
-}
-
 // Table returns this Kademlia overlay's routing table from your nodes perspective.
 func (p *Protocol) Table() *Table {
 	return p.table
@@ -90,10 +80,20 @@ func (p *Protocol) Ack(id noise.ID) {
 		inserted, err := p.table.Update(id)
 		if err == nil {
 			if inserted {
-				p.node.Logger().Debug("Peer was inserted into routing table.",
+				p.logger.Debug("Peer was inserted into routing table.",
 					zap.String("peer_id", id.String()),
 					zap.String("peer_addr", id.Address),
 				)
+			}
+
+			if inserted {
+				if p.events.OnPeerAdmitted != nil {
+					p.events.OnPeerAdmitted(id)
+				}
+			} else {
+				if p.events.OnPeerActivity != nil {
+					p.events.OnPeerActivity(id)
+				}
 			}
 
 			return
@@ -107,50 +107,93 @@ func (p *Protocol) Ack(id noise.ID) {
 		cancel()
 
 		if err != nil {
-			if p.table.Delete(last.ID) {
-				p.node.Logger().Debug("Peer was evicted from routing table by failing to be pinged.",
-					zap.String("peer_id", last.ID.String()),
-					zap.String("peer_addr", last.Address),
+			if id, deleted := p.table.Delete(last.ID); deleted {
+				p.logger.Debug("Peer was evicted from routing table by failing to be pinged.",
+					zap.String("peer_id", id.String()),
+					zap.String("peer_addr", id.Address),
 					zap.Error(err),
 				)
+
+				if p.events.OnPeerEvicted != nil {
+					p.events.OnPeerEvicted(id)
+				}
 			}
 			continue
 		}
 
 		if _, ok := pong.(Pong); !ok {
-			if p.table.Delete(last.ID) {
-				p.node.Logger().Debug("Peer was evicted from routing table by failing to be pinged.",
-					zap.String("peer_id", last.ID.String()),
-					zap.String("peer_addr", last.Address),
+			if id, deleted := p.table.Delete(last.ID); deleted {
+				p.logger.Debug("Peer was evicted from routing table by failing to be pinged.",
+					zap.String("peer_id", id.String()),
+					zap.String("peer_addr", id.Address),
 					zap.Error(err),
 				)
+
+				if p.events.OnPeerEvicted != nil {
+					p.events.OnPeerEvicted(id)
+				}
 			}
 			continue
 		}
 
-		p.node.Logger().Debug("Peer failed to be inserted into routing table as it's intended bucket is full.",
+		p.logger.Debug("Peer failed to be inserted into routing table as it's intended bucket is full.",
 			zap.String("peer_id", id.String()),
 			zap.String("peer_addr", id.Address),
 		)
+
+		if p.events.OnPeerEvicted != nil {
+			p.events.OnPeerEvicted(id)
+		}
 
 		return
 	}
 }
 
-// OnPeerJoin implements noise.Protocol and attempts to acknowledge the new peers existence by placing its
-// entry into your nodes' routing table via (*Protocol).Ack.
-func (p *Protocol) OnPeerJoin(client *noise.Client) {
+// Protocol implements noise.Protocol.
+func (p *Protocol) Protocol() noise.Protocol {
+	return noise.Protocol{
+		Bind:            p.Bind,
+		OnPeerConnected: p.OnPeerConnected,
+		OnPingFailed:    p.OnPingFailed,
+		OnMessageSent:   p.OnMessageSent,
+		OnMessageRecv:   p.OnMessageRecv,
+	}
+}
+
+// Bind registers messages Ping, Pong, FindNodeRequest, FindNodeResponse, and handles them by register the
+// (*Protocol).Handle Handler.
+func (p *Protocol) Bind(node *noise.Node) error {
+	p.node = node
+	p.table = NewTable(p.node.ID())
+
+	if p.logger == nil {
+		p.logger = p.node.Logger()
+	}
+
+	node.RegisterMessage(Ping{}, UnmarshalPing)
+	node.RegisterMessage(Pong{}, UnmarshalPong)
+	node.RegisterMessage(FindNodeRequest{}, UnmarshalFindNodeRequest)
+	node.RegisterMessage(FindNodeResponse{}, UnmarshalFindNodeResponse)
+
+	node.Handle(p.Handle)
+
+	return nil
+}
+
+// OnPeerConnected attempts to acknowledge the new peers existence by placing its entry into your nodes' routing table
+// via (*Protocol).Ack.
+func (p *Protocol) OnPeerConnected(client *noise.Client) {
 	p.Ack(client.ID())
 }
 
-// OnPeerLeave implements noise.Protocol and does nothing.
-func (p *Protocol) OnPeerLeave(*noise.Client) {
-}
-
-// OnPingFailed implements noise.Protocol and evicts peers that your node has failed to dial.
+// OnPingFailed evicts peers that your node has failed to dial.
 func (p *Protocol) OnPingFailed(addr string, err error) {
-	if p.table.DeleteByAddress(addr) {
-		p.node.Logger().Debug("Peer was evicted from routing table by failing to be dialed.", zap.Error(err))
+	if id, deleted := p.table.DeleteByAddress(addr); deleted {
+		p.logger.Debug("Peer was evicted from routing table by failing to be dialed.", zap.Error(err))
+
+		if p.events.OnPeerEvicted != nil {
+			p.events.OnPeerEvicted(id)
+		}
 	}
 }
 

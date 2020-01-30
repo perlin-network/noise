@@ -141,6 +141,10 @@ func (n *Node) Listen() error {
 	n.id = NewID(n.publicKey, n.host, n.port)
 
 	for _, protocol := range n.protocols {
+		if protocol.Bind == nil {
+			continue
+		}
+
 		if err = protocol.Bind(n); err != nil {
 			return err
 		}
@@ -268,6 +272,10 @@ func (n *Node) Send(ctx context.Context, addr string, data []byte) error {
 	}
 
 	for _, protocol := range c.node.protocols {
+		if protocol.OnMessageSent == nil {
+			continue
+		}
+
 		protocol.OnMessageSent(c)
 	}
 
@@ -300,6 +308,10 @@ func (n *Node) Request(ctx context.Context, addr string, data []byte) ([]byte, e
 	}
 
 	for _, protocol := range c.node.protocols {
+		if protocol.OnMessageSent == nil {
+			continue
+		}
+
 		protocol.OnMessageSent(c)
 	}
 
@@ -378,6 +390,10 @@ func (n *Node) dialIfNotExists(ctx context.Context, addr string) (*Client, error
 	err = fmt.Errorf("attempted to dial %s several times but failed: %w", addr, err)
 
 	for _, protocol := range n.protocols {
+		if protocol.OnPingFailed == nil {
+			continue
+		}
+
 		protocol.OnPingFailed(addr, err)
 	}
 

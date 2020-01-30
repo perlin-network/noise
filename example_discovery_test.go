@@ -30,11 +30,11 @@ func Example_peerDiscovery() {
 	// Alice, Bob, and Charlie are following an overlay network protocol called Kademlia to discover, interact, and
 	// manage each others peer connections.
 
-	ka, kb, kc := kademlia.NewProtocol(), kademlia.NewProtocol(), kademlia.NewProtocol()
+	ka, kb, kc := kademlia.New(), kademlia.New(), kademlia.New()
 
-	alice.Bind(ka)
-	bob.Bind(kb)
-	charlie.Bind(kc)
+	alice.Bind(ka.Protocol())
+	bob.Bind(kb.Protocol())
+	charlie.Bind(kc.Protocol())
 
 	if err := alice.Listen(); err != nil {
 		panic(err)

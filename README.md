@@ -145,8 +145,15 @@ ok      github.com/perlin-network/noise 101.966s
 
 ## Versioning
 
-Breaking changes will comprise of an increment of the MINOR version, with bug patches/improvements involving an increment of the PATCH version. Semantic versioning will be adopted starting from v1.0.0.
+**noise** is currently in it's initial development phase, and therefore does not promise that subsequent releases will not comprise of breaking changes. Be aware of this should you choose to utilize Noise for projects that are in production.
 
+Releases are marked with a version number formatted as MAJOR.MINOR.PATCH. Major breaking changes involve a bump in MAJOR, minor backwards-compatible changes involve a bump in MINOR, and patches and bug fixes involve an bump in PATCH starting from v2.0.0.
+
+Therefore, **noise** _mostly_ respects semantic versioning.
+
+The rationale behind this is due to improper tagging of prior releases (v0.1.0, v1.0.0, and v1.1.0), which has caused for the improper caching of module information on _proxy.golang.org_ and _sum.golang.org_.
+
+As a result, _noise's initial development phase starts from v1.1.1_. Until Noise's API is stable, subsequent releases will only comprise of bumps in MINOR and PATCH.
 
 ## License
 

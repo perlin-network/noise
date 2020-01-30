@@ -15,29 +15,33 @@ type Handler func(ctx HandlerContext) error
 // Protocol is an interface that may be implemented by libraries and projects built on top of Noise to hook callbacks
 // onto a series of events that are emitted throughout a nodes lifecycle. They may be registered to a node by
 // (*Node).Bind before the node starts listening for new peers.
-type Protocol interface {
+type Protocol struct {
+	// VersionMajor, VersionMinor, and VersionPatch mark the version of this protocol with respect to semantic
+	// versioning.
+	VersionMajor, VersionMinor, VersionPatch uint
+
 	// Bind is called when the node has successfully started listening for new peers. Important node information
 	// such as the nodes binding host, binding port, public address, and ID are not initialized until after
 	// (*Node).Listen has successfully been called. Bind gets called the very moment such information has successfully
 	// been initialized.
 	//
 	// Errors returned from implementations of Bind will propagate back up to (*Node).Listen as a returned error.
-	Bind(node *Node) error
+	Bind func(node *Node) error
 
-	// OnPeerJoin is called when a node successfully receives an incoming peer/connects to an outgoing peer, and
+	// OnPeerConnected is called when a node successfully receives an incoming peer/connects to an outgoing peer, and
 	// completes noise's protocol handshake.
-	OnPeerJoin(client *Client)
+	OnPeerConnected func(client *Client)
 
-	// OnPeerLeave is called whenever any inbound/outbound connection that has successfully connected to a node
+	// OnPeerDisconnected is called whenever any inbound/outbound connection that has successfully connected to a node
 	// has been terminated.
-	OnPeerLeave(client *Client)
+	OnPeerDisconnected func(client *Client)
 
 	// OnPingFailed is called whenever any attempt by a node to dial a peer at addr fails.
-	OnPingFailed(addr string, err error)
+	OnPingFailed func(addr string, err error)
 
 	// OnMessageSent is called whenever a message or request is successfully sent to a peer.
-	OnMessageSent(client *Client)
+	OnMessageSent func(client *Client)
 
 	// OnMessageRecv is called whenever a message or response is received from a peer.
-	OnMessageRecv(client *Client)
+	OnMessageRecv func(client *Client)
 }

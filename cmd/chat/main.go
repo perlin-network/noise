@@ -56,7 +56,7 @@ func main() {
 	)
 	check(err)
 
-	// Release resources associated to node at the end of the program/
+	// Release resources associated to node at the end of the program.
 	defer node.Close()
 
 	// Register the chatMessage Go type to the node with an associated unmarshal function.
@@ -65,9 +65,20 @@ func main() {
 	// Register a message handler to the node.
 	node.Handle(handle)
 
+	// Instantiate Kademlia.
+	events := kademlia.Events{
+		OnPeerAdmitted: func(id noise.ID) {
+			fmt.Printf("Learned about a new peer %s(%s).\n", id.Address, id.ID.String()[:printedLength])
+		},
+		OnPeerEvicted: func(id noise.ID) {
+			fmt.Printf("Forgotten a peer %s(%s).\n", id.Address, id.ID.String()[:printedLength])
+		},
+	}
+
+	overlay := kademlia.New(kademlia.WithProtocolEvents(events))
+
 	// Bind Kademlia to the node.
-	overlay := kademlia.NewProtocol()
-	node.Bind(overlay)
+	node.Bind(overlay.Protocol())
 
 	// Have the node start listening for new peers.
 	check(node.Listen())

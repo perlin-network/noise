@@ -60,8 +60,8 @@ func TestTableEviction(t *testing.T) {
 	assert.NoError(t, err)
 	defer leader.Close()
 
-	overlay := kademlia.NewProtocol()
-	leader.Bind(overlay)
+	overlay := kademlia.New()
+	leader.Bind(overlay.Protocol())
 
 	assert.NoError(t, leader.Listen())
 
@@ -75,7 +75,7 @@ func TestTableEviction(t *testing.T) {
 			defer node.Close()
 		}
 
-		node.Bind(kademlia.NewProtocol())
+		node.Bind(kademlia.New().Protocol())
 		assert.NoError(t, node.Listen())
 
 		_, err = node.Ping(context.Background(), leader.Addr())
@@ -103,7 +103,7 @@ func TestTableEviction(t *testing.T) {
 	assert.NoError(t, err)
 	defer follower.Close()
 
-	follower.Bind(kademlia.NewProtocol())
+	follower.Bind(kademlia.New().Protocol())
 	assert.NoError(t, follower.Listen())
 
 	_, err = follower.Ping(context.Background(), leader.Addr())
@@ -138,14 +138,14 @@ func TestDiscoveryAcrossThreeNodes(t *testing.T) {
 	assert.NoError(t, err)
 	defer c.Close()
 
-	ka := kademlia.NewProtocol()
-	a.Bind(ka)
+	ka := kademlia.New()
+	a.Bind(ka.Protocol())
 
-	kb := kademlia.NewProtocol()
-	b.Bind(kb)
+	kb := kademlia.New()
+	b.Bind(kb.Protocol())
 
-	kc := kademlia.NewProtocol()
-	c.Bind(kc)
+	kc := kademlia.New()
+	c.Bind(kc.Protocol())
 
 	assert.NoError(t, a.Listen())
 	assert.NoError(t, b.Listen())

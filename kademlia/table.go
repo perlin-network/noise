@@ -86,8 +86,9 @@ func (t *Table) Recorded(target noise.PublicKey) bool {
 	return false
 }
 
-// Delete removes target from this routing table.
-func (t *Table) Delete(target noise.PublicKey) bool {
+// Delete removes target from this routing table. It returns the id of the delted target and true if found, or
+// a zero-value ID and false otherwise.
+func (t *Table) Delete(target noise.PublicKey) (noise.ID, bool) {
 	t.Lock()
 	defer t.Unlock()
 
@@ -97,15 +98,16 @@ func (t *Table) Delete(target noise.PublicKey) bool {
 		if id.ID == target {
 			t.entries[idx] = append(t.entries[idx][:i], t.entries[idx][i+1:]...)
 			t.size--
-			return true
+			return id, true
 		}
 	}
 
-	return false
+	return noise.ID{}, false
 }
 
-// DeleteByAddress removes the first occurrence of an id with target as its address from this routing table.
-func (t *Table) DeleteByAddress(target string) bool {
+// DeleteByAddress removes the first occurrence of an id with target as its address from this routing table. It
+// returns the id of the deleted target and true if found, or a zero-value ID and false otherwise.
+func (t *Table) DeleteByAddress(target string) (noise.ID, bool) {
 	t.Lock()
 	defer t.Unlock()
 
@@ -114,12 +116,12 @@ func (t *Table) DeleteByAddress(target string) bool {
 			if id.Address == target {
 				t.entries[i] = append(t.entries[i][:j], t.entries[i][j+1:]...)
 				t.size--
-				return true
+				return id, true
 			}
 		}
 	}
 
-	return false
+	return noise.ID{}, false
 }
 
 // Peers returns BucketSize closest peer IDs to the ID which this routing table's distance metric is defined against.

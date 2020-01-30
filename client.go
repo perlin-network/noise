@@ -269,7 +269,11 @@ func (c *Client) outbound(ctx context.Context, addr string) {
 	c.Logger().Debug("Peer connection closed.")
 
 	for _, protocol := range c.node.protocols {
-		protocol.OnPeerLeave(c)
+		if protocol.OnPeerDisconnected == nil {
+			continue
+		}
+
+		protocol.OnPeerDisconnected(c)
 	}
 }
 
@@ -300,7 +304,11 @@ func (c *Client) inbound(conn net.Conn, addr string) {
 	c.handleLoop()
 
 	for _, protocol := range c.node.protocols {
-		protocol.OnPeerLeave(c)
+		if protocol.OnPeerDisconnected == nil {
+			continue
+		}
+
+		protocol.OnPeerDisconnected(c)
 	}
 }
 
@@ -509,7 +517,11 @@ func (c *Client) handshake(ctx context.Context) {
 	c.Logger().Debug("Peer connection opened.")
 
 	for _, protocol := range c.node.protocols {
-		protocol.OnPeerJoin(c)
+		if protocol.OnPeerConnected == nil {
+			continue
+		}
+
+		protocol.OnPeerConnected(c)
 	}
 }
 
@@ -527,6 +539,10 @@ func (c *Client) handleLoop() {
 		}
 
 		for _, protocol := range c.node.protocols {
+			if protocol.OnMessageRecv == nil {
+				continue
+			}
+
 			protocol.OnMessageRecv(c)
 		}
 
