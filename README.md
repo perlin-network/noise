@@ -52,7 +52,7 @@
 **noise** was intended to be used in Go projects that utilize Go modules. You may incorporate noise into your project as a library dependency by executing the following:
 
 ```shell
-% go get -u github.com/perlin-network/noise@v0.1.0
+% go get -u github.com/perlin-network/noise
 ```
  
 ## Example
