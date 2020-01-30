@@ -12,6 +12,7 @@ type Table struct {
 
 	entries [noise.SizePublicKey * 8][]noise.ID
 	self    noise.ID
+	size    int
 }
 
 // NewTable instantiates a new routing table whose XOR distance metric is defined with respect to some
@@ -19,7 +20,7 @@ type Table struct {
 func NewTable(self noise.ID) *Table {
 	table := &Table{self: self}
 
-	if err := table.Update(self); err != nil {
+	if _, err := table.Update(self); err != nil {
 		panic(err)
 	}
 
@@ -41,10 +42,11 @@ func (t *Table) Bucket(target noise.PublicKey) []noise.ID {
 
 // Update attempts to insert the target node/peer ID into this routing table. If the bucket it was expected
 // to be inserted within is full, ErrBucketFull is returned. If the ID already exists in its respective routing
-// table bucket, it is moved to the head of the bucket.
-func (t *Table) Update(target noise.ID) error {
+// table bucket, it is moved to the head of the bucket and false is returned. If the ID has yet to exist, it is
+// appended to the head of its intended bucket and true is returned.
+func (t *Table) Update(target noise.ID) (bool, error) {
 	if target.ID == noise.ZeroPublicKey {
-		return nil
+		return false, nil
 	}
 
 	t.Lock()
@@ -55,18 +57,19 @@ func (t *Table) Update(target noise.ID) error {
 	for i, id := range t.entries[idx] {
 		if id.ID == target.ID { // Found the target ID already inside the routing table.
 			t.entries[idx] = append(append([]noise.ID{target}, t.entries[idx][:i]...), t.entries[idx][i+1:]...)
-			return nil
+			return false, nil
 		}
 	}
 
 	if len(t.entries[idx]) < BucketSize { // The bucket is not yet under full capacity.
 		t.entries[idx] = append([]noise.ID{target}, t.entries[idx]...)
-		return nil
+		t.size++
+		return true, nil
 	}
 
 	// The bucket is at full capacity. Return ErrBucketFull.
 
-	return fmt.Errorf("cannot insert id %x into routing table: %w", target.ID, ErrBucketFull)
+	return false, fmt.Errorf("cannot insert id %x into routing table: %w", target.ID, ErrBucketFull)
 }
 
 // Recorded returns true if target is already recorded in this routing table.
@@ -93,7 +96,26 @@ func (t *Table) Delete(target noise.PublicKey) bool {
 	for i, id := range t.entries[idx] {
 		if id.ID == target {
 			t.entries[idx] = append(t.entries[idx][:i], t.entries[idx][i+1:]...)
+			t.size--
 			return true
+		}
+	}
+
+	return false
+}
+
+// DeleteByAddress removes the first occurrence of an id with target as its address from this routing table.
+func (t *Table) DeleteByAddress(target string) bool {
+	t.Lock()
+	defer t.Unlock()
+
+	for i, bucket := range t.entries {
+		for j, id := range bucket {
+			if id.Address == target {
+				t.entries[i] = append(t.entries[i][:j], t.entries[i][j+1:]...)
+				t.size--
+				return true
+			}
 		}
 	}
 
@@ -141,6 +163,30 @@ func (t *Table) FindClosest(target noise.PublicKey, k int) []noise.ID {
 	}
 
 	return closest
+}
+
+// Entries returns all stored ids in this routing table.
+func (t *Table) Entries() []noise.ID {
+	t.RLock()
+	defer t.RUnlock()
+
+	entries := make([]noise.ID, 0, t.size)
+
+	for _, bucket := range t.entries {
+		for _, id := range bucket {
+			entries = append(entries, id)
+		}
+	}
+
+	return entries
+}
+
+// NumEntries returns the total amount of ids stored in this routing table.
+func (t *Table) NumEntries() int {
+	t.RLock()
+	defer t.RUnlock()
+
+	return t.size
 }
 
 func (t *Table) getBucketIndex(target noise.PublicKey) int {

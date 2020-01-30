@@ -90,6 +90,8 @@ func TestTableEviction(t *testing.T) {
 
 	before := overlay.Table().Bucket(nodes[0].ID().ID)
 	assert.Len(t, before, kademlia.BucketSize)
+	assert.EqualValues(t, kademlia.BucketSize+1, overlay.Table().NumEntries())
+	assert.EqualValues(t, overlay.Table().NumEntries(), len(overlay.Table().Entries()))
 
 	// Close the node that is at the bottom of the bucket.
 
@@ -114,6 +116,8 @@ func TestTableEviction(t *testing.T) {
 
 	after := overlay.Table().Bucket(nodes[0].ID().ID)
 	assert.Len(t, after, kademlia.BucketSize)
+	assert.EqualValues(t, kademlia.BucketSize+1, overlay.Table().NumEntries())
+	assert.EqualValues(t, overlay.Table().NumEntries(), len(overlay.Table().Entries()))
 
 	assert.EqualValues(t, after[0].Address, follower.Addr())
 	assert.NotContains(t, after, nodes[0].ID())

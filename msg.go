@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"go.uber.org/atomic"
+	"go.uber.org/zap"
 	"io"
 )
 
@@ -41,6 +42,11 @@ type HandlerContext struct {
 // ID returns the ID of the inbound/outbound peer that sent you the data that is currently being handled.
 func (ctx *HandlerContext) ID() ID {
 	return ctx.client.ID()
+}
+
+// Logger returns the logger instance associated to the inbound/outbound peer being handled.
+func (ctx *HandlerContext) Logger() *zap.Logger {
+	return ctx.client.Logger()
 }
 
 // Data returns the raw bytes that some peer has sent to you.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/oasislabs/ed25519"
@@ -90,7 +91,7 @@ func newClient(node *Node) *Client {
 		clientDone: make(chan struct{}),
 	}
 
-	c.logger.Logger = node.logger
+	c.SetLogger(node.logger)
 
 	return c
 }
@@ -251,9 +252,9 @@ func (c *Client) outbound(ctx context.Context, addr string) {
 		return
 	}
 
-	conn.(*net.TCPConn).SetNoDelay(false)
-	conn.(*net.TCPConn).SetWriteBuffer(10000)
-	conn.(*net.TCPConn).SetReadBuffer(10000)
+	_ = conn.(*net.TCPConn).SetNoDelay(false)
+	_ = conn.(*net.TCPConn).SetWriteBuffer(10000)
+	_ = conn.(*net.TCPConn).SetReadBuffer(10000)
 
 	c.conn = conn
 	c.startTimeout(ctx)
@@ -265,8 +266,10 @@ func (c *Client) outbound(ctx context.Context, addr string) {
 
 	c.handleLoop()
 
-	for _, binder := range c.node.binders {
-		binder.OnPeerLeave(c)
+	c.Logger().Debug("Peer connection closed.")
+
+	for _, protocol := range c.node.protocols {
+		protocol.OnPeerLeave(c)
 	}
 }
 
@@ -296,8 +299,8 @@ func (c *Client) inbound(conn net.Conn, addr string) {
 
 	c.handleLoop()
 
-	for _, binder := range c.node.binders {
-		binder.OnPeerLeave(c)
+	for _, protocol := range c.node.protocols {
+		protocol.OnPeerLeave(c)
 	}
 }
 
@@ -496,8 +499,17 @@ func (c *Client) handshake(ctx context.Context) {
 
 	c.id = id
 
-	for _, binder := range c.node.binders {
-		binder.OnPeerJoin(c)
+	c.SetLogger(c.Logger().With(
+		zap.String("peer_id", id.ID.String()),
+		zap.String("peer_addr", id.Address),
+		zap.String("remote_addr", c.conn.RemoteAddr().String()),
+		zap.String("session_key", hex.EncodeToString(shared[:])),
+	))
+
+	c.Logger().Debug("Peer connection opened.")
+
+	for _, protocol := range c.node.protocols {
+		protocol.OnPeerJoin(c)
 	}
 }
 
@@ -507,13 +519,15 @@ func (c *Client) handleLoop() {
 	for {
 		msg, err := c.recv(context.Background())
 		if err != nil {
-			c.logger.Warn("Got an error deserializing a message from a peer.", zap.Error(err))
+			if !isEOF(err) {
+				c.Logger().Warn("Got an error deserializing a message from a peer.", zap.Error(err))
+			}
 			c.reportError(err)
 			break
 		}
 
-		for _, binder := range c.node.binders {
-			binder.OnMessageRecv(c)
+		for _, protocol := range c.node.protocols {
+			protocol.OnMessageRecv(c)
 		}
 
 		if ch := c.requests.findRequest(msg.nonce); ch != nil {
@@ -524,7 +538,7 @@ func (c *Client) handleLoop() {
 
 		for _, handler := range c.node.handlers {
 			if err = handler(HandlerContext{client: c, msg: msg}); err != nil {
-				c.logger.Warn("Got an error executing a message handler.", zap.Error(err))
+				c.Logger().Warn("Got an error executing a message handler.", zap.Error(err))
 				c.reportError(err)
 				break
 			}
@@ -542,7 +556,9 @@ func (c *Client) writeLoop(conn net.Conn) {
 	defer close(c.writerDone)
 
 	if err := c.writer.loop(conn); err != nil {
-		c.logger.Warn("Got an error while sending messages.", zap.Error(err))
+		if !isEOF(err) {
+			c.Logger().Warn("Got an error while sending messages.", zap.Error(err))
+		}
 		c.reportError(err)
 		c.close()
 	}
@@ -552,8 +568,26 @@ func (c *Client) readLoop(conn net.Conn) {
 	defer close(c.readerDone)
 
 	if err := c.reader.loop(conn); err != nil {
-		c.logger.Warn("Got an error while reading incoming messages.", zap.Error(err))
+		if !isEOF(err) {
+			c.Logger().Warn("Got an error while reading incoming messages.", zap.Error(err))
+		}
 		c.reportError(err)
 		c.close()
 	}
+}
+
+func isEOF(err error) bool {
+	if errors.Is(err, io.EOF) {
+		return true
+	}
+
+	var netErr *net.OpError
+
+	if errors.As(err, &netErr) {
+		if netErr.Err.Error() == "use of closed network connection" {
+			return true
+		}
+	}
+
+	return false
 }

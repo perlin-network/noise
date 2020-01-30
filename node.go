@@ -43,9 +43,9 @@ type Node struct {
 	outbound *clientMap
 	inbound  *clientMap
 
-	codec    *codec
-	binders  []Protocol
-	handlers []Handler
+	codec     *codec
+	protocols []Protocol
+	handlers  []Handler
 
 	kill chan error
 }
@@ -140,8 +140,8 @@ func (n *Node) Listen() error {
 
 	n.id = NewID(n.publicKey, n.host, n.port)
 
-	for _, binder := range n.binders {
-		if err = binder.Bind(n); err != nil {
+	for _, protocol := range n.protocols {
+		if err = protocol.Bind(n); err != nil {
 			return err
 		}
 	}
@@ -152,6 +152,13 @@ func (n *Node) Listen() error {
 
 		n.listening.Store(true)
 		defer n.listening.Store(false)
+
+		n.logger.Info("Listening for incoming peers.",
+			zap.String("bind_addr", addr.String()),
+			zap.String("id_addr", n.id.Address),
+			zap.String("public_key", n.publicKey.String()),
+			zap.String("private_key", n.privateKey.String()),
+		)
 
 		for {
 			conn, err := n.listener.Accept()
@@ -260,8 +267,8 @@ func (n *Node) Send(ctx context.Context, addr string, data []byte) error {
 		return err
 	}
 
-	for _, binder := range c.node.binders {
-		binder.OnMessageSent(c)
+	for _, protocol := range c.node.protocols {
+		protocol.OnMessageSent(c)
 	}
 
 	return nil
@@ -292,8 +299,8 @@ func (n *Node) Request(ctx context.Context, addr string, data []byte) ([]byte, e
 		return nil, err
 	}
 
-	for _, binder := range c.node.binders {
-		binder.OnMessageSent(c)
+	for _, protocol := range c.node.protocols {
+		protocol.OnMessageSent(c)
 	}
 
 	return msg.data, nil
@@ -368,7 +375,13 @@ func (n *Node) dialIfNotExists(ctx context.Context, addr string) (*Client, error
 		}
 	}
 
-	return nil, fmt.Errorf("attempted to dial %s several times but failed: %w", addr, err)
+	err = fmt.Errorf("attempted to dial %s several times but failed: %w", addr, err)
+
+	for _, protocol := range n.protocols {
+		protocol.OnPingFailed(addr, err)
+	}
+
+	return nil, err
 }
 
 // Bind registers a Protocol to this node, which implements callbacks for all events this node can emit throughout
@@ -377,12 +390,12 @@ func (n *Node) dialIfNotExists(ctx context.Context, addr string) (*Client, error
 // for new peers, Bind silently returns and does nothing.
 //
 // Bind may be called concurrently.
-func (n *Node) Bind(binders ...Protocol) {
+func (n *Node) Bind(protocols ...Protocol) {
 	if n.listening.Load() {
 		return
 	}
 
-	n.binders = append(n.binders, binders...)
+	n.protocols = append(n.protocols, protocols...)
 }
 
 // Handle registers a Handler to this node, which is executed every time this node receives a message from an

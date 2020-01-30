@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/perlin-network/noise"
+	"go.uber.org/zap"
 	"time"
 )
 
@@ -86,7 +87,15 @@ func (p *Protocol) Table() *Table {
 // peer ID at the tail of the bucket is evicted and your peer ID is inserted to the head of the bucket.
 func (p *Protocol) Ack(id noise.ID) {
 	for {
-		if err := p.table.Update(id); err == nil {
+		inserted, err := p.table.Update(id)
+		if err == nil {
+			if inserted {
+				p.node.Logger().Debug("Peer was inserted into routing table.",
+					zap.String("peer_id", id.String()),
+					zap.String("peer_addr", id.Address),
+				)
+			}
+
 			return
 		}
 
@@ -98,14 +107,31 @@ func (p *Protocol) Ack(id noise.ID) {
 		cancel()
 
 		if err != nil {
-			p.table.Delete(last.ID)
+			if p.table.Delete(last.ID) {
+				p.node.Logger().Debug("Peer was evicted from routing table by failing to be pinged.",
+					zap.String("peer_id", last.ID.String()),
+					zap.String("peer_addr", last.Address),
+					zap.Error(err),
+				)
+			}
 			continue
 		}
 
 		if _, ok := pong.(Pong); !ok {
-			p.table.Delete(last.ID)
+			if p.table.Delete(last.ID) {
+				p.node.Logger().Debug("Peer was evicted from routing table by failing to be pinged.",
+					zap.String("peer_id", last.ID.String()),
+					zap.String("peer_addr", last.Address),
+					zap.Error(err),
+				)
+			}
 			continue
 		}
+
+		p.node.Logger().Debug("Peer failed to be inserted into routing table as it's intended bucket is full.",
+			zap.String("peer_id", id.String()),
+			zap.String("peer_addr", id.Address),
+		)
 
 		return
 	}
@@ -118,7 +144,14 @@ func (p *Protocol) OnPeerJoin(client *noise.Client) {
 }
 
 // OnPeerLeave implements noise.Protocol and does nothing.
-func (p *Protocol) OnPeerLeave(client *noise.Client) {
+func (p *Protocol) OnPeerLeave(*noise.Client) {
+}
+
+// OnPingFailed implements noise.Protocol and evicts peers that your node has failed to dial.
+func (p *Protocol) OnPingFailed(addr string, err error) {
+	if p.table.DeleteByAddress(addr) {
+		p.node.Logger().Debug("Peer was evicted from routing table by failing to be dialed.", zap.Error(err))
+	}
 }
 
 // OnMessageSent implements noise.Protocol and attempts to push the position in which the clients ID resides in

@@ -32,6 +32,9 @@ type Protocol interface {
 	// has been terminated.
 	OnPeerLeave(client *Client)
 
+	// OnPingFailed is called whenever any attempt by a node to dial a peer at addr fails.
+	OnPingFailed(addr string, err error)
+
 	// OnMessageSent is called whenever a message or request is successfully sent to a peer.
 	OnMessageSent(client *Client)
 
