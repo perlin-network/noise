@@ -81,7 +81,9 @@ func TestTableEviction(t *testing.T) {
 		_, err = node.Ping(context.Background(), leader.Addr())
 		assert.NoError(t, err)
 
-		leader.Inbound()[i].WaitUntilReady()
+		for _, client := range leader.Inbound() {
+			client.WaitUntilReady()
+		}
 
 		nodes = append(nodes, node)
 	}
@@ -109,7 +111,9 @@ func TestTableEviction(t *testing.T) {
 	_, err = follower.Ping(context.Background(), leader.Addr())
 	assert.NoError(t, err)
 
-	leader.Inbound()[len(leader.Inbound())-1].WaitUntilReady()
+	for _, client := range leader.Inbound() {
+		client.WaitUntilReady()
+	}
 
 	// Query all peer IDs that the leader node knows about again, and check that node 0 was evicted and that
 	// the follower node has been put to the head of the bucket.
