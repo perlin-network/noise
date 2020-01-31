@@ -27,7 +27,7 @@ func TestNodeOptions(t *testing.T) {
 		return true
 	}
 
-	assert.NoError(t, quick.Check(a, nil))
+	assert.NoError(t, quick.Check(a, &quick.Config{MaxCount: 10}))
 
 	b := func(a int) bool {
 		if a <= 0 {
@@ -48,7 +48,7 @@ func TestNodeOptions(t *testing.T) {
 		return true
 	}
 
-	assert.NoError(t, quick.Check(b, nil))
+	assert.NoError(t, quick.Check(b, &quick.Config{MaxCount: 10}))
 
 	c := func(a int) bool {
 		if a <= 0 {
@@ -69,7 +69,7 @@ func TestNodeOptions(t *testing.T) {
 		return true
 	}
 
-	assert.NoError(t, quick.Check(c, nil))
+	assert.NoError(t, quick.Check(c, &quick.Config{MaxCount: 10}))
 
 	d := func(a time.Duration) bool {
 		n, err := NewNode(WithNodeIdleTimeout(a))
@@ -84,7 +84,7 @@ func TestNodeOptions(t *testing.T) {
 		return true
 	}
 
-	assert.NoError(t, quick.Check(d, nil))
+	assert.NoError(t, quick.Check(d, &quick.Config{MaxCount: 10}))
 
 	e := func(a bool) bool {
 		var logger *zap.Logger
@@ -104,7 +104,7 @@ func TestNodeOptions(t *testing.T) {
 		return true
 	}
 
-	assert.NoError(t, quick.Check(e, nil))
+	assert.NoError(t, quick.Check(e, &quick.Config{MaxCount: 10}))
 
 	f := func(publicKey PublicKey, host net.IP, port uint16) bool {
 		id := NewID(publicKey, host, port)
@@ -121,7 +121,7 @@ func TestNodeOptions(t *testing.T) {
 		return true
 	}
 
-	assert.NoError(t, quick.Check(f, nil))
+	assert.NoError(t, quick.Check(f, &quick.Config{MaxCount: 10}))
 
 	g := func(privateKey PrivateKey) bool {
 		n, err := NewNode(WithNodePrivateKey(privateKey))
@@ -140,7 +140,7 @@ func TestNodeOptions(t *testing.T) {
 		return true
 	}
 
-	assert.NoError(t, quick.Check(g, nil))
+	assert.NoError(t, quick.Check(g, &quick.Config{MaxCount: 10}))
 
 	h := func(host net.IP, port uint16, address string) bool {
 		n, err := NewNode(WithNodeBindHost(host), WithNodeBindPort(port), WithNodeAddress(address))
@@ -163,5 +163,5 @@ func TestNodeOptions(t *testing.T) {
 		return true
 	}
 
-	assert.NoError(t, quick.Check(h, nil))
+	assert.NoError(t, quick.Check(h, &quick.Config{MaxCount: 10}))
 }
