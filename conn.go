@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 type connWriterState byte
@@ -59,7 +60,7 @@ func (c *connWriter) write(data []byte) {
 	c.cond.Broadcast()
 }
 
-func (c *connWriter) loop(conn net.Conn) error {
+func (c *connWriter) loop(conn net.Conn, timeout time.Duration) error {
 	c.Lock()
 	c.state = connWriterRunning
 	c.Unlock()
@@ -76,6 +77,12 @@ func (c *connWriter) loop(conn net.Conn) error {
 	}()
 
 	for {
+		if timeout > 0 {
+			if err := conn.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
+				return err
+			}
+		}
+
 		c.Lock()
 		for c.state == connWriterRunning && len(c.pending) == 0 {
 			c.cond.Wait()
@@ -114,13 +121,19 @@ func newConnReader() *connReader {
 	return &connReader{pending: make(chan []byte, 1024)}
 }
 
-func (c *connReader) loop(conn net.Conn) error {
+func (c *connReader) loop(conn net.Conn, timeout time.Duration) error {
 	defer close(c.pending)
 
 	header := make([]byte, 4)
 	reader := bufio.NewReader(conn)
 
 	for {
+		if timeout > 0 {
+			if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+				return err
+			}
+		}
+
 		if _, err := io.ReadFull(reader, header); err != nil {
 			return err
 		}

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/goleak"
 	"io"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -272,7 +273,10 @@ func TestIdleTimeoutServerSide(t *testing.T) {
 	ba.WaitUntilClosed()
 	ab.WaitUntilClosed()
 
-	assert.EqualValues(t, ab.Error(), context.DeadlineExceeded)
+	var abError *net.OpError
+	assert.True(t, errors.As(ab.Error(), &abError))
+	assert.True(t, abError.Timeout())
+
 	assert.EqualValues(t, ba.Error(), io.EOF)
 
 	assert.Len(t, a.Inbound(), 0)
@@ -306,7 +310,10 @@ func TestIdleTimeoutClientSide(t *testing.T) {
 	ba.WaitUntilClosed()
 	ab.WaitUntilClosed()
 
-	assert.EqualValues(t, ba.Error(), context.DeadlineExceeded)
+	var baError *net.OpError
+	assert.True(t, errors.As(ba.Error(), &baError))
+	assert.True(t, baError.Timeout())
+
 	assert.EqualValues(t, ab.Error(), io.EOF)
 
 	assert.Len(t, a.Inbound(), 0)

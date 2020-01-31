@@ -12,7 +12,6 @@ import (
 	"io"
 	"net"
 	"sync"
-	"time"
 )
 
 type clientSide bool
@@ -33,10 +32,9 @@ const (
 // The lifecycle of a client may be controlled through (*Client).WaitUntilReady, and (*Client).WaitUntilClosed. It
 // provably has been useful in writing unit tests where a client instance is used under high concurrency scenarios.
 //
-// A client in total has four goroutines associated to it: a goroutine responsible for handling writing messages, a
-// goroutine responsible for handling the recipient of messages, a goroutine for timing out the client connection
-// should there be no further read/writes after some configured timeout on the clients associatd node, and a goroutine
-// for handling protocol logic such as handshaking/executing Handler's.
+// A client in total has three goroutines associated to it: a goroutine responsible for handling writing messages, a
+// goroutine responsible for handling the recipient of messages, and a goroutine for handling protocol logic such as
+// handshaking/executing Handler's.
 type Client struct {
 	node *Node
 
@@ -51,11 +49,6 @@ type Client struct {
 	logger struct {
 		sync.RWMutex
 		*zap.Logger
-	}
-
-	timeout struct {
-		reset chan struct{}
-		timer *time.Timer
 	}
 
 	reader *connReader
@@ -191,46 +184,6 @@ func (c *Client) waitUntilClosed() {
 	<-c.clientDone
 }
 
-func (c *Client) startTimeout(ctx context.Context) {
-	c.timeout.reset = make(chan struct{}, 1)
-
-	if c.node.idleTimeout == 0 {
-		return
-	}
-
-	c.timeout.timer = time.NewTimer(c.node.idleTimeout)
-
-	go func() {
-		defer c.timeout.timer.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-c.clientDone:
-				return
-			case <-c.timeout.reset:
-				if !c.timeout.timer.Stop() {
-					<-c.timeout.timer.C
-				}
-
-				c.timeout.timer.Reset(c.node.idleTimeout)
-			case <-c.timeout.timer.C:
-				c.reportError(context.DeadlineExceeded)
-				c.close()
-				return
-			}
-		}
-	}()
-}
-
-func (c *Client) resetTimeout() {
-	select {
-	case c.timeout.reset <- struct{}{}:
-	default:
-	}
-}
-
 func (c *Client) outbound(ctx context.Context, addr string) {
 	c.addr = addr
 	c.side = clientSideInbound
@@ -257,7 +210,6 @@ func (c *Client) outbound(ctx context.Context, addr string) {
 	_ = conn.(*net.TCPConn).SetReadBuffer(10000)
 
 	c.conn = conn
-	c.startTimeout(ctx)
 
 	go c.readLoop(conn)
 	go c.writeLoop(conn)
@@ -288,7 +240,6 @@ func (c *Client) inbound(conn net.Conn, addr string) {
 	}()
 
 	ctx := context.Background()
-	c.startTimeout(ctx)
 
 	go c.readLoop(conn)
 	go c.writeLoop(conn)
@@ -327,8 +278,6 @@ func (c *Client) request(ctx context.Context, data []byte) (message, error) {
 		return message{}, err
 	}
 
-	c.resetTimeout()
-
 	// Await response.
 
 	var msg message
@@ -338,8 +287,6 @@ func (c *Client) request(ctx context.Context, data []byte) (message, error) {
 	case <-ctx.Done():
 		return message{}, ctx.Err()
 	}
-
-	c.resetTimeout()
 
 	return msg, nil
 }
@@ -356,8 +303,6 @@ func (c *Client) send(nonce uint64, data []byte) error {
 	}
 
 	c.writer.write(data)
-
-	c.resetTimeout()
 
 	return nil
 }
@@ -381,8 +326,6 @@ func (c *Client) recv(ctx context.Context) (message, error) {
 		if err != nil {
 			return message{}, err
 		}
-
-		c.resetTimeout()
 
 		return msg, nil
 	case <-ctx.Done():
@@ -571,7 +514,7 @@ func (c *Client) handleLoop() {
 func (c *Client) writeLoop(conn net.Conn) {
 	defer close(c.writerDone)
 
-	if err := c.writer.loop(conn); err != nil {
+	if err := c.writer.loop(conn, c.node.idleTimeout); err != nil {
 		if !isEOF(err) {
 			c.Logger().Warn("Got an error while sending messages.", zap.Error(err))
 		}
@@ -583,7 +526,7 @@ func (c *Client) writeLoop(conn net.Conn) {
 func (c *Client) readLoop(conn net.Conn) {
 	defer close(c.readerDone)
 
-	if err := c.reader.loop(conn); err != nil {
+	if err := c.reader.loop(conn, c.node.idleTimeout); err != nil {
 		if !isEOF(err) {
 			c.Logger().Warn("Got an error while reading incoming messages.", zap.Error(err))
 		}
