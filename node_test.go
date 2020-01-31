@@ -274,8 +274,7 @@ func TestIdleTimeoutServerSide(t *testing.T) {
 	ab.WaitUntilClosed()
 
 	var abError *net.OpError
-	assert.True(t, errors.As(ab.Error(), &abError))
-	assert.True(t, abError.Timeout())
+	assert.True(t, errors.As(ab.Error(), &abError) && abError.Timeout() || ab.Error() == io.EOF)
 
 	assert.EqualValues(t, ba.Error(), io.EOF)
 
@@ -311,8 +310,7 @@ func TestIdleTimeoutClientSide(t *testing.T) {
 	ab.WaitUntilClosed()
 
 	var baError *net.OpError
-	assert.True(t, errors.As(ba.Error(), &baError))
-	assert.True(t, baError.Timeout())
+	assert.True(t, errors.As(ba.Error(), &baError) && baError.Timeout() || ba.Error() == io.EOF)
 
 	assert.EqualValues(t, ab.Error(), io.EOF)
 
