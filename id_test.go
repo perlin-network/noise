@@ -15,7 +15,11 @@ func TestID_String(t *testing.T) {
 	t.Parallel()
 
 	f := func(publicKey noise.PublicKey, host net.IP, port uint16) bool {
-		h := host.String() // Make-shift 'normalizeIP(net.IP)'.
+		if host.IsLoopback() || host.IsUnspecified() { // Make-shift 'normalizeIP(net.IP)'.
+			host = nil
+		}
+
+		h := host.String()
 		if h == "<nil>" {
 			h = ""
 		}

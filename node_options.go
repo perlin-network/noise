@@ -48,9 +48,9 @@ func WithNodeMaxOutboundConnections(maxOutboundConnections uint) NodeOption {
 	}
 }
 
-// WithNodeMaxRecvSize sets the max number of bytes a node is willing to receive from a peer. If the limit is ever
-// exceeded, the peer is disconnected with an error. Setting this option to zero will disable the limit. By default,
-// the max number of bytes a node is willing to receive from a peer is set to 2MB.
+// WithNodeMaxRecvMessageSize sets the max number of bytes a node is willing to receive from a peer. If the limit is
+// ever exceeded, the peer is disconnected with an error. Setting this option to zero will disable the limit. By
+// default, the max number of bytes a node is willing to receive from a peer is set to 2MB.
 func WithNodeMaxRecvMessageSize(maxRecvMessageSize uint32) NodeOption {
 	return func(n *Node) {
 		n.maxRecvMessageSize = maxRecvMessageSize

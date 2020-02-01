@@ -284,6 +284,9 @@ func (c *Client) request(ctx context.Context, data []byte) (message, error) {
 
 	select {
 	case msg = <-ch:
+		if msg.nonce == 0 {
+			return message{}, io.EOF
+		}
 	case <-ctx.Done():
 		return message{}, ctx.Err()
 	}
@@ -470,6 +473,7 @@ func (c *Client) handshake(ctx context.Context) {
 
 func (c *Client) handleLoop() {
 	defer close(c.handlerDone)
+	defer c.requests.close()
 
 	for {
 		msg, err := c.recv(context.Background())

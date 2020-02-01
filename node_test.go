@@ -371,7 +371,7 @@ func TestWithNodeMaxRecvMessageSize(t *testing.T) {
 
 	client := a.Inbound()[0]
 	client.WaitUntilClosed()
-	assert.True(t, errors.Is(client.Error(), noise.ErrMessageTooLarge))
+	assert.True(t, errors.Is(client.Error(), noise.ErrMessageTooLarge) || errors.Is(client.Error(), io.EOF))
 }
 
 func BenchmarkRPC(b *testing.B) {

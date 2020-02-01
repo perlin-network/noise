@@ -146,3 +146,13 @@ func (r *requestMap) findRequest(nonce uint64) chan<- message {
 
 	return ch
 }
+
+func (r *requestMap) close() {
+	r.Lock()
+	defer r.Unlock()
+
+	for nonce := range r.entries {
+		close(r.entries[nonce])
+		delete(r.entries, nonce)
+	}
+}
