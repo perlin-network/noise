@@ -15,12 +15,12 @@ type clientMapEntry struct {
 type clientMap struct {
 	sync.Mutex
 
-	cap     int
+	cap     uint
 	order   *list.List
 	entries map[string]clientMapEntry
 }
 
-func newClientMap(cap int) *clientMap {
+func newClientMap(cap uint) *clientMap {
 	return &clientMap{
 		cap:     cap,
 		order:   list.New(),
@@ -34,7 +34,7 @@ func (c *clientMap) get(n *Node, addr string) (*Client, bool) {
 
 	entry, exists := c.entries[addr]
 	if !exists {
-		if len(c.entries) == n.maxInboundConnections {
+		if uint(len(c.entries)) == n.maxInboundConnections {
 			el := c.order.Back()
 			evicted := c.order.Remove(el).(string)
 

@@ -354,6 +354,26 @@ func TestHandlerErrorCausesConnToClose(t *testing.T) {
 	assert.Len(t, b.Outbound(), 0)
 }
 
+func TestWithNodeMaxRecvMessageSize(t *testing.T) {
+	// Set the limit to 1MB.
+
+	a, err := noise.NewNode(noise.WithNodeMaxRecvMessageSize(1 << 20))
+	assert.NoError(t, err)
+	defer a.Close()
+
+	assert.NoError(t, a.Listen())
+
+	// Send a message that is just 1 byte over 1MB (minus 35 because of overhead from encrypting data).
+
+	assert.NoError(t, a.Send(context.Background(), a.Addr(), make([]byte, (1<<20)-35)))
+
+	// Client should have disconnected with an error saying that the message received from its peer was too large.
+
+	client := a.Inbound()[0]
+	client.WaitUntilClosed()
+	assert.True(t, errors.Is(client.Error(), noise.ErrMessageTooLarge))
+}
+
 func BenchmarkRPC(b *testing.B) {
 	a, err := noise.NewNode()
 	assert.NoError(b, err)

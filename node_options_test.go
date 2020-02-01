@@ -10,8 +10,8 @@ import (
 )
 
 func TestNodeOptions(t *testing.T) {
-	a := func(a int) bool {
-		if a <= 0 {
+	a := func(a uint) bool {
+		if a == 0 {
 			a = 1
 		}
 
@@ -29,8 +29,8 @@ func TestNodeOptions(t *testing.T) {
 
 	assert.NoError(t, quick.Check(a, &quick.Config{MaxCount: 10}))
 
-	b := func(a int) bool {
-		if a <= 0 {
+	b := func(a uint) bool {
+		if a == 0 {
 			a = 128
 		} else if a > 1000 {
 			a = 1000
@@ -50,8 +50,8 @@ func TestNodeOptions(t *testing.T) {
 
 	assert.NoError(t, quick.Check(b, &quick.Config{MaxCount: 10}))
 
-	c := func(a int) bool {
-		if a <= 0 {
+	c := func(a uint) bool {
+		if a == 0 {
 			a = 128
 		} else if a > 1000 {
 			a = 1000

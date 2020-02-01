@@ -31,9 +31,10 @@ type Node struct {
 
 	id ID
 
-	maxDialAttempts        int
-	maxInboundConnections  int
-	maxOutboundConnections int
+	maxDialAttempts        uint
+	maxInboundConnections  uint
+	maxOutboundConnections uint
+	maxRecvMessageSize     uint32
 
 	idleTimeout time.Duration
 
@@ -53,7 +54,13 @@ type Node struct {
 // NewNode instantiates a new node instance, and pre-configures the node with provided options.
 // Default values for some non-specified options are instantiated as well, which may yield an error.
 func NewNode(opts ...NodeOption) (*Node, error) {
-	n := &Node{kill: make(chan error, 1)}
+	n := &Node{
+		kill:                   make(chan error, 1),
+		maxDialAttempts:        3,
+		maxInboundConnections:  128,
+		maxOutboundConnections: 128,
+		maxRecvMessageSize:     2 << 20,
+	}
 
 	for _, opt := range opts {
 		opt(n)
@@ -76,22 +83,6 @@ func NewNode(opts ...NodeOption) (*Node, error) {
 
 	if n.id.ID == ZeroPublicKey && n.host != nil && n.port > 0 {
 		n.id = NewID(n.publicKey, n.host, n.port)
-	}
-
-	if n.maxDialAttempts == 0 {
-		n.maxDialAttempts = 3
-	}
-
-	if n.maxInboundConnections == 0 {
-		n.maxInboundConnections = 128
-	}
-
-	if n.maxOutboundConnections == 0 {
-		n.maxOutboundConnections = 128
-	}
-
-	if n.idleTimeout == 0 {
-		n.idleTimeout = 10 * time.Second
 	}
 
 	n.inbound = newClientMap(n.maxInboundConnections)
@@ -384,7 +375,7 @@ func (n *Node) dialIfNotExists(ctx context.Context, addr string) (*Client, error
 		return nil, err
 	}
 
-	for i := 0; i < n.maxDialAttempts; i++ {
+	for i := uint(0); i < n.maxDialAttempts; i++ {
 		client, exists := n.outbound.get(n, addr)
 		if !exists {
 			go client.outbound(ctx, addr)

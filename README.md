@@ -37,6 +37,7 @@
 - Peers attempt to be dialed at most three times.
 - A total of 128 outbound connections are allowed at any time.
 - A total of 128 inbound connections are allowed at any time.
+- Peers may send in a single message, at most, 2MB worth of data.
 - Connections timeout after 10 seconds if no reads/writes occur.
 
 ## Dependencies
