@@ -526,7 +526,7 @@ func (c *Client) writeLoop(conn net.Conn) {
 func (c *Client) readLoop(conn net.Conn) {
 	defer close(c.readerDone)
 
-	if err := c.reader.loop(conn, c.node.idleTimeout); err != nil {
+	if err := c.reader.loop(conn, c.node.idleTimeout, c.node.maxRecvMessageSize); err != nil {
 		if !isEOF(err) {
 			c.Logger().Warn("Got an error while reading incoming messages.", zap.Error(err))
 		}

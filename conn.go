@@ -3,6 +3,7 @@ package noise
 import (
 	"bufio"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -121,7 +122,7 @@ func newConnReader() *connReader {
 	return &connReader{pending: make(chan []byte, 1024)}
 }
 
-func (c *connReader) loop(conn net.Conn, timeout time.Duration) error {
+func (c *connReader) loop(conn net.Conn, timeout time.Duration, limit uint32) error {
 	defer close(c.pending)
 
 	header := make([]byte, 4)
@@ -139,6 +140,10 @@ func (c *connReader) loop(conn net.Conn, timeout time.Duration) error {
 		}
 
 		size := binary.BigEndian.Uint32(header[:4])
+
+		if limit > 0 && size > limit {
+			return fmt.Errorf("got %d bytes, but limit is set to %d: %w", size, limit, ErrMessageTooLarge)
+		}
 
 		data := make([]byte, size)
 		if _, err := io.ReadFull(reader, data); err != nil {

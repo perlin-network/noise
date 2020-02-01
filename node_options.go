@@ -12,9 +12,9 @@ type NodeOption func(n *Node)
 
 // WithNodeMaxDialAttempts sets the max number of attempts a connection is dialed before it is determined to have
 // failed. By default, the max number of attempts a connection is dialed is 3.
-func WithNodeMaxDialAttempts(maxDialAttempts int) NodeOption {
+func WithNodeMaxDialAttempts(maxDialAttempts uint) NodeOption {
 	return func(n *Node) {
-		if maxDialAttempts <= 0 {
+		if maxDialAttempts == 0 {
 			maxDialAttempts = 1
 		}
 
@@ -25,9 +25,9 @@ func WithNodeMaxDialAttempts(maxDialAttempts int) NodeOption {
 // WithNodeMaxInboundConnections sets the max number of inbound connections the connection pool a node maintains allows
 // at any given moment in time. By default, the max number of inbound connections is 128. Exceeding the max number
 // causes the connection pool to release the oldest inbound connection in the pool.
-func WithNodeMaxInboundConnections(maxInboundConnections int) NodeOption {
+func WithNodeMaxInboundConnections(maxInboundConnections uint) NodeOption {
 	return func(n *Node) {
-		if maxInboundConnections <= 0 {
+		if maxInboundConnections == 0 {
 			maxInboundConnections = 128
 		}
 
@@ -38,13 +38,22 @@ func WithNodeMaxInboundConnections(maxInboundConnections int) NodeOption {
 // WithNodeMaxOutboundConnections sets the max number of outbound connections the connection pool a node maintains
 // allows at any given moment in time. By default, the maximum number of outbound connections is 128. Exceeding the
 // max number causes the connection pool to release the oldest outbound connection in the pool.
-func WithNodeMaxOutboundConnections(maxOutboundConnections int) NodeOption {
+func WithNodeMaxOutboundConnections(maxOutboundConnections uint) NodeOption {
 	return func(n *Node) {
-		if maxOutboundConnections <= 0 {
+		if maxOutboundConnections == 0 {
 			maxOutboundConnections = 128
 		}
 
 		n.maxOutboundConnections = maxOutboundConnections
+	}
+}
+
+// WithNodeMaxRecvSize sets the max number of bytes a node is willing to receive from a peer. If the limit is ever
+// exceeded, the peer is disconnected with an error. Setting this option to zero will disable the limit. By default,
+// the max number of bytes a node is willing to receive from a peer is set to 2MB.
+func WithNodeMaxRecvMessageSize(maxRecvMessageSize uint32) NodeOption {
+	return func(n *Node) {
+		n.maxRecvMessageSize = maxRecvMessageSize
 	}
 }
 
