@@ -3,6 +3,7 @@ module github.com/perlin-network/noise
 go 1.13
 
 require (
+	github.com/VictoriaMetrics/fastcache v1.5.7
 	github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412
 	github.com/oasislabs/ed25519 v0.0.0-20191122104632-9d9ffc15f526
 	github.com/spf13/pflag v1.0.5

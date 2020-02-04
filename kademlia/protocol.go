@@ -153,7 +153,7 @@ func (p *Protocol) Ack(id noise.ID) {
 	}
 }
 
-// Protocol implements noise.Protocol.
+// Protocol returns a noise.Protocol that may registered to a node via (*noise.Node).Bind.
 func (p *Protocol) Protocol() noise.Protocol {
 	return noise.Protocol{
 		Bind:            p.Bind,
@@ -164,7 +164,7 @@ func (p *Protocol) Protocol() noise.Protocol {
 	}
 }
 
-// Bind registers messages Ping, Pong, FindNodeRequest, FindNodeResponse, and handles them by register the
+// Bind registers messages Ping, Pong, FindNodeRequest, FindNodeResponse, and handles them by registering the
 // (*Protocol).Handle Handler.
 func (p *Protocol) Bind(node *noise.Node) error {
 	p.node = node
