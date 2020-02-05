@@ -2,23 +2,18 @@ package noise
 
 import (
 	"crypto/cipher"
-	"github.com/valyala/bytebufferpool"
 	"io"
 	"math/rand"
 )
 
 func encryptAEAD(suite cipher.AEAD, buf []byte) ([]byte, error) {
-	dst := bytebufferpool.Get()
-	defer bytebufferpool.Put(dst)
+	nonce := make([]byte, suite.NonceSize())
 
-	dst.B = append(dst.B[:0], make([]byte, suite.NonceSize())...)
-	dst.B = dst.B[:suite.NonceSize()]
-
-	if _, err := rand.Read(dst.B[:suite.NonceSize()]); err != nil {
+	if _, err := rand.Read(nonce[:]); err != nil {
 		return nil, err
 	}
 
-	return append(dst.B, suite.Seal(buf[:0], dst.B[:suite.NonceSize()], buf, nil)...), nil
+	return append(nonce, suite.Seal(buf[:0], nonce[:suite.NonceSize()], buf, nil)...), nil
 }
 
 func decryptAEAD(suite cipher.AEAD, buf []byte) ([]byte, error) {
