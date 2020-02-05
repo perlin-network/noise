@@ -50,10 +50,23 @@ func WithNodeMaxOutboundConnections(maxOutboundConnections uint) NodeOption {
 
 // WithNodeMaxRecvMessageSize sets the max number of bytes a node is willing to receive from a peer. If the limit is
 // ever exceeded, the peer is disconnected with an error. Setting this option to zero will disable the limit. By
-// default, the max number of bytes a node is willing to receive from a peer is set to 2MB.
+// default, the max number of bytes a node is willing to receive from a peer is set to 4MB.
 func WithNodeMaxRecvMessageSize(maxRecvMessageSize uint32) NodeOption {
 	return func(n *Node) {
 		n.maxRecvMessageSize = maxRecvMessageSize
+	}
+}
+
+// WithNodeNumWorkers sets the max number of workers a node will spawn to handle incoming peer messages. By default,
+// the max number of workers a node will spawn is the number of CPUs available to the Go runtime specified by
+// runtime.NumCPU(). The minimum number of workers which need to be spawned is 1.
+func WithNodeNumWorkers(numWorkers uint) NodeOption {
+	return func(n *Node) {
+		if numWorkers == 0 {
+			numWorkers = 1
+		}
+
+		n.numWorkers = numWorkers
 	}
 }
 

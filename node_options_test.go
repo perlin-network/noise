@@ -164,4 +164,23 @@ func TestNodeOptions(t *testing.T) {
 	}
 
 	assert.NoError(t, quick.Check(h, &quick.Config{MaxCount: 10}))
+
+	i := func(a uint) bool {
+		n, err := NewNode(WithNodeNumWorkers(a))
+		if !assert.NoError(t, err) {
+			return false
+		}
+
+		if a > 0 && !assert.EqualValues(t, n.numWorkers, a) {
+			return false
+		}
+
+		if a == 0 && !assert.EqualValues(t, n.numWorkers, 1) {
+			return false
+		}
+
+		return true
+	}
+
+	assert.NoError(t, quick.Check(i, &quick.Config{MaxCount: 10}))
 }
