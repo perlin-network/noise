@@ -8,7 +8,9 @@ import (
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"net"
+	"runtime"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -16,9 +18,9 @@ import (
 // under a bounded connection pool whose bounds may be configured, the TCP listener which accepts new incoming peer
 // connections, and all Go types that may be serialized/deserialized at will on-the-wire or through a Handler.
 //
-// A node at most will only have one goroutine associated to it which represents the listener looking to accept new
-// incoming peer connections. A node once closed or once started (as in, (*Node).Listen was called) should not be
-// reused.
+// A node at most will only have one goroutine + num configured worker goroutines associated to it which represents
+// the listener looking to accept new incoming peer connections, and workers responsible for handling incoming peer
+// messages. A node once closed or once started (as in, (*Node).Listen was called) should not be reused.
 type Node struct {
 	logger *zap.Logger
 
@@ -35,6 +37,7 @@ type Node struct {
 	maxInboundConnections  uint
 	maxOutboundConnections uint
 	maxRecvMessageSize     uint32
+	numWorkers             uint
 
 	idleTimeout time.Duration
 
@@ -48,18 +51,23 @@ type Node struct {
 	protocols []Protocol
 	handlers  []Handler
 
-	kill chan error
+	workers sync.WaitGroup
+	work    chan HandlerContext
+
+	listenerDone chan error
 }
 
 // NewNode instantiates a new node instance, and pre-configures the node with provided options.
 // Default values for some non-specified options are instantiated as well, which may yield an error.
 func NewNode(opts ...NodeOption) (*Node, error) {
 	n := &Node{
-		kill:                   make(chan error, 1),
+		listenerDone: make(chan error, 1),
+
 		maxDialAttempts:        3,
 		maxInboundConnections:  128,
 		maxOutboundConnections: 128,
-		maxRecvMessageSize:     2 << 20,
+		maxRecvMessageSize:     4 << 20,
+		numWorkers:             uint(runtime.NumCPU()),
 	}
 
 	for _, opt := range opts {
@@ -167,12 +175,39 @@ func (n *Node) Listen() error {
 		}
 	}
 
-	go func() {
-		defer close(n.kill)
-		defer n.inbound.release()
+	n.work = make(chan HandlerContext, int(n.numWorkers))
+	n.workers.Add(int(n.numWorkers))
 
+	for i := uint(0); i < n.numWorkers; i++ {
+		go func() {
+			defer n.workers.Done()
+
+			for ctx := range n.work {
+				for _, handler := range n.handlers {
+					if err := handler(ctx); err != nil {
+						ctx.client.Logger().Warn("Got an error executing a message handler.", zap.Error(err))
+						ctx.client.reportError(err)
+						ctx.client.close()
+
+						return
+					}
+				}
+			}
+		}()
+	}
+
+	go func() {
 		n.listening.Store(true)
-		defer n.listening.Store(false)
+
+		defer func() {
+			n.inbound.release()
+
+			close(n.work)
+			n.workers.Wait()
+
+			n.listening.Store(false)
+			close(n.listenerDone)
+		}()
 
 		n.logger.Info("Listening for incoming peers.",
 			zap.String("bind_addr", addr.String()),
@@ -184,7 +219,7 @@ func (n *Node) Listen() error {
 		for {
 			conn, err := n.listener.Accept()
 			if err != nil {
-				n.kill <- err
+				n.listenerDone <- err
 				break
 			}
 
@@ -363,17 +398,13 @@ func (n *Node) Close() error {
 		}
 	}
 
-	<-n.kill
+	<-n.listenerDone
 
 	return nil
 }
 
 func (n *Node) dialIfNotExists(ctx context.Context, addr string) (*Client, error) {
 	var err error
-
-	if addr, err = ResolveAddress(addr); err != nil {
-		return nil, err
-	}
 
 	for i := uint(0); i < n.maxDialAttempts; i++ {
 		client, exists := n.outbound.get(n, addr)

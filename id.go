@@ -75,7 +75,9 @@ func UnmarshalID(buf []byte) (ID, error) {
 		return ID{}, io.ErrUnexpectedEOF
 	}
 
-	host := net.IP(buf[:net.IPv6len])
+	host := make([]byte, net.IPv6len)
+	copy(host, buf[:net.IPv6len])
+
 	buf = buf[net.IPv6len:]
 
 	if len(buf) < 2 {

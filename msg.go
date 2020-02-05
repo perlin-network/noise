@@ -13,11 +13,12 @@ type message struct {
 	data  []byte
 }
 
-func (m message) marshal() []byte {
-	header := make([]byte, 8)
-	binary.BigEndian.PutUint64(header[:8], m.nonce)
+func (m message) marshal(dst []byte) []byte {
+	dst = append(dst, make([]byte, 8)...)
+	binary.BigEndian.PutUint64(dst[:8], m.nonce)
+	dst = append(dst, m.data...)
 
-	return append(header, m.data...)
+	return dst
 }
 
 func unmarshalMessage(data []byte) (message, error) {

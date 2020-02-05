@@ -1,9 +1,11 @@
 package noise
 
 import (
+	"bufio"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -12,6 +14,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 type clientSide bool
@@ -20,6 +23,14 @@ const (
 	clientSideInbound  clientSide = false
 	clientSideOutbound clientSide = true
 )
+
+func (c clientSide) String() string {
+	if c {
+		return "outbound"
+	}
+
+	return "inbound"
+}
 
 // Client represents an pooled inbound/outbound connection under some node. Should a client successfully undergo
 // noise's protocol handshake, information about the peer representative of this client, such as its ID is available.
@@ -32,16 +43,14 @@ const (
 // The lifecycle of a client may be controlled through (*Client).WaitUntilReady, and (*Client).WaitUntilClosed. It
 // provably has been useful in writing unit tests where a client instance is used under high concurrency scenarios.
 //
-// A client in total has three goroutines associated to it: a goroutine responsible for handling writing messages, a
-// goroutine responsible for handling the recipient of messages, and a goroutine for handling protocol logic such as
-// handshaking/executing Handler's.
+// A client in total has two goroutines associated to it: a goroutine responsible for handling writing messages, and a
+// goroutine responsible for handling the recipient of messages.
 type Client struct {
 	node *Node
 
 	id ID
 
 	addr string
-	conn net.Conn
 	side clientSide
 
 	suite cipher.AEAD
@@ -51,16 +60,23 @@ type Client struct {
 		*zap.Logger
 	}
 
-	reader *connReader
-	writer *connWriter
+	conn net.Conn
+
+	reader *bufio.Reader
+	writer *bufio.Writer
+
+	readerBuf []byte
+
+	writerBuf   []byte
+	writerFlush chan struct{}
+	writerLock  sync.Mutex
 
 	requests *requestMap
 
-	ready       chan struct{}
-	writerDone  chan struct{}
-	readerDone  chan struct{}
-	handlerDone chan struct{}
-	clientDone  chan struct{}
+	ready      chan struct{}
+	readerDone chan struct{}
+	writerDone chan struct{}
+	clientDone chan struct{}
 
 	err struct {
 		sync.Mutex
@@ -72,14 +88,17 @@ type Client struct {
 
 func newClient(node *Node) *Client {
 	c := &Client{
-		node:        node,
-		reader:      newConnReader(),
-		writer:      newConnWriter(),
-		requests:    newRequestMap(),
-		ready:       make(chan struct{}),
-		writerDone:  make(chan struct{}),
-		readerDone:  make(chan struct{}),
-		handlerDone: make(chan struct{}),
+		node: node,
+
+		requests: newRequestMap(),
+
+		readerBuf:   make([]byte, 4+node.maxRecvMessageSize),
+		writerBuf:   make([]byte, 4),
+		writerFlush: make(chan struct{}, 1),
+
+		ready:      make(chan struct{}),
+		readerDone: make(chan struct{}),
+		writerDone: make(chan struct{}),
 
 		clientDone: make(chan struct{}),
 	}
@@ -168,8 +187,6 @@ func (c *Client) reportError(err error) {
 
 func (c *Client) close() {
 	c.closeOnce.Do(func() {
-		c.writer.close()
-
 		if c.conn != nil {
 			c.conn.Close()
 		}
@@ -201,22 +218,18 @@ func (c *Client) outbound(ctx context.Context, addr string) {
 		close(c.ready)
 		close(c.writerDone)
 		close(c.readerDone)
-		close(c.handlerDone)
 		return
 	}
 
-	_ = conn.(*net.TCPConn).SetNoDelay(false)
-	_ = conn.(*net.TCPConn).SetWriteBuffer(10000)
-	_ = conn.(*net.TCPConn).SetReadBuffer(10000)
-
+	c.reader = bufio.NewReader(conn)
+	c.writer = bufio.NewWriter(conn)
 	c.conn = conn
 
-	go c.readLoop(conn)
-	go c.writeLoop(conn)
+	c.handshake()
 
-	c.handshake(ctx)
-
-	c.handleLoop()
+	go c.writeLoop()
+	c.recvLoop()
+	c.close()
 
 	c.Logger().Debug("Peer connection closed.")
 
@@ -231,7 +244,6 @@ func (c *Client) outbound(ctx context.Context, addr string) {
 
 func (c *Client) inbound(conn net.Conn, addr string) {
 	c.addr = addr
-	c.conn = conn
 	c.side = clientSideOutbound
 
 	defer func() {
@@ -239,20 +251,20 @@ func (c *Client) inbound(conn net.Conn, addr string) {
 		close(c.clientDone)
 	}()
 
-	ctx := context.Background()
+	c.reader = bufio.NewReader(conn)
+	c.writer = bufio.NewWriter(conn)
+	c.conn = conn
 
-	go c.readLoop(conn)
-	go c.writeLoop(conn)
+	c.handshake()
 
-	c.handshake(ctx)
-
-	if _, open := <-c.ready; !open && c.Error() != nil {
-		close(c.handlerDone)
+	if c.Error() != nil {
 		c.close()
 		return
 	}
 
-	c.handleLoop()
+	go c.writeLoop()
+	c.recvLoop()
+	c.close()
 
 	for _, protocol := range c.node.protocols {
 		if protocol.OnPeerDisconnected == nil {
@@ -261,6 +273,98 @@ func (c *Client) inbound(conn net.Conn, addr string) {
 
 		protocol.OnPeerDisconnected(c)
 	}
+}
+
+func (c *Client) read() ([]byte, error) {
+	if c.node.idleTimeout > 0 {
+		if err := c.conn.SetReadDeadline(time.Now().Add(c.node.idleTimeout)); err != nil {
+			return nil, err
+		}
+	}
+
+	if _, err := io.ReadFull(c.reader, c.readerBuf[:4]); err != nil {
+		return nil, err
+	}
+
+	size := binary.BigEndian.Uint32(c.readerBuf[:4])
+
+	if c.node.maxRecvMessageSize > 0 && size > c.node.maxRecvMessageSize {
+		return nil, fmt.Errorf("got %d bytes, but limit is set to %d: %w", size, c.node.maxRecvMessageSize, ErrMessageTooLarge)
+	}
+
+	if _, err := io.ReadFull(c.reader, c.readerBuf[4:size+4]); err != nil {
+		return nil, err
+	}
+
+	if c.suite == nil {
+		return c.readerBuf[4 : size+4], nil
+	}
+
+	buf, err := decryptAEAD(c.suite, c.readerBuf[4:size+4])
+	if err != nil {
+		return nil, err
+	}
+
+	return buf, nil
+}
+
+func (c *Client) write(data []byte) error {
+	if c.node.idleTimeout > 0 {
+		if err := c.conn.SetWriteDeadline(time.Now().Add(c.node.idleTimeout)); err != nil {
+			return err
+		}
+	}
+
+	if c.suite != nil {
+		var err error
+
+		if data, err = encryptAEAD(c.suite, data); err != nil {
+			return err
+		}
+	}
+
+	c.writerBuf = c.writerBuf[:4]
+	binary.BigEndian.PutUint32(c.writerBuf[:4], uint32(len(data)))
+	c.writerBuf = append(c.writerBuf[:4], data...)
+
+	if _, err := c.writer.Write(c.writerBuf); err != nil {
+		return err
+	}
+
+	return c.writer.Flush()
+}
+
+func (c *Client) send(nonce uint64, data []byte) error {
+	if c.node.idleTimeout > 0 {
+		if err := c.conn.SetWriteDeadline(time.Now().Add(c.node.idleTimeout)); err != nil {
+			return err
+		}
+	}
+
+	c.writerLock.Lock()
+	defer c.writerLock.Unlock()
+
+	data = message{nonce: nonce, data: data}.marshal(c.writerBuf[:0])
+
+	if c.suite != nil {
+		var err error
+
+		if data, err = encryptAEAD(c.suite, data); err != nil {
+			return err
+		}
+	}
+
+	binary.BigEndian.PutUint32(c.writerBuf[:4], uint32(len(data)))
+	c.writerBuf = append(c.writerBuf[:4], data...)
+
+	_, err := c.writer.Write(c.writerBuf)
+
+	select {
+	case c.writerFlush <- struct{}{}:
+	default:
+	}
+
+	return err
 }
 
 func (c *Client) request(ctx context.Context, data []byte) (message, error) {
@@ -294,49 +398,7 @@ func (c *Client) request(ctx context.Context, data []byte) (message, error) {
 	return msg, nil
 }
 
-func (c *Client) send(nonce uint64, data []byte) error {
-	data = message{nonce: nonce, data: data}.marshal()
-
-	if c.suite != nil {
-		var err error
-
-		if data, err = encryptAEAD(c.suite, data); err != nil {
-			return err
-		}
-	}
-
-	c.writer.write(data)
-
-	return nil
-}
-
-func (c *Client) recv(ctx context.Context) (message, error) {
-	select {
-	case data, open := <-c.reader.pending:
-		if !open {
-			return message{}, io.EOF
-		}
-
-		if c.suite != nil {
-			var err error
-
-			if data, err = decryptAEAD(c.suite, data); err != nil {
-				return message{}, err
-			}
-		}
-
-		msg, err := unmarshalMessage(data)
-		if err != nil {
-			return message{}, err
-		}
-
-		return msg, nil
-	case <-ctx.Done():
-		return message{}, ctx.Err()
-	}
-}
-
-func (c *Client) handshake(ctx context.Context) {
+func (c *Client) handshake() {
 	defer close(c.ready)
 
 	// Generate Ed25519 ephemeral keypair to perform a Diffie-Hellman handshake.
@@ -349,39 +411,34 @@ func (c *Client) handshake(ctx context.Context) {
 
 	// Send our Ed25519 ephemeral public key and signature of the message '.__noise_handshake'.
 
-	if err := c.send(0, append(pub[:], sec.Sign([]byte(".__noise_handshake"))...)); err != nil {
+	if err := c.write(append(pub[:], sec.Sign([]byte(".__noise_handshake"))...)); err != nil {
 		c.reportError(fmt.Errorf("failed to send session handshake: %w", err))
 		return
 	}
 
 	// Read from our peer their Ed25519 ephemeral public key and signature of the message '.__noise_handshake'.
 
-	msg, err := c.recv(ctx)
+	data, err := c.read()
 	if err != nil {
 		c.reportError(err)
 		return
 	}
 
-	if msg.nonce != 0 {
-		c.reportError(fmt.Errorf("got session handshake with nonce %d, but expected nonce to be 0", msg.nonce))
-		return
-	}
-
-	if len(msg.data) != ed25519.PublicKeySize+ed25519.SignatureSize {
+	if len(data) != ed25519.PublicKeySize+ed25519.SignatureSize {
 		c.reportError(fmt.Errorf("received invalid number of bytes opening a session: expected %d byte(s), but got %d byte(s)",
 			ed25519.PublicKeySize+ed25519.SignatureSize,
-			len(msg.data),
+			len(data),
 		))
 
 		return
 	}
 
 	var peerPublicKey PublicKey
-	copy(peerPublicKey[:], msg.data[:ed25519.PublicKeySize])
+	copy(peerPublicKey[:], data[:ed25519.PublicKeySize])
 
 	// Verify ownership of our peers Ed25519 public key by verifying the signature they sent.
 
-	if !peerPublicKey.Verify([]byte(".__noise_handshake"), msg.data[ed25519.PublicKeySize:]) {
+	if !peerPublicKey.Verify([]byte(".__noise_handshake"), data[ed25519.PublicKeySize:]) {
 		c.reportError(errors.New("could not verify session handshake"))
 		return
 	}
@@ -417,25 +474,20 @@ func (c *Client) handshake(ctx context.Context) {
 	buf := c.node.id.Marshal()
 	buf = append(buf, c.node.Sign(append(buf, shared...))...)
 
-	if err := c.send(0, buf); err != nil {
+	if err := c.write(buf); err != nil {
 		c.reportError(fmt.Errorf("failed to send session handshake: %w", err))
 		return
 	}
 
 	// Read and parse from our peer their overlay ID.
 
-	msg, err = c.recv(ctx)
+	data, err = c.read()
 	if err != nil {
 		c.reportError(fmt.Errorf("failed to read overlay handshake: %w", err))
 		return
 	}
 
-	if msg.nonce != 0 {
-		c.reportError(fmt.Errorf("got overlay handshake with nonce %d, but expected nonce to be 0", msg.nonce))
-		return
-	}
-
-	id, err := UnmarshalID(msg.data)
+	id, err := UnmarshalID(data)
 	if err != nil {
 		c.reportError(fmt.Errorf("failed to parse peer id while handling overlay handshake: %w", err))
 		return
@@ -443,10 +495,10 @@ func (c *Client) handshake(ctx context.Context) {
 
 	// Validate the peers ownership of the overlay ID.
 
-	data := make([]byte, id.Size())
-	copy(data, msg.data)
+	buf = make([]byte, id.Size())
+	copy(buf, data)
 
-	if !id.ID.Verify(append(data, shared...), msg.data[len(data):]) {
+	if !id.ID.Verify(append(buf, shared...), data[len(buf):]) {
 		c.reportError(errors.New("overlay handshake signature is malformed"))
 		return
 	}
@@ -471,19 +523,38 @@ func (c *Client) handshake(ctx context.Context) {
 	}
 }
 
-func (c *Client) handleLoop() {
-	defer close(c.handlerDone)
-	defer c.requests.close()
+func (c *Client) recvLoop() {
+	defer close(c.readerDone)
 
 	for {
-		msg, err := c.recv(context.Background())
+		buf, err := c.read()
 		if err != nil {
 			if !isEOF(err) {
-				c.Logger().Warn("Got an error deserializing a message from a peer.", zap.Error(err))
+				c.Logger().Warn("Got an error while sending messages.", zap.Error(err))
 			}
 			c.reportError(err)
+
 			break
 		}
+
+		msg, err := unmarshalMessage(buf)
+		if err != nil {
+			c.Logger().Warn("Got an error while reading incoming messages.", zap.Error(err))
+			c.reportError(err)
+
+			break
+		}
+
+		msg.data = append([]byte{}, msg.data...)
+
+		if ch := c.requests.findRequest(msg.nonce); ch != nil {
+			ch <- msg
+			close(ch)
+
+			continue
+		}
+
+		c.node.work <- HandlerContext{client: c, msg: msg}
 
 		for _, protocol := range c.node.protocols {
 			if protocol.OnMessageRecv == nil {
@@ -492,50 +563,37 @@ func (c *Client) handleLoop() {
 
 			protocol.OnMessageRecv(c)
 		}
-
-		if ch := c.requests.findRequest(msg.nonce); ch != nil {
-			ch <- msg
-			close(ch)
-			continue
-		}
-
-		for _, handler := range c.node.handlers {
-			if err = handler(HandlerContext{client: c, msg: msg}); err != nil {
-				c.Logger().Warn("Got an error executing a message handler.", zap.Error(err))
-				c.reportError(err)
-				break
-			}
-		}
-
-		if err != nil {
-			break
-		}
 	}
-
-	c.close()
 }
 
-func (c *Client) writeLoop(conn net.Conn) {
+func (c *Client) writeLoop() {
 	defer close(c.writerDone)
 
-	if err := c.writer.loop(conn, c.node.idleTimeout); err != nil {
-		if !isEOF(err) {
-			c.Logger().Warn("Got an error while sending messages.", zap.Error(err))
+	for {
+		select {
+		case <-c.readerDone:
+			return
+		case <-c.clientDone:
+			return
+		case <-c.writerFlush:
 		}
-		c.reportError(err)
-		c.close()
-	}
-}
 
-func (c *Client) readLoop(conn net.Conn) {
-	defer close(c.readerDone)
+		var err error
 
-	if err := c.reader.loop(conn, c.node.idleTimeout, c.node.maxRecvMessageSize); err != nil {
-		if !isEOF(err) {
-			c.Logger().Warn("Got an error while reading incoming messages.", zap.Error(err))
+		c.writerLock.Lock()
+		if c.writer.Buffered() > 0 {
+			err = c.writer.Flush()
 		}
-		c.reportError(err)
-		c.close()
+		c.writerLock.Unlock()
+
+		if err != nil {
+			if !isEOF(err) {
+				c.Logger().Warn("Got an error flushing.", zap.Error(err))
+			}
+			c.reportError(err)
+
+			break
+		}
 	}
 }
 

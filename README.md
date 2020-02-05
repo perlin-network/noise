@@ -37,7 +37,7 @@
 - Peers attempt to be dialed at most three times.
 - A total of 128 outbound connections are allowed at any time.
 - A total of 128 inbound connections are allowed at any time.
-- Peers may send in a single message, at most, 2MB worth of data.
+- Peers may send in a single message, at most, 4MB worth of data.
 - Connections timeout after 10 seconds if no reads/writes occur.
 
 ## Dependencies
@@ -138,10 +138,10 @@ model name : Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz
 goos: linux
 goarch: amd64
 pkg: github.com/perlin-network/noise
-BenchmarkRPC-8           2978550             14136 ns/op            1129 B/op         27 allocs/op
-BenchmarkSend-8          9239581              4546 ns/op             503 B/op         12 allocs/op
+BenchmarkRPC-8           4074007              9967 ns/op             272 B/op          7 allocs/op
+BenchmarkSend-8         31161464              1051 ns/op              13 B/op          2 allocs/op
 PASS
-ok      github.com/perlin-network/noise 101.966s
+ok      github.com/perlin-network/noise 84.481s
 ```
 
 ## Versioning
