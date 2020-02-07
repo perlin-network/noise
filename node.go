@@ -323,14 +323,6 @@ func (n *Node) Send(ctx context.Context, addr string, data []byte) error {
 		return err
 	}
 
-	for _, protocol := range c.node.protocols {
-		if protocol.OnMessageSent == nil {
-			continue
-		}
-
-		protocol.OnMessageSent(c)
-	}
-
 	return nil
 }
 
@@ -357,14 +349,6 @@ func (n *Node) Request(ctx context.Context, addr string, data []byte) ([]byte, e
 	msg, err := c.request(ctx, data)
 	if err != nil {
 		return nil, err
-	}
-
-	for _, protocol := range c.node.protocols {
-		if protocol.OnMessageSent == nil {
-			continue
-		}
-
-		protocol.OnMessageSent(c)
 	}
 
 	return msg.data, nil
@@ -485,7 +469,7 @@ func (n *Node) Handle(handlers ...Handler) {
 }
 
 // Sign uses the nodes private key to sign data and return its cryptographic signature as a slice of bytes.
-func (n *Node) Sign(data []byte) []byte {
+func (n *Node) Sign(data []byte) Signature {
 	return n.privateKey.Sign(data)
 }
 
