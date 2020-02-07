@@ -1,6 +1,7 @@
 package kademlia
 
 import (
+	"container/list"
 	"fmt"
 	"github.com/perlin-network/noise"
 	"sync"
@@ -10,7 +11,7 @@ import (
 type Table struct {
 	sync.RWMutex
 
-	entries [noise.SizePublicKey * 8][]noise.ID
+	entries [noise.SizePublicKey * 8]*list.List
 	self    noise.ID
 	size    int
 }
@@ -19,6 +20,10 @@ type Table struct {
 // given ID.
 func NewTable(self noise.ID) *Table {
 	table := &Table{self: self}
+
+	for i := 0; i < len(table.entries); i++ {
+		table.entries[i] = list.New()
+	}
 
 	if _, err := table.Update(self); err != nil {
 		panic(err)
@@ -32,12 +37,27 @@ func (t *Table) Self() noise.ID {
 	return t.self
 }
 
-// Bucket returns all IDs in the bucket where target resides within.
+// Last returns the last id of the bucket where target resides within.
+func (t *Table) Last(target noise.PublicKey) noise.ID {
+	t.RLock()
+	defer t.RUnlock()
+
+	return t.entries[t.getBucketIndex(target)].Back().Value.(noise.ID)
+}
+
+// Bucket returns all entries of a bucket where target reside within.
 func (t *Table) Bucket(target noise.PublicKey) []noise.ID {
 	t.RLock()
 	defer t.RUnlock()
 
-	return t.entries[t.getBucketIndex(target)]
+	bucket := t.entries[t.getBucketIndex(target)]
+	entries := make([]noise.ID, 0, bucket.Len())
+
+	for e := bucket.Front(); e != nil; e = e.Next() {
+		entries = append(entries, e.Value.(noise.ID))
+	}
+
+	return entries
 }
 
 // Update attempts to insert the target node/peer ID into this routing table. If the bucket it was expected
@@ -52,17 +72,17 @@ func (t *Table) Update(target noise.ID) (bool, error) {
 	t.Lock()
 	defer t.Unlock()
 
-	idx := t.getBucketIndex(target.ID)
+	bucket := t.entries[t.getBucketIndex(target.ID)]
 
-	for i, id := range t.entries[idx] {
-		if id.ID == target.ID { // Found the target ID already inside the routing table.
-			t.entries[idx] = append(append([]noise.ID{target}, t.entries[idx][:i]...), t.entries[idx][i+1:]...)
+	for e := bucket.Front(); e != nil; e = e.Next() {
+		if e.Value.(noise.ID).ID == target.ID { // Found the target ID already inside the routing table.
+			bucket.MoveToFront(e)
 			return false, nil
 		}
 	}
 
-	if len(t.entries[idx]) < BucketSize { // The bucket is not yet under full capacity.
-		t.entries[idx] = append([]noise.ID{target}, t.entries[idx]...)
+	if bucket.Len() < BucketSize { // The bucket is not yet under full capacity.
+		bucket.PushFront(target)
 		t.size++
 		return true, nil
 	}
@@ -77,8 +97,10 @@ func (t *Table) Recorded(target noise.PublicKey) bool {
 	t.RLock()
 	defer t.RUnlock()
 
-	for _, id := range t.entries[t.getBucketIndex(target)] {
-		if id.ID == target {
+	bucket := t.entries[t.getBucketIndex(target)]
+
+	for e := bucket.Front(); e != nil; e = e.Next() {
+		if e.Value.(noise.ID).ID == target {
 			return true
 		}
 	}
@@ -92,11 +114,13 @@ func (t *Table) Delete(target noise.PublicKey) (noise.ID, bool) {
 	t.Lock()
 	defer t.Unlock()
 
-	idx := t.getBucketIndex(target)
+	bucket := t.entries[t.getBucketIndex(target)]
 
-	for i, id := range t.entries[idx] {
+	for e := bucket.Front(); e != nil; e = e.Next() {
+		id := e.Value.(noise.ID)
+
 		if id.ID == target {
-			t.entries[idx] = append(t.entries[idx][:i], t.entries[idx][i+1:]...)
+			bucket.Remove(e)
 			t.size--
 			return id, true
 		}
@@ -111,10 +135,12 @@ func (t *Table) DeleteByAddress(target string) (noise.ID, bool) {
 	t.Lock()
 	defer t.Unlock()
 
-	for i, bucket := range t.entries {
-		for j, id := range bucket {
+	for _, bucket := range t.entries {
+		for e := bucket.Front(); e != nil; e = e.Next() {
+			id := e.Value.(noise.ID)
+
 			if id.Address == target {
-				t.entries[i] = append(t.entries[i][:j], t.entries[i][j+1:]...)
+				bucket.Remove(e)
 				t.size--
 				return id, true
 			}
@@ -133,8 +159,10 @@ func (t *Table) Peers() []noise.ID {
 func (t *Table) FindClosest(target noise.PublicKey, k int) []noise.ID {
 	var closest []noise.ID
 
-	f := func(bucket []noise.ID) {
-		for _, id := range bucket {
+	f := func(bucket *list.List) {
+		for e := bucket.Front(); e != nil; e = e.Next() {
+			id := e.Value.(noise.ID)
+
 			if id.ID != target {
 				closest = append(closest, id)
 			}
@@ -175,8 +203,8 @@ func (t *Table) Entries() []noise.ID {
 	entries := make([]noise.ID, 0, t.size)
 
 	for _, bucket := range t.entries {
-		for _, id := range bucket {
-			entries = append(entries, id)
+		for e := bucket.Front(); e != nil; e = e.Next() {
+			entries = append(entries, e.Value.(noise.ID))
 		}
 	}
 

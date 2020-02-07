@@ -103,8 +103,7 @@ func (p *Protocol) Ack(id noise.ID) {
 			return
 		}
 
-		bucket := p.table.Bucket(id.ID)
-		last := bucket[len(bucket)-1]
+		last := p.table.Last(id.ID)
 
 		ctx, cancel := context.WithTimeout(context.Background(), p.pingTimeout)
 		pong, err := p.node.RequestMessage(ctx, last.Address, Ping{})

@@ -411,7 +411,9 @@ func (c *Client) handshake() {
 
 	// Send our Ed25519 ephemeral public key and signature of the message '.__noise_handshake'.
 
-	if err := c.write(append(pub[:], sec.Sign([]byte(".__noise_handshake"))...)); err != nil {
+	signature := sec.Sign([]byte(".__noise_handshake"))
+
+	if err := c.write(append(pub[:], signature[:]...)); err != nil {
 		c.reportError(fmt.Errorf("failed to send session handshake: %w", err))
 		return
 	}
@@ -424,7 +426,7 @@ func (c *Client) handshake() {
 		return
 	}
 
-	if len(data) != ed25519.PublicKeySize+ed25519.SignatureSize {
+	if len(data) != SizePublicKey+SizeSignature {
 		c.reportError(fmt.Errorf("received invalid number of bytes opening a session: expected %d byte(s), but got %d byte(s)",
 			ed25519.PublicKeySize+ed25519.SignatureSize,
 			len(data),
@@ -434,11 +436,11 @@ func (c *Client) handshake() {
 	}
 
 	var peerPublicKey PublicKey
-	copy(peerPublicKey[:], data[:ed25519.PublicKeySize])
+	copy(peerPublicKey[:], data[:SizePublicKey])
 
 	// Verify ownership of our peers Ed25519 public key by verifying the signature they sent.
 
-	if !peerPublicKey.Verify([]byte(".__noise_handshake"), data[ed25519.PublicKeySize:]) {
+	if !peerPublicKey.Verify([]byte(".__noise_handshake"), UnmarshalSignature(data[SizePublicKey:SizePublicKey+SizeSignature])) {
 		c.reportError(errors.New("could not verify session handshake"))
 		return
 	}
@@ -472,7 +474,8 @@ func (c *Client) handshake() {
 	// Send to our peer our overlay ID.
 
 	buf := c.node.id.Marshal()
-	buf = append(buf, c.node.Sign(append(buf, shared...))...)
+	signature = c.node.Sign(append(buf, shared...))
+	buf = append(buf, signature[:]...)
 
 	if err := c.write(buf); err != nil {
 		c.reportError(fmt.Errorf("failed to send session handshake: %w", err))
@@ -498,7 +501,16 @@ func (c *Client) handshake() {
 	buf = make([]byte, id.Size())
 	copy(buf, data)
 
-	if !id.ID.Verify(append(buf, shared...), data[len(buf):]) {
+	if len(data) != len(buf)+SizeSignature {
+		c.reportError(fmt.Errorf("received invalid number of bytes handshaking: expected %d byte(s), got %d byte(s)",
+			len(buf)+SizeSignature,
+			len(data),
+		))
+
+		return
+	}
+
+	if !id.ID.Verify(append(buf, shared...), UnmarshalSignature(data[len(buf):len(buf)+SizeSignature])) {
 		c.reportError(errors.New("overlay handshake signature is malformed"))
 		return
 	}
@@ -593,6 +605,14 @@ func (c *Client) writeLoop() {
 			c.reportError(err)
 
 			break
+		}
+
+		for _, protocol := range c.node.protocols {
+			if protocol.OnMessageSent == nil {
+				continue
+			}
+
+			protocol.OnMessageSent(c)
 		}
 	}
 }

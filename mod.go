@@ -39,7 +39,7 @@ type Protocol struct {
 	// OnPingFailed is called whenever any attempt by a node to dial a peer at addr fails.
 	OnPingFailed func(addr string, err error)
 
-	// OnMessageSent is called whenever a message or request is successfully sent to a peer.
+	// OnMessageSent is called whenever bytes of a message or request or response have been flushed/sent to a peer.
 	OnMessageSent func(client *Client)
 
 	// OnMessageRecv is called whenever a message or response is received from a peer.
