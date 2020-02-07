@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/oasislabs/ed25519"
 	"go.uber.org/zap"
 	"io"
 	"net"
@@ -428,7 +427,7 @@ func (c *Client) handshake() {
 
 	if len(data) != SizePublicKey+SizeSignature {
 		c.reportError(fmt.Errorf("received invalid number of bytes opening a session: expected %d byte(s), but got %d byte(s)",
-			ed25519.PublicKeySize+ed25519.SignatureSize,
+			SizePublicKey+SizeSignature,
 			len(data),
 		))
 
