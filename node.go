@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/oasislabs/ed25519"
-	"go.uber.org/atomic"
-	"go.uber.org/zap"
 	"net"
 	"runtime"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/oasislabs/ed25519"
+	"go.uber.org/atomic"
+	"go.uber.org/zap"
 )
 
 // Node keeps track of a users ID, all of a users outgoing/incoming connections to/from peers as *Client instances
@@ -28,8 +29,9 @@ type Node struct {
 	port uint16
 	addr string
 
-	publicKey  PublicKey
-	privateKey PrivateKey
+	publicKey    PublicKey
+	privateKey   PrivateKey
+	preSharedKey *PrivateKey
 
 	id ID
 

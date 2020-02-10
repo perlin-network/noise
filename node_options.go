@@ -1,9 +1,10 @@
 package noise
 
 import (
-	"go.uber.org/zap"
 	"net"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // NodeOption represents a functional option that may be passed to NewNode for instantiating a new node instance
@@ -130,5 +131,12 @@ func WithNodeBindPort(port uint16) NodeOption {
 func WithNodeAddress(addr string) NodeOption {
 	return func(n *Node) {
 		n.addr = addr
+	}
+}
+
+// WithNodePreSharedKey sets the pre shared key of the node. By default, it is nil
+func WithNodePreSharedKey(preSharedKey PrivateKey) NodeOption {
+	return func(n *Node) {
+		n.preSharedKey = &preSharedKey
 	}
 }

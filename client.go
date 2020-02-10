@@ -2,18 +2,21 @@ package noise
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
 	"io"
 	"net"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type clientSide bool
@@ -399,6 +402,57 @@ func (c *Client) request(ctx context.Context, data []byte) (message, error) {
 
 func (c *Client) handshake() {
 	defer close(c.ready)
+
+	if c.node.preSharedKey != nil {
+		ourRandomKey := make([]byte, SizeSignature)
+		_, err := rand.Read(ourRandomKey)
+		if err != nil {
+			c.reportError(err)
+			return
+		}
+
+		if err := c.write(ourRandomKey); err != nil {
+			c.reportError(fmt.Errorf("failed to send random key: %w", err))
+			return
+		}
+
+		theirRandomKey, err := c.read()
+		if err != nil {
+			c.reportError(err)
+			return
+		}
+
+		theirRandomKeySigned := c.node.preSharedKey.Sign(theirRandomKey[:SizeSignature])
+
+		if err := c.write([]byte(theirRandomKeySigned.String())); err != nil {
+			c.reportError(fmt.Errorf("failed to send random key signed back: %w", err))
+			return
+		}
+
+		ourRandomKeyBack, err := c.read()
+		if err != nil {
+			c.reportError(err)
+			return
+		}
+
+		if len(theirRandomKey) > SizeSignature {
+			ourRandomKeyBack = append(theirRandomKey[SizeSignature+1:], ourRandomKeyBack...)
+		}
+
+		if len(ourRandomKeyBack) < SizeSignature {
+			c.reportError(fmt.Errorf("failed to read random key signed back"))
+			return
+		}
+
+		ourRandomKeySigned := c.node.preSharedKey.Sign(ourRandomKey)
+
+		res := bytes.Compare(ourRandomKeyBack, []byte(ourRandomKeySigned.String()))
+
+		if res != 0 {
+			c.reportError(fmt.Errorf("failed to verify pre shared key"))
+			return
+		}
+	}
 
 	// Generate Ed25519 ephemeral keypair to perform a Diffie-Hellman handshake.
 
