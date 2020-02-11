@@ -65,10 +65,10 @@ type Client struct {
 	writer *bufio.Writer
 
 	readerBuf []byte
+	writerBuf []message
 
-	writerBuf   []byte
-	writerFlush chan struct{}
-	writerLock  sync.Mutex
+	writerCond   sync.Cond
+	writerClosed bool
 
 	requests *requestMap
 
@@ -91,9 +91,7 @@ func newClient(node *Node) *Client {
 
 		requests: newRequestMap(),
 
-		readerBuf:   make([]byte, 4+node.maxRecvMessageSize),
-		writerBuf:   make([]byte, 4),
-		writerFlush: make(chan struct{}, 1),
+		readerBuf: make([]byte, 4+node.maxRecvMessageSize),
 
 		ready:      make(chan struct{}),
 		readerDone: make(chan struct{}),
@@ -101,6 +99,8 @@ func newClient(node *Node) *Client {
 
 		clientDone: make(chan struct{}),
 	}
+
+	c.writerCond.L = &sync.Mutex{}
 
 	c.SetLogger(node.logger)
 
@@ -186,6 +186,11 @@ func (c *Client) reportError(err error) {
 
 func (c *Client) close() {
 	c.closeOnce.Do(func() {
+		c.writerCond.L.Lock()
+		c.writerClosed = true
+		c.writerCond.Signal()
+		c.writerCond.L.Unlock()
+
 		if c.conn != nil {
 			c.conn.Close()
 		}
@@ -322,11 +327,10 @@ func (c *Client) write(data []byte) error {
 		}
 	}
 
-	c.writerBuf = c.writerBuf[:4]
-	binary.BigEndian.PutUint32(c.writerBuf[:4], uint32(len(data)))
-	c.writerBuf = append(c.writerBuf[:4], data...)
+	data = append(make([]byte, 4), data...)
+	binary.BigEndian.PutUint32(data[:4], uint32(len(data)-4))
 
-	if _, err := c.writer.Write(c.writerBuf); err != nil {
+	if _, err := c.writer.Write(data); err != nil {
 		return err
 	}
 
@@ -334,36 +338,12 @@ func (c *Client) write(data []byte) error {
 }
 
 func (c *Client) send(nonce uint64, data []byte) error {
-	if c.node.idleTimeout > 0 {
-		if err := c.conn.SetWriteDeadline(time.Now().Add(c.node.idleTimeout)); err != nil {
-			return err
-		}
-	}
+	c.writerCond.L.Lock()
+	c.writerBuf = append(c.writerBuf, message{nonce: nonce, data: data})
+	c.writerCond.Signal()
+	c.writerCond.L.Unlock()
 
-	c.writerLock.Lock()
-	defer c.writerLock.Unlock()
-
-	data = message{nonce: nonce, data: data}.marshal(c.writerBuf[:0])
-
-	if c.suite != nil {
-		var err error
-
-		if data, err = encryptAEAD(c.suite, data); err != nil {
-			return err
-		}
-	}
-
-	binary.BigEndian.PutUint32(c.writerBuf[:4], uint32(len(data)))
-	c.writerBuf = append(c.writerBuf[:4], data...)
-
-	_, err := c.writer.Write(c.writerBuf)
-
-	select {
-	case c.writerFlush <- struct{}{}:
-	default:
-	}
-
-	return err
+	return nil
 }
 
 func (c *Client) request(ctx context.Context, data []byte) (message, error) {
@@ -580,30 +560,84 @@ func (c *Client) recvLoop() {
 func (c *Client) writeLoop() {
 	defer close(c.writerDone)
 
+	header := make([]byte, 4)
+	buf := make([]byte, 0, 1024)
+
+Write:
 	for {
 		select {
 		case <-c.readerDone:
 			return
 		case <-c.clientDone:
 			return
-		case <-c.writerFlush:
+		default:
 		}
 
-		var err error
+		if c.node.idleTimeout > 0 {
+			if err := c.conn.SetWriteDeadline(time.Now().Add(c.node.idleTimeout)); err != nil {
+				if !isEOF(err) {
+					c.Logger().Warn("Got an error setting write deadline.", zap.Error(err))
+				}
+				c.reportError(err)
 
-		c.writerLock.Lock()
-		if c.writer.Buffered() > 0 {
-			err = c.writer.Flush()
+				break Write
+			}
 		}
-		c.writerLock.Unlock()
 
-		if err != nil {
+		c.writerCond.L.Lock()
+		for len(c.writerBuf) == 0 && !c.writerClosed {
+			c.writerCond.Wait()
+		}
+		writerBuf, writerClosed := c.writerBuf, c.writerClosed
+		c.writerBuf = nil
+		c.writerCond.L.Unlock()
+
+		if writerClosed {
+			break Write
+		}
+
+		for _, msg := range writerBuf {
+			buf = buf[:0]
+			buf = msg.marshal(buf)
+
+			if c.suite != nil {
+				var err error
+
+				if buf, err = encryptAEAD(c.suite, buf); err != nil {
+					c.Logger().Warn("Got an error encrypting a message.", zap.Error(err))
+					c.reportError(err)
+					break Write
+				}
+			}
+
+			binary.BigEndian.PutUint32(header, uint32(len(buf)))
+
+			if _, err := c.writer.Write(header); err != nil {
+				if !isEOF(err) {
+					c.Logger().Warn("Got an error writing header.", zap.Error(err))
+				}
+				c.reportError(err)
+
+				break Write
+			}
+
+			if _, err := c.writer.Write(buf); err != nil {
+				if !isEOF(err) {
+					c.Logger().Warn("Got an error writing a message.", zap.Error(err))
+				}
+				c.reportError(err)
+
+				break Write
+			}
+		}
+
+		if err := c.writer.Flush(); err != nil {
 			if !isEOF(err) {
 				c.Logger().Warn("Got an error flushing.", zap.Error(err))
 			}
 			c.reportError(err)
 
-			break
+			break Write
 		}
 
 		for _, protocol := range c.node.protocols {
