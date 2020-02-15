@@ -6,10 +6,30 @@ import (
 	"math/rand"
 )
 
+func extendFront(buf []byte, n int) []byte {
+	if len(buf) < n {
+		clone := make([]byte, n+len(buf))
+		copy(clone[n:], buf)
+
+		return clone
+	}
+
+	return append(buf[:n], buf...)
+}
+
+func extendBack(buf []byte, n int) []byte {
+	n += len(buf)
+	if nn := n - cap(buf); nn > 0 {
+		buf = append(buf[:cap(buf)], make([]byte, nn)...)
+	}
+	return buf[:n]
+}
+
 func encryptAEAD(suite cipher.AEAD, buf []byte) ([]byte, error) {
 	a, b := suite.NonceSize(), len(buf)
 
-	buf = append(make([]byte, a), append(buf, make([]byte, suite.Overhead())...)...)
+	buf = extendFront(buf, a)
+	buf = extendBack(buf, b)
 
 	if _, err := rand.Read(buf[:a]); err != nil {
 		return nil, err
