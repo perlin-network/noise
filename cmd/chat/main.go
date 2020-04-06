@@ -47,12 +47,19 @@ const printedLength = 8
 func main() {
 	// Parse flags/options.
 	pflag.Parse()
-
+	
+	//create a Node ID and use while creating Node, so that multiple nodes can be created in same machine.
+	pub, _, err := noise.GenerateKeys(nil)
+	check(err)
+	
+	id := noise.NewID(pub, *hostFlag, *portFlag)
+	
 	// Create a new configured node.
 	node, err := noise.NewNode(
 		noise.WithNodeBindHost(*hostFlag),
 		noise.WithNodeBindPort(*portFlag),
 		noise.WithNodeAddress(*addressFlag),
+		noise.WithNodeID(id),
 	)
 	check(err)
 
