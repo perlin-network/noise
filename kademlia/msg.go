@@ -2,7 +2,7 @@ package kademlia
 
 import (
 	"fmt"
-	"github.com/perlin-network/noise"
+	"github.com/qadre/noise"
 	"io"
 )
 

@@ -2,15 +2,15 @@
 
 [![GoDoc][1]][2] [![Discord][7]][8] [![MIT licensed][5]][6] ![Build Status][9] [![Go Report Card][11]][12] [![Coverage Status][13]][14]
 
-[1]: https://godoc.org/github.com/perlin-network/noise?status.svg
-[2]: https://godoc.org/github.com/perlin-network/noise
+[1]: https://godoc.org/github.com/qadre/noise?status.svg
+[2]: https://godoc.org/github.com/qadre/noise
 [5]: https://img.shields.io/badge/license-MIT-blue.svg
 [6]: LICENSE
 [7]: https://img.shields.io/discord/458332417909063682.svg
 [8]: https://discord.gg/dMYfDPM
-[9]: https://github.com/perlin-network/noise/workflows/CI/badge.svg
-[11]: https://goreportcard.com/badge/github.com/perlin-network/noise
-[12]: https://goreportcard.com/report/github.com/perlin-network/noise
+[9]: https://github.com/qadre/noise/workflows/CI/badge.svg
+[11]: https://goreportcard.com/badge/github.com/qadre/noise
+[12]: https://goreportcard.com/report/github.com/qadre/noise
 [13]: https://codecov.io/gh/perlin-network/noise/branch/master/graph/badge.svg
 [14]: https://codecov.io/gh/perlin-network/noise
 
@@ -51,7 +51,7 @@
 **noise** was intended to be used in Go projects that utilize Go modules. You may incorporate noise into your project as a library dependency by executing the following:
 
 ```shell
-% go get -u github.com/perlin-network/noise
+% go get -u github.com/qadre/noise
 ```
  
 ## Example
@@ -62,7 +62,7 @@ package main
 import (
     "context"
     "fmt"
-    "github.com/perlin-network/noise"
+    "github.com/qadre/noise"
 )
 
 func check(err error) {
@@ -120,7 +120,7 @@ func main() {
 }
 ```
 
-For documentation and more examples, refer to noise's godoc [here](https://godoc.org/github.com/perlin-network/noise).
+For documentation and more examples, refer to noise's godoc [here](https://godoc.org/github.com/qadre/noise).
 
 ## Benchmarks
 
@@ -135,11 +135,11 @@ model name : Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz
 % go test -bench=. -benchtime=30s -benchmem
 goos: linux
 goarch: amd64
-pkg: github.com/perlin-network/noise
+pkg: github.com/qadre/noise
 BenchmarkRPC-8           4074007              9967 ns/op             272 B/op          7 allocs/op
 BenchmarkSend-8         31161464              1051 ns/op              13 B/op          2 allocs/op
 PASS
-ok      github.com/perlin-network/noise 84.481s
+ok      github.com/qadre/noise 84.481s
 ```
 
 ## Versioning
@@ -156,4 +156,4 @@ As a result, _noise's initial development phase starts from v1.1.2_. Until Noise
 
 ## License
 
-**noise**, and all of its source code is released under the MIT [License](https://github.com/perlin-network/noise/blob/master/LICENSE).
+**noise**, and all of its source code is released under the MIT [License](https://github.com/qadre/noise/blob/master/LICENSE).

@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"github.com/oasislabs/ed25519"
-	"github.com/perlin-network/noise"
+	"github.com/qadre/noise"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )

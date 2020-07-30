@@ -2,7 +2,7 @@ package kademlia
 
 import (
 	"context"
-	"github.com/perlin-network/noise"
+	"github.com/qadre/noise"
 	"go.uber.org/zap"
 	"sync"
 	"time"

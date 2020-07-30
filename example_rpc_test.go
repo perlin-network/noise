@@ -3,7 +3,7 @@ package noise_test
 import (
 	"context"
 	"fmt"
-	"github.com/perlin-network/noise"
+	"github.com/qadre/noise"
 )
 
 // This example demonstrates how to send/handle RPC requests across peers, how to listen for incoming peers, how

@@ -3,7 +3,7 @@ package kademlia
 import (
 	"container/list"
 	"fmt"
-	"github.com/perlin-network/noise"
+	"github.com/qadre/noise"
 	"sync"
 )
 

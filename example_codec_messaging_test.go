@@ -3,7 +3,7 @@ package noise_test
 import (
 	"context"
 	"fmt"
-	"github.com/perlin-network/noise"
+	"github.com/qadre/noise"
 	"strings"
 	"sync"
 )

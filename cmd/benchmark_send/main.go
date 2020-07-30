@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/perlin-network/noise"
+	"github.com/qadre/noise"
 	"runtime"
 	"sync"
 	"sync/atomic"

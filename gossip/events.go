@@ -1,6 +1,6 @@
 package gossip
 
-import "github.com/perlin-network/noise"
+import "github.com/qadre/noise"
 
 // Events comprise of callbacks that may be hooked against by a user to handle inbound gossip messages/events that
 // occur throughout the lifecycle of this gossip protocol.

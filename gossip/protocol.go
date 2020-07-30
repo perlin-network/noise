@@ -5,8 +5,8 @@ package gossip
 import (
 	"context"
 	"github.com/VictoriaMetrics/fastcache"
-	"github.com/perlin-network/noise"
-	"github.com/perlin-network/noise/kademlia"
+	"github.com/qadre/noise"
+	"github.com/qadre/noise/kademlia"
 	"sync"
 )
 
