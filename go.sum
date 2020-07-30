@@ -18,10 +18,10 @@ github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORN
 github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
 github.com/kr/text v0.1.0 h1:45sCR5RtlFHMR4UwH9sdQ5TC8v0qDQCHnXt+kaKSTVE=
 github.com/kr/text v0.1.0/go.mod h1:4Jbv+DJW3UT/LiOwJeYQe1efqtUx/iVham/4vfdArNI=
-github.com/oasislabs/ed25519 v0.0.0-20191122104632-9d9ffc15f526 h1:xKlK+m6tNFucKVOP4V0GDgU4IgaLbS+HRoiVbN3W8Y4=
-github.com/oasislabs/ed25519 v0.0.0-20191122104632-9d9ffc15f526/go.mod h1:xIpCyrK2ouGA4QBGbiNbkoONrvJ00u9P3QOkXSOAC0c=
 github.com/oasislabs/ed25519 v0.0.0-20200302143042-29f6767a7c3e h1:85L+lUTJHx4O7UP9y/65XV8iq7oaA2Uqe5WiUSB8XE4=
 github.com/oasislabs/ed25519 v0.0.0-20200302143042-29f6767a7c3e/go.mod h1:xIpCyrK2ouGA4QBGbiNbkoONrvJ00u9P3QOkXSOAC0c=
+github.com/perlin-network/noise v1.1.3 h1:x5lfqlvNLxYSzwRu5mjKyWusxOVg1wWEALT9XXVvCDI=
+github.com/perlin-network/noise v1.1.3/go.mod h1:Tr+hlttT8o7bobjS0o4GI+ef3MW8Gfk4RNJVolTpIcA=
 github.com/pkg/errors v0.8.1 h1:iURUrRGxPUNPdy5/HRSm+Yj6okJ6UtLINN0Q9M4+h3I=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
