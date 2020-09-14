@@ -4,7 +4,7 @@ go 1.13
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.5.7
-	github.com/oasislabs/ed25519 v0.0.0-20200302143042-29f6767a7c3e
+	github.com/oasisprotocol/ed25519 v0.0.0-20200528083105-55566edd6df0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.4.0
 	go.uber.org/atomic v1.5.1
