@@ -2,8 +2,8 @@ package noise
 
 import (
 	"crypto/cipher"
+	"crypto/rand"
 	"io"
-	"math/rand"
 )
 
 func extendFront(buf []byte, n int) []byte {
