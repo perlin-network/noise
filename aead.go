@@ -1,13 +1,41 @@
 package noise
 
 import (
+	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"encoding/binary"
 	"io"
 )
 
 type aeadEncryption struct {
 	suite cipher.AEAD
+	// GCM takes a 12 byte nonce by default
+	fixed   [4]byte //Random part, 4 bytes
+	counter int64   //Counter	   8 bytes
+}
+
+func newAEAD(key []byte) (aeadEncryption, error) {
+	core, err := aes.NewCipher(key)
+	if err != nil {
+		return aeadEncryption{}, err
+	}
+
+	suite, err := cipher.NewGCM(core)
+	if err != nil {
+		return aeadEncryption{}, err
+	}
+
+	var encryption aeadEncryption
+	encryption.suite = suite
+
+	//Generate fixed portion of repetition resistant nonce
+	//https://tools.ietf.org/id/draft-mcgrew-iv-gen-01.html
+	if _, err := rand.Read(encryption.fixed[:]); err != nil {
+		return aeadEncryption{}, err
+	}
+
+	return encryption, nil
 }
 
 func extendFront(buf []byte, n int) []byte {
@@ -34,16 +62,23 @@ func (e *aeadEncryption) initialised() bool {
 }
 
 func (e *aeadEncryption) encrypt(buf []byte) ([]byte, error) {
-	a, b := e.suite.NonceSize(), len(buf)
+	nonceSize, plaintextSize := e.suite.NonceSize(), len(buf)
 
-	buf = extendFront(buf, a)
-	buf = extendBack(buf, b)
+	buf = extendFront(buf, nonceSize)
+	buf = extendBack(buf, plaintextSize)
 
-	if _, err := rand.Read(buf[:a]); err != nil {
-		return nil, err
-	}
+	//Repetition resistant nonce https://tools.ietf.org/html/rfc5116#section-3.2
 
-	return append(buf[:a], e.suite.Seal(buf[a:a], buf[:a], buf[a:a+b], nil)...), nil
+	copy(buf[:nonceSize], e.fixed[:])
+
+	binary.BigEndian.PutUint64(buf[len(e.fixed):nonceSize], uint64(e.counter))
+
+	//Increment Nonce counter
+	e.counter++
+
+	//Reuse the storage of buf, taking nonce buf[:nonceSize] and plaintext[nonceSize:nonceSize+plaintextSize]
+	//Put nonce on the front of the ciphertext
+	return append(buf[:nonceSize], e.suite.Seal(buf[nonceSize:nonceSize], buf[:nonceSize], buf[nonceSize:nonceSize+plaintextSize], nil)...), nil
 }
 
 func (e *aeadEncryption) decrypt(buf []byte) ([]byte, error) {

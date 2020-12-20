@@ -3,8 +3,6 @@ package noise
 import (
 	"bufio"
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -437,20 +435,10 @@ func (c *Client) handshake() {
 	// Use the derived shared key from Diffie-Hellman to encrypt/decrypt all future communications
 	// with AES-256 Galois Counter Mode (GCM).
 
-	core, err := aes.NewCipher(shared[:])
+	c.suite, err = newAEAD(shared[:])
 	if err != nil {
 		c.reportError(fmt.Errorf("could not instantiate aes: %w", err))
-		return
 	}
-
-	suite, err := cipher.NewGCM(core)
-	if err != nil {
-		c.reportError(fmt.Errorf("could not instantiate aes-gcm: %w", err))
-		return
-	}
-
-	c.suite = aeadEncryption{suite}
-
 	// Send to our peer our overlay ID.
 
 	buf := c.node.id.Marshal()
