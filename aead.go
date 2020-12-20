@@ -2,9 +2,13 @@ package noise
 
 import (
 	"crypto/cipher"
+	"crypto/rand"
 	"io"
-	"math/rand"
 )
+
+type aeadEncryption struct {
+	suite cipher.AEAD
+}
 
 func extendFront(buf []byte, n int) []byte {
 	if len(buf) < n {
@@ -25,8 +29,12 @@ func extendBack(buf []byte, n int) []byte {
 	return buf[:n]
 }
 
-func encryptAEAD(suite cipher.AEAD, buf []byte) ([]byte, error) {
-	a, b := suite.NonceSize(), len(buf)
+func (e *aeadEncryption) initialised() bool {
+	return e.suite == nil
+}
+
+func (e *aeadEncryption) encrypt(buf []byte) ([]byte, error) {
+	a, b := e.suite.NonceSize(), len(buf)
 
 	buf = extendFront(buf, a)
 	buf = extendBack(buf, b)
@@ -35,16 +43,16 @@ func encryptAEAD(suite cipher.AEAD, buf []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	return append(buf[:a], suite.Seal(buf[a:a], buf[:a], buf[a:a+b], nil)...), nil
+	return append(buf[:a], e.suite.Seal(buf[a:a], buf[:a], buf[a:a+b], nil)...), nil
 }
 
-func decryptAEAD(suite cipher.AEAD, buf []byte) ([]byte, error) {
-	if len(buf) < suite.NonceSize() {
+func (e *aeadEncryption) decrypt(buf []byte) ([]byte, error) {
+	if len(buf) < e.suite.NonceSize() {
 		return nil, io.ErrUnexpectedEOF
 	}
 
-	nonce := buf[:suite.NonceSize()]
-	text := buf[suite.NonceSize():]
+	nonce := buf[:e.suite.NonceSize()]
+	text := buf[e.suite.NonceSize():]
 
-	return suite.Open(text[:0], nonce, text, nil)
+	return e.suite.Open(text[:0], nonce, text, nil)
 }

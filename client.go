@@ -9,11 +9,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
 	"io"
 	"net"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type clientSide bool
@@ -52,7 +53,7 @@ type Client struct {
 	addr string
 	side clientSide
 
-	suite cipher.AEAD
+	suite aeadEncryption
 
 	logger struct {
 		sync.RWMutex
@@ -300,11 +301,11 @@ func (c *Client) read() ([]byte, error) {
 		return nil, err
 	}
 
-	if c.suite == nil {
+	if c.suite.initialised() {
 		return c.readerBuf[4 : size+4], nil
 	}
 
-	buf, err := decryptAEAD(c.suite, c.readerBuf[4:size+4])
+	buf, err := c.suite.decrypt(c.readerBuf[4 : size+4])
 	if err != nil {
 		return nil, err
 	}
@@ -319,10 +320,10 @@ func (c *Client) write(data []byte) error {
 		}
 	}
 
-	if c.suite != nil {
+	if c.suite.initialised() {
 		var err error
 
-		if data, err = encryptAEAD(c.suite, data); err != nil {
+		if data, err = c.suite.encrypt(data); err != nil {
 			return err
 		}
 	}
@@ -448,7 +449,7 @@ func (c *Client) handshake() {
 		return
 	}
 
-	c.suite = suite
+	c.suite = aeadEncryption{suite}
 
 	// Send to our peer our overlay ID.
 
@@ -600,10 +601,10 @@ Write:
 			buf = buf[:0]
 			buf = msg.marshal(buf)
 
-			if c.suite != nil {
+			if c.suite.initialised() {
 				var err error
 
-				if buf, err = encryptAEAD(c.suite, buf); err != nil {
+				if buf, err = c.suite.encrypt(buf); err != nil {
 					c.Logger().Warn("Got an error encrypting a message.", zap.Error(err))
 					c.reportError(err)
 					break Write
