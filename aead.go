@@ -100,11 +100,16 @@ func (e *aeadEncryption) decrypt(buf []byte) ([]byte, error) {
 	nonce := buf[:e.suite.NonceSize()]
 	text := buf[e.suite.NonceSize():]
 
+	cleartext, err := e.suite.Open(text[:0], nonce, text, nil)
+	if err != nil {
+		return cleartext, err
+	}
+
 	// Handle edge case where both parties generate the same 4 starting bytes
 	// The best solution to this would be the parties generate a nonce prefix together
 	// This also has some chance of still generating the same data
 	if bytes.Equal(e.fixed[:], nonce[:4]) {
 		e.regenerateNonce()
 	}
-	return e.suite.Open(text[:0], nonce, text, nil)
+	return cleartext, err
 }
