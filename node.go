@@ -89,7 +89,7 @@ func NewNode(opts ...NodeOption) (*Node, error) {
 
 	copy(n.publicKey[:], ed25519.PrivateKey(n.privateKey[:]).Public().(ed25519.PublicKey)[:])
 
-	if n.id.ID == ZeroPublicKey && n.host != nil && n.port > 0 {
+	if  n.host != nil && n.port > 0 {
 		n.id = NewID(n.publicKey, n.host, n.port)
 	}
 
