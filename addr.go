@@ -13,26 +13,21 @@ func ResolveAddress(address string) (string, error) {
 		return "", err
 	}
 
-	addr.IP = resolveIP(addr.IP)
+	if !isAllowedIP(addr.IP) {
+		addr.IP = nil
+	}
 
 	return addr.String(), nil
 }
 
-func resolveIP(ip net.IP) net.IP {
-	if ip.IsLoopback() || ip.IsUnspecified() {
-		return nil
-	}
-
-	return ip
+func isAllowedIP(ip net.IP) bool {
+	return !(ip.IsLoopback() || ip.IsUnspecified() || ip.String() == "<nil>")
 }
 
 func normalizeIP(ip net.IP) string {
-	ip = resolveIP(ip)
-
-	str := ip.String()
-	if str == "<nil>" {
-		return ""
+	if isAllowedIP(ip) {
+		return ip.String()
 	}
 
-	return str
+	return ""
 }
